@@ -30,6 +30,7 @@ app/.env.*
 # Python
 __pycache__/
 *.pyc
+venv/
 
 # Firebase local cache
 .firebase/

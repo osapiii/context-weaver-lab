@@ -13,10 +13,10 @@ These wireframes intentionally follow the EN AIstudio admin/workspace patterns: 
 | Admin Nav            | VibeControl                                             |
 |                      | Govern vibe coding with story evidence                  |
 | - AI Studio          |                                                         |
-| - Knowledge          | [Connect Source] [Generate Stories] [Run Visual QA]     |
+| - Knowledge          | [Connect Source] [Generate Stories] [Export Story]      |
 | - VibeControl  (*)   |                                                         |
 | - Request Logs       | +----------------+ +----------------+ +---------------+ |
-| - Settings           | | Stories        | | Drift Alerts   | | QA Pass Rate  | |
+| - Settings           | | Stories        | | Drift Alerts   | | Avg Confidence| |
 |                      | | 42 total       | | 5 high         | | 86%           | |
 |                      | +----------------+ +----------------+ +---------------+ |
 |                      |                                                         |
@@ -26,7 +26,7 @@ These wireframes intentionally follow the EN AIstudio admin/workspace patterns: 
 
 ## 2. Story Board / Dynamic List View
 
-Primary use: understand what remains for MVP, which stories are risky, and where code/spec/QA disagree.
+Primary use: understand what remains for MVP, which stories are risky, and where code/spec evidence disagree.
 
 ```text
 +--------------------------------------------------------------------------------+
@@ -44,8 +44,8 @@ Primary use: understand what remains for MVP, which stories are risky, and where
 | | +------------------+ | | +------------------+ | | +------------------+ |      |
 | | | ST-101 Checkout | | | | ST-104 Cart pay | | | | ST-088 Login SSO | |      |
 | | | conf 72%        | | | | conf 91%        | | | | conf 88%        | |      |
-| | | docs 4 tickets1 | | | | PR #123 open    | | | | QA pass         | |      |
-| | | drift medium    | | | | QA pending      | | | | released? no    | |      |
+| | | evidence 4     | | | | PR #123 open    | | | | code mapped     | |      |
+| | | drift medium   | | | | needs review    | | | | released? no    | |      |
 | | +------------------+ | | +------------------+ | | +------------------+ |      |
 | |                      | |                      | |                      |      |
 | +----------------------+ +----------------------+ +----------------------+      |
@@ -56,7 +56,7 @@ Primary use: understand what remains for MVP, which stories are risky, and where
 | | +------------------+ |                                                        |
 | | | ST-055 Search   | |                                                        |
 | | | conf 95%        | |                                                        |
-| | | QA pass         | |                                                        |
+| | | evidence 5      | |                                                        |
 | | +------------------+ |                                                        |
 | +----------------------+                                                        |
 +--------------------------------------------------------------------------------+
@@ -71,7 +71,7 @@ Board card anatomy:
 | confidence: 91%   drift: low     |
 |                                  |
 | Evidence                         |
-| docs 3 | tickets 1 | PR 1 | QA 0 |
+| docs 3 | tickets 1 | PR 1 | code 2 |
 |                                  |
 | [Open] [Refresh] [Export]        |
 +----------------------------------+
@@ -79,14 +79,14 @@ Board card anatomy:
 
 ## 3. Story Detail / Context Package
 
-Primary use: one place to inspect intent, tickets, implementation, and visual evidence.
+Primary use: one place to inspect intent, tickets, implementation, evidence, and open review gaps.
 
 ```text
 +--------------------------------------------------------------------------------+
 | ST-104 Cart payment                                        [Refresh] [Export]   |
 | Status: Ready for Dev   Confidence: 91%   Drift: Low   Owner: Unassigned        |
 +--------------------------------------------------------------------------------+
-| Tabs: [Spec / Background] [Tickets] [Code Context] [Visual QA] [Agent Log]      |
+| Tabs: [Spec / Background] [Evidence] [Tickets] [Code Context] [Agent Log]      |
 +--------------------------------------------------------------------------------+
 | Left: selected tab content                          | Right: evidence rail      |
 |                                                     |                           |
@@ -94,14 +94,14 @@ Primary use: one place to inspect intent, tickets, implementation, and visual ev
 | | User Story                                     | | | Source Health         | |
 | | As a shopper, I want to pay from the cart...   | | | Docs: fresh           | |
 | |                                                 | | | GitHub: 12 min ago    | |
-| | Acceptance Criteria                            | | | QA: not run           | |
+| | Acceptance Criteria                            | | | Review: needed        | |
 | | - Can review cart total                        | | +-----------------------+ |
 | | - Can choose payment method                    | |                           |
 | | - Can see confirmation                         | | +-----------------------+ |
 | +-------------------------------------------------+ | | Citations             | |
 |                                                     | | 1. Product brief      | |
 | +-------------------------------------------------+ | | 2. PR #123            | |
-| | Agent Summary                                   | | | 3. Playwright spec    | |
+| | Agent Summary                                   | | | 3. Commit a1b2c3d     | |
 | | To-Be is supported by 3 docs. As-Is has PR...   | | +-----------------------+ |
 | +-------------------------------------------------+ |                           |
 +--------------------------------------------------------------------------------+
@@ -171,26 +171,28 @@ Primary use: one place to inspect intent, tickets, implementation, and visual ev
 +--------------------------------------------------------------------------------+
 ```
 
-## 7. Visual QA Tab
+## 7. Evidence Tab
 
 ```text
 +--------------------------------------------------------------------------------+
-| Visual QA                                                                       |
+| Evidence                                                                        |
 +--------------------------------------------------------------------------------+
-| Target: https://demo.example.com/cart        Last run: not run                  |
-| [Run Playwright QA] [Upload screenshot] [Open artifacts]                        |
+| Story: ST-104 Cart payment                Coverage: 4 citations / 3 AC mapped  |
+| [Refresh evidence] [Open source] [Export citations]                             |
 |                                                                                |
 | +---------------------+ +---------------------+ +---------------------+        |
-| | Step 1: Cart        | | Step 2: Payment     | | Step 3: Confirm     |        |
-| | screenshot          | | screenshot          | | screenshot          |        |
-| | PASS                | | PASS                | | MISSING             |        |
+| | Product brief       | | Imported ticket     | | GitHub PR #123      |        |
+| | FileSpace doc       | | FileSpace doc       | | branch feature/...  |        |
+| | supports AC 1,2     | | supports AC 3       | | maps AC 1,2         |        |
 | +---------------------+ +---------------------+ +---------------------+        |
 |                                                                                |
-| Assertions                                                                      |
+| Evidence table                                                                  |
 | +-------+--------------------------------------------+-----------------------+ |
-| | PASS  | Cart total is visible                      | screenshot step 1     | |
-| | PASS  | Payment method can be selected             | screenshot step 2     | |
-| | FAIL  | Confirmation page appears after submit      | no matching route      | |
+| | Type  | Source                                     | Coverage / Gap        | |
+| | doc   | Product brief billing section              | cart total, method    | |
+| | ticket| PROJ-104 imported ticket                   | confirmation copy     | |
+| | code  | app/pages/cart.vue                         | cart total only       | |
+| | agent | generation trace                           | needs AC 3 review     | |
 | +-------+--------------------------------------------+-----------------------+ |
 +--------------------------------------------------------------------------------+
 ```
@@ -214,7 +216,7 @@ Primary use: make autonomous story generation transparent.
 | [x] Refresh To-Be from Agent Search                                             |
 | [x] Refresh As-Is from GitHub                                                   |
 | [x] Detect drift                                                                |
-| [ ] Run Visual QA after generation                                              |
+| [x] Mark unknowns as needs_review instead of guessing                           |
 |                                                                                |
 | [Start generation]                                                              |
 +--------------------------------------------------------------------------------+
@@ -244,10 +246,10 @@ This should reuse the existing EN AIstudio knowledge screens instead of creating
 | +----------------------------------+ +----------------------------------------+ |
 |                                                                                |
 | +----------------------------------+ +----------------------------------------+ |
-| | Ticket Sources                   | | QA Targets                             | |
-| | MVP: imported docs or CSV        | | Base URL and route map                 | |
+| | Ticket Sources                   | | Export Targets                         | |
+| | MVP: imported docs or CSV        | | JSON / Markdown first                  | |
 | | Later: Jira / Linear OAuth       | |                                        | |
-| | [Import ticket file]             | | [Add target URL] [Add route map]       | |
+| | [Import ticket file]             | | [Copy Markdown] [Download JSON]        | |
 | +----------------------------------+ +----------------------------------------+ |
 +--------------------------------------------------------------------------------+
 ```
@@ -265,7 +267,7 @@ This should reuse the existing EN AIstudio knowledge screens instead of creating
 | [x] Source citations from Agent Search                                          |
 | [x] Ticket links and current status                                             |
 | [x] GitHub file and PR mapping                                                  |
-| [x] Latest Visual QA evidence                                                   |
+| [x] Latest generation trace and unresolved review gaps                           |
 |                                                                                |
 | Delivery                                                                         |
 | ( ) Copy markdown                                                               |
@@ -286,7 +288,7 @@ This should reuse the existing EN AIstudio knowledge screens instead of creating
   Story board / dashboard
 
 /admin/vibe-control/sources
-  Source setup for FileSpace, GitHub, tickets, QA targets
+  Source setup for FileSpace, GitHub, tickets, and export targets
 
 /admin/vibe-control/stories/:storyId
   Story detail package
@@ -307,10 +309,9 @@ app/components/vibeControl/VibeControlStoryBoard.vue
 app/components/vibeControl/VibeControlStoryCard.vue
 app/components/vibeControl/VibeControlStoryDetail.vue
 app/components/vibeControl/VibeControlEvidenceRail.vue
-app/components/vibeControl/VibeControlVisualQaPanel.vue
 app/components/vibeControl/VibeControlSourceSetup.vue
 app/components/vibeControl/VibeControlAgentRunCenter.vue
 
 app/stores/vibeControl.ts
-app/types/vibeControl.ts
+app/types/models/vibeControl.ts
 ```

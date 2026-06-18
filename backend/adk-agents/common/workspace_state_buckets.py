@@ -12,6 +12,7 @@ TASK_KEYS = (
     "data_analysis",
     "web_page",
     "business_partner",
+    "vibe_control",
     "guide",
 )
 

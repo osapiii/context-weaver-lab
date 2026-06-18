@@ -24,6 +24,12 @@ def test_set_workspace_mode_accepts_research():
     assert result["workspace_mode"] == "research"
 
 
+def test_set_workspace_mode_accepts_vibe_control():
+    result = set_workspace_mode("vibe_control", "SSOT構築")
+    assert result["ok"] is True
+    assert result["workspace_mode"] == "vibe_control"
+
+
 def test_set_workspace_mode_rejects_invalid():
     result = set_workspace_mode("bogus", "invalid")
     assert result["ok"] is False

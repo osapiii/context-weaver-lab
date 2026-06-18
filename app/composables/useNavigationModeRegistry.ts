@@ -162,6 +162,7 @@ export const useNavigationModeRegistry = () => {
         // 「リサーチエージェント」の能動的な生成セッション画面
         "admin-research-agent",
         "admin-researches",
+        "admin-vibe-control",
         "admin-data-analysis",
         // レガシー一覧 → AI スタジオへリダイレクト
         "admin-writings",
@@ -212,6 +213,18 @@ export const useNavigationModeRegistry = () => {
               routeQuery: { kind: "research" },
               badge: "Beta",
               useCases: ["市場調査", "題材リサーチ"],
+            },
+            {
+              key: "vibe-control",
+              label: "VibeControl",
+              description: "仕様・根拠・コード状態からユーザーストーリーSSOTを構築",
+              purpose:
+                "VibeControl では、FileSpace に登録されたナレッジと GitHub の現在状態を突き合わせ、根拠・信頼度・差分を持つユーザーストーリー台帳を確認できます。Visual QA は含めず、まずSSOTの正確性に集中します。",
+              icon: navCardIcons.vibeControl,
+              behavior: "page",
+              routeName: "admin-vibe-control",
+              badge: "MVP",
+              useCases: ["SSOT構築", "仕様差分確認"],
             },
             {
               key: "ai-image",

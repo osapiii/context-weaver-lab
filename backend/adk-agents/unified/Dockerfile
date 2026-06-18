@@ -22,9 +22,11 @@ COPY adk-agents/writing /app/writing
 COPY adk-agents/sheet /app/sheet
 COPY adk-agents/image /app/image
 COPY adk-agents/consultation /app/consultation
-COPY adk-agents/guide /app/guide
 COPY adk-agents/research /app/research
 COPY adk-agents/business_partner /app/business_partner
+COPY adk-agents/data_analysis /app/data_analysis
+COPY adk-agents/web_page /app/web_page
+COPY adk-agents/vibe_control /app/vibe_control
 COPY adk-agents/unified /app/unified
 COPY agent/slides-generator /app/slides-generator
 

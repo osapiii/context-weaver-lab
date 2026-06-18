@@ -31,3 +31,11 @@ def test_resolve_falls_back_to_url():
     assert mode == "consultation"
 
 
+def test_resolve_accepts_vibe_control_mode():
+    mode = resolve_invoke_agent_mode(
+        url_mode="vibe_control",
+        mode_state={"active_mode": "vibe_control"},
+        session_state={},
+    )
+    assert mode == "vibe_control"
+

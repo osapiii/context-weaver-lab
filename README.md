@@ -1,6 +1,6 @@
 # VibeControl
 
-VibeControl is a hackathon app built from the EN AIstudio foundation. It turns product intent, tickets, code, pull requests, and visual QA evidence into a governed user-story SSOT so teams can keep the speed of vibe coding while preserving delivery confidence.
+VibeControl is a hackathon app built from the EN AIstudio foundation. It turns product intent, tickets, code, pull requests, and source evidence into a governed user-story SSOT so teams can keep the speed of vibe coding while preserving delivery confidence.
 
 This repository was cut out as a fresh repo from `en-aistudio` on 2026-06-18. The inherited base keeps the Nuxt/Firebase UI foundation, ADK agent runtime, and knowledge ingestion pipeline. New VibeControl work should proceed in this repository.
 
@@ -31,7 +31,7 @@ Source: https://findy.co.jp/4127/
 The MVP should focus on four user-facing surfaces:
 
 1. Story board: dynamic list view grouped by lifecycle and metadata.
-2. Story detail: spec/background, tickets, code context, and visual QA in one tabbed detail view.
+2. Story detail: spec/background, evidence, tickets, code context, and agent logs in one tabbed detail view.
 3. Agent run center: generate or refresh stories from knowledge + GitHub state.
 4. Context export: provide story bundles to AI editors through an MCP/OAuth-compatible context endpoint.
 
@@ -40,7 +40,31 @@ The MVP should focus on four user-facing surfaces:
 ```bash
 cd app
 yarn install
+cp .env.example .env.vibe-control-dev
 yarn local:dev
 ```
 
 Use `.env.example` as the template for local Firebase and agent endpoints. Do not commit local `.env.*` files or local signer keys.
+
+## Development GCP Project
+
+- Project ID: `vibe-control-dev`
+- Firebase Hosting: `https://vibe-control-dev.web.app`
+- Unified ADK Cloud Run: `https://en-aistudio-adk-agent-q2uwnmd3yq-an.a.run.app`
+- Firestore: `(default)` database in `asia-northeast1`
+- Firebase Storage: `gs://vibe-control-dev.firebasestorage.app`
+- ADK artifact bucket: `gs://vibe-control-dev-adk-artifacts`
+- Firebase Functions codebase: `ui-backend`
+
+Deploy the SPA to the development project:
+
+```bash
+cd app
+yarn dev:deploy
+```
+
+Deploy backend Functions after creating `backend/app/.env.vibe-control-dev` from `backend/app/.env.example`:
+
+```bash
+firebase deploy --only functions:ui-backend --project vibe-control-dev --config firebase.json
+```

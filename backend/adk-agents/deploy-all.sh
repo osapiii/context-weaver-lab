@@ -3,7 +3,7 @@
 #
 # 使い方:
 #   cd backend/adk-agents
-#   PROJECT_ID=en-aistudio-development REGION=asia-northeast1 ./deploy-all.sh
+#   PROJECT_ID=vibe-control-dev REGION=asia-northeast1 ./deploy-all.sh
 #
 # 必須 env:
 #   PROJECT_ID   — GCP プロジェクト ID

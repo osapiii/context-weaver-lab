@@ -9,6 +9,7 @@ EnActiveTask = Literal[
     "consultation",
     "research",
     "business_partner",
+    "vibe_control",
     "guide",
     "sheet",
 ]
@@ -57,6 +58,7 @@ TASK_BUCKET_KEYS = frozenset(
         "consultation",
         "research",
         "business_partner",
+        "vibe_control",
         "guide",
         "sheet",
     }

@@ -18,6 +18,7 @@ INVOKE_TASKS = frozenset(
         "data_analysis",
         "web_page",
         "business_partner",
+        "vibe_control",
         "guide",
         "sheet",
     }
@@ -40,6 +41,7 @@ TASK_INVOKE_HANDLERS: dict[str, dict[str, Any]] = {
     "data_analysis": {"merge": _noop_merge, "validate": _noop_validate},
     "web_page": {"merge": _noop_merge, "validate": _noop_validate},
     "business_partner": {"merge": _noop_merge, "validate": _noop_validate},
+    "vibe_control": {"merge": _noop_merge, "validate": _noop_validate},
     "guide": {"merge": _noop_merge, "validate": _noop_validate},
     "sheet": {"merge": _noop_merge, "validate": _noop_validate},
 }

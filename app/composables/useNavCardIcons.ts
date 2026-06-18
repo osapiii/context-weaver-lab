@@ -30,5 +30,7 @@ export const useNavCardIcons = () => {
     knowledgeMaterials: "vscode-icons:default-folder-opened",
     /** リクエストログ */
     requestLogs: "flat-color-icons:list",
+    /** VibeControl */
+    vibeControl: "flat-color-icons:flow-chart",
   } as const;
 };

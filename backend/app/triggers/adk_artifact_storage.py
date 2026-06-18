@@ -30,6 +30,7 @@ ADK_ARTIFACT_BUCKET = StringParam(
 
 @storage_fn.on_object_finalized(
     bucket=ADK_ARTIFACT_BUCKET,
+    region="asia-northeast1",
     memory=512,
     timeout_sec=120,
 )

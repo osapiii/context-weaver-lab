@@ -209,6 +209,27 @@ def build_agent_for_mode(
             tools=tools,
         )
 
+    if mode == "vibe_control":
+        from vibe_control.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from vibe_control.tools import (  # type: ignore
+            read_vibe_control_sources,
+            save_user_story_ssot,
+        )
+
+        tools = [
+            *base_tools,
+            FunctionTool(func=read_vibe_control_sources),
+            FunctionTool(func=save_user_story_ssot),
+            FunctionTool(func=add_markdown_document),
+            FunctionTool(func=add_html_document),
+        ]
+        return LlmAgent(
+            name="en_aistudio_vibe_control_agent",
+            model=model,
+            instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
+            tools=tools,
+        )
+
     if mode == "business_partner":
         from business_partner.agent import build_root_agent  # type: ignore
 

@@ -7,11 +7,11 @@
     "local:dev:emulator": "NUXT_PUBLIC_USE_FIREBASE_EMULATOR=true nuxt dev --dotenv ./.env.local",
     "preview": "nuxt preview",
     "build": "nuxt build",
-    "generate:hosting": "NITRO_PRESET=static nuxi generate --dotenv ./.env.sandbox",
+    "generate:hosting": "NITRO_PRESET=static nuxi generate --dotenv ./.env.vibe-control-dev",
     "generate:hosting:prod": "NITRO_PRESET=static nuxi generate --dotenv ./.env.prod",
     "dev:generate": "yarn generate:hosting",
     "prod:generate": "yarn generate:hosting:prod",
-    "dev:deploy": "yarn generate:hosting && firebase --config ../firebase.json deploy --only hosting --project en-aistudio-development",
+    "dev:deploy": "yarn generate:hosting && firebase --config ../firebase.json deploy --only hosting --project vibe-control-dev",
     "test": "vitest",
     "test:run": "vitest run",
     "test:watch": "vitest watch",
@@ -23,8 +23,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "emulator:dump": "mkdir -p ./dumps && firebase emulators:export ./dumps/latest",
-    "emulator:start": "firebase --config ./firebase.json emulators:start --project=en-aistudio-development --only firestore,functions:ui-backend,auth,pubsub --import ./dumps/latest",
-    "dev:test": "firebase --config ../firebase.json emulators:exec --ui --project=en-aistudio-development --only firestore,authimage.png --import ../dumps/2025-05-28-19:22 'npx vitest --coverage'"
+    "emulator:start": "firebase --config ./firebase.json emulators:start --project=vibe-control-dev --only firestore,functions:ui-backend,auth,pubsub --import ./dumps/latest",
+    "dev:test": "firebase --config ../firebase.json emulators:exec --ui --project=vibe-control-dev --only firestore,authimage.png --import ../dumps/2025-05-28-19:22 'npx vitest --coverage'"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.2",
