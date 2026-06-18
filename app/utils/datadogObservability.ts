@@ -33,9 +33,15 @@ type DatadogBeforeSendEvent = {
   };
 };
 
+type DatadogViewContext = {
+  name: string;
+  path: string;
+  fullPath: string;
+};
+
 declare global {
   interface Window {
-    __EN_AISTUDIO_DATADOG_INITIALIZED__?: boolean;
+    __VIBE_CONTROL_DATADOG_INITIALIZED__?: boolean;
   }
 }
 
@@ -56,7 +62,7 @@ const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
 const isDatadogObservabilityActive = (): boolean =>
-  import.meta.client && window.__EN_AISTUDIO_DATADOG_INITIALIZED__ === true;
+  import.meta.client && window.__VIBE_CONTROL_DATADOG_INITIALIZED__ === true;
 
 const compactObject = <T extends Record<string, unknown>>(value: T): T => {
   const entries = Object.entries(value).filter(([, entryValue]) => {
@@ -99,7 +105,7 @@ export const initDatadogObservability = async ({
     return;
   }
 
-  if (window.__EN_AISTUDIO_DATADOG_INITIALIZED__) return;
+  if (window.__VIBE_CONTROL_DATADOG_INITIALIZED__) return;
 
   const [{ datadogRum }, { datadogLogs }] = await Promise.all([
     import("@datadog/browser-rum"),
@@ -109,7 +115,7 @@ export const initDatadogObservability = async ({
   const baseConfig = compactObject({
     clientToken,
     site: datadog.site?.trim() || "ap1.datadoghq.com",
-    service: datadog.service?.trim() || "en-aistudio-frontend",
+    service: datadog.service?.trim() || "vibe-control-frontend",
     env: datadog.env?.trim() || "development",
     version: datadog.version?.trim(),
     sessionSampleRate: 100,
@@ -122,6 +128,7 @@ export const initDatadogObservability = async ({
     applicationId,
     sessionReplaySampleRate: 100,
     defaultPrivacyLevel: "allow",
+    trackViewsManually: true,
     trackUserInteractions: true,
     trackResources: true,
     trackLongTasks: true,
@@ -138,7 +145,25 @@ export const initDatadogObservability = async ({
     beforeSend: shouldSendDatadogEvent,
   });
 
-  window.__EN_AISTUDIO_DATADOG_INITIALIZED__ = true;
+  window.__VIBE_CONTROL_DATADOG_INITIALIZED__ = true;
+};
+
+export const startDatadogView = ({
+  name,
+  path,
+  fullPath,
+}: DatadogViewContext): void => {
+  if (!isDatadogObservabilityActive()) return;
+
+  void import("@datadog/browser-rum").then(({ datadogRum }) => {
+    datadogRum.startView({
+      name,
+      context: {
+        routePath: path,
+        routeFullPath: fullPath,
+      },
+    });
+  });
 };
 
 export const reportDatadogError = (

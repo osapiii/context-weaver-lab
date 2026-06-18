@@ -22,8 +22,13 @@ if (existsSync(envFile)) {
 const useFirebaseEmulator =
   process.env.NUXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
 const firebaseProjectId = process.env.NUXT_PUBLIC_FIREBASECONFIG_PROJECTID || "";
+const devAuthBypassDefaultProjects = new Set([
+  "vibe-control-dev",
+  "en-aistudio-development",
+]);
 const defaultDevAuthBypassEmails =
-  firebaseProjectId !== "en-aistudio-production"
+  devAuthBypassDefaultProjects.has(firebaseProjectId) ||
+  (firebaseProjectId && firebaseProjectId !== "en-aistudio-production")
     ? "super@enostech.co.jp"
     : "";
 const devAuthBypassEmails =
@@ -197,7 +202,7 @@ export default defineNuxtConfig({
         site: process.env.NUXT_PUBLIC_DATADOG_SITE || "ap1.datadoghq.com",
         service:
           process.env.NUXT_PUBLIC_DATADOG_SERVICE ||
-          "en-aistudio-frontend",
+          "vibe-control-frontend",
         env: datadogEnv,
         version:
           process.env.NUXT_PUBLIC_APP_VERSION ||

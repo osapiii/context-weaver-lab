@@ -3,6 +3,12 @@
 substitutions:
   _SERVICE: en-aistudio-sheet-agent
   _REGION: asia-northeast1
+  _DD_LLMOBS_ENABLED: "false"
+  _DD_LLMOBS_AGENTLESS_ENABLED: "true"
+  _DD_LLMOBS_ML_APP: vibe-control
+  _DD_SERVICE: vibe-control-sheet-agent
+  _DD_ENV: dev
+  _DD_SITE: ap1.datadoghq.com
 
 steps:
   - id: build
@@ -26,7 +32,7 @@ steps:
       - --cpu=1
       - --concurrency=8
       - --timeout=900
-      - --set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=us-central1,VERTEX_SEARCH_LOCATION=global,MODEL_ID=gemini-2.5-flash
+      - --set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=us-central1,VERTEX_SEARCH_LOCATION=global,MODEL_ID=gemini-2.5-flash,DD_LLMOBS_ENABLED=${_DD_LLMOBS_ENABLED},DD_LLMOBS_AGENTLESS_ENABLED=${_DD_LLMOBS_AGENTLESS_ENABLED},DD_LLMOBS_ML_APP=${_DD_LLMOBS_ML_APP},DD_SERVICE=${_DD_SERVICE},DD_ENV=${_DD_ENV},DD_SITE=${_DD_SITE}
 
 images:
   - gcr.io/$PROJECT_ID/${_SERVICE}:latest

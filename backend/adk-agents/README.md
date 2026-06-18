@@ -76,6 +76,23 @@ backend/adk-agents/
 | `MODEL_ID`                     | LLM (既定 `gemini-2.5-flash`) |
 | `CORS_ALLOW_ORIGINS`           | カンマ区切り; EN AIstudio frontend オリジン |
 | `FIREBASE_PROJECT_ID`          | Firebase Admin SDK (ADC で auto-detect) |
+| `DD_LLMOBS_ENABLED`            | Datadog LLM Observability を有効化 (`true` / `false`) |
+| `DD_LLMOBS_AGENTLESS_ENABLED`  | Datadog agentless 送信 (`true` 推奨) |
+| `DD_LLMOBS_ML_APP`             | LLM Observability app 名 (`vibe-control`) |
+| `DD_SERVICE`                   | Datadog 上の論理 service 名 (`vibe-control-adk-agent`) |
+| `DD_ENV`                       | Datadog env (`dev` / `prod`) |
+| `DD_SITE`                      | Datadog site (`ap1.datadoghq.com`) |
+| `DD_API_KEY`                   | Datadog API key。Secret Manager から注入する |
+
+Datadog API key は Cloud Build substitutions に渡さない。例:
+
+```bash
+gcloud run services update en-aistudio-adk-agent \
+  --project=vibe-control-dev \
+  --region=asia-northeast1 \
+  --update-env-vars=DD_LLMOBS_ENABLED=true \
+  --update-secrets=DD_API_KEY=datadog-api-key:latest
+```
 
 ## デプロイ (mode ごと)
 

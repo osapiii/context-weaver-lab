@@ -21,6 +21,10 @@ except ImportError:
 
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
+from common.datadog_llmobs import init_datadog_llmobs  # type: ignore  # noqa: E402
+
+init_datadog_llmobs()
+
 from common.server_base import create_app  # type: ignore  # noqa: E402
 from image.agent import root_agent  # type: ignore  # noqa: E402
 

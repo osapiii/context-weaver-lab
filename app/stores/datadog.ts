@@ -21,8 +21,9 @@ export const useDatadogStore = defineStore("datadog", {
       datadogRum.init({
         applicationId: runtimeConfig.public.datadog.applicationId,
         clientToken: runtimeConfig.public.datadog.clientToken,
-        site: "ap1.datadoghq.com",
-        service: "qlavis",
+        site: runtimeConfig.public.datadog.site || "ap1.datadoghq.com",
+        service:
+          runtimeConfig.public.datadog.service || "vibe-control-frontend",
         sessionSampleRate: 100,
         sessionReplaySampleRate: 100,
         trackResources: true,
