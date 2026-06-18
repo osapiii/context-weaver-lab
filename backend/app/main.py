@@ -1,5 +1,9 @@
 """Firebase Functions entrypoint for AI Studio backend."""
 
+from datadog_llmobs import init_datadog_llmobs
+
+init_datadog_llmobs()
+
 from triggers import adk_artifact_signed_url  # noqa: F401
 from triggers import adk_artifact_storage  # noqa: F401
 from triggers import adk_invoke_requests  # noqa: F401

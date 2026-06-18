@@ -89,10 +89,16 @@ const clearPersistedEmailForLink = () => {
 
 const isDevAuthBypassEmail = (email: string): boolean => {
   const normalizedEmail = email.trim().toLowerCase();
-  const isLocalhost =
+  const devAuthBypassHosts = new Set([
+    "localhost",
+    "127.0.0.1",
+    "vibe-control-dev.web.app",
+    "vibe-control-dev.firebaseapp.com",
+  ]);
+  const isDevHost =
     typeof window !== "undefined" &&
-    ["localhost", "127.0.0.1"].includes(window.location.hostname);
-  if (isLocalhost && normalizedEmail === "super@enostech.co.jp") {
+    devAuthBypassHosts.has(window.location.hostname);
+  if (isDevHost && normalizedEmail === "super@enostech.co.jp") {
     return true;
   }
 

@@ -11,6 +11,7 @@
 #   REGION       — Cloud Run リージョン (既定: asia-northeast1)
 #   IMAGE_BUCKET — image agent の生成画像保存先 GCS バケット (未指定なら data URL fallback)
 #   ONLY         — "unified" / "writing" / "sheet" / "image" / "consultation" / "all" (既定 unified)
+#   DD_*         — Datadog LLM Observability non-secret env (API key は Secret Manager 推奨)
 
 set -euo pipefail
 
@@ -21,11 +22,17 @@ PROJECT_ID="${PROJECT_ID:?PROJECT_ID is required}"
 REGION="${REGION:-asia-northeast1}"
 IMAGE_BUCKET="${IMAGE_BUCKET:-}"
 ONLY="${ONLY:-unified}"
+DD_LLMOBS_ENABLED="${DD_LLMOBS_ENABLED:-false}"
+DD_LLMOBS_AGENTLESS_ENABLED="${DD_LLMOBS_AGENTLESS_ENABLED:-true}"
+DD_LLMOBS_ML_APP="${DD_LLMOBS_ML_APP:-vibe-control}"
+DD_ENV="${DD_ENV:-dev}"
+DD_SITE="${DD_SITE:-ap1.datadoghq.com}"
 
 deploy_one() {
   local mode="$1"
   echo "::: Deploying en-aistudio-${mode}-agent (project=${PROJECT_ID} region=${REGION})"
-  local sub="_REGION=${REGION}"
+  local dd_service="vibe-control-${mode}-agent"
+  local sub="_REGION=${REGION},_DD_LLMOBS_ENABLED=${DD_LLMOBS_ENABLED},_DD_LLMOBS_AGENTLESS_ENABLED=${DD_LLMOBS_AGENTLESS_ENABLED},_DD_LLMOBS_ML_APP=${DD_LLMOBS_ML_APP},_DD_SERVICE=${dd_service},_DD_ENV=${DD_ENV},_DD_SITE=${DD_SITE}"
   if [[ "${mode}" == "image" && -n "${IMAGE_BUCKET}" ]]; then
     sub="${sub},_IMAGE_BUCKET=${IMAGE_BUCKET}"
   fi
@@ -37,7 +44,7 @@ deploy_one() {
 
 deploy_unified() {
   echo "::: Deploying en-aistudio-adk-agent (unified) (project=${PROJECT_ID} region=${REGION})"
-  local sub="_REGION=${REGION}"
+  local sub="_REGION=${REGION},_DD_LLMOBS_ENABLED=${DD_LLMOBS_ENABLED},_DD_LLMOBS_AGENTLESS_ENABLED=${DD_LLMOBS_AGENTLESS_ENABLED},_DD_LLMOBS_ML_APP=${DD_LLMOBS_ML_APP},_DD_SERVICE=vibe-control-adk-agent,_DD_ENV=${DD_ENV},_DD_SITE=${DD_SITE}"
   local artifact_bucket="${ARTIFACT_BUCKET:-${IMAGE_BUCKET:-}}"
   if [[ -z "${artifact_bucket}" ]]; then
     artifact_bucket="${PROJECT_ID}-adk-artifacts"

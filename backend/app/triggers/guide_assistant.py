@@ -6,6 +6,7 @@ official EN AIstudio guide corpus.
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
 import os
 import re
 from typing import Any
@@ -123,6 +124,84 @@ def _grounding_metadata(response: Any) -> Any:
     return _jsonable(getattr(first, "grounding_metadata", None))
 
 
+def _usage_metadata(response: Any) -> dict[str, Any]:
+    usage = getattr(response, "usage_metadata", None)
+    jsonable_usage = _jsonable(usage)
+    return jsonable_usage if isinstance(jsonable_usage, dict) else {}
+
+
+def _llmobs_enabled() -> bool:
+    return os.getenv("DD_LLMOBS_ENABLED", "").lower() in {"1", "true", "yes"}
+
+
+def _llmobs_span(model_name: str):
+    if not _llmobs_enabled():
+        return nullcontext()
+    try:
+        from ddtrace.llmobs import LLMObs
+
+        return LLMObs.llm(
+            model_name=model_name,
+            name="ask_en_aistudio_guide.generate_content",
+            model_provider="google_gemini",
+            ml_app=os.getenv("DD_LLMOBS_ML_APP", "vibe-control"),
+        )
+    except Exception:
+        return nullcontext()
+
+
+def _llmobs_annotate(
+    *,
+    prompt: str,
+    output: str | None = None,
+    response: Any | None = None,
+    error: Exception | None = None,
+) -> None:
+    if not _llmobs_enabled():
+        return
+    try:
+        from ddtrace.llmobs import LLMObs
+
+        usage = _usage_metadata(response) if response is not None else {}
+        metrics = {
+            "input_tokens": usage.get("prompt_token_count"),
+            "output_tokens": usage.get("candidates_token_count"),
+            "total_tokens": usage.get("total_token_count"),
+        }
+        metrics = {key: value for key, value in metrics.items() if value is not None}
+        metadata = {
+            "operation": "ask_en_aistudio_guide",
+            "file_search_store": _store_name(),
+        }
+        if error is not None:
+            metadata["error_type"] = type(error).__name__
+            metadata["error_message"] = str(error)[:1000]
+
+        LLMObs.annotate(
+            input_data=prompt,
+            output_data=output,
+            metadata=metadata,
+            metrics=metrics or None,
+            tags={
+                "vibe_control.operation": "ask_en_aistudio_guide",
+                "vibe_control.feature": "guide_assistant",
+            },
+        )
+    except Exception:
+        return
+
+
+def _llmobs_flush() -> None:
+    if not _llmobs_enabled():
+        return
+    try:
+        from ddtrace.llmobs import LLMObs
+
+        LLMObs.flush()
+    except Exception:
+        return
+
+
 def _extract_auto_navigation(text: str) -> dict[str, Any] | None:
     match = NAVIGATION_LINK_RE.search(text or "")
     if not match:
@@ -167,22 +246,34 @@ def ask_en_aistudio_guide(req: https_fn.CallableRequest) -> dict[str, Any]:
             f"## ユーザーの質問\n{prompt}"
         )
 
+    model_id = _model_id()
+    response = None
+    text = ""
     try:
         client = genai.Client(api_key=_api_key())
-        response = client.models.generate_content(
-            model=_model_id(),
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                tools=[
-                    types.Tool(
-                        file_search=types.FileSearch(
-                            file_search_store_names=[_store_name()]
-                        )
-                    )
-                ],
-            ),
-        )
+        with _llmobs_span(model_id):
+            try:
+                response = client.models.generate_content(
+                    model=model_id,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        tools=[
+                            types.Tool(
+                                file_search=types.FileSearch(
+                                    file_search_store_names=[_store_name()]
+                                )
+                            )
+                        ],
+                    ),
+                )
+                text = getattr(response, "text", "") or ""
+                _llmobs_annotate(prompt=contents, output=text, response=response)
+            except Exception as exc:
+                _llmobs_annotate(prompt=contents, error=exc)
+                raise
+            finally:
+                _llmobs_flush()
     except https_fn.HttpsError:
         raise
     except Exception as exc:
@@ -191,7 +282,6 @@ def ask_en_aistudio_guide(req: https_fn.CallableRequest) -> dict[str, Any]:
             message=f"Gemini guide request failed: {exc}",
         ) from exc
 
-    text = getattr(response, "text", "") or ""
     return {
         "text": text,
         "groundingMetadata": _grounding_metadata(response),

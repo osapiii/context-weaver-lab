@@ -26,7 +26,9 @@ except ImportError:
 logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
 from common.byok_patch import install as install_byok_patch  # type: ignore  # noqa: E402
+from common.datadog_llmobs import init_datadog_llmobs  # type: ignore  # noqa: E402
 
+init_datadog_llmobs()
 install_byok_patch()
 
 from common.server_base import create_unified_app  # type: ignore  # noqa: E402

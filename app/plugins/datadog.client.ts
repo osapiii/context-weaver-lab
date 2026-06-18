@@ -1,4 +1,7 @@
-import { initDatadogObservability } from "@utils/datadogObservability";
+import {
+  initDatadogObservability,
+  startDatadogView,
+} from "@utils/datadogObservability";
 
 const toOrigin = (url: unknown): string | null => {
   if (typeof url !== "string" || !url.trim()) return null;
@@ -10,8 +13,18 @@ const toOrigin = (url: unknown): string | null => {
   }
 };
 
+type DatadogRoute = {
+  name?: string | symbol | null;
+  path: string;
+  fullPath: string;
+};
+
+const resolveViewName = (route: DatadogRoute): string =>
+  route.name ? String(route.name) : route.path;
+
 export default defineNuxtPlugin(async () => {
   const config = useRuntimeConfig();
+  const router = useRouter();
   const publicConfig = config.public;
 
   const serviceOrigins = [
@@ -43,5 +56,19 @@ export default defineNuxtPlugin(async () => {
   await initDatadogObservability({
     datadog: publicConfig.datadog,
     allowedTracingUrls,
+  });
+
+  startDatadogView({
+    name: resolveViewName(router.currentRoute.value),
+    path: router.currentRoute.value.path,
+    fullPath: router.currentRoute.value.fullPath,
+  });
+
+  router.afterEach((to) => {
+    startDatadogView({
+      name: resolveViewName(to),
+      path: to.path,
+      fullPath: to.fullPath,
+    });
   });
 });
