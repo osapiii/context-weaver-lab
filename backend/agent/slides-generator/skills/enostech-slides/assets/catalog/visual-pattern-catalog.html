@@ -1,0 +1,2810 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ENOSTECH Visual Pattern Catalog (v6.19)</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --brand: #000000;
+      --brand-soft: #F5F5F5;
+      --brand-deep: #000000;
+      --accent: #F59E0B;
+      --accent-soft: #FEF3C7;
+      --ink: #000000;
+      --gray100: #F5F5F5;
+      --gray200: #E5E5E5;
+      --gray500: #737373;
+      --gray700: #404040;
+      --canvas: #FAFAF7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--canvas);
+      color: var(--ink);
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      line-height: 1.6;
+    }
+    .hero {
+      background: var(--brand);
+      color: white;
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 40px;
+    }
+    .hero h1 { margin: 0 0 8px; font-size: 28px; }
+    .hero .subtitle { opacity: 0.85; font-size: 14px; }
+    .hero .accent-bar {
+      display: inline-block;
+      background: var(--accent);
+      color: var(--ink);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-top: 12px;
+    }
+    h2 {
+      margin: 50px 0 20px;
+      padding-bottom: 8px;
+      border-bottom: 3px solid var(--brand);
+      color: var(--brand-deep);
+    }
+    h3 {
+      margin: 30px 0 16px;
+      font-size: 16px;
+      color: var(--gray700);
+    }
+    .count { color: var(--gray500); font-size: 13px; font-weight: normal; }
+    .grid {
+      display: grid;
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    .icon-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+    .scene-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+    .card {
+      background: white;
+      border: 1px solid var(--gray200);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      z-index: 2;
+    }
+    .badge-shape { background: var(--brand-soft); color: var(--brand-deep); }
+    .badge-svg   { background: var(--accent-soft); color: var(--brand-deep); border: 1px solid var(--accent); }
+    .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .card-img {
+      background: var(--gray100);
+      padding: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .card-img img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+    .icon-card .card-img { aspect-ratio: 1; max-height: 200px; }
+    .scene-card .card-img { aspect-ratio: 16/10; }
+    .card-body { padding: 12px 14px; }
+    .card-id {
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--brand-deep);
+    }
+    .card-desc {
+      font-size: 12px;
+      color: var(--gray700);
+      margin: 4px 0 8px;
+    }
+    .card-snippet {
+      background: var(--gray100);
+      border-radius: 4px;
+      padding: 6px 8px;
+      font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+      font-size: 11px;
+      overflow-x: auto;
+      margin: 0;
+    }
+    details { font-size: 12px; }
+    details summary { cursor: pointer; color: var(--brand); font-weight: 500; padding: 4px 0; }
+    .rules {
+      background: var(--brand-soft);
+      border-left: 4px solid var(--brand);
+      padding: 16px 20px;
+      border-radius: 4px;
+      margin: 20px 0 30px;
+    }
+    .rules h4 { margin: 0 0 8px; color: var(--brand-deep); }
+    .rules ul { margin: 0; padding-left: 20px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h1>ENOSTECH Visual Pattern Catalog</h1>
+    <div class="subtitle">v6.19 (2026-04-27) — 106 icons × 50 scenes / ネイティブ shape only</div>
+    <span class="accent-bar">SVG / Nanobanana refine 廃止</span>
+  </div>
+
+  <div class="rules">
+    <h4>図解グローバルルール G1-G4</h4>
+    <ul>
+      <li><strong>G1 平易な言葉</strong>: 横文字回避、専門用語は補足、数値は単位込み (label 16 字 / sub 30 字 / title 28 字以内)</li>
+      <li><strong>G2 シンプルな見た目</strong>: 雲・有機形・キャラクター・絵文字は禁止。許可シェイプ (RECTANGLE / ROUNDED_RECTANGLE / OVAL / LINE / 矢印 / TRIANGLE / TRAPEZOID) のみ</li>
+      <li><strong>G3 3 ステップ作成</strong>: 情報整理 → 型選択 → 配置と装飾 (色 3 色まで)</li>
+      <li><strong>G4 70-25-5 色比</strong>: base 70% (canvas/gray) / brand 25% / accent 5% (アンバーは 1 挿絵に 1 箇所)</li>
+    </ul>
+  </div>
+
+  <h2>📦 シーン (50)</h2>
+  <p>挿絵の「型」。<code>NI.addNativeIllust(slide, sceneId, opts)</code> で呼び出し。</p>
+  
+    <h3>A. 既存 8 (基本) <span class="count">(8)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/compare-2col-arch.png" alt="compare-2col-arch" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">compare-2col-arch</div>
+        <div class="card-desc">商用 vs 自社系の左右対比構造図</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;商用 API の GPU 拠点 vs 自社 VPC&quot;,
+  &quot;left&quot;: {
+    &quot;label&quot;: &quot;商用 API 提供者&quot;,
+    &quot;icon&quot;: &quot;building&quot;,
+    &quot;sub&quot;: &quot;GPU 拠点 (大規模)&quot;
+  },
+  &quot;right&quot;: {
+    &quot;label&quot;: &quot;自社 VPC&quot;,
+    &quot;dashed&quot;: true,
+    &quot;stack&quot;: [
+      &quot;自社 GPU&quot;,
+      &quot;Ollama&quot;,
+      &quot;Llama 3.1&quot;
+    ]
+  },
+  &quot;bridge&quot;: {
+    &quot;label&quot;: &quot;API 呼び出し&quot;,
+    &quot;direction&quot;: &quot;right&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/dataflow-3stage.png" alt="dataflow-3stage" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">dataflow-3stage</div>
+        <div class="card-desc">Client → 処理 → Storage 系 3 段フロー</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;Cloud Run GPU でのリクエスト処理&quot;,
+  &quot;stages&quot;: [
+    {
+      &quot;label&quot;: &quot;クライアント&quot;,
+      &quot;icon&quot;: &quot;server&quot;,
+      &quot;sub&quot;: &quot;ブラウザ&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Cloud Run GPU&quot;,
+      &quot;icon&quot;: &quot;gpu&quot;,
+      &quot;sub&quot;: &quot;推論処理&quot;
+    },
+    {
+      &quot;label&quot;: &quot;GCS バケット&quot;,
+      &quot;icon&quot;: &quot;db&quot;,
+      &quot;sub&quot;: &quot;結果保存&quot;
+    }
+  ],
+  &quot;arrowLabels&quot;: [
+    &quot;HTTPS&quot;,
+    &quot;結果保存&quot;
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/radial-hub-spoke.png" alt="radial-hub-spoke" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">radial-hub-spoke</div>
+        <div class="card-desc">中央 + 周辺 4-8 要素</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;データ基盤を取り巻く 6 機能&quot;,
+  &quot;hub&quot;: {
+    &quot;label&quot;: &quot;データ基盤&quot;
+  },
+  &quot;spokes&quot;: [
+    {
+      &quot;label&quot;: &quot;BI&quot;
+    },
+    {
+      &quot;label&quot;: &quot;分析&quot;
+    },
+    {
+      &quot;label&quot;: &quot;ETL&quot;
+    },
+    {
+      &quot;label&quot;: &quot;可視化&quot;
+    },
+    {
+      &quot;label&quot;: &quot;権限&quot;
+    },
+    {
+      &quot;label&quot;: &quot;監査&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/before-after-pair.png" alt="before-after-pair" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">before-after-pair</div>
+        <div class="card-desc">Before/After の左右対比</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;導入前後の運用負荷&quot;,
+  &quot;before&quot;: {
+    &quot;label&quot;: &quot;導入前&quot;,
+    &quot;sub&quot;: &quot;担当 1 人で属人化&quot;
+  },
+  &quot;after&quot;: {
+    &quot;label&quot;: &quot;導入後&quot;,
+    &quot;sub&quot;: &quot;チーム 5 人で再現可能&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/stack-3layer.png" alt="stack-3layer" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">stack-3layer</div>
+        <div class="card-desc">基盤 → 中間 → 上位 階層</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;本プロダクトの技術スタック&quot;,
+  &quot;layers&quot;: [
+    {
+      &quot;label&quot;: &quot;上位アプリ層&quot;,
+      &quot;sub&quot;: &quot;管理画面 / 申請&quot;
+    },
+    {
+      &quot;label&quot;: &quot;中間 API 層&quot;,
+      &quot;sub&quot;: &quot;REST + GraphQL&quot;
+    },
+    {
+      &quot;label&quot;: &quot;基盤データ層&quot;,
+      &quot;sub&quot;: &quot;PostgreSQL + GCS&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/tradeoff-balance.png" alt="tradeoff-balance" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">tradeoff-balance</div>
+        <div class="card-desc">天秤・トレードオフ</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;リアルタイム vs バッチ処理&quot;,
+  &quot;axis&quot;: &quot;推論コスト&quot;,
+  &quot;left&quot;: {
+    &quot;label&quot;: &quot;リアルタイム&quot;,
+    &quot;weight&quot;: 0.7
+  },
+  &quot;right&quot;: {
+    &quot;label&quot;: &quot;バッチ&quot;,
+    &quot;weight&quot;: 0.3
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/decision-tree.png" alt="decision-tree" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">decision-tree</div>
+        <div class="card-desc">三角分岐 / 損益分岐</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;モデル選定の分岐&quot;,
+  &quot;root&quot;: {
+    &quot;label&quot;: &quot;用途は？&quot;
+  },
+  &quot;branches&quot;: [
+    {
+      &quot;label&quot;: &quot;日本語生成&quot;,
+      &quot;sub&quot;: &quot;Llama 3.1 (Ja)&quot;
+    },
+    {
+      &quot;label&quot;: &quot;英語生成&quot;,
+      &quot;sub&quot;: &quot;Llama 3.1 (En)&quot;
+    },
+    {
+      &quot;label&quot;: &quot;コード生成&quot;,
+      &quot;sub&quot;: &quot;CodeLlama&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/lifecycle-loop.png" alt="lifecycle-loop" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">lifecycle-loop</div>
+        <div class="card-desc">4 段サイクル (PDCA 系)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;運用サイクル&quot;,
+  &quot;steps&quot;: [
+    {
+      &quot;label&quot;: &quot;計画&quot;
+    },
+    {
+      &quot;label&quot;: &quot;実行&quot;
+    },
+    {
+      &quot;label&quot;: &quot;評価&quot;
+    },
+    {
+      &quot;label&quot;: &quot;改善&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>B. ビジネスモデル (Bizgram 由来) <span class="count">(6)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/bizgram-3x3.png" alt="bizgram-3x3" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">bizgram-3x3</div>
+        <div class="card-desc">Bizgram 9 マス: 利用者 / 事業 / 事業者</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;メルカリのビジネスモデル&quot;,
+  &quot;top&quot;: {
+    &quot;items&quot;: [
+      &quot;出品者&quot;,
+      &quot;商品&quot;,
+      &quot;購入者&quot;
+    ]
+  },
+  &quot;mid&quot;: {
+    &quot;items&quot;: [
+      &quot;手数料&quot;,
+      &quot;取引仲介&quot;,
+      &quot;配送支援&quot;
+    ]
+  },
+  &quot;bottom&quot;: {
+    &quot;items&quot;: [
+      &quot;メルカリ本社&quot;,
+      &quot;物流網&quot;,
+      &quot;決済代行&quot;
+    ]
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/platform-3party.png" alt="platform-3party" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">platform-3party</div>
+        <div class="card-desc">プラットフォーム 3 者構造</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;プラットフォーム型ビジネス&quot;,
+  &quot;buyer&quot;: {
+    &quot;label&quot;: &quot;買い手&quot;
+  },
+  &quot;platform&quot;: {
+    &quot;label&quot;: &quot;プラットフォーム&quot;
+  },
+  &quot;seller&quot;: {
+    &quot;label&quot;: &quot;売り手&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/freemium-funnel.png" alt="freemium-funnel" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">freemium-funnel</div>
+        <div class="card-desc">フリーミアム漏斗 (無料 → 有料)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;フリーミアム漏斗&quot;,
+  &quot;free&quot;: {
+    &quot;label&quot;: &quot;無料利用者&quot;,
+    &quot;sub&quot;: &quot;100 万人&quot;
+  },
+  &quot;paid&quot;: {
+    &quot;label&quot;: &quot;有料転換&quot;,
+    &quot;sub&quot;: &quot;5 万人&quot;
+  },
+  &quot;loyal&quot;: {
+    &quot;label&quot;: &quot;ロイヤル&quot;,
+    &quot;sub&quot;: &quot;5 千人&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/subscription-flow.png" alt="subscription-flow" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">subscription-flow</div>
+        <div class="card-desc">サブスク継続課金</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;サブスクリプションの仕組み&quot;,
+  &quot;customer&quot;: {
+    &quot;label&quot;: &quot;顧客&quot;
+  },
+  &quot;period&quot;: {
+    &quot;label&quot;: &quot;月次&quot;
+  },
+  &quot;revenue&quot;: {
+    &quot;label&quot;: &quot;月額収益&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/marketplace-match.png" alt="marketplace-match" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">marketplace-match</div>
+        <div class="card-desc">マーケットプレイス (出品 → 購入)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;マーケットプレイスのマッチング&quot;,
+  &quot;sellers&quot;: [
+    &quot;出品者 A&quot;,
+    &quot;出品者 B&quot;,
+    &quot;出品者 C&quot;
+  ],
+  &quot;hub&quot;: {
+    &quot;label&quot;: &quot;集約サービス&quot;
+  },
+  &quot;buyers&quot;: [
+    &quot;購入者 X&quot;,
+    &quot;購入者 Y&quot;,
+    &quot;購入者 Z&quot;
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/value-chain.png" alt="value-chain" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">value-chain</div>
+        <div class="card-desc">バリューチェーン (横連鎖)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;バリューチェーン&quot;,
+  &quot;stages&quot;: [
+    {
+      &quot;label&quot;: &quot;調達&quot;,
+      &quot;sub&quot;: &quot;原材料&quot;
+    },
+    {
+      &quot;label&quot;: &quot;業務&quot;,
+      &quot;sub&quot;: &quot;組立&quot;
+    },
+    {
+      &quot;label&quot;: &quot;販売&quot;,
+      &quot;sub&quot;: &quot;流通&quot;
+    },
+    {
+      &quot;label&quot;: &quot;サポート&quot;,
+      &quot;sub&quot;: &quot;保守&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>C. マーケ・戦略フレームワーク <span class="count">(5)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/swot-2x2.png" alt="swot-2x2" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">swot-2x2</div>
+        <div class="card-desc">SWOT 4 象限</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;本プロダクトの SWOT 分析&quot;,
+  &quot;s&quot;: {
+    &quot;label&quot;: &quot;事業会社向けの実績&quot;
+  },
+  &quot;w&quot;: {
+    &quot;label&quot;: &quot;海外展開がない&quot;
+  },
+  &quot;o&quot;: {
+    &quot;label&quot;: &quot;AI 案件の急増&quot;
+  },
+  &quot;t&quot;: {
+    &quot;label&quot;: &quot;大手参入リスク&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/five-forces.png" alt="five-forces" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">five-forces</div>
+        <div class="card-desc">5 フォース (中央 + 4 周辺)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;5 フォース分析&quot;,
+  &quot;center&quot;: {
+    &quot;label&quot;: &quot;業界内競争&quot;
+  },
+  &quot;top&quot;: {
+    &quot;label&quot;: &quot;新規参入&quot;
+  },
+  &quot;bottom&quot;: {
+    &quot;label&quot;: &quot;代替品&quot;
+  },
+  &quot;left&quot;: {
+    &quot;label&quot;: &quot;買い手&quot;
+  },
+  &quot;right&quot;: {
+    &quot;label&quot;: &quot;売り手&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/4p-grid.png" alt="4p-grid" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">4p-grid</div>
+        <div class="card-desc">4P (Product / Price / Place / Promotion)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;4P マーケティング&quot;,
+  &quot;product&quot;: {
+    &quot;label&quot;: &quot;AI 業務支援&quot;
+  },
+  &quot;price&quot;: {
+    &quot;label&quot;: &quot;月額制&quot;
+  },
+  &quot;place&quot;: {
+    &quot;label&quot;: &quot;SaaS&quot;
+  },
+  &quot;promotion&quot;: {
+    &quot;label&quot;: &quot;カンファレンス&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/customer-journey.png" alt="customer-journey" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">customer-journey</div>
+        <div class="card-desc">カスタマージャーニー (5 段階)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;購入までの 5 段階&quot;,
+  &quot;stages&quot;: [
+    {
+      &quot;phase&quot;: &quot;認知&quot;,
+      &quot;touch&quot;: &quot;広告&quot;,
+      &quot;emotion&quot;: &quot;気付く&quot;
+    },
+    {
+      &quot;phase&quot;: &quot;関心&quot;,
+      &quot;touch&quot;: &quot;サイト&quot;,
+      &quot;emotion&quot;: &quot;比べる&quot;
+    },
+    {
+      &quot;phase&quot;: &quot;検討&quot;,
+      &quot;touch&quot;: &quot;資料請求&quot;,
+      &quot;emotion&quot;: &quot;迷う&quot;
+    },
+    {
+      &quot;phase&quot;: &quot;購入&quot;,
+      &quot;touch&quot;: &quot;フォーム&quot;,
+      &quot;emotion&quot;: &quot;決める&quot;
+    },
+    {
+      &quot;phase&quot;: &quot;継続&quot;,
+      &quot;touch&quot;: &quot;マイページ&quot;,
+      &quot;emotion&quot;: &quot;満足&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/aisas-funnel.png" alt="aisas-funnel" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">aisas-funnel</div>
+        <div class="card-desc">AIDMA / AISAS の段階ファネル</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;AISAS ファネル&quot;,
+  &quot;steps&quot;: [
+    {
+      &quot;label&quot;: &quot;A 認知&quot;
+    },
+    {
+      &quot;label&quot;: &quot;I 興味&quot;
+    },
+    {
+      &quot;label&quot;: &quot;S 検索&quot;
+    },
+    {
+      &quot;label&quot;: &quot;A 行動&quot;
+    },
+    {
+      &quot;label&quot;: &quot;S 共有&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>D. 構造表現 <span class="count">(4)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/logic-tree.png" alt="logic-tree" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">logic-tree</div>
+        <div class="card-desc">ロジックツリー (root → 大 → 中)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;売上向上のロジックツリー&quot;,
+  &quot;root&quot;: {
+    &quot;label&quot;: &quot;売上向上&quot;
+  },
+  &quot;branches&quot;: [
+    {
+      &quot;label&quot;: &quot;客数増&quot;,
+      &quot;children&quot;: [
+        &quot;新規獲得&quot;,
+        &quot;リピート&quot;
+      ]
+    },
+    {
+      &quot;label&quot;: &quot;客単価増&quot;,
+      &quot;children&quot;: [
+        &quot;ARPU&quot;,
+        &quot;クロスセル&quot;
+      ]
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/org-hierarchy.png" alt="org-hierarchy" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">org-hierarchy</div>
+        <div class="card-desc">組織図 (1 → 3 → N)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;組織構造&quot;,
+  &quot;top&quot;: {
+    &quot;label&quot;: &quot;CEO&quot;
+  },
+  &quot;middle&quot;: [
+    &quot;CTO&quot;,
+    &quot;CPO&quot;,
+    &quot;CFO&quot;
+  ],
+  &quot;bottom&quot;: [
+    &quot;エンジニア&quot;,
+    &quot;デザイン&quot;,
+    &quot;PM&quot;,
+    &quot;営業&quot;
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/timeline-horizontal.png" alt="timeline-horizontal" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">timeline-horizontal</div>
+        <div class="card-desc">横タイムライン</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;プロダクト開発の進捗&quot;,
+  &quot;events&quot;: [
+    {
+      &quot;date&quot;: &quot;2025/Q1&quot;,
+      &quot;label&quot;: &quot;企画&quot;
+    },
+    {
+      &quot;date&quot;: &quot;2025/Q2&quot;,
+      &quot;label&quot;: &quot;設計&quot;
+    },
+    {
+      &quot;date&quot;: &quot;2025/Q3&quot;,
+      &quot;label&quot;: &quot;開発&quot;
+    },
+    {
+      &quot;date&quot;: &quot;2025/Q4&quot;,
+      &quot;label&quot;: &quot;リリース&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/funnel-conversion.png" alt="funnel-conversion" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">funnel-conversion</div>
+        <div class="card-desc">コンバージョンファネル</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;コンバージョン推移&quot;,
+  &quot;stages&quot;: [
+    {
+      &quot;label&quot;: &quot;訪問&quot;,
+      &quot;value&quot;: &quot;100,000&quot;
+    },
+    {
+      &quot;label&quot;: &quot;関心&quot;,
+      &quot;value&quot;: &quot;30,000&quot;
+    },
+    {
+      &quot;label&quot;: &quot;比較&quot;,
+      &quot;value&quot;: &quot;10,000&quot;
+    },
+    {
+      &quot;label&quot;: &quot;購入&quot;,
+      &quot;value&quot;: &quot;2,000&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>H. 経営・戦略 (v6.20) <span class="count">(5)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/pestel-6factor.png" alt="pestel-6factor" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">pestel-6factor</div>
+        <div class="card-desc">PESTEL 6 要因 (政治/経済/社会/技術/環境/法律)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;事業会社 SaaS 参入の PESTEL 分析&quot;,
+  &quot;factors&quot;: [
+    {
+      &quot;key&quot;: &quot;P&quot;,
+      &quot;label&quot;: &quot;政治&quot;,
+      &quot;sub&quot;: &quot;事業会社DX補助金が拡大&quot;
+    },
+    {
+      &quot;key&quot;: &quot;E&quot;,
+      &quot;label&quot;: &quot;経済&quot;,
+      &quot;sub&quot;: &quot;円安で内製化ニーズ高&quot;
+    },
+    {
+      &quot;key&quot;: &quot;S&quot;,
+      &quot;label&quot;: &quot;社会&quot;,
+      &quot;sub&quot;: &quot;人手不足・若手減少&quot;
+    },
+    {
+      &quot;key&quot;: &quot;T&quot;,
+      &quot;label&quot;: &quot;技術&quot;,
+      &quot;sub&quot;: &quot;生成AIの実用域到達&quot;
+    },
+    {
+      &quot;key&quot;: &quot;EN&quot;,
+      &quot;label&quot;: &quot;環境&quot;,
+      &quot;sub&quot;: &quot;カーボン報告義務化&quot;
+    },
+    {
+      &quot;key&quot;: &quot;L&quot;,
+      &quot;label&quot;: &quot;法律&quot;,
+      &quot;sub&quot;: &quot;改正電子帳簿保存法&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/kano-model.png" alt="kano-model" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">kano-model</div>
+        <div class="card-desc">Kano モデル (基本品質/性能品質/魅力品質)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;チャットボットの 3 品質&quot;,
+  &quot;basic&quot;: {
+    &quot;label&quot;: &quot;24h応答&quot;
+  },
+  &quot;performance&quot;: {
+    &quot;label&quot;: &quot;回答精度&quot;
+  },
+  &quot;attractive&quot;: {
+    &quot;label&quot;: &quot;感情共感&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/stp-marketing.png" alt="stp-marketing" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">stp-marketing</div>
+        <div class="card-desc">STP (Segmentation → Targeting → Positioning)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;AI 業務支援の STP&quot;,
+  &quot;segments&quot;: {
+    &quot;label&quot;: &quot;中堅事業会社&quot;,
+    &quot;sub&quot;: &quot;従業員50-500名&quot;
+  },
+  &quot;target&quot;: {
+    &quot;label&quot;: &quot;情シス担当&quot;,
+    &quot;sub&quot;: &quot;兼任1人体制&quot;
+  },
+  &quot;position&quot;: {
+    &quot;label&quot;: &quot;伴走型導入&quot;,
+    &quot;sub&quot;: &quot;内製化を支援&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/ansoff-matrix.png" alt="ansoff-matrix" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">ansoff-matrix</div>
+        <div class="card-desc">Ansoff 2×2 (既存/新市場 × 既存/新製品)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;事業拡張の 4 選択肢&quot;,
+  &quot;penetration&quot;: {
+    &quot;label&quot;: &quot;事業会社へ深耕&quot;,
+    &quot;sub&quot;: &quot;既存顧客の活用拡大&quot;
+  },
+  &quot;devProduct&quot;: {
+    &quot;label&quot;: &quot;AI機能を追加&quot;,
+    &quot;sub&quot;: &quot;提案書自動生成&quot;
+  },
+  &quot;devMarket&quot;: {
+    &quot;label&quot;: &quot;建設業に展開&quot;,
+    &quot;sub&quot;: &quot;同規模の人手不足層&quot;
+  },
+  &quot;diversify&quot;: {
+    &quot;label&quot;: &quot;AISaaSを単独販売&quot;,
+    &quot;sub&quot;: &quot;自社ブランドで市場参入&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/bcg-matrix.png" alt="bcg-matrix" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">bcg-matrix</div>
+        <div class="card-desc">BCG 2×2 (市場成長率 × 相対シェア)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;事業ポートフォリオ整理&quot;,
+  &quot;star&quot;: {
+    &quot;label&quot;: &quot;生成AI受託&quot;,
+    &quot;sub&quot;: &quot;高成長×シェア確立&quot;
+  },
+  &quot;question&quot;: {
+    &quot;label&quot;: &quot;海外展開&quot;,
+    &quot;sub&quot;: &quot;高成長×未参入&quot;
+  },
+  &quot;cash&quot;: {
+    &quot;label&quot;: &quot;BI 構築支援&quot;,
+    &quot;sub&quot;: &quot;安定収益源&quot;
+  },
+  &quot;dog&quot;: {
+    &quot;label&quot;: &quot;オンプレ保守&quot;,
+    &quot;sub&quot;: &quot;撤退候補&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>I. ジャーニー (v6.20) <span class="count">(2)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/stakeholder-map-2x2.png" alt="stakeholder-map-2x2" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">stakeholder-map-2x2</div>
+        <div class="card-desc">ステークホルダーマップ (影響度 × 関心度)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;社内導入ステークホルダー&quot;,
+  &quot;stakeholders&quot;: [
+    {
+      &quot;label&quot;: &quot;CEO&quot;,
+      &quot;influence&quot;: 0.92,
+      &quot;interest&quot;: 0.85
+    },
+    {
+      &quot;label&quot;: &quot;情シス長&quot;,
+      &quot;influence&quot;: 0.75,
+      &quot;interest&quot;: 0.95
+    },
+    {
+      &quot;label&quot;: &quot;現場リーダー&quot;,
+      &quot;influence&quot;: 0.45,
+      &quot;interest&quot;: 0.85
+    },
+    {
+      &quot;label&quot;: &quot;経理部&quot;,
+      &quot;influence&quot;: 0.55,
+      &quot;interest&quot;: 0.3
+    },
+    {
+      &quot;label&quot;: &quot;法務部&quot;,
+      &quot;influence&quot;: 0.65,
+      &quot;interest&quot;: 0.25
+    },
+    {
+      &quot;label&quot;: &quot;若手社員&quot;,
+      &quot;influence&quot;: 0.2,
+      &quot;interest&quot;: 0.7
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/empathy-map-4.png" alt="empathy-map-4" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">empathy-map-4</div>
+        <div class="card-desc">共感マップ (Say / Think / Do / Feel)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;中小事業会社 情シス担当の共感マップ&quot;,
+  &quot;persona&quot;: {
+    &quot;label&quot;: &quot;情シス1人&quot;
+  },
+  &quot;say&quot;: {
+    &quot;items&quot;: [
+      &quot;人がいない&quot;,
+      &quot;何から始めれば？&quot;,
+      &quot;AIは難しそう&quot;
+    ]
+  },
+  &quot;think&quot;: {
+    &quot;items&quot;: [
+      &quot;失敗したくない&quot;,
+      &quot;まず社内説得が課題&quot;,
+      &quot;丸投げできない&quot;
+    ]
+  },
+  &quot;do&quot;: {
+    &quot;items&quot;: [
+      &quot;夜間に検証&quot;,
+      &quot;展示会に1人参加&quot;,
+      &quot;上司に小さく報告&quot;
+    ]
+  },
+  &quot;feel&quot;: {
+    &quot;items&quot;: [
+      &quot;焦り&quot;,
+      &quot;取り残される不安&quot;,
+      &quot;味方が欲しい&quot;
+    ]
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>E. プロセス・オペレーション (v6.20-β) <span class="count">(6)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/pipeline-7stage.png" alt="pipeline-7stage" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">pipeline-7stage</div>
+        <div class="card-desc">7 段パイプライン (細かいフェーズ、CHEVRON 形)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;リリース 7 ステップ&quot;,
+  &quot;stages&quot;: [
+    {
+      &quot;label&quot;: &quot;要件&quot;,
+      &quot;sub&quot;: &quot;ユーザー価値&quot;
+    },
+    {
+      &quot;label&quot;: &quot;設計&quot;,
+      &quot;sub&quot;: &quot;API/UI&quot;
+    },
+    {
+      &quot;label&quot;: &quot;実装&quot;,
+      &quot;sub&quot;: &quot;コード&quot;
+    },
+    {
+      &quot;label&quot;: &quot;レビュー&quot;,
+      &quot;sub&quot;: &quot;PR + QA&quot;
+    },
+    {
+      &quot;label&quot;: &quot;テスト&quot;,
+      &quot;sub&quot;: &quot;結合 + E2E&quot;
+    },
+    {
+      &quot;label&quot;: &quot;リリース&quot;,
+      &quot;sub&quot;: &quot;カナリア&quot;
+    },
+    {
+      &quot;label&quot;: &quot;監視&quot;,
+      &quot;sub&quot;: &quot;本番監視&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/escalation-tier.png" alt="escalation-tier" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">escalation-tier</div>
+        <div class="card-desc">L1 → L2 → L3 階段状エスカレーション</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;サポートのエスカレーション体制&quot;,
+  &quot;tiers&quot;: [
+    {
+      &quot;label&quot;: &quot;L1 一次受付&quot;,
+      &quot;scope&quot;: &quot;FAQ / 既知不具合&quot;
+    },
+    {
+      &quot;label&quot;: &quot;L2 専門担当&quot;,
+      &quot;scope&quot;: &quot;プロダクト固有&quot;
+    },
+    {
+      &quot;label&quot;: &quot;L3 開発&quot;,
+      &quot;scope&quot;: &quot;コード修正・障害対応&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/incident-flow.png" alt="incident-flow" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">incident-flow</div>
+        <div class="card-desc">インシデント対応 (検知 → 対応 → 復旧 → 振り返り)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;本番障害のフロー&quot;,
+  &quot;steps&quot;: [
+    {
+      &quot;label&quot;: &quot;検知&quot;,
+      &quot;sub&quot;: &quot;アラート&quot;
+    },
+    {
+      &quot;label&quot;: &quot;対応&quot;,
+      &quot;sub&quot;: &quot;一次切り分け&quot;
+    },
+    {
+      &quot;label&quot;: &quot;復旧&quot;,
+      &quot;sub&quot;: &quot;ロールバック&quot;
+    },
+    {
+      &quot;label&quot;: &quot;振り返り&quot;,
+      &quot;sub&quot;: &quot;ポストモーテム&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/feedback-loop-double.png" alt="feedback-loop-double" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">feedback-loop-double</div>
+        <div class="card-desc">PDCA 二重ループ (内側 + 外側)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;組織の二重ループ学習&quot;,
+  &quot;inner&quot;: [
+    {
+      &quot;label&quot;: &quot;Plan&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Do&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Check&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Act&quot;
+    }
+  ],
+  &quot;outer&quot;: [
+    {
+      &quot;label&quot;: &quot;Vision&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Strategy&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Review&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Adjust&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/request-response.png" alt="request-response" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">request-response</div>
+        <div class="card-desc">Sync vs Async (Client ⇄ Server)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;同期 vs 非同期 API&quot;,
+  &quot;sync&quot;: {
+    &quot;label&quot;: &quot;同期 (Sync)&quot;,
+    &quot;sub&quot;: &quot;結果が返るまで待つ&quot;
+  },
+  &quot;async&quot;: {
+    &quot;label&quot;: &quot;非同期 (Async)&quot;,
+    &quot;sub&quot;: &quot;即終了 + コールバック&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/retry-circuit-breaker.png" alt="retry-circuit-breaker" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">retry-circuit-breaker</div>
+        <div class="card-desc">リトライ + サーキットブレーカー 3 状態</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;サーキットブレーカーの 3 状態&quot;,
+  &quot;states&quot;: [
+    {
+      &quot;label&quot;: &quot;Closed&quot;,
+      &quot;status&quot;: &quot;通常、リクエスト通過&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Open&quot;,
+      &quot;status&quot;: &quot;失敗閾値超え、即拒否&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Half-Open&quot;,
+      &quot;status&quot;: &quot;試験的に通し、回復確認&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>F. ネットワーク・アーキ (v6.20-β) <span class="count">(5)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/microservices-mesh.png" alt="microservices-mesh" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">microservices-mesh</div>
+        <div class="card-desc">中央バス + 周辺マイクロサービス</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;マイクロサービスメッシュ&quot;,
+  &quot;bus&quot;: {
+    &quot;label&quot;: &quot;サービスメッシュ&quot;
+  },
+  &quot;services&quot;: [
+    {
+      &quot;label&quot;: &quot;認証&quot;
+    },
+    {
+      &quot;label&quot;: &quot;注文&quot;
+    },
+    {
+      &quot;label&quot;: &quot;リソース&quot;
+    },
+    {
+      &quot;label&quot;: &quot;決済&quot;
+    },
+    {
+      &quot;label&quot;: &quot;通知&quot;
+    },
+    {
+      &quot;label&quot;: &quot;分析&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/event-sourcing.png" alt="event-sourcing" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">event-sourcing</div>
+        <div class="card-desc">Aggregate → Events → Projection</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;イベントソーシング&quot;,
+  &quot;aggregate&quot;: {
+    &quot;label&quot;: &quot;注文Aggregate&quot;
+  },
+  &quot;events&quot;: [
+    &quot;注文作成&quot;,
+    &quot;支払確定&quot;,
+    &quot;納品指示&quot;,
+    &quot;配送完了&quot;
+  ],
+  &quot;projections&quot;: [
+    {
+      &quot;label&quot;: &quot;注文一覧 View&quot;
+    },
+    {
+      &quot;label&quot;: &quot;売上集計 View&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/pub-sub-topic.png" alt="pub-sub-topic" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">pub-sub-topic</div>
+        <div class="card-desc">Pub/Sub トピックモデル</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;Pub/Sub トピック&quot;,
+  &quot;publishers&quot;: [
+    {
+      &quot;label&quot;: &quot;注文サービス&quot;
+    },
+    {
+      &quot;label&quot;: &quot;リソース管理サービス&quot;
+    }
+  ],
+  &quot;topic&quot;: {
+    &quot;label&quot;: &quot;order-events&quot;
+  },
+  &quot;subscribers&quot;: [
+    {
+      &quot;label&quot;: &quot;通知&quot;
+    },
+    {
+      &quot;label&quot;: &quot;分析&quot;
+    },
+    {
+      &quot;label&quot;: &quot;監査ログ&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/cdn-edge.png" alt="cdn-edge" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">cdn-edge</div>
+        <div class="card-desc">Origin → Edge → User</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;CDN エッジ配信&quot;,
+  &quot;origin&quot;: {
+    &quot;label&quot;: &quot;オリジン (東京)&quot;
+  },
+  &quot;edges&quot;: [
+    {
+      &quot;label&quot;: &quot;Edge&quot;,
+      &quot;location&quot;: &quot;東京&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Edge&quot;,
+      &quot;location&quot;: &quot;大阪&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Edge&quot;,
+      &quot;location&quot;: &quot;札幌&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Edge&quot;,
+      &quot;location&quot;: &quot;福岡&quot;
+    }
+  ],
+  &quot;user&quot;: {
+    &quot;label&quot;: &quot;エンドユーザー&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/caching-tier.png" alt="caching-tier" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">caching-tier</div>
+        <div class="card-desc">CDN / メモリ / DB のキャッシュ階層</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;キャッシュ階層&quot;,
+  &quot;tiers&quot;: [
+    {
+      &quot;label&quot;: &quot;CDN&quot;,
+      &quot;latency&quot;: &quot;&lt; 10ms&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Memcached&quot;,
+      &quot;latency&quot;: &quot;&lt; 1ms&quot;
+    },
+    {
+      &quot;label&quot;: &quot;DB&quot;,
+      &quot;latency&quot;: &quot;10-50ms&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>G. データモデル・分析 (v6.20-β) <span class="count">(3)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/lakehouse-stack.png" alt="lakehouse-stack" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">lakehouse-stack</div>
+        <div class="card-desc">レイクハウス 4 層 (Storage / Compute / Catalog / BI)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;レイクハウススタック&quot;,
+  &quot;layers&quot;: [
+    {
+      &quot;label&quot;: &quot;BI / 分析&quot;,
+      &quot;sub&quot;: &quot;Looker / Tableau&quot;
+    },
+    {
+      &quot;label&quot;: &quot;カタログ&quot;,
+      &quot;sub&quot;: &quot;Unity Catalog&quot;
+    },
+    {
+      &quot;label&quot;: &quot;コンピュート&quot;,
+      &quot;sub&quot;: &quot;Spark / Trino&quot;
+    },
+    {
+      &quot;label&quot;: &quot;ストレージ&quot;,
+      &quot;sub&quot;: &quot;S3 / GCS / ADLS&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/model-training-loop.png" alt="model-training-loop" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">model-training-loop</div>
+        <div class="card-desc">Train → Eval → Deploy のループ</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;モデルライフサイクル&quot;,
+  &quot;train&quot;: {
+    &quot;label&quot;: &quot;学習&quot;,
+    &quot;sub&quot;: &quot;GPU + データセット&quot;
+  },
+  &quot;eval&quot;: {
+    &quot;label&quot;: &quot;評価&quot;,
+    &quot;sub&quot;: &quot;精度・公平性&quot;
+  },
+  &quot;deploy&quot;: {
+    &quot;label&quot;: &quot;デプロイ&quot;,
+    &quot;sub&quot;: &quot;推論サーバ&quot;
+  }
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/segment-2x2.png" alt="segment-2x2" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">segment-2x2</div>
+        <div class="card-desc">2 軸でセグメントを散布配置</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;顧客セグメント (NPS × 利用頻度)&quot;,
+  &quot;xAxis&quot;: &quot;利用頻度&quot;,
+  &quot;yAxis&quot;: &quot;NPS&quot;,
+  &quot;segments&quot;: [
+    {
+      &quot;label&quot;: &quot;ロイヤル&quot;,
+      &quot;x&quot;: 0.85,
+      &quot;y&quot;: 0.85,
+      &quot;size&quot;: 1
+    },
+    {
+      &quot;label&quot;: &quot;関心層&quot;,
+      &quot;x&quot;: 0.3,
+      &quot;y&quot;: 0.7
+    },
+    {
+      &quot;label&quot;: &quot;機能特化&quot;,
+      &quot;x&quot;: 0.75,
+      &quot;y&quot;: 0.4
+    },
+    {
+      &quot;label&quot;: &quot;休眠層&quot;,
+      &quot;x&quot;: 0.2,
+      &quot;y&quot;: 0.2
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>J. アジャイル・チーム (v6.20-β) <span class="count">(3)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/scrum-events-cycle.png" alt="scrum-events-cycle" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">scrum-events-cycle</div>
+        <div class="card-desc">スクラムイベント五角形 (Planning → Daily → Review → Retro → Refinement)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;スクラムイベントサイクル&quot;,
+  &quot;events&quot;: [
+    {
+      &quot;label&quot;: &quot;Sprint Planning&quot;,
+      &quot;sub&quot;: &quot;スプリント開始&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Daily&quot;,
+      &quot;sub&quot;: &quot;15 分同期&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Review&quot;,
+      &quot;sub&quot;: &quot;成果共有&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Retro&quot;,
+      &quot;sub&quot;: &quot;改善議論&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Refinement&quot;,
+      &quot;sub&quot;: &quot;次バックログ&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/definition-of-done.png" alt="definition-of-done" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">definition-of-done</div>
+        <div class="card-desc">Definition of Done チェックリスト</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;スプリント完了の定義&quot;,
+  &quot;items&quot;: [
+    {
+      &quot;label&quot;: &quot;コードレビュー済み&quot;,
+      &quot;checked&quot;: true
+    },
+    {
+      &quot;label&quot;: &quot;ユニットテスト 80% 以上&quot;,
+      &quot;checked&quot;: true
+    },
+    {
+      &quot;label&quot;: &quot;結合テスト合格&quot;,
+      &quot;checked&quot;: true
+    },
+    {
+      &quot;label&quot;: &quot;ドキュメント更新&quot;,
+      &quot;checked&quot;: true
+    },
+    {
+      &quot;label&quot;: &quot;リリースノート記載&quot;,
+      &quot;checked&quot;: false
+    },
+    {
+      &quot;label&quot;: &quot;ステークホルダー承認&quot;,
+      &quot;checked&quot;: false
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/velocity-burndown.png" alt="velocity-burndown" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">velocity-burndown</div>
+        <div class="card-desc">バーンダウンチャート (理想線 + 実績線)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;スプリント 10 のバーンダウン&quot;,
+  &quot;days&quot;: 10,
+  &quot;ideal&quot;: [
+    50,
+    45,
+    40,
+    35,
+    30,
+    25,
+    20,
+    15,
+    10,
+    5,
+    0
+  ],
+  &quot;actual&quot;: [
+    50,
+    48,
+    46,
+    41,
+    39,
+    32,
+    30,
+    22,
+    14,
+    8,
+    2
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+    <h3>L. 教育・コンテンツ (v6.20-β) <span class="count">(3)</span></h3>
+    <div class="grid scene-grid">
+      
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/learning-pyramid.png" alt="learning-pyramid" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">learning-pyramid</div>
+        <div class="card-desc">Edgar Dale 学習定着率ピラミッド</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;学習定着率ピラミッド&quot;,
+  &quot;levels&quot;: [
+    {
+      &quot;label&quot;: &quot;講義を聴く&quot;,
+      &quot;retention&quot;: &quot;5%&quot;
+    },
+    {
+      &quot;label&quot;: &quot;読書&quot;,
+      &quot;retention&quot;: &quot;10%&quot;
+    },
+    {
+      &quot;label&quot;: &quot;視聴覚 (動画)&quot;,
+      &quot;retention&quot;: &quot;20%&quot;
+    },
+    {
+      &quot;label&quot;: &quot;デモを見る&quot;,
+      &quot;retention&quot;: &quot;30%&quot;
+    },
+    {
+      &quot;label&quot;: &quot;グループ討議&quot;,
+      &quot;retention&quot;: &quot;50%&quot;
+    },
+    {
+      &quot;label&quot;: &quot;体験 (実践)&quot;,
+      &quot;retention&quot;: &quot;75%&quot;
+    },
+    {
+      &quot;label&quot;: &quot;人に教える&quot;,
+      &quot;retention&quot;: &quot;90%&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/bloom-taxonomy.png" alt="bloom-taxonomy" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">bloom-taxonomy</div>
+        <div class="card-desc">Bloom 改訂版 6 階層 (Create → Remember 上から)</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;ブルーム・タキソノミー&quot;,
+  &quot;levels&quot;: [
+    {
+      &quot;label&quot;: &quot;Create&quot;,
+      &quot;sub&quot;: &quot;創造する&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Evaluate&quot;,
+      &quot;sub&quot;: &quot;評価する&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Analyze&quot;,
+      &quot;sub&quot;: &quot;分析する&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Apply&quot;,
+      &quot;sub&quot;: &quot;応用する&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Understand&quot;,
+      &quot;sub&quot;: &quot;理解する&quot;
+    },
+    {
+      &quot;label&quot;: &quot;Remember&quot;,
+      &quot;sub&quot;: &quot;記憶する&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    <div class="card scene-card">
+      <div class="card-img"><img src="scenes/concept-map.png" alt="concept-map" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">concept-map</div>
+        <div class="card-desc">中央概念 + 周辺ノード + 関係ラベル</div>
+        <details>
+          <summary>payload 例</summary>
+          <pre class="card-snippet"><code>{
+  &quot;title&quot;: &quot;生成 AI のコンセプトマップ&quot;,
+  &quot;central&quot;: {
+    &quot;label&quot;: &quot;生成 AI&quot;
+  },
+  &quot;nodes&quot;: [
+    {
+      &quot;label&quot;: &quot;LLM&quot;,
+      &quot;relation&quot;: &quot;基盤&quot;
+    },
+    {
+      &quot;label&quot;: &quot;プロンプト&quot;,
+      &quot;relation&quot;: &quot;入力&quot;
+    },
+    {
+      &quot;label&quot;: &quot;推論&quot;,
+      &quot;relation&quot;: &quot;実行&quot;
+    },
+    {
+      &quot;label&quot;: &quot;ファインチューニング&quot;,
+      &quot;relation&quot;: &quot;調整&quot;
+    },
+    {
+      &quot;label&quot;: &quot;RAG&quot;,
+      &quot;relation&quot;: &quot;拡張&quot;
+    },
+    {
+      &quot;label&quot;: &quot;評価&quot;,
+      &quot;relation&quot;: &quot;品質確認&quot;
+    }
+  ]
+}</code></pre>
+        </details>
+      </div>
+    </div>
+    </div>
+  
+
+  <h2>🎨 アイコン (106)</h2>
+  <p>シーン内で使うアイコン部品。各シーンの payload で <code>icon: '...'</code> として参照、または <code>NI.icons['...'](s, x, y, w, h, h_)</code> で直接呼び出し。</p>
+  
+    <h3>People / Org <span class="count">(10)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-svg">SVG</span>
+      <div class="card-img"><img src="icons/person.png" alt="person" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">person</div>
+        <div class="card-desc">利用者・担当者</div>
+        <pre class="card-snippet"><code>NI.icons['person'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-svg">SVG</span>
+      <div class="card-img"><img src="icons/team.png" alt="team" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">team</div>
+        <div class="card-desc">チーム (3 人組)</div>
+        <pre class="card-snippet"><code>NI.icons['team'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-svg">SVG</span>
+      <div class="card-img"><img src="icons/customer.png" alt="customer" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">customer</div>
+        <div class="card-desc">顧客 / 受益者 (吹き出し付き)</div>
+        <pre class="card-snippet"><code>NI.icons['customer'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-svg">SVG</span>
+      <div class="card-img"><img src="icons/leader.png" alt="leader" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">leader</div>
+        <div class="card-desc">リーダー / 責任者 (バッジ付き)</div>
+        <pre class="card-snippet"><code>NI.icons['leader'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/role-badge.png" alt="role-badge" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">role-badge</div>
+        <div class="card-desc">役割表示 (1 文字バッジ)</div>
+        <pre class="card-snippet"><code>NI.icons['role-badge'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/customer-segment.png" alt="customer-segment" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">customer-segment</div>
+        <div class="card-desc">セグメント (3 人組、中央強調)</div>
+        <pre class="card-snippet"><code>NI.icons['customer-segment'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/decision-maker.png" alt="decision-maker" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">decision-maker</div>
+        <div class="card-desc">意思決定者 (王冠付き)</div>
+        <pre class="card-snippet"><code>NI.icons['decision-maker'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/engineer.png" alt="engineer" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">engineer</div>
+        <div class="card-desc">エンジニア (歯車付き)</div>
+        <pre class="card-snippet"><code>NI.icons['engineer'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/designer.png" alt="designer" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">designer</div>
+        <div class="card-desc">デザイナー (ペン付き)</div>
+        <pre class="card-snippet"><code>NI.icons['designer'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/executive.png" alt="executive" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">executive</div>
+        <div class="card-desc">経営層 (ネクタイ)</div>
+        <pre class="card-snippet"><code>NI.icons['executive'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+    <h3>Building / Place <span class="count">(10)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/building.png" alt="building" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">building</div>
+        <div class="card-desc">本社 / 事業者 (窓格子付き)</div>
+        <pre class="card-snippet"><code>NI.icons['building'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-svg">SVG</span>
+      <div class="card-img"><img src="icons/factory.png" alt="factory" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">factory</div>
+        <div class="card-desc">業務拠点 (煙突付き)</div>
+        <pre class="card-snippet"><code>NI.icons['factory'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/store.png" alt="store" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">store</div>
+        <div class="card-desc">店舗 (屋根 + 看板)</div>
+        <pre class="card-snippet"><code>NI.icons['store'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/warehouse.png" alt="warehouse" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">warehouse</div>
+        <div class="card-desc">倉庫 / 物流</div>
+        <pre class="card-snippet"><code>NI.icons['warehouse'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/datacenter.png" alt="datacenter" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">datacenter</div>
+        <div class="card-desc">データセンター (ラック行)</div>
+        <pre class="card-snippet"><code>NI.icons['datacenter'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/hospital.png" alt="hospital" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">hospital</div>
+        <div class="card-desc">病院 (赤十字)</div>
+        <pre class="card-snippet"><code>NI.icons['hospital'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/school.png" alt="school" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">school</div>
+        <div class="card-desc">学校 (時計塔付き)</div>
+        <pre class="card-snippet"><code>NI.icons['school'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/office-tower.png" alt="office-tower" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">office-tower</div>
+        <div class="card-desc">オフィスビル (高層)</div>
+        <pre class="card-snippet"><code>NI.icons['office-tower'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/retail-shop.png" alt="retail-shop" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">retail-shop</div>
+        <div class="card-desc">小売店 (ガラス窓 + ドア)</div>
+        <pre class="card-snippet"><code>NI.icons['retail-shop'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/bank.png" alt="bank" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">bank</div>
+        <div class="card-desc">銀行 (列柱 + 三角屋根)</div>
+        <pre class="card-snippet"><code>NI.icons['bank'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+    <h3>Tech / Compute <span class="count">(16)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/server.png" alt="server" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">server</div>
+        <div class="card-desc">サーバー / PC (端子 + LED)</div>
+        <pre class="card-snippet"><code>NI.icons['server'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/gpu.png" alt="gpu" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">gpu</div>
+        <div class="card-desc">GPU (LED 1 個)</div>
+        <pre class="card-snippet"><code>NI.icons['gpu'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/cpu-chip.png" alt="cpu-chip" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">cpu-chip</div>
+        <div class="card-desc">CPU / チップ (足 12 本)</div>
+        <pre class="card-snippet"><code>NI.icons['cpu-chip'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/network.png" alt="network" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">network</div>
+        <div class="card-desc">ネットワーク (4 ノード網)</div>
+        <pre class="card-snippet"><code>NI.icons['network'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/firewall.png" alt="firewall" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">firewall</div>
+        <div class="card-desc">ファイアウォール (壁)</div>
+        <pre class="card-snippet"><code>NI.icons['firewall'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/api-endpoint.png" alt="api-endpoint" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">api-endpoint</div>
+        <div class="card-desc">API / エンドポイント</div>
+        <pre class="card-snippet"><code>NI.icons['api-endpoint'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/container.png" alt="container" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">container</div>
+        <div class="card-desc">コンテナ (Docker 風キューブ)</div>
+        <pre class="card-snippet"><code>NI.icons['container'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/kubernetes.png" alt="kubernetes" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">kubernetes</div>
+        <div class="card-desc">Kubernetes (ホイール状)</div>
+        <pre class="card-snippet"><code>NI.icons['kubernetes'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/serverless.png" alt="serverless" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">serverless</div>
+        <div class="card-desc">サーバーレス (稲妻 + 関数)</div>
+        <pre class="card-snippet"><code>NI.icons['serverless'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/queue.png" alt="queue" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">queue</div>
+        <div class="card-desc">メッセージキュー (FIFO 4 マス)</div>
+        <pre class="card-snippet"><code>NI.icons['queue'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/cache.png" alt="cache" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">cache</div>
+        <div class="card-desc">キャッシュ (高速メモリ層)</div>
+        <pre class="card-snippet"><code>NI.icons['cache'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/cdn.png" alt="cdn" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">cdn</div>
+        <div class="card-desc">CDN (グローバル分散ノード)</div>
+        <pre class="card-snippet"><code>NI.icons['cdn'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/load-balancer.png" alt="load-balancer" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">load-balancer</div>
+        <div class="card-desc">ロードバランサ (1 → N 振り分け)</div>
+        <pre class="card-snippet"><code>NI.icons['load-balancer'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/api-gateway.png" alt="api-gateway" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">api-gateway</div>
+        <div class="card-desc">API ゲートウェイ (門 + ルート)</div>
+        <pre class="card-snippet"><code>NI.icons['api-gateway'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/auth-server.png" alt="auth-server" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">auth-server</div>
+        <div class="card-desc">認証サーバ (鍵付きサーバ)</div>
+        <pre class="card-snippet"><code>NI.icons['auth-server'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/vault.png" alt="vault" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">vault</div>
+        <div class="card-desc">Vault / 秘密管理 (金庫)</div>
+        <pre class="card-snippet"><code>NI.icons['vault'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+    <h3>Data / Storage <span class="count">(10)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/db.png" alt="db" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">db</div>
+        <div class="card-desc">データベース (円柱)</div>
+        <pre class="card-snippet"><code>NI.icons['db'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/disk.png" alt="disk" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">disk</div>
+        <div class="card-desc">ディスク (横向き円柱)</div>
+        <pre class="card-snippet"><code>NI.icons['disk'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/file.png" alt="file" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">file</div>
+        <div class="card-desc">ファイル (折り返し付き)</div>
+        <pre class="card-snippet"><code>NI.icons['file'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/log.png" alt="log" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">log</div>
+        <div class="card-desc">ログ (横線 + accent dot)</div>
+        <pre class="card-snippet"><code>NI.icons['log'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/data-cube.png" alt="data-cube" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">data-cube</div>
+        <div class="card-desc">データキューブ (立体)</div>
+        <pre class="card-snippet"><code>NI.icons['data-cube'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/table.png" alt="table" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">table</div>
+        <div class="card-desc">テーブル (行 × 列グリッド)</div>
+        <pre class="card-snippet"><code>NI.icons['table'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/chart-bar.png" alt="chart-bar" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">chart-bar</div>
+        <div class="card-desc">棒グラフ (4 本)</div>
+        <pre class="card-snippet"><code>NI.icons['chart-bar'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/chart-line.png" alt="chart-line" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">chart-line</div>
+        <div class="card-desc">折れ線グラフ (推移)</div>
+        <pre class="card-snippet"><code>NI.icons['chart-line'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/dashboard.png" alt="dashboard" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">dashboard</div>
+        <div class="card-desc">ダッシュボード (4 ペイン)</div>
+        <pre class="card-snippet"><code>NI.icons['dashboard'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/report.png" alt="report" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">report</div>
+        <div class="card-desc">レポート (集計 + グラフ)</div>
+        <pre class="card-snippet"><code>NI.icons['report'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+    <h3>Process / Flow <span class="count">(10)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/arrow-right.png" alt="arrow-right" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">arrow-right</div>
+        <div class="card-desc">単方向フロー</div>
+        <pre class="card-snippet"><code>NI.icons['arrow-right'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/arrow-leftright.png" alt="arrow-leftright" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">arrow-leftright</div>
+        <div class="card-desc">双方向 / 取引</div>
+        <pre class="card-snippet"><code>NI.icons['arrow-leftright'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/cycle-arrow.png" alt="cycle-arrow" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">cycle-arrow</div>
+        <div class="card-desc">循環 (リング + 矢印先端)</div>
+        <pre class="card-snippet"><code>NI.icons['cycle-arrow'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/workflow-step.png" alt="workflow-step" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">workflow-step</div>
+        <div class="card-desc">ステップ (番号付き)</div>
+        <pre class="card-snippet"><code>NI.icons['workflow-step'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/gear-process.png" alt="gear-process" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">gear-process</div>
+        <div class="card-desc">自動処理 (gear 別名)</div>
+        <pre class="card-snippet"><code>NI.icons['gear-process'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/timer.png" alt="timer" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">timer</div>
+        <div class="card-desc">タイマー (デジタル風)</div>
+        <pre class="card-snippet"><code>NI.icons['timer'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/calendar.png" alt="calendar" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">calendar</div>
+        <div class="card-desc">カレンダー (日付グリッド)</div>
+        <pre class="card-snippet"><code>NI.icons['calendar'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/clock.png" alt="clock" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">clock</div>
+        <div class="card-desc">時計 (アナログ針)</div>
+        <pre class="card-snippet"><code>NI.icons['clock'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/hourglass.png" alt="hourglass" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">hourglass</div>
+        <div class="card-desc">砂時計 (時間経過)</div>
+        <pre class="card-snippet"><code>NI.icons['hourglass'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/progress.png" alt="progress" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">progress</div>
+        <div class="card-desc">進捗バー (パーセンテージ)</div>
+        <pre class="card-snippet"><code>NI.icons['progress'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+    <h3>Money / Business <span class="count">(10)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/yen-coin.png" alt="yen-coin" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">yen-coin</div>
+        <div class="card-desc">金銭 (¥ コイン)</div>
+        <pre class="card-snippet"><code>NI.icons['yen-coin'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/revenue-up.png" alt="revenue-up" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">revenue-up</div>
+        <div class="card-desc">売上増 (折れ線 +)</div>
+        <pre class="card-snippet"><code>NI.icons['revenue-up'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/cost-down.png" alt="cost-down" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">cost-down</div>
+        <div class="card-desc">コスト減 (折れ線 -)</div>
+        <pre class="card-snippet"><code>NI.icons['cost-down'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/kpi-target.png" alt="kpi-target" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">kpi-target</div>
+        <div class="card-desc">KPI / 目標 (同心円)</div>
+        <pre class="card-snippet"><code>NI.icons['kpi-target'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/growth-arrow.png" alt="growth-arrow" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">growth-arrow</div>
+        <div class="card-desc">成長矢印 (右上向き)</div>
+        <pre class="card-snippet"><code>NI.icons['growth-arrow'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/wallet.png" alt="wallet" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">wallet</div>
+        <div class="card-desc">財布 (フラップ + コイン)</div>
+        <pre class="card-snippet"><code>NI.icons['wallet'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/invoice.png" alt="invoice" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">invoice</div>
+        <div class="card-desc">請求書 (¥ 合計)</div>
+        <pre class="card-snippet"><code>NI.icons['invoice'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/receipt.png" alt="receipt" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">receipt</div>
+        <div class="card-desc">レシート (ジグザグ底)</div>
+        <pre class="card-snippet"><code>NI.icons['receipt'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/chart-revenue.png" alt="chart-revenue" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">chart-revenue</div>
+        <div class="card-desc">売上棒グラフ (右肩上がり)</div>
+        <pre class="card-snippet"><code>NI.icons['chart-revenue'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/chart-cost.png" alt="chart-cost" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">chart-cost</div>
+        <div class="card-desc">コスト棒グラフ (右肩下がり)</div>
+        <pre class="card-snippet"><code>NI.icons['chart-cost'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+    <h3>Documents / Knowledge <span class="count">(10)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/document.png" alt="document" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">document</div>
+        <div class="card-desc">資料 (横線本文)</div>
+        <pre class="card-snippet"><code>NI.icons['document'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/book.png" alt="book" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">book</div>
+        <div class="card-desc">書籍 / ナレッジ</div>
+        <pre class="card-snippet"><code>NI.icons['book'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/clipboard.png" alt="clipboard" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">clipboard</div>
+        <div class="card-desc">チェックリスト (クリップ付き)</div>
+        <pre class="card-snippet"><code>NI.icons['clipboard'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/checklist.png" alt="checklist" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">checklist</div>
+        <div class="card-desc">タスクリスト (チェックボックス)</div>
+        <pre class="card-snippet"><code>NI.icons['checklist'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/template.png" alt="template" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">template</div>
+        <div class="card-desc">テンプレート (file 別名)</div>
+        <pre class="card-snippet"><code>NI.icons['template'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/contract.png" alt="contract" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">contract</div>
+        <div class="card-desc">契約書 (署名線 + 印)</div>
+        <pre class="card-snippet"><code>NI.icons['contract'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/spec.png" alt="spec" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">spec</div>
+        <div class="card-desc">仕様書 (ヘッダ + チェック)</div>
+        <pre class="card-snippet"><code>NI.icons['spec'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/wireframe.png" alt="wireframe" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">wireframe</div>
+        <div class="card-desc">ワイヤーフレーム (UI 骨格)</div>
+        <pre class="card-snippet"><code>NI.icons['wireframe'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/pull-request.png" alt="pull-request" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">pull-request</div>
+        <div class="card-desc">プルリクエスト (分岐 + マージ)</div>
+        <pre class="card-snippet"><code>NI.icons['pull-request'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/changelog.png" alt="changelog" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">changelog</div>
+        <div class="card-desc">変更履歴 (バージョンタグ)</div>
+        <pre class="card-snippet"><code>NI.icons['changelog'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+    <h3>Communication <span class="count">(9)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/chat-bubble.png" alt="chat-bubble" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">chat-bubble</div>
+        <div class="card-desc">チャット (吹き出し)</div>
+        <pre class="card-snippet"><code>NI.icons['chat-bubble'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/email.png" alt="email" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">email</div>
+        <div class="card-desc">メール (封筒 V)</div>
+        <pre class="card-snippet"><code>NI.icons['email'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/alert-bell.png" alt="alert-bell" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">alert-bell</div>
+        <div class="card-desc">警告 (ベル)</div>
+        <pre class="card-snippet"><code>NI.icons['alert-bell'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/signal-broadcast.png" alt="signal-broadcast" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">signal-broadcast</div>
+        <div class="card-desc">配信 / 通知 (放射波)</div>
+        <pre class="card-snippet"><code>NI.icons['signal-broadcast'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/video-call.png" alt="video-call" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">video-call</div>
+        <div class="card-desc">ビデオ会議 (画面 + カメラ)</div>
+        <pre class="card-snippet"><code>NI.icons['video-call'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/phone.png" alt="phone" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">phone</div>
+        <div class="card-desc">電話 (受話器 + 本体)</div>
+        <pre class="card-snippet"><code>NI.icons['phone'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/mention.png" alt="mention" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">mention</div>
+        <div class="card-desc">メンション (@ 記号)</div>
+        <pre class="card-snippet"><code>NI.icons['mention'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/notification-toast.png" alt="notification-toast" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">notification-toast</div>
+        <div class="card-desc">トースト通知 (吹き出し + バッジ)</div>
+        <pre class="card-snippet"><code>NI.icons['notification-toast'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/podcast.png" alt="podcast" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">podcast</div>
+        <div class="card-desc">ポッドキャスト (マイク + 波形)</div>
+        <pre class="card-snippet"><code>NI.icons['podcast'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+    <h3>Tools / Action <span class="count">(11)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/gear.png" alt="gear" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">gear</div>
+        <div class="card-desc">設定 / 仕組み (歯車)</div>
+        <pre class="card-snippet"><code>NI.icons['gear'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/shield.png" alt="shield" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">shield</div>
+        <div class="card-desc">保護 / セキュリティ</div>
+        <pre class="card-snippet"><code>NI.icons['shield'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-svg">SVG</span>
+      <div class="card-img"><img src="icons/lock.png" alt="lock" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">lock</div>
+        <div class="card-desc">暗号化 / 制限</div>
+        <pre class="card-snippet"><code>NI.icons['lock'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-svg">SVG</span>
+      <div class="card-img"><img src="icons/key.png" alt="key" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">key</div>
+        <div class="card-desc">認証 / 解錠</div>
+        <pre class="card-snippet"><code>NI.icons['key'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-svg">SVG</span>
+      <div class="card-img"><img src="icons/handshake.png" alt="handshake" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">handshake</div>
+        <div class="card-desc">提携 / 合意</div>
+        <pre class="card-snippet"><code>NI.icons['handshake'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-svg">SVG</span>
+      <div class="card-img"><img src="icons/wrench.png" alt="wrench" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">wrench</div>
+        <div class="card-desc">修理 / 調整 (スパナ)</div>
+        <pre class="card-snippet"><code>NI.icons['wrench'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/magnifier.png" alt="magnifier" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">magnifier</div>
+        <div class="card-desc">虫眼鏡 / 検索</div>
+        <pre class="card-snippet"><code>NI.icons['magnifier'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/filter.png" alt="filter" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">filter</div>
+        <div class="card-desc">フィルタ (漏斗)</div>
+        <pre class="card-snippet"><code>NI.icons['filter'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/sort.png" alt="sort" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">sort</div>
+        <div class="card-desc">ソート (上下矢印)</div>
+        <pre class="card-snippet"><code>NI.icons['sort'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/tag.png" alt="tag" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">tag</div>
+        <div class="card-desc">タグ (ラベル + 紐穴)</div>
+        <pre class="card-snippet"><code>NI.icons['tag'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/bookmark.png" alt="bookmark" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">bookmark</div>
+        <div class="card-desc">ブックマーク (旗型)</div>
+        <pre class="card-snippet"><code>NI.icons['bookmark'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+    <h3>Industry <span class="count">(10)</span></h3>
+    <div class="grid icon-grid">
+      
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/healthcare.png" alt="healthcare" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">healthcare</div>
+        <div class="card-desc">ヘルスケア (聴診器 + ハート)</div>
+        <pre class="card-snippet"><code>NI.icons['healthcare'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/finance.png" alt="finance" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">finance</div>
+        <div class="card-desc">金融 (¥ + グラフ)</div>
+        <pre class="card-snippet"><code>NI.icons['finance'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/retail.png" alt="retail" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">retail</div>
+        <div class="card-desc">小売 (ショッピングバッグ)</div>
+        <pre class="card-snippet"><code>NI.icons['retail'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/manufacturing.png" alt="manufacturing" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">manufacturing</div>
+        <div class="card-desc">業務 (ベルトコンベア + 歯車)</div>
+        <pre class="card-snippet"><code>NI.icons['manufacturing'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/logistics.png" alt="logistics" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">logistics</div>
+        <div class="card-desc">物流 (トラック + 矢印)</div>
+        <pre class="card-snippet"><code>NI.icons['logistics'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/media.png" alt="media" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">media</div>
+        <div class="card-desc">メディア (再生ボタン + フィルム)</div>
+        <pre class="card-snippet"><code>NI.icons['media'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/energy.png" alt="energy" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">energy</div>
+        <div class="card-desc">エネルギー (稲妻 + 電池)</div>
+        <pre class="card-snippet"><code>NI.icons['energy'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/agriculture.png" alt="agriculture" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">agriculture</div>
+        <div class="card-desc">農業 (麦 + 太陽)</div>
+        <pre class="card-snippet"><code>NI.icons['agriculture'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/construction.png" alt="construction" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">construction</div>
+        <div class="card-desc">建設 (ヘルメット + 工具)</div>
+        <pre class="card-snippet"><code>NI.icons['construction'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    <div class="card icon-card">
+      <span class="badge badge-shape">shape</span>
+      <div class="card-img"><img src="icons/hospitality.png" alt="hospitality" loading="lazy"></div>
+      <div class="card-body">
+        <div class="card-id">hospitality</div>
+        <div class="card-desc">接客業 (ベル + 歓迎ドア)</div>
+        <pre class="card-snippet"><code>NI.icons['hospitality'](s, x, y, w, h, h_)</code></pre>
+      </div>
+    </div>
+    </div>
+  
+
+  <p style="text-align: center; margin: 60px 0 20px; color: var(--gray500); font-size: 12px;">
+    Generated by <code>scripts/build-visual-pattern-catalog.js</code> · ENOSTECH Slides Skill v6.19
+  </p>
+</body>
+</html>

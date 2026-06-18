@@ -1,0 +1,2 @@
+# EN AIstudio writing agent — 共通 requirements を取り込むだけ
+-r ../common/requirements.txt

@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── ユーザー個人シークレット (BYOK) ───────────────────────
+    // 本人だけ read/write 可。他ユーザーから絶対に読めないようにする。
+    // Cloud Run の service account は Admin SDK 経由なので rules を bypass する。
+    match /users/{uid}/secrets/{secretId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == uid;
+    }
+
+    // ─── ADK セッション (org/space 配下) ─────────────────────────
+    match /organizations/{orgId}/spaces/{spaceId}/adkSessions/{sessionId} {
+      allow read, list: if request.auth != null
+                        && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.uid == request.auth.uid;
+      allow delete: if false;
+
+      match /events/{eventId} {
+        allow read: if request.auth != null
+                    && get(/databases/$(database)/documents/organizations/$(orgId)/spaces/$(spaceId)/adkSessions/$(sessionId)).data.uid == request.auth.uid;
+        allow write: if false;
+      }
+
+      match /artifacts/{artifactId} {
+        allow read: if request.auth != null
+                    && get(/databases/$(database)/documents/organizations/$(orgId)/spaces/$(spaceId)/adkSessions/$(sessionId)).data.uid == request.auth.uid;
+        allow write: if false;
+      }
+    }
+
+    // ─── RequestDoc ───────────────────
+    // PC が作成し、スマホ (同 org/space の認証ユーザー) が files/status を更新する。
+    // 解析結果 (output) の書き込みは Admin SDK (Firebase Function) が rules を bypass。
+    match /organizations/{orgId}/spaces/{spaceId}/requests/shippingIntakeRequests/logs/{requestId} {
+      allow read, create, update: if request.auth != null;
+      allow delete: if false;
+    }
+
+    // ─── 既存の catch-all (ログイン済みなら R/W 可) ─────────────
+    // ※ 上記の specific match に該当する path は specific 側が優先されるので
+    //    secrets / adkSessions は守られる。
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

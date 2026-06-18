@@ -1,0 +1,2 @@
+# image agent の追加依存のみ. common/requirements.txt は Dockerfile で先に install 済み.
+google-cloud-storage>=2.16.0

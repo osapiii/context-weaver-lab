@@ -1,0 +1,36 @@
+# EN AIstudio image agent — Cloud Build → Cloud Run.
+# 使い方: cd backend/adk-agents && gcloud builds submit . --config image/cloudbuild.yaml
+substitutions:
+  _SERVICE: en-aistudio-image-agent
+  _REGION: asia-northeast1
+  _IMAGE_BUCKET: ""
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/${_SERVICE}:latest", "-f", "image/Dockerfile", "."]
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "gcr.io/$PROJECT_ID/${_SERVICE}:latest"]
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=gcr.io/$PROJECT_ID/${_SERVICE}:latest
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --memory=2Gi
+      - --cpu=2
+      - --concurrency=4
+      - --timeout=900
+      - --set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=us-central1,VERTEX_SEARCH_LOCATION=global,MODEL_ID=gemini-2.5-flash,OPENAI_IMAGE_MODEL=gpt-image-2,OPENAI_IMAGE_THINKING=off,IMAGE_BUCKET=${_IMAGE_BUCKET},IMAGE_SIGNED_URL_TTL_SECONDS=86400
+
+images:
+  - gcr.io/$PROJECT_ID/${_SERVICE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

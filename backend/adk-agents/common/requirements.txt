@@ -1,0 +1,34 @@
+# EN AIstudio ADK Agents — 共通依存
+# 各 mode の requirements.txt は -r ../common/requirements.txt で取り込む
+
+# ADK + Gemini SDK
+google-adk[all]>=2.0,<3
+google-genai>=1.0.0
+
+# Vertex AI Search / Imagen / Sheets API
+google-auth>=2.30.0
+google-cloud-discoveryengine>=0.13.0
+google-api-python-client>=2.130.0
+google-cloud-aiplatform>=1.60.0
+
+# FastAPI / Cloud Run
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+
+# 認証 (Firebase Admin)
+firebase-admin>=6.5.0
+
+# ADK session persistence (FirestoreSessionService)
+google-cloud-firestore>=2.16.0
+google-cloud-storage>=2.19.0
+
+# HTTP
+requests>=2.31.0
+openai>=1.50.0
+
+# 画像マスク (OpenAI inpainting)
+Pillow>=10.0.0
+
+# 共通
+python-dotenv>=1.0.0

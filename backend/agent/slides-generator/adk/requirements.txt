@@ -1,0 +1,21 @@
+# ADK + Gemini SDK
+google-adk>=2.0,<3
+google-genai>=1.72,<2
+
+# Pydantic v2
+pydantic>=2.6.0
+
+# 環境変数 / CLI
+python-dotenv>=1.0.0
+
+# プレビュー画像合成 (preview_runner.build_contact_sheet 用)
+pillow>=10.0.0
+
+# skill v12 の render-deck-instruction.py が plan.html 生成に使う
+jinja2>=3.1.0
+
+# braindump-illust / SchemaQA など subprocess 経由で必要になることがある
+pyyaml>=6.0
+
+# Cloud Run / 共通
+requests>=2.31.0

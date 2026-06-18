@@ -1,0 +1,38 @@
+{
+  "projects": {
+    "default": "en-aistudio-development",
+    "development": "en-aistudio-development",
+    "production": "en-aistudio-production"
+  },
+  "targets": {
+    "enostech-sandbox": {
+      "hosting": {
+        "ui-kit": [
+          "ui-kit-enostech"
+        ]
+      }
+    },
+    "enostech-production": {
+      "hosting": {
+        "ui-kit": [
+          "ui-kit-enostech-prod"
+        ]
+      }
+    },
+    "en-aistudio-production": {
+      "hosting": {
+        "default": [
+          "en-aistudio-production"
+        ]
+      }
+    },
+    "en-aistudio-development": {
+      "hosting": {
+        "default": [
+          "en-aistudio-development"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

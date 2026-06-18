@@ -1,0 +1,1 @@
+export const MAX_AI_MASTER_SOURCE_DOCUMENTS = 5;

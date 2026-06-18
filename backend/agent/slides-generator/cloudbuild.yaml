@@ -1,0 +1,84 @@
+# EN AIstudio Slides Generator Agent — Cloud Build → Cloud Run デプロイ
+#
+# 由来: ENOSTECH-KNOWLEDGE-SPACE/agents-sandbox/adk/cloudbuild.yaml を EN AIstudio 用に改変.
+#
+# 変更点:
+#   - ビルドコンテキストを backend/agent/slides-generator/ にする
+#   - --allow-unauthenticated を削除 (Firebase Auth で守るので Cloud Run の
+#     IAM 認可は無効化, 代わりにフロントから ID Token を付けて叩く)
+#   - GOOGLE_GENAI_USE_VERTEXAI を削除 (BYOK 方式に変更)
+#   - GCS_ARTIFACT_BUCKET / FIRESTORE_SESSIONS_COLLECTION を追加
+#   - 専用 SA `enostech-slides-agent@en-aistudio-development.iam.gserviceaccount.com` 指定
+#   - timeout=3600 に延長 (Phase 1-4 フル実行は 10-30 分かかる想定)
+#
+# 実行例 (en-aistudio-development):
+#   gcloud builds submit \
+#     --config=backend/agent/slides-generator/cloudbuild.yaml \
+#     --project=en-aistudio-development \
+#     backend
+#
+# 前提:
+#   - Firebase Storage デフォルトバケット (en-aistudio-development.firebasestorage.app)
+#     を使う。これにより front の Firebase SDK getDownloadURL() で download token
+#     経由の URL がそのまま使え、IAM SignBlob 権限に依存しない。
+#   - SA enostech-slides-agent@en-aistudio-development.iam.gserviceaccount.com が作成済み
+#     かつ datastore.user / storage.objectAdmin (bucket 限定) /
+#     iam.serviceAccountTokenCreator (self) を付与済み
+
+substitutions:
+  _REGION: asia-northeast1
+  # 2026-05 PR #76 で frontend を slides-agent → research-agent に rename したのに合わせ、
+  # Cloud Run service 名もこちらに揃える. SA と Firestore コレクションは IAM/データ
+  # 移行が必要なため slidesAgent のまま残置 (機能上は問題なし, 命名のみ不整合).
+  _SERVICE: enostech-research-agent
+  _MEMORY: '2Gi'
+  _CPU: '2'
+  _BUCKET: en-aistudio-development.firebasestorage.app
+  _COLLECTION: adkSessions
+  _SERVICE_ACCOUNT: enostech-slides-agent@en-aistudio-development.iam.gserviceaccount.com
+  _CORS_ALLOW_ORIGINS: 'http://localhost:3000,https://en-aistudio.app,https://en-aistudio-development.web.app'
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag=gcr.io/$PROJECT_ID/${_SERVICE}:$BUILD_ID
+      - --tag=gcr.io/$PROJECT_ID/${_SERVICE}:latest
+      - -f
+      - agent/slides-generator/Dockerfile
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args: ['push', '--all-tags', 'gcr.io/$PROJECT_ID/${_SERVICE}']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=gcr.io/$PROJECT_ID/${_SERVICE}:$BUILD_ID
+      - --region=${_REGION}
+      - --platform=managed
+      - --memory=${_MEMORY}
+      - --cpu=${_CPU}
+      - --timeout=3600
+      - --concurrency=4
+      - --service-account=${_SERVICE_ACCOUNT}
+      # CORS_ALLOW_ORIGINS にカンマ区切りの origin 列があるので、
+      # gcloud の --set-env-vars 内デリミタを ^@^ で @ に変更する.
+      # (デフォルトのカンマだと "https://en-aistudio.app" 等が独立した env var 名として
+      # parse されて exit 2 で失敗する.)
+      - --set-env-vars=^@^ADK_ARTIFACT_BUCKET=${_BUCKET}@FIRESTORE_ADK_SESSIONS_COLLECTION=${_COLLECTION}@ENOSTECH_DECK_OUT=/tmp/decks@CORS_ALLOW_ORIGINS=${_CORS_ALLOW_ORIGINS}@GOOGLE_CLOUD_PROJECT=$PROJECT_ID@ADK_SESSION_BACKEND=firestore
+      # 認可は FastAPI 側 (`require_user` で Firebase ID Token を検証) で行う。
+      # Cloud Run IAM 認可を有効にするとブラウザの CORS プリフライト OPTIONS が
+      # Authorization ヘッダを付けないため Google Frontend が 403 を返し、CORS で
+      # ブロックされる。よって IAM 認可は無効化 (= allow-unauthenticated)。
+      - --allow-unauthenticated
+
+images:
+  - gcr.io/$PROJECT_ID/${_SERVICE}:$BUILD_ID
+  - gcr.io/$PROJECT_ID/${_SERVICE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

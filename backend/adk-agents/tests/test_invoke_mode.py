@@ -1,0 +1,33 @@
+"""Tests for invoke agent mode resolution."""
+from __future__ import annotations
+
+from common.invoke_mode import resolve_invoke_agent_mode
+
+
+def test_resolve_prefers_body_mode_over_stale_session():
+    mode = resolve_invoke_agent_mode(
+        url_mode="consultation",
+        mode_state={"active_mode": "image"},
+        session_state={"mode": "consultation"},
+    )
+    assert mode == "image"
+
+
+def test_resolve_uses_session_when_body_missing():
+    mode = resolve_invoke_agent_mode(
+        url_mode="consultation",
+        mode_state={"active_mode": "consultation"},
+        session_state={"mode": "image"},
+    )
+    assert mode == "consultation"
+
+
+def test_resolve_falls_back_to_url():
+    mode = resolve_invoke_agent_mode(
+        url_mode="consultation",
+        mode_state=None,
+        session_state={},
+    )
+    assert mode == "consultation"
+
+

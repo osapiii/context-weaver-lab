@@ -1,0 +1,47 @@
+# EN AIstudio unified ADK agent — Cloud Build → Cloud Run.
+# 使い方: cd backend && gcloud builds submit . --config adk-agents/unified/cloudbuild.yaml
+# または: cd backend/adk-agents && PROJECT_ID=... ./deploy-all.sh
+substitutions:
+  _SERVICE: en-aistudio-adk-agent
+  _REGION: asia-northeast1
+  _IMAGE_BUCKET: ""
+  _ARTIFACT_BUCKET: ""
+  _ADK_INTERNAL_INVOKE_SECRET: ""
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      [
+        "build",
+        "-t",
+        "gcr.io/$PROJECT_ID/${_SERVICE}:latest",
+        "-f",
+        "adk-agents/unified/Dockerfile",
+        ".",
+      ]
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "gcr.io/$PROJECT_ID/${_SERVICE}:latest"]
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=gcr.io/$PROJECT_ID/${_SERVICE}:latest
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --memory=2Gi
+      - --cpu=2
+      - --concurrency=4
+      - --timeout=900
+      - --set-env-vars=GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=us-central1,VERTEX_SEARCH_LOCATION=global,MODEL_ID=gemini-2.5-flash,GUIDE_MODEL_ID=gemini-2.5-flash-lite,OPENAI_IMAGE_MODEL=gpt-image-2,OPENAI_IMAGE_THINKING=off,ENOSTECH_SVG_BACKEND=openai,ENOSTECH_OPENAI_SVG_MODEL=gpt-image-2,IMAGE_BUCKET=${_IMAGE_BUCKET},IMAGE_SIGNED_URL_TTL_SECONDS=86400,ADK_SESSION_BACKEND=firestore,FIRESTORE_ADK_SESSIONS_COLLECTION=adkSessions,ADK_ARTIFACT_BUCKET=${_ARTIFACT_BUCKET},ADK_INTERNAL_INVOKE_SECRET=${_ADK_INTERNAL_INVOKE_SECRET}
+
+images:
+  - gcr.io/$PROJECT_ID/${_SERVICE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
