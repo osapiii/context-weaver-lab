@@ -29,7 +29,6 @@ import {
   type DrivePendingDiffResult,
   type FirestoreDriveDoc,
 } from "@utils/computeDrivePendingDiff";
-import { getDriveToGcsSyncServiceUrl } from "@utils/googleDriveServiceUrl";
 import {
   createIdleImportSession,
   projectRequestToSession,
@@ -786,12 +785,12 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
       }, DRIVE_SCAN_TIMEOUT_MS);
 
       try {
-        const baseUrl = getDriveToGcsSyncServiceUrl();
         const requestId = `preview_${Date.now()}_${createRandomId()}`;
         const body = this.buildDriveScanRequestBody({
           ...params,
           requestId,
         });
+        const googleWorkspace = useGoogleWorkspaceOAuth();
 
         type ScanApiResponse = {
           status?: string;
@@ -802,12 +801,6 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
           error?: { message?: string } | string;
         };
 
-        const fetchOpts = {
-          method: "POST" as const,
-          body,
-          signal: abortController.signal,
-        };
-
         let counts: DrivePendingDiffResult | null = null;
         let scannedFiles: DriveListFile[] = [];
         let lastListErr: unknown = null;
@@ -815,10 +808,12 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
         for (let attempt = 0; attempt < DRIVE_SCAN_MAX_ATTEMPTS; attempt++) {
           if (abortController.signal.aborted) break;
           try {
-            const listRes = await $fetch<ScanApiResponse>(
-              `${baseUrl}/scan/list-folder`,
-              fetchOpts
-            );
+            const listRes = (await googleWorkspace.listDriveFolder({
+              folderId: body.targetFolderId || body.rootFolderId,
+              rootFolderId: body.rootFolderId,
+              targetFolderId: body.targetFolderId,
+              recursive: body.recursive,
+            })) as ScanApiResponse;
             if (listRes?.status === "error" || listRes?.error) {
               const errMsg =
                 typeof listRes.error === "string"

@@ -277,9 +277,9 @@ import {
 import { useGoogleDriveSyncStore } from "@stores/googleDriveSync";
 import { useDefaultFileSpace } from "@composables/useDefaultFileSpace";
 import { useGoogleDriveFolderSync } from "@composables/useGoogleDriveFolderSync";
-import { getDriveToGcsSyncServiceUrl } from "@utils/googleDriveServiceUrl";
 
 const driveStore = useGoogleDriveSyncStore();
+const googleWorkspace = useGoogleWorkspaceOAuth();
 const { config, isConfigured, serviceAccountEmail, refresh } =
   useGoogleDriveConfig();
 const { fileSpaceId } = useDefaultFileSpace();
@@ -478,31 +478,24 @@ const onTestConnection = async () => {
   isTesting.value = true;
   testResult.value = null;
   try {
-    const url = `${getDriveToGcsSyncServiceUrl()}/scan/test-connection`;
-    const res = await $fetch<{
-      ok?: boolean;
-      rootFolderName?: string;
-      error?: string | { message?: string };
-      status?: string;
-    }>(url, {
-      method: "POST",
-      body: {
-        rootFolderId: extractedFolderId.value,
-      },
-    });
+    const connection = await googleWorkspace.refreshConnection();
+    if (!connection.connected) {
+      testResult.value = {
+        ok: false,
+        error: "Google Workspace を接続してからDriveフォルダを確認してください",
+      };
+      return;
+    }
+    const res = await googleWorkspace.testDriveFolder(extractedFolderId.value);
     if (res?.ok) {
       testResult.value = {
         ok: true,
         rootFolderName: res.rootFolderName,
       };
     } else {
-      const errorMessage =
-        typeof res?.error === "string"
-          ? res.error
-          : res?.error?.message || "接続に失敗しました";
       testResult.value = {
         ok: false,
-        error: errorMessage,
+        error: res?.error || "接続に失敗しました",
       };
     }
   } catch (e: unknown) {
