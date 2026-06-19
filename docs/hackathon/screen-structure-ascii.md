@@ -4,6 +4,8 @@ Last updated: 2026-06-18
 
 These wireframes intentionally follow the EN AIstudio admin/workspace patterns: left navigation, compact operation-first panels, tabbed detail surfaces, and evidence-first cards.
 
+Domain premise: VibeControl is multi-application. The top-level domain model is `Application`, and each Application owns multiple user stories. Every board, source setup, evidence view, and export action is scoped to the selected Application.
+
 ## 1. App Shell
 
 ```text
@@ -11,9 +13,9 @@ These wireframes intentionally follow the EN AIstudio admin/workspace patterns: 
 | EN AIstudio / VibeControl                                      [User] [Settings] |
 +----------------------+---------------------------------------------------------+
 | Admin Nav            | VibeControl                                             |
-|                      | Govern vibe coding with story evidence                  |
+|                      | Govern vibe coding with application-scoped stories      |
 | - AI Studio          |                                                         |
-| - Knowledge          | [Connect Source] [Generate Stories] [Export Story]      |
+| - Knowledge          | [App Switcher] [New App] [Generate Stories] [Export]    |
 | - VibeControl  (*)   |                                                         |
 | - Request Logs       | +----------------+ +----------------+ +---------------+ |
 | - Settings           | | Stories        | | Drift Alerts   | | Avg Confidence| |
@@ -32,6 +34,8 @@ Primary use: understand what remains for MVP, which stories are risky, and where
 +--------------------------------------------------------------------------------+
 | VibeControl > Story Board                                                       |
 +--------------------------------------------------------------------------------+
+| Application: [Demo Commerce App v]  Key: SHOP  Repo: enostech/demo-shop         |
+| [VC Platform] [SHOP Demo Commerce] [New App] [Edit App]                         |
 | Search stories...                  domain: billing x  milestone: mvp x          |
 | [Status] [Owner] [Confidence] [Drift] [Source freshness]           [Refresh]    |
 +--------------------------------------------------------------------------------+
@@ -67,7 +71,8 @@ Board card anatomy:
 ```text
 +----------------------------------+
 | ST-104  Cart payment             |
-| domain: billing   milestone: mvp |
+| app: SHOP         domain: billing |
+| milestone: mvp                    |
 | confidence: 91%   drift: low     |
 |                                  |
 | Evidence                         |
@@ -84,6 +89,7 @@ Primary use: one place to inspect intent, tickets, implementation, evidence, and
 ```text
 +--------------------------------------------------------------------------------+
 | ST-104 Cart payment                                        [Refresh] [Export]   |
+| Application: SHOP Demo Commerce App                                             |
 | Status: Ready for Dev   Confidence: 91%   Drift: Low   Owner: Unassigned        |
 +--------------------------------------------------------------------------------+
 | Tabs: [Spec / Background] [Evidence] [Tickets] [Code Context] [Agent Log]      |
@@ -104,6 +110,22 @@ Primary use: one place to inspect intent, tickets, implementation, evidence, and
 | | Agent Summary                                   | | | 3. Commit a1b2c3d     | |
 | | To-Be is supported by 3 docs. As-Is has PR...   | | +-----------------------+ |
 | +-------------------------------------------------+ |                           |
++--------------------------------------------------------------------------------+
+```
+
+## 3.5 Application Detail Top
+
+Primary use: VibeControl opens on the currently selected Application. The page first shows application metadata, source bindings, and health metrics, then the story board below.
+
+```text
++--------------------------------------------------------------------------------+
+| Application: SHOP Demo Commerce App                         [Edit] [Delete]     |
+| Summary: Commerce checkout app used for payment story governance.               |
++--------------------------------------------------------------------------------+
+| Domain: commerce       Owner: Product Team       Labels: checkout, mvp          |
+| FileSpace: w-commerce  Repo: enostech/demo-shop  Branch: main                   |
++--------------------------------------------------------------------------------+
+| Stories 12 | Avg confidence 84% | Needs review 3 | High drift 1                |
 +--------------------------------------------------------------------------------+
 ```
 
@@ -236,6 +258,9 @@ This should reuse the existing EN AIstudio knowledge screens instead of creating
 +--------------------------------------------------------------------------------+
 | VibeControl > Sources                                                           |
 +--------------------------------------------------------------------------------+
+| Application                                                                    |
+| [Application v] [Application Key] [Application Name]                            |
+|                                                                                |
 | +----------------------------------+ +----------------------------------------+ |
 | | Knowledge Sources                | | Code Sources                           | |
 | | Reuse EN AIstudio FileSpace      | | GitHub App / PAT for MVP               | |
@@ -285,10 +310,10 @@ This should reuse the existing EN AIstudio knowledge screens instead of creating
 
 ```text
 /admin/vibe-control
-  Story board / dashboard
+  Selected Application detail top + story board / dashboard
 
 /admin/vibe-control/sources
-  Source setup for FileSpace, GitHub, tickets, and export targets
+  Application-scoped source setup for FileSpace, GitHub, tickets, and export targets
 
 /admin/vibe-control/stories/:storyId
   Story detail package
@@ -308,6 +333,9 @@ app/pages/admin/vibe-control/runs/[runId].vue
 app/components/vibeControl/VibeControlStoryBoard.vue
 app/components/vibeControl/VibeControlStoryCard.vue
 app/components/vibeControl/VibeControlStoryDetail.vue
+app/components/vibeControl/VibeControlApplicationHeader.vue
+app/components/vibeControl/VibeControlApplicationDetail.vue
+app/components/vibeControl/VibeControlApplicationFormModal.vue
 app/components/vibeControl/VibeControlEvidenceRail.vue
 app/components/vibeControl/VibeControlSourceSetup.vue
 app/components/vibeControl/VibeControlAgentRunCenter.vue

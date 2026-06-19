@@ -7,9 +7,12 @@
         :class="iconClass"
       />
       <div class="min-w-0">
-        <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">
-          {{ title }}
-        </h1>
+        <div class="flex min-w-0 flex-wrap items-center gap-3">
+          <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">
+            {{ title }}
+          </h1>
+          <slot name="titleTrailing" />
+        </div>
         <p
           v-if="subtitle"
           class="mt-1 hidden text-sm text-slate-600 md:block"

@@ -46,8 +46,83 @@ def _bounded_impact(value: Any, fallback: int = 0) -> int:
     return max(-100, min(100, numeric))
 
 
+def _normalize_application(raw: dict[str, Any], *, index: int) -> dict[str, Any]:
+    application_key = _clean_text(
+        raw.get("applicationKey"), _clean_text(raw.get("application_key"), f"APP-{index + 1}")
+    ).upper()
+    application_id = _clean_text(
+        raw.get("id"),
+        _clean_text(raw.get("applicationId"), f"app-{application_key.lower()}"),
+    )
+    return {
+        "id": application_id,
+        "applicationKey": application_key,
+        "name": _clean_text(raw.get("name"), _clean_text(raw.get("title"), application_key)),
+        "summary": _clean_text(raw.get("summary")) or None,
+        "domain": _clean_text(raw.get("domain")) or None,
+        "owner": _clean_text(raw.get("owner")) or None,
+        "labels": [
+            str(value).strip()
+            for value in _as_list(raw.get("labels"))
+            if str(value).strip()
+        ],
+        "fileSpaceId": _clean_text(raw.get("fileSpaceId"), _clean_text(raw.get("file_space_id"))) or None,
+        "repoFullName": _clean_text(raw.get("repoFullName"), _clean_text(raw.get("repo_full_name"))) or None,
+        "defaultBranch": _clean_text(raw.get("defaultBranch"), _clean_text(raw.get("default_branch"))) or None,
+        "storyCount": _bounded_score(raw.get("storyCount"), 0),
+        "highDriftCount": _bounded_score(raw.get("highDriftCount"), 0),
+        "lastGeneratedAt": _clean_text(raw.get("lastGeneratedAt"), _now_iso()),
+    }
+
+
+def _infer_default_application(
+    stories: list[dict[str, Any]], source_connections: list[dict[str, Any]] | None
+) -> dict[str, Any]:
+    first_story = _as_dict(stories[0]) if stories else {}
+    first_source = _as_dict(_as_list(source_connections)[0]) if source_connections else {}
+    return _normalize_application(
+        {
+            "id": _clean_text(first_story.get("applicationId"), "app-default"),
+            "applicationKey": _clean_text(first_story.get("applicationKey"), "APP"),
+            "name": _clean_text(first_story.get("applicationName"), "VibeControl Application"),
+            "domain": _clean_text(first_story.get("domain")) or None,
+            "fileSpaceId": _clean_text(first_story.get("fileSpaceId"))
+            or _clean_text(first_source.get("fileSpaceId")),
+            "repoFullName": _clean_text(first_story.get("repoFullName"))
+            or _clean_text(first_source.get("repoFullName")),
+            "defaultBranch": _clean_text(first_source.get("defaultBranch"), "main"),
+        },
+        index=0,
+    )
+
+
+def _application_ref(
+    raw: dict[str, Any],
+    default_application: dict[str, Any],
+    applications_by_id: dict[str, dict[str, Any]] | None = None,
+    applications_by_key: dict[str, dict[str, Any]] | None = None,
+) -> tuple[str, str]:
+    application_id = _clean_text(raw.get("applicationId"))
+    application_key = _clean_text(raw.get("applicationKey")).upper()
+    if application_id and applications_by_id and application_id in applications_by_id:
+        application = applications_by_id[application_id]
+        return application["id"], application["applicationKey"]
+    if application_key and applications_by_key and application_key in applications_by_key:
+        application = applications_by_key[application_key]
+        return application["id"], application["applicationKey"]
+    application_id = application_id or default_application["id"]
+    application_key = application_key or default_application["applicationKey"]
+    return application_id, application_key
+
+
 def _normalize_evidence(
-    raw: dict[str, Any], *, index: int, story_key: str
+    raw: dict[str, Any],
+    *,
+    index: int,
+    story_key: str,
+    default_application: dict[str, Any],
+    applications_by_id: dict[str, dict[str, Any]],
+    applications_by_key: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     citation = _as_dict(raw.get("citation"))
     evidence_type = _clean_text(raw.get("type"), "agent")
@@ -57,8 +132,16 @@ def _normalize_evidence(
     title = _clean_text(raw.get("title"), f"{story_key} evidence {index + 1}")
     excerpt = _clean_text(raw.get("excerpt"), title)
     snippet = _clean_text(citation.get("snippet"), excerpt)
+    application_id, application_key = _application_ref(
+        raw,
+        default_application,
+        applications_by_id=applications_by_id,
+        applications_by_key=applications_by_key,
+    )
     return {
         "id": evidence_id,
+        "applicationId": application_id,
+        "applicationKey": application_key,
         "storyId": _clean_text(raw.get("storyId")),
         "storyKey": _clean_text(raw.get("storyKey"), story_key),
         "type": evidence_type,
@@ -121,31 +204,62 @@ def _coverage_score(story: dict[str, Any], evidence_count: int) -> int:
 
 def build_story_ssot_package(
     *,
+    applications: list[dict[str, Any]] | None = None,
     stories: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
     source_connections: list[dict[str, Any]] | None = None,
     generation_trace: list[str] | None = None,
 ) -> dict[str, Any]:
     """Normalize and score a VibeControl SSOT package."""
+    raw_applications = _as_list(applications)
+    normalized_applications = [
+        _normalize_application(_as_dict(raw), index=index)
+        for index, raw in enumerate(raw_applications)
+    ]
+    if not normalized_applications:
+        normalized_applications = [_infer_default_application(stories, source_connections)]
+    default_application = normalized_applications[0]
+    applications_by_id = {
+        application["id"]: application for application in normalized_applications
+    }
+    applications_by_key = {
+        application["applicationKey"]: application for application in normalized_applications
+    }
+
     normalized_evidence: list[dict[str, Any]] = []
     for index, raw in enumerate(evidence):
         story_key = _clean_text(raw.get("storyKey"), "ST")
-        normalized_evidence.append(_normalize_evidence(raw, index=index, story_key=story_key))
+        normalized_evidence.append(
+            _normalize_evidence(
+                raw,
+                index=index,
+                story_key=story_key,
+                default_application=default_application,
+                applications_by_id=applications_by_id,
+                applications_by_key=applications_by_key,
+            )
+        )
 
-    evidence_by_story_key: dict[str, list[dict[str, Any]]] = {}
+    evidence_by_story_key: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for item in normalized_evidence:
-        evidence_by_story_key.setdefault(item["storyKey"], []).append(item)
+        evidence_by_story_key.setdefault((item["applicationId"], item["storyKey"]), []).append(item)
 
     normalized_stories: list[dict[str, Any]] = []
     for index, raw in enumerate(stories):
         story_key = _clean_text(raw.get("storyKey"), f"ST-{index + 1:03d}")
+        application_id, application_key = _application_ref(
+            raw,
+            default_application,
+            applications_by_id=applications_by_id,
+            applications_by_key=applications_by_key,
+        )
         status = _clean_text(raw.get("status"), "discovery")
         if status not in StoryStatus:
             status = "discovery"
         drift = _clean_text(raw.get("driftLevel"), "medium")
         if drift not in DriftLevels:
             drift = "medium"
-        story_evidence = evidence_by_story_key.get(story_key, [])
+        story_evidence = evidence_by_story_key.get((application_id, story_key), [])
         evidence_ids = [
             str(value).strip()
             for value in (_as_list(raw.get("evidenceIds")) or [item["id"] for item in story_evidence])
@@ -153,6 +267,8 @@ def build_story_ssot_package(
         ]
         story = {
             "id": _clean_text(raw.get("id"), f"story-{story_key.lower()}"),
+            "applicationId": application_id,
+            "applicationKey": application_key,
             "storyKey": story_key,
             "title": _clean_text(raw.get("title"), f"{story_key} user story"),
             "summary": _clean_text(raw.get("summary"), "根拠付きユーザーストーリー候補"),
@@ -195,12 +311,42 @@ def build_story_ssot_package(
             story["reviewState"] = "needs_review"
         normalized_stories.append(story)
 
+    for application in normalized_applications:
+        app_stories = [
+            story
+            for story in normalized_stories
+            if story.get("applicationId") == application["id"]
+        ]
+        application["storyCount"] = len(app_stories)
+        application["highDriftCount"] = sum(
+            1 for story in app_stories if story.get("driftLevel") == "high"
+        )
+        application["lastGeneratedAt"] = _now_iso()
+
+    normalized_source_connections: list[dict[str, Any]] = []
+    for raw in _as_list(source_connections):
+        data = _as_dict(raw)
+        application_id, application_key = _application_ref(
+            data,
+            default_application,
+            applications_by_id=applications_by_id,
+            applications_by_key=applications_by_key,
+        )
+        normalized_source_connections.append(
+            {
+                **data,
+                "applicationId": application_id,
+                "applicationKey": application_key,
+            }
+        )
+
     return {
-        "schemaVersion": "vibe-control-ssot-v1",
+        "schemaVersion": "vibe-control-application-ssot-v1",
         "generatedAt": _now_iso(),
+        "applications": normalized_applications,
         "stories": normalized_stories,
         "evidence": normalized_evidence,
-        "source_connections": _as_list(source_connections),
+        "source_connections": normalized_source_connections,
         "generation_trace": [
             str(item).strip()
             for item in _as_list(generation_trace)
@@ -216,6 +362,9 @@ def read_vibe_control_sources(tool_context: Any = None) -> dict[str, Any]:
     setup = _as_dict(bucket.get("setup"))
     return {
         "ok": True,
+        "application_id": _clean_text(setup.get("application_id")),
+        "application_key": _clean_text(setup.get("application_key"), "APP"),
+        "application_name": _clean_text(setup.get("application_name")),
         "file_space_id": _clean_text(state.get("file_space_id"))
         or _clean_text(setup.get("file_space_id")),
         "repo_full_name": _clean_text(setup.get("repo_full_name")),
@@ -229,15 +378,17 @@ def save_user_story_ssot(
     evidence: list[dict[str, Any]],
     source_connections: list[dict[str, Any]] | None = None,
     generation_trace: list[str] | None = None,
+    applications: list[dict[str, Any]] | None = None,
     tool_context: Any = None,
 ) -> dict[str, Any]:
-    """Return a validated user-story SSOT package as a JSON artifact."""
+    """Return a validated application-scoped user-story SSOT package as a JSON artifact."""
     if not stories:
         return {"ok": False, "error": "stories must contain at least one item"}
     if not evidence:
         return {"ok": False, "error": "evidence must contain at least one item"}
 
     package = build_story_ssot_package(
+        applications=applications,
         stories=stories,
         evidence=evidence,
         source_connections=source_connections,
@@ -247,6 +398,7 @@ def save_user_story_ssot(
     return {
         "ok": True,
         "vibe_control": {
+            "application_count": len(package["applications"]),
             "story_count": len(package["stories"]),
             "evidence_count": len(package["evidence"]),
             "needs_review_count": sum(
@@ -258,7 +410,7 @@ def save_user_story_ssot(
         "artifacts": [
             {
                 "kind": "json_document",
-                "title": "VibeControl User Story SSOT",
+                "title": "VibeControl Application Story SSOT",
                 "body": body,
             }
         ],

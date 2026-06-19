@@ -103,9 +103,11 @@ const isDevAuthBypassEmail = (email: string): boolean => {
   }
 
   const devAuthBypass = config.public.devAuthBypass as
-    | { enabled?: string; emails?: string }
+    | { enabled?: boolean | string; emails?: string }
     | undefined;
-  if (devAuthBypass?.enabled !== "true") return false;
+  if (devAuthBypass?.enabled !== true && devAuthBypass?.enabled !== "true") {
+    return false;
+  }
 
   const allowlistedEmails = String(devAuthBypass.emails || "")
     .split(",")
@@ -311,7 +313,7 @@ onMounted(async () => {
 
 <template>
   <main class="signin-shell">
-    <section class="signin-auth-panel" aria-label="EN AIstudio login">
+    <section class="signin-auth-panel" aria-label="VibeControl login">
       <div class="signin-auth-inner">
         <header class="signin-brand">
           <div class="signin-mark" aria-hidden="true">
@@ -319,13 +321,13 @@ onMounted(async () => {
           </div>
           <div>
             <p class="signin-kicker">ENOSTECH</p>
-            <h1>EN AIstudio</h1>
+            <h1>VibeControl</h1>
           </div>
         </header>
 
         <div class="signin-copy">
           <p class="signin-eyebrow">Secure workspace access</p>
-          <h2>ビジネスAIを、いつもの業務画面へ。</h2>
+          <h2>仕様とコードのズレを、ストーリー単位で管理。</h2>
           <p>
             登録済みメールアドレスに認証リンクを送信します。
           </p>
@@ -343,7 +345,7 @@ onMounted(async () => {
           <div>
             <p>スマートフォンでのご利用について</p>
             <span>
-              ログイン後、モバイル向けの相談画面へ移動します。
+              ログイン後、VibeControl 画面へ移動します。
             </span>
           </div>
         </div>
@@ -500,8 +502,8 @@ onMounted(async () => {
         </div>
         <div class="preview-header">
           <div>
-            <p>AI Studio</p>
-            <strong>Workspace OS</strong>
+            <p>VibeControl</p>
+            <strong>Story SSOT</strong>
           </div>
           <div class="preview-live">LIVE</div>
         </div>

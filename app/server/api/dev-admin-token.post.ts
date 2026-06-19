@@ -8,12 +8,27 @@ const SERVICE_ACCOUNT_KEY_PATH = resolve(
   process.cwd(),
   ".local/en-aistudio-local-dev-signer-key.json"
 );
+const DEV_ADMIN_SIGN_IN_URL =
+  "https://asia-northeast1-vibe-control-dev.cloudfunctions.net/dev_admin_sign_in";
 const ALLOWED_EMAILS = new Set(["super@enostech.co.jp"]);
 
 type ServiceAccountKey = {
   client_email: string;
   private_key: string;
   private_key_id?: string;
+};
+
+type DevAdminSignInResponse = {
+  result?: {
+    customToken?: string;
+    email?: string;
+    uid?: string;
+    projectId?: string;
+  };
+  error?: {
+    message?: string;
+    status?: string;
+  };
 };
 
 const base64url = (value: string | Buffer): string =>
@@ -59,17 +74,32 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: "Email is not allowlisted" });
   }
 
-  let serviceAccount: ServiceAccountKey;
+  let serviceAccount: ServiceAccountKey | null = null;
   try {
     serviceAccount = JSON.parse(
       readFileSync(SERVICE_ACCOUNT_KEY_PATH, "utf8")
     ) as ServiceAccountKey;
-  } catch (error) {
-    throw createError({
-      statusCode: 500,
-      statusMessage:
-        "Local service account key is missing. Create app/.local/en-aistudio-local-dev-signer-key.json",
+  } catch {
+    const response = await fetch(DEV_ADMIN_SIGN_IN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: { email } }),
     });
+    const payload = (await response.json()) as DevAdminSignInResponse;
+    if (!response.ok || !payload.result?.customToken) {
+      throw createError({
+        statusCode: 500,
+        statusMessage:
+          payload.error?.message ||
+          "Dev admin sign-in failed and local signer key is missing.",
+      });
+    }
+    return {
+      customToken: payload.result.customToken,
+      email: payload.result.email || email,
+      uid: payload.result.uid || "super_enostech_co_jp",
+      projectId: payload.result.projectId || "vibe-control-dev",
+    };
   }
 
   const now = Math.floor(Date.now() / 1000);

@@ -52,7 +52,7 @@ function goBack() {
 }
 
 useHead({
-  title: () => `${statusCode.value} | EN AIstudio`,
+  title: () => `${statusCode.value} | VibeControl`,
   meta: [{ name: "robots", content: "noindex" }],
 });
 </script>
@@ -61,7 +61,7 @@ useHead({
   <div class="min-h-screen bg-slate-50 flex flex-col">
     <header class="px-6 py-5">
       <span class="text-sm font-semibold tracking-wide text-slate-800">
-        EN AIstudio
+        VibeControl
       </span>
     </header>
 

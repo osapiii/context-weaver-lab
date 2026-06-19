@@ -64,6 +64,18 @@ export default defineNuxtConfig({
     "**/venv/**",
     "**/__pycache__/**",
     "**/.venv/**",
+    "pages/admin/ai-chat.vue",
+    "pages/admin/ai-studio.vue",
+    "pages/admin/business-partners/**",
+    "pages/admin/help.vue",
+    "pages/admin/images.vue",
+    "pages/admin/oauth/**",
+    "pages/admin/research-agent.vue",
+    "pages/admin/researches.vue",
+    "pages/admin/sheets.vue",
+    "pages/admin/storage.vue",
+    "pages/admin/work.vue",
+    "pages/admin/writings.vue",
   ],
 
   colorMode: {
@@ -181,6 +193,9 @@ export default defineNuxtConfig({
       /** Google Workspace OAuth auth-code flow client id. Secret is backend-only. */
       googleWorkspaceOAuthClientId:
         process.env.NUXT_PUBLIC_GOOGLE_WORKSPACE_OAUTH_CLIENT_ID || "",
+      /** GitHub OAuth client id. Secret and tokens are backend-only. */
+      githubOAuthClientId:
+        process.env.NUXT_PUBLIC_GITHUB_OAUTH_CLIENT_ID || "",
       /** Gシート連携: ユーザーが「編集者」で招待する SA（ui-backend の .cred.json と一致） */
       gsheetServiceAccountEmail:
         process.env.NUXT_PUBLIC_GSHEET_SERVICE_ACCOUNT_EMAIL ||

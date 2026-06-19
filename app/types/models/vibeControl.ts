@@ -45,6 +45,29 @@ export const VibeControlSourceConnectionStatusSchema = z.enum([
   "error",
 ]);
 
+export const VibeControlApplicationSchema = z.object({
+  id: z.string().optional(),
+  applicationKey: z.string(),
+  name: z.string(),
+  summary: z.string().optional(),
+  domain: z.string().optional(),
+  owner: z.string().optional(),
+  labels: z.array(z.string()).default([]),
+  fileSpaceId: z.string().optional(),
+  repoFullName: z.string().min(1),
+  defaultBranch: z.string().optional(),
+  storyCount: z.number().min(0).default(0),
+  highDriftCount: z.number().min(0).default(0),
+  lastGeneratedAt: z.string().optional(),
+  createdAt: z.instanceof(Timestamp).optional(),
+  updatedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlApplicationSchema =
+  VibeControlApplicationSchema.extend({
+    id: z.string(),
+  });
+
 export const VibeControlAcceptanceCriterionSchema = z.object({
   id: z.string(),
   text: z.string(),
@@ -72,6 +95,8 @@ export const VibeControlGenerationTraceSchema = z.object({
 
 export const VibeControlStorySchema = z.object({
   id: z.string().optional(),
+  applicationId: z.string().default("app-default"),
+  applicationKey: z.string().default("APP"),
   storyKey: z.string(),
   title: z.string(),
   summary: z.string(),
@@ -106,6 +131,8 @@ export const DecodedVibeControlStorySchema = VibeControlStorySchema.extend({
 
 export const VibeControlStoryEvidenceSchema = z.object({
   id: z.string().optional(),
+  applicationId: z.string().default("app-default"),
+  applicationKey: z.string().default("APP"),
   storyId: z.string(),
   storyKey: z.string(),
   type: VibeControlEvidenceTypeSchema,
@@ -136,6 +163,8 @@ export const DecodedVibeControlStoryEvidenceSchema =
 
 export const VibeControlSourceConnectionSchema = z.object({
   id: z.string().optional(),
+  applicationId: z.string().default("app-default"),
+  applicationKey: z.string().default("APP"),
   provider: VibeControlSourceProviderSchema,
   status: VibeControlSourceConnectionStatusSchema,
   displayName: z.string(),
@@ -167,6 +196,12 @@ export type VibeControlEvidenceType = z.infer<
 export type VibeControlSourceProvider = z.infer<
   typeof VibeControlSourceProviderSchema
 >;
+export type VibeControlApplication = z.infer<
+  typeof VibeControlApplicationSchema
+>;
+export type DecodedVibeControlApplication = z.infer<
+  typeof DecodedVibeControlApplicationSchema
+>;
 export type VibeControlAcceptanceCriterion = z.infer<
   typeof VibeControlAcceptanceCriterionSchema
 >;
@@ -193,6 +228,9 @@ export type DecodedVibeControlSourceConnection = z.infer<
 
 export const vibeControlStoryConverter = firestoreTypeConverter(
   DecodedVibeControlStorySchema
+);
+export const vibeControlApplicationConverter = firestoreTypeConverter(
+  DecodedVibeControlApplicationSchema
 );
 export const vibeControlStoryEvidenceConverter = firestoreTypeConverter(
   DecodedVibeControlStoryEvidenceSchema

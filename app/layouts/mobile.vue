@@ -10,10 +10,10 @@
     >
       <div class="flex items-center justify-between px-4 h-12">
         <NuxtLink
-          :to="{ name: 'admin' }"
+          :to="{ name: 'admin-vibe-control' }"
           class="text-base font-bold tracking-tight font-mono text-slate-900"
         >
-          EN AIstudio
+          VibeControl
         </NuxtLink>
 
         <UDropdownMenu
@@ -40,8 +40,6 @@
       <slot />
     </main>
 
-    <!-- EN AIstudio 統合アシスタント -->
-    <EnAssistantSlideover />
   </div>
 </template>
 

@@ -3,7 +3,7 @@
     <AdminModePageNav current-page-label="ナレッジ素材" />
     <EnAiPageHeader
       title="AI を育てる"
-      subtitle="PDF や文書を AI に教えると、経営相談や AI 部下の回答精度が上がります"
+      subtitle="PDF や文書を AI に教えると、VibeControl の根拠づけと回答精度が上がります"
       :icon="navModeIcons.grow"
     >
       <template #trailing>

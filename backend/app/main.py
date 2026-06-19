@@ -9,6 +9,7 @@ from triggers import adk_artifact_storage  # noqa: F401
 from triggers import adk_invoke_requests  # noqa: F401
 from triggers import auth_email_link  # noqa: F401
 from triggers import google_workspace_oauth  # noqa: F401
+from triggers import github_oauth  # noqa: F401
 from triggers import guide_assistant  # noqa: F401
 from triggers import member_user_requests  # noqa: F401
 from triggers import research_completion_email  # noqa: F401
@@ -24,6 +25,12 @@ from triggers.auth_email_link import send_admin_sign_in_link  # noqa: F401
 from triggers.google_workspace_oauth import connect_google_workspace  # noqa: F401
 from triggers.google_workspace_oauth import disconnect_google_workspace  # noqa: F401
 from triggers.google_workspace_oauth import get_google_workspace_connection  # noqa: F401
+from triggers.github_oauth import connect_github  # noqa: F401
+from triggers.github_oauth import disconnect_github  # noqa: F401
+from triggers.github_oauth import get_github_connection  # noqa: F401
+from triggers.github_oauth import get_github_repository  # noqa: F401
+from triggers.github_oauth import list_github_merged_pull_requests  # noqa: F401
+from triggers.github_oauth import list_github_repositories  # noqa: F401
 from triggers.guide_assistant import ask_en_aistudio_guide  # noqa: F401
 from triggers.member_user_requests import on_member_user_create_request_created  # noqa: F401
 from triggers.member_user_requests import on_member_user_delete_request_created  # noqa: F401
