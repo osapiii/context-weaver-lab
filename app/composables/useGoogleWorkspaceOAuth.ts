@@ -19,6 +19,34 @@ type GoogleWorkspaceConnection = {
   scopes?: string[];
 };
 
+export type GoogleDriveFolderTestResult = {
+  ok: boolean;
+  rootFolderName?: string;
+  folderId?: string;
+  webViewLink?: string;
+  error?: string;
+};
+
+export type GoogleDriveListFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  modifiedTime?: string;
+  parents?: string[];
+  size?: string;
+  webViewLink?: string;
+  thumbnailLink?: string;
+};
+
+export type GoogleDriveFolderListResult = {
+  status?: string;
+  files?: GoogleDriveListFile[];
+  fileCount?: number;
+  rootFolderId?: string;
+  targetFolderId?: string | null;
+  error?: { message?: string } | string;
+};
+
 type GoogleCodeResponse = {
   code?: string;
   error?: string;
@@ -189,6 +217,52 @@ export function useGoogleWorkspaceOAuth() {
     }
   };
 
+  const testDriveFolder = async (
+    folderId: string
+  ): Promise<GoogleDriveFolderTestResult> => {
+    if (!organizationId.value) {
+      return { ok: false, error: "組織情報が未取得です" };
+    }
+    const callable = httpsCallable<
+      { organizationId: string; folderId: string },
+      GoogleDriveFolderTestResult
+    >(functions(), "test_google_drive_folder");
+    const res = await callable({ organizationId: organizationId.value, folderId });
+    return res.data;
+  };
+
+  const listDriveFolder = async (params: {
+    folderId: string;
+    rootFolderId?: string;
+    targetFolderId?: string | null;
+    recursive?: boolean;
+  }): Promise<GoogleDriveFolderListResult> => {
+    if (!organizationId.value) {
+      return {
+        status: "error",
+        error: { message: "組織情報が未取得です" },
+      };
+    }
+    const callable = httpsCallable<
+      {
+        organizationId: string;
+        folderId: string;
+        rootFolderId?: string;
+        targetFolderId?: string | null;
+        recursive?: boolean;
+      },
+      GoogleDriveFolderListResult
+    >(functions(), "list_google_drive_folder");
+    const res = await callable({
+      organizationId: organizationId.value,
+      folderId: params.folderId,
+      rootFolderId: params.rootFolderId,
+      targetFolderId: params.targetFolderId,
+      recursive: params.recursive ?? true,
+    });
+    return res.data;
+  };
+
   return {
     clientId,
     connection: sharedConnection,
@@ -196,5 +270,7 @@ export function useGoogleWorkspaceOAuth() {
     connect,
     disconnect,
     refreshConnection,
+    testDriveFolder,
+    listDriveFolder,
   };
 }

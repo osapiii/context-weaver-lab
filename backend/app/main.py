@@ -21,6 +21,8 @@ from triggers.auth_email_link import send_admin_sign_in_link  # noqa: F401
 from triggers.google_workspace_oauth import connect_google_workspace  # noqa: F401
 from triggers.google_workspace_oauth import disconnect_google_workspace  # noqa: F401
 from triggers.google_workspace_oauth import get_google_workspace_connection  # noqa: F401
+from triggers.google_workspace_oauth import list_google_drive_folder  # noqa: F401
+from triggers.google_workspace_oauth import test_google_drive_folder  # noqa: F401
 from triggers.github_oauth import connect_github  # noqa: F401
 from triggers.github_oauth import disconnect_github  # noqa: F401
 from triggers.github_oauth import get_github_connection  # noqa: F401

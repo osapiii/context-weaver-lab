@@ -16,6 +16,8 @@ from firebase_functions import https_fn
 from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.cloud import firestore
 from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 
 db = firestore.Client()
@@ -29,6 +31,8 @@ WORKSPACE_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
 TOKEN_URL = "https://oauth2.googleapis.com/token"
+DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
+DRIVE_READONLY_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 
 def _oauth_client_id() -> str:
@@ -256,3 +260,138 @@ def credentials_from_operation_metadata(
         user_id=user_id,
         scopes=scopes,
     )
+
+
+def _drive_service_for_user(organization_id: str, user_id: str):
+    creds = credentials_for_user(
+        organization_id=organization_id,
+        user_id=user_id,
+        scopes=DRIVE_READONLY_SCOPES,
+    )
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def _drive_permission_error(exc: HttpError) -> str:
+    status = exc.resp.status if hasattr(exc, "resp") else "?"
+    if status in (403, 404):
+        return (
+            "接続した Google アカウントでこのDriveフォルダを閲覧できません。"
+            "フォルダID、共有先アカウント、共有ドライブの権限を確認してください。"
+        )
+    return f"Drive API エラー (HTTP {status})"
+
+
+def _drive_file_fields() -> str:
+    return (
+        "nextPageToken, files(id, name, mimeType, modifiedTime, parents, size, "
+        "webViewLink, thumbnailLink)"
+    )
+
+
+def _list_drive_files(service: Any, folder_id: str, recursive: bool) -> list[dict[str, Any]]:
+    files: list[dict[str, Any]] = []
+    page_token: str | None = None
+    while True:
+        response = (
+            service.files()
+            .list(
+                q=f"'{folder_id}' in parents and trashed = false",
+                fields=_drive_file_fields(),
+                pageToken=page_token,
+                pageSize=200,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            )
+            .execute()
+        )
+        current = response.get("files", []) or []
+        files.extend(current)
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+
+    if not recursive:
+        return files
+
+    expanded: list[dict[str, Any]] = []
+    for item in files:
+        expanded.append(item)
+        if item.get("mimeType") == DRIVE_FOLDER_MIME_TYPE and item.get("id"):
+            expanded.extend(_list_drive_files(service, item["id"], recursive=True))
+    return expanded
+
+
+@https_fn.on_call(region="asia-northeast1", memory=512, timeout_sec=60)
+def test_google_drive_folder(req: https_fn.CallableRequest) -> dict[str, Any]:
+    user_id = _require_auth(req)
+    data = req.data if isinstance(req.data, dict) else {}
+    organization_id = _require_org(data)
+    folder_id = str(data.get("folderId") or data.get("rootFolderId") or "").strip()
+    if not folder_id:
+        raise https_fn.HttpsError(
+            code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
+            message="folderId is required",
+        )
+
+    try:
+        service = _drive_service_for_user(organization_id, user_id)
+        folder = (
+            service.files()
+            .get(
+                fileId=folder_id,
+                fields="id, name, mimeType, webViewLink",
+                supportsAllDrives=True,
+            )
+            .execute()
+        )
+    except HttpError as exc:
+        return {"ok": False, "error": _drive_permission_error(exc)}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)[:300]}
+
+    if folder.get("mimeType") != DRIVE_FOLDER_MIME_TYPE:
+        return {"ok": False, "error": "指定された ID はフォルダではありません"}
+    return {
+        "ok": True,
+        "rootFolderName": folder.get("name") or "(no name)",
+        "folderId": folder.get("id") or folder_id,
+        "webViewLink": folder.get("webViewLink") or "",
+    }
+
+
+@https_fn.on_call(region="asia-northeast1", memory=512, timeout_sec=120)
+def list_google_drive_folder(req: https_fn.CallableRequest) -> dict[str, Any]:
+    user_id = _require_auth(req)
+    data = req.data if isinstance(req.data, dict) else {}
+    organization_id = _require_org(data)
+    folder_id = str(
+        data.get("folderId")
+        or data.get("targetFolderId")
+        or data.get("rootFolderId")
+        or ""
+    ).strip()
+    recursive = bool(data.get("recursive", True))
+    if not folder_id:
+        raise https_fn.HttpsError(
+            code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
+            message="folderId is required",
+        )
+
+    try:
+        service = _drive_service_for_user(organization_id, user_id)
+        items = _list_drive_files(service, folder_id, recursive)
+    except HttpError as exc:
+        return {"status": "error", "error": {"message": _drive_permission_error(exc)}}
+    except Exception as exc:
+        return {"status": "error", "error": {"message": str(exc)[:300]}}
+
+    files_only = [
+        item for item in items if item.get("mimeType") != DRIVE_FOLDER_MIME_TYPE
+    ]
+    return {
+        "status": "ok",
+        "files": files_only,
+        "fileCount": len(files_only),
+        "rootFolderId": data.get("rootFolderId") or folder_id,
+        "targetFolderId": data.get("targetFolderId") or folder_id,
+    }
