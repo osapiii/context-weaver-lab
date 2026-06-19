@@ -7,8 +7,10 @@
 export const useNavModeIcons = () => {
   return {
     home: "flat-color-icons:home",
-    /** AI に仕事を依頼（ロケット / 起動） */
-    work: "flat-color-icons:deployment",
+    /** アプリ */
+    applications: "flat-color-icons:deployment",
+    /** ユーザーストーリー */
+    stories: "flat-color-icons:flow-chart",
     /** マスタ・実績・取引先の整備 */
     prepare: "flat-color-icons:survey",
     /** ナレッジ投入・AI 育成 */

@@ -6,6 +6,8 @@ Last updated: 2026-06-18
 
 VibeControl is a governance layer for AI-driven software delivery. It treats the user story as the single source of truth, then keeps that story synchronized with specs, tickets, GitHub code state, pull requests, and AI-editor context.
 
+Domain premise: VibeControl can manage multiple software applications. Unlike HAiFF, where masters were attached to a manufacturing-line domain model, VibeControl uses `Application` as the top-level domain model. Each application owns multiple user stories, and story evidence, code references, source connections, drift, and editor context are always interpreted inside that application boundary.
+
 The pitch from the attached deck is:
 
 - Vibe coding accelerates prototyping, but weak governance creates context collapse, unclear requirements, and spec/code drift.
@@ -31,11 +33,14 @@ Key dates:
 
 ### Must Have
 
-1. Project context setup
+1. Application context setup
+   - Select or create an Application as the top-level working domain.
+   - Switch the active Application from the VibeControl header.
+   - Provide Application CRUD UI: create modal, edit modal, delete action, and an Application detail top page.
    - Select or create a FileSpace.
    - Connect GitHub repository.
    - Import product docs through existing Drive/Web/manual ingestion.
-   - Register product metadata such as domain, milestone, labels, and release target.
+   - Register application metadata such as domain, owner, labels, milestone, and release target.
 
 2. Story generation
    - Use Agent Search to extract To-Be from product docs, tickets, and accepted criteria.
@@ -112,7 +117,7 @@ Add a new ADK mode named `vibe_control` rather than creating a separate agent fr
 ```text
 Firebase Hosting SPA
   |
-  |-- Firestore: stories, source connections, evidence, agent runs
+  |-- Firestore: applications, stories, source connections, evidence, agent runs
   |-- Firebase Storage/GCS: artifacts, imported docs
   |
   +-- RequestDoc invoke
@@ -126,13 +131,31 @@ Cloud Run: unified ADK agent
   |-- GitHub evidence collector
   |
   v
-Story SSOT package
+Application-scoped Story SSOT package
 ```
 
 ## 6. Data Model Draft
 
+### `vibeControlApplications/{applicationId}`
+
+- `applicationKey`
+- `name`
+- `summary`
+- `domain`
+- `owner`
+- `labels`
+- `fileSpaceId`
+- `repoFullName`
+- `defaultBranch`
+- `storyCount`
+- `highDriftCount`
+- `lastGeneratedAt`
+- `createdAt`, `updatedAt`
+
 ### `vibeControlStories/{storyId}`
 
+- `applicationId`
+- `applicationKey`
 - `title`
 - `summary`
 - `status`: `discovery | ready_for_dev | implemented | released`
@@ -148,6 +171,8 @@ Story SSOT package
 
 ### `vibeControlStoryEvidence/{evidenceId}`
 
+- `applicationId`
+- `applicationKey`
 - `storyId`
 - `type`: `knowledge | ticket | code | pr | commit | agent`
 - `title`
@@ -159,6 +184,8 @@ Story SSOT package
 
 ### `vibeControlSourceConnections/{connectionId}`
 
+- `applicationId`
+- `applicationKey`
 - `provider`: `github | jira | linear | drive | web`
 - `status`
 - `repoFullName`
@@ -180,13 +207,13 @@ Story SSOT package
 
 - Add `/admin/vibe-control` route.
 - Reuse admin immersive layout and EN components.
-- Add mock story board, detail drawer/page, and source setup screen.
-- Add Pinia store and TypeScript types for stories, evidence, and source connections.
+- Add Application switcher header, Application create/edit modal, Application detail top, mock story board, detail drawer/page, and source setup screen.
+- Add Pinia store and TypeScript types for applications, stories, evidence, and source connections.
 
 ### Phase 2 - Knowledge-First Story Generation (2026-06-22 to 2026-06-27)
 
 - Add ADK mode `vibe_control`.
-- Implement story generation from Agent Search results over the selected FileSpace.
+- Implement story generation from Agent Search results over the selected application's FileSpace.
 - Persist generated stories and evidence in Firestore.
 - Render citations and confidence indicators in the story detail view.
 
@@ -226,7 +253,7 @@ Story SSOT package
 ## 9. Submission Demo Script
 
 1. Open VibeControl dashboard.
-2. Select FileSpace with product docs and a GitHub repo.
+2. Select or create an Application, then attach its FileSpace with product docs and GitHub repo.
 3. Run "Generate stories."
 4. Show dynamic board grouped by lifecycle.
 5. Open one story detail and switch through Spec, Evidence, Tickets/Requirements, Code Context, and Agent Log.

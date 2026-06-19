@@ -4,6 +4,7 @@ import createRandomDocId from "@utils/createRandomDocId";
 import { useFirestoreDocOperation } from "@composables/firestore-doc-operation";
 import { useContextStore } from "./context";
 import type {
+  DecodedVibeControlApplication,
   DecodedVibeControlSourceConnection,
   DecodedVibeControlStory,
   DecodedVibeControlStoryEvidence,
@@ -12,6 +13,7 @@ import type {
   VibeControlStoryStatus,
 } from "@models/vibeControl";
 import {
+  vibeControlApplicationConverter,
   vibeControlSourceConnectionConverter,
   vibeControlStoryConverter,
   vibeControlStoryEvidenceConverter,
@@ -28,16 +30,76 @@ export type VibeControlFilters = {
 };
 
 export type VibeControlGenerationInput = {
+  applicationId?: string;
+  applicationKey: string;
+  applicationName: string;
   fileSpaceId: string;
   repoFullName: string;
   defaultBranch: string;
 };
 
+export type VibeControlApplicationInput = {
+  id?: string;
+  applicationKey: string;
+  name: string;
+  summary?: string;
+  domain?: string;
+  owner?: string;
+  labels?: string[];
+  fileSpaceId?: string;
+  repoFullName: string;
+  defaultBranch?: string;
+};
+
 const nowIso = () => new Date().toISOString();
+
+const toDocId = (value: string, fallback: string): string => {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || fallback;
+};
+
+const mockApplications: DecodedVibeControlApplication[] = [
+  {
+    id: "app-vibe-control-platform",
+    applicationKey: "VC",
+    name: "VibeControl Platform",
+    summary:
+      "AI-driven delivery governance for product intent, user stories, code state, and editor context.",
+    domain: "devops-governance",
+    labels: ["hackathon", "governance"],
+    fileSpaceId: "w-default",
+    repoFullName: "enostech/vibe-control-demo",
+    defaultBranch: "main",
+    storyCount: 2,
+    highDriftCount: 0,
+    lastGeneratedAt: nowIso(),
+  },
+  {
+    id: "app-demo-commerce",
+    applicationKey: "SHOP",
+    name: "Demo Commerce App",
+    summary:
+      "Sample commerce application used to demonstrate checkout and payment story drift.",
+    domain: "commerce",
+    labels: ["sample", "checkout"],
+    fileSpaceId: "w-commerce",
+    repoFullName: "enostech/demo-commerce-app",
+    defaultBranch: "main",
+    storyCount: 1,
+    highDriftCount: 1,
+    lastGeneratedAt: nowIso(),
+  },
+];
 
 const mockEvidence: DecodedVibeControlStoryEvidence[] = [
   {
     id: "ev-st101-brief",
+    applicationId: "app-vibe-control-platform",
+    applicationKey: "VC",
     storyId: "story-st101",
     storyKey: "ST-101",
     type: "knowledge",
@@ -54,6 +116,8 @@ const mockEvidence: DecodedVibeControlStoryEvidence[] = [
   },
   {
     id: "ev-st101-code",
+    applicationId: "app-vibe-control-platform",
+    applicationKey: "VC",
     storyId: "story-st101",
     storyKey: "ST-101",
     type: "code",
@@ -72,6 +136,8 @@ const mockEvidence: DecodedVibeControlStoryEvidence[] = [
   },
   {
     id: "ev-st104-brief",
+    applicationId: "app-demo-commerce",
+    applicationKey: "SHOP",
     storyId: "story-st104",
     storyKey: "ST-104",
     type: "knowledge",
@@ -88,25 +154,29 @@ const mockEvidence: DecodedVibeControlStoryEvidence[] = [
   },
   {
     id: "ev-st104-pr",
+    applicationId: "app-demo-commerce",
+    applicationKey: "SHOP",
     storyId: "story-st104",
     storyKey: "ST-104",
     type: "pr",
     title: "PR #123 Cart payment",
     excerpt:
       "カート合計と支払い方法選択は実装済み。確認画面のACがテスト・コード双方で不足。",
-    repoFullName: "enostech/vibe-control-demo",
+    repoFullName: "enostech/demo-commerce-app",
     pullRequest: "#123",
     path: "app/components/PaymentMethodPicker.vue",
     citation: {
       title: "GitHub PR #123",
       snippet: "cart total and payment method implemented; confirmation remains",
-      uri: "https://github.com/enostech/vibe-control-demo/pull/123",
+      uri: "https://github.com/enostech/demo-commerce-app/pull/123",
     },
     freshness: "fresh",
     confidenceImpact: -12,
   },
   {
     id: "ev-st201-doc",
+    applicationId: "app-vibe-control-platform",
+    applicationKey: "VC",
     storyId: "story-st201",
     storyKey: "ST-201",
     type: "knowledge",
@@ -126,6 +196,8 @@ const mockEvidence: DecodedVibeControlStoryEvidence[] = [
 const mockStories: DecodedVibeControlStory[] = [
   {
     id: "story-st101",
+    applicationId: "app-vibe-control-platform",
+    applicationKey: "VC",
     storyKey: "ST-101",
     title: "初回ユーザーが組織スペースを作成できる",
     summary:
@@ -161,7 +233,7 @@ const mockStories: DecodedVibeControlStory[] = [
       },
       {
         id: "AC-101-3",
-        text: "完了後にAI Studioの開始地点へ遷移する",
+        text: "完了後にVibeControlの開始地点へ遷移する",
         state: "missing",
         evidenceIds: ["ev-st101-code"],
       },
@@ -194,6 +266,8 @@ const mockStories: DecodedVibeControlStory[] = [
   },
   {
     id: "story-st104",
+    applicationId: "app-demo-commerce",
+    applicationKey: "SHOP",
     storyKey: "ST-104",
     title: "カートから決済を完了できる",
     summary:
@@ -238,7 +312,7 @@ const mockStories: DecodedVibeControlStory[] = [
     codeRefs: [
       {
         provider: "github",
-        repoFullName: "enostech/vibe-control-demo",
+        repoFullName: "enostech/demo-commerce-app",
         branch: "feature/cart-payment",
         pullRequest: "#123",
         path: "app/components/PaymentMethodPicker.vue",
@@ -258,11 +332,13 @@ const mockStories: DecodedVibeControlStory[] = [
       },
     ],
     fileSpaceId: "w-default",
-    repoFullName: "enostech/vibe-control-demo",
+    repoFullName: "enostech/demo-commerce-app",
     generatedAt: nowIso(),
   },
   {
     id: "story-st201",
+    applicationId: "app-vibe-control-platform",
+    applicationKey: "VC",
     storyKey: "ST-201",
     title: "AIエディタがストーリーSSOTを参照できる",
     summary:
@@ -315,6 +391,8 @@ const mockStories: DecodedVibeControlStory[] = [
 const mockConnections: DecodedVibeControlSourceConnection[] = [
   {
     id: "source-filespace",
+    applicationId: "app-vibe-control-platform",
+    applicationKey: "VC",
     provider: "file_space",
     status: "connected",
     displayName: "Default product FileSpace",
@@ -324,6 +402,8 @@ const mockConnections: DecodedVibeControlSourceConnection[] = [
   },
   {
     id: "source-github",
+    applicationId: "app-vibe-control-platform",
+    applicationKey: "VC",
     provider: "github",
     status: "connected",
     displayName: "enostech/vibe-control-demo",
@@ -332,13 +412,38 @@ const mockConnections: DecodedVibeControlSourceConnection[] = [
     lastSyncedAt: nowIso(),
     scopes: ["contents:read", "pull_requests:read"],
   },
+  {
+    id: "source-commerce-filespace",
+    applicationId: "app-demo-commerce",
+    applicationKey: "SHOP",
+    provider: "file_space",
+    status: "connected",
+    displayName: "Commerce product FileSpace",
+    fileSpaceId: "w-commerce",
+    lastSyncedAt: nowIso(),
+    scopes: ["agent_search", "knowledge"],
+  },
+  {
+    id: "source-commerce-github",
+    applicationId: "app-demo-commerce",
+    applicationKey: "SHOP",
+    provider: "github",
+    status: "connected",
+    displayName: "enostech/demo-commerce-app",
+    repoFullName: "enostech/demo-commerce-app",
+    defaultBranch: "main",
+    lastSyncedAt: nowIso(),
+    scopes: ["contents:read", "pull_requests:read"],
+  },
 ];
 
 export const useVibeControlStore = defineStore("vibeControl", {
   state: () => ({
+    applications: [] as DecodedVibeControlApplication[],
     stories: [] as DecodedVibeControlStory[],
     evidence: [] as DecodedVibeControlStoryEvidence[],
     sourceConnections: [] as DecodedVibeControlSourceConnection[],
+    selectedApplicationId: "" as string,
     selectedStoryId: "" as string,
     isLoading: false,
     isGenerating: false,
@@ -355,12 +460,44 @@ export const useVibeControlStore = defineStore("vibeControl", {
     } as VibeControlFilters,
   }),
   getters: {
+    selectedApplication(state): DecodedVibeControlApplication | null {
+      return (
+        state.applications.find(
+          (application) => application.id === state.selectedApplicationId
+        ) ?? state.applications[0] ?? null
+      );
+    },
+    activeStories(state): DecodedVibeControlStory[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      if (!applicationId) return state.stories;
+      return state.stories.filter((story) => story.applicationId === applicationId);
+    },
+    activeEvidence(state): DecodedVibeControlStoryEvidence[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      if (!applicationId) return state.evidence;
+      return state.evidence.filter((item) => item.applicationId === applicationId);
+    },
+    activeSourceConnections(state): DecodedVibeControlSourceConnection[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      if (!applicationId) return state.sourceConnections;
+      return state.sourceConnections.filter(
+        (source) => source.applicationId === applicationId
+      );
+    },
     filteredStories(state): DecodedVibeControlStory[] {
       const query = state.filters.query.trim().toLowerCase();
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
       return state.stories.filter((story) => {
+        const applicationHit =
+          !applicationId || story.applicationId === applicationId;
         const queryHit =
           !query ||
           [
+            story.applicationKey,
             story.storyKey,
             story.title,
             story.summary,
@@ -389,6 +526,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
         const confidenceHit =
           story.confidenceScore >= state.filters.minConfidence;
         return (
+          applicationHit &&
           queryHit &&
           statusHit &&
           driftHit &&
@@ -400,44 +538,98 @@ export const useVibeControlStore = defineStore("vibeControl", {
       });
     },
     selectedStory(state): DecodedVibeControlStory | null {
-      return state.stories.find((story) => story.id === state.selectedStoryId) ?? null;
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      return (
+        state.stories.find(
+          (story) =>
+            story.id === state.selectedStoryId &&
+            (!applicationId || story.applicationId === applicationId)
+        ) ?? null
+      );
     },
     selectedEvidence(state): DecodedVibeControlStoryEvidence[] {
-      const story = state.stories.find((item) => item.id === state.selectedStoryId);
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      const story = state.stories.find(
+        (item) =>
+          item.id === state.selectedStoryId &&
+          (!applicationId || item.applicationId === applicationId)
+      );
       if (!story) return [];
       const ids = new Set(story.evidenceIds);
       return state.evidence.filter(
-        (item) => item.storyId === story.id || ids.has(item.id)
+        (item) =>
+          item.applicationId === story.applicationId &&
+          (item.storyId === story.id || ids.has(item.id))
       );
     },
     evidenceCountByStory(state): Record<string, number> {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
       return state.evidence.reduce<Record<string, number>>((acc, item) => {
+        if (applicationId && item.applicationId !== applicationId) return acc;
         acc[item.storyId] = (acc[item.storyId] ?? 0) + 1;
         return acc;
       }, {});
     },
     domains(state): string[] {
-      return [...new Set(state.stories.map((story) => story.domain))].sort();
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      return [
+        ...new Set(
+          state.stories
+            .filter((story) => !applicationId || story.applicationId === applicationId)
+            .map((story) => story.domain)
+        ),
+      ].sort();
     },
     milestones(state): string[] {
-      return [...new Set(state.stories.map((story) => story.milestone))].sort();
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      return [
+        ...new Set(
+          state.stories
+            .filter((story) => !applicationId || story.applicationId === applicationId)
+            .map((story) => story.milestone)
+        ),
+      ].sort();
     },
     averageConfidence(state): number {
-      if (state.stories.length === 0) return 0;
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      const stories = state.stories.filter(
+        (story) => !applicationId || story.applicationId === applicationId
+      );
+      if (stories.length === 0) return 0;
       return Math.round(
-        state.stories.reduce((sum, item) => sum + item.confidenceScore, 0) /
-          state.stories.length
+        stories.reduce((sum, item) => sum + item.confidenceScore, 0) /
+          stories.length
       );
     },
     highDriftCount(state): number {
-      return state.stories.filter((story) => story.driftLevel === "high").length;
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      return state.stories.filter(
+        (story) =>
+          (!applicationId || story.applicationId === applicationId) &&
+          story.driftLevel === "high"
+      ).length;
     },
     needsReviewCount(state): number {
-      return state.stories.filter((story) => story.reviewState === "needs_review")
-        .length;
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      return state.stories.filter(
+        (story) =>
+          (!applicationId || story.applicationId === applicationId) &&
+          story.reviewState === "needs_review"
+      ).length;
     },
   },
   actions: {
+    applicationCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlApplications");
+    },
     storyCollectionPath(): string {
       return useContextStore().baseFirestorePath("vibeControlStories");
     },
@@ -448,14 +640,24 @@ export const useVibeControlStore = defineStore("vibeControl", {
       return useContextStore().baseFirestorePath("vibeControlSourceConnections");
     },
     loadMockData(): void {
+      this.applications = [...mockApplications];
       this.stories = [...mockStories];
       this.evidence = [...mockEvidence];
       this.sourceConnections = [...mockConnections];
-      this.selectedStoryId = this.stories[0]?.id ?? "";
+      this.selectedApplicationId = this.applications.some(
+        (application) => application.id === this.selectedApplicationId
+      )
+        ? this.selectedApplicationId
+        : this.applications[0]?.id || "";
+      const activeStories = this.stories.filter(
+        (story) => story.applicationId === this.selectedApplicationId
+      );
+      this.selectedStoryId = activeStories[0]?.id ?? "";
       this.lastRunLog = [
+        "Application: VibeControl Platform を集約ルートとして選択",
         "Agent Search: FileSpace w-default からTo-Be候補を抽出",
         "GitHub: enostech/vibe-control-demo のPR/commit/file refsを照合",
-        "SSOT: 3 stories / 5 evidence refs を生成",
+        "SSOT: selected application に紐づく stories / evidence refs を生成",
       ];
       this.error = null;
     },
@@ -464,7 +666,13 @@ export const useVibeControlStore = defineStore("vibeControl", {
       this.error = null;
       try {
         const firestoreOps = useFirestoreDocOperation();
-        const [stories, evidence, sourceConnections] = await Promise.all([
+        const [applications, stories, evidence, sourceConnections] = await Promise.all([
+          firestoreOps.getDocumentsWithQueryAndConverter({
+            collectionName: this.applicationCollectionPath(),
+            converter: vibeControlApplicationConverter,
+            orderBy: { field: "lastGeneratedAt", direction: "desc" },
+            limit: 50,
+          }),
           firestoreOps.getDocumentsWithQueryAndConverter({
             collectionName: this.storyCollectionPath(),
             converter: vibeControlStoryConverter,
@@ -482,11 +690,20 @@ export const useVibeControlStore = defineStore("vibeControl", {
             limit: 50,
           }),
         ]);
+        this.applications = applications;
         this.stories = stories;
         this.evidence = evidence;
         this.sourceConnections = sourceConnections;
-        this.selectedStoryId = this.stories[0]?.id ?? "";
-        if (this.stories.length === 0) {
+        this.selectedApplicationId = this.applications.some(
+          (application) => application.id === this.selectedApplicationId
+        )
+          ? this.selectedApplicationId
+          : (this.applications[0]?.id ?? "");
+        const activeStories = this.stories.filter(
+          (story) => story.applicationId === this.selectedApplicationId
+        );
+        this.selectedStoryId = activeStories[0]?.id ?? "";
+        if (this.applications.length === 0 || this.stories.length === 0) {
           this.loadMockData();
         }
       } catch (err) {
@@ -518,25 +735,285 @@ export const useVibeControlStore = defineStore("vibeControl", {
     selectStory(storyId: string): void {
       this.selectedStoryId = storyId;
     },
+    selectApplication(applicationId: string): void {
+      this.selectedApplicationId = applicationId;
+      const nextStory = this.stories.find(
+        (story) => story.applicationId === applicationId
+      );
+      this.selectedStoryId = nextStory?.id ?? "";
+      this.clearFilters();
+    },
+    async upsertApplication(
+      input: VibeControlApplicationInput
+    ): Promise<DecodedVibeControlApplication> {
+      this.isLoading = true;
+      this.error = null;
+      try {
+        const now = nowIso();
+        const name = input.name.trim();
+        if (!name) {
+          throw new Error("アプリ名を入力してください");
+        }
+        const repoFullName = input.repoFullName.trim();
+        if (!repoFullName || !repoFullName.includes("/")) {
+          throw new Error("GitHub repositoryを選択してください");
+        }
+        const applicationKey = (
+          input.applicationKey.trim() ||
+          name
+            .split(/\s+/)
+            .map((part) => part[0])
+            .join("") ||
+          "APP"
+        ).toUpperCase();
+        const applicationId =
+          input.id?.trim() || `app-${toDocId(name, createRandomDocId())}`;
+        const duplicatedRepository = this.applications.find(
+          (application) =>
+            application.id !== applicationId &&
+            application.repoFullName.toLowerCase() === repoFullName.toLowerCase()
+        );
+        if (duplicatedRepository) {
+          throw new Error(
+            `${repoFullName} は ${duplicatedRepository.name} に登録済みです`
+          );
+        }
+        const currentApplication = this.applications.find(
+          (application) => application.id === applicationId
+        );
+        const currentStories = this.stories.filter(
+          (story) => story.applicationId === applicationId
+        );
+        const application: DecodedVibeControlApplication = {
+          id: applicationId,
+          applicationKey,
+          name,
+          summary: input.summary?.trim() || undefined,
+          domain: input.domain?.trim() || undefined,
+          owner: input.owner?.trim() || undefined,
+          labels: input.labels?.map((label) => label.trim()).filter(Boolean) ?? [],
+          fileSpaceId: input.fileSpaceId?.trim() || undefined,
+          repoFullName,
+          defaultBranch: input.defaultBranch?.trim() || "main",
+          storyCount: currentStories.length || currentApplication?.storyCount || 0,
+          highDriftCount:
+            currentStories.filter((story) => story.driftLevel === "high").length ||
+            currentApplication?.highDriftCount ||
+            0,
+          lastGeneratedAt: currentApplication?.lastGeneratedAt ?? now,
+        };
+
+        this.applications = [
+          application,
+          ...this.applications.filter((item) => item.id !== applicationId),
+        ];
+        this.selectedApplicationId = applicationId;
+        this.sourceConnections = this.buildSourceConnectionsForApplication(
+          application,
+          now
+        );
+
+        const firestoreOps = useFirestoreDocOperation();
+        await Promise.all([
+          firestoreOps.createDocument({
+            collectionName: this.applicationCollectionPath(),
+            docId: application.id,
+            docData: application,
+            converter: vibeControlApplicationConverter,
+            merge: true,
+          }),
+          ...this.sourceConnections
+            .filter((source) => source.applicationId === application.id)
+            .map((source) =>
+              firestoreOps.createDocument({
+                collectionName: this.sourceConnectionCollectionPath(),
+                docId: source.id,
+                docData: source,
+                converter: vibeControlSourceConnectionConverter,
+                merge: true,
+              })
+            ),
+        ]);
+
+        return application;
+      } catch (err) {
+        log("ERROR", "VibeControl application upsert failed", err);
+        this.error =
+          err instanceof Error ? err.message : "アプリケーション保存に失敗しました";
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    buildSourceConnectionsForApplication(
+      application: DecodedVibeControlApplication,
+      syncedAt = nowIso()
+    ): DecodedVibeControlSourceConnection[] {
+      const sources = this.sourceConnections.filter(
+        (source) => source.applicationId !== application.id
+      );
+      if (application.fileSpaceId) {
+        sources.push({
+          id: `${application.id}-filespace`,
+          applicationId: application.id,
+          applicationKey: application.applicationKey,
+          provider: "file_space",
+          status: "connected",
+          displayName: `FileSpace ${application.fileSpaceId}`,
+          fileSpaceId: application.fileSpaceId,
+          lastSyncedAt: syncedAt,
+          scopes: ["agent_search", "knowledge"],
+        });
+      }
+      sources.push({
+        id: `${application.id}-github`,
+        applicationId: application.id,
+        applicationKey: application.applicationKey,
+        provider: "github",
+        status: "connected",
+        displayName: application.repoFullName,
+        repoFullName: application.repoFullName,
+        defaultBranch: application.defaultBranch || "main",
+        lastSyncedAt: syncedAt,
+        scopes: ["contents:read", "pull_requests:read", "commits:read"],
+      });
+      return sources;
+    },
+    async deleteApplication(applicationId: string): Promise<boolean> {
+      if (this.applications.length <= 1) {
+        this.error = "少なくとも1つのアプリケーションが必要です";
+        return false;
+      }
+      this.isLoading = true;
+      this.error = null;
+      try {
+        const firestoreOps = useFirestoreDocOperation();
+        const stories = this.stories.filter(
+          (story) => story.applicationId === applicationId
+        );
+        const evidence = this.evidence.filter(
+          (item) => item.applicationId === applicationId
+        );
+        const sources = this.sourceConnections.filter(
+          (source) => source.applicationId === applicationId
+        );
+
+        await Promise.all([
+          firestoreOps.deleteDocument({
+            collectionName: this.applicationCollectionPath(),
+            docId: applicationId,
+          }),
+          ...stories.map((story) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.storyCollectionPath(),
+              docId: story.id,
+            })
+          ),
+          ...evidence.map((item) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.evidenceCollectionPath(),
+              docId: item.id,
+            })
+          ),
+          ...sources.map((source) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.sourceConnectionCollectionPath(),
+              docId: source.id,
+            })
+          ),
+        ]);
+
+        this.applications = this.applications.filter(
+          (application) => application.id !== applicationId
+        );
+        this.stories = this.stories.filter(
+          (story) => story.applicationId !== applicationId
+        );
+        this.evidence = this.evidence.filter(
+          (item) => item.applicationId !== applicationId
+        );
+        this.sourceConnections = this.sourceConnections.filter(
+          (source) => source.applicationId !== applicationId
+        );
+        this.selectedApplicationId = this.applications[0]?.id ?? "";
+        this.selectedStoryId =
+          this.stories.find(
+            (story) => story.applicationId === this.selectedApplicationId
+          )?.id ?? "";
+        this.clearFilters();
+        return true;
+      } catch (err) {
+        log("ERROR", "VibeControl application delete failed", err);
+        this.error =
+          err instanceof Error ? err.message : "アプリケーション削除に失敗しました";
+        return false;
+      } finally {
+        this.isLoading = false;
+      }
+    },
     evidenceForStory(storyId: string): DecodedVibeControlStoryEvidence[] {
       const story = this.stories.find((item) => item.id === storyId);
       if (!story) return [];
       const ids = new Set(story.evidenceIds);
       return this.evidence.filter(
-        (item) => item.storyId === storyId || ids.has(item.id)
+        (item) =>
+          item.applicationId === story.applicationId &&
+          (item.storyId === storyId || ids.has(item.id))
       );
     },
     async registerSourceConnection(
       input: VibeControlGenerationInput
-    ): Promise<void> {
+    ): Promise<DecodedVibeControlApplication> {
       const now = nowIso();
+      const applicationName =
+        input.applicationName.trim() || "VibeControl Application";
+      const applicationKey = (
+        input.applicationKey.trim() ||
+        applicationName
+          .split(/\s+/)
+          .map((part) => part[0])
+          .join("") ||
+        "APP"
+      ).toUpperCase();
+      const applicationId =
+        input.applicationId?.trim() ||
+        this.selectedApplicationId ||
+        `app-${toDocId(applicationName, createRandomDocId())}`;
       const fileSpaceId = input.fileSpaceId.trim() || "w-default";
       const repoFullName =
         input.repoFullName.trim() || "enostech/vibe-control-demo";
       const defaultBranch = input.defaultBranch.trim() || "main";
+      const currentApplication = this.applications.find(
+        (item) => item.id === applicationId
+      );
+      const application: DecodedVibeControlApplication = {
+        id: applicationId,
+        applicationKey,
+        name: applicationName,
+        summary: currentApplication?.summary,
+        domain: currentApplication?.domain,
+        owner: currentApplication?.owner,
+        labels: currentApplication?.labels ?? [],
+        fileSpaceId,
+        repoFullName,
+        defaultBranch,
+        storyCount: currentApplication?.storyCount ?? 0,
+        highDriftCount: currentApplication?.highDriftCount ?? 0,
+        lastGeneratedAt: now,
+      };
+      this.applications = [
+        application,
+        ...this.applications.filter((item) => item.id !== applicationId),
+      ];
+      this.selectedApplicationId = applicationId;
       this.sourceConnections = [
+        ...this.sourceConnections.filter(
+          (source) => source.applicationId !== applicationId
+        ),
         {
-          id: "source-filespace",
+          id: `${applicationId}-filespace`,
+          applicationId,
+          applicationKey,
           provider: "file_space",
           status: "connected",
           displayName: `FileSpace ${fileSpaceId}`,
@@ -545,7 +1022,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
           scopes: ["agent_search", "knowledge"],
         },
         {
-          id: "source-github",
+          id: `${applicationId}-github`,
+          applicationId,
+          applicationKey,
           provider: "github",
           status: "connected",
           displayName: repoFullName,
@@ -555,22 +1034,52 @@ export const useVibeControlStore = defineStore("vibeControl", {
           scopes: ["contents:read", "pull_requests:read", "commits:read"],
         },
       ];
+      return application;
     },
     async runMockGeneration(input: VibeControlGenerationInput): Promise<void> {
       this.isGenerating = true;
       this.error = null;
       this.lastRunLog = [];
       try {
-        await this.registerSourceConnection(input);
+        const application = await this.registerSourceConnection(input);
+        const applicationId = application.id;
+        const applicationKey = application.applicationKey;
         const fileSpaceId = input.fileSpaceId.trim() || "w-default";
         const repoFullName =
           input.repoFullName.trim() || "enostech/vibe-control-demo";
+        const seedStories =
+          mockStories.filter((story) => story.applicationId === applicationId)
+            .length > 0
+            ? mockStories.filter((story) => story.applicationId === applicationId)
+            : mockStories.filter(
+                (story) => story.applicationId === this.selectedApplicationId
+              );
+        const storiesForApplication =
+          seedStories.length > 0 ? seedStories : mockStories;
+        const storyIds = new Set(storiesForApplication.map((story) => story.id));
+        const evidenceForApplication = mockEvidence.filter((item) =>
+          storyIds.has(item.storyId)
+        );
+        const storyIdFor = (storyId: string) => `${applicationId}-${storyId}`;
+        const evidenceIdFor = (evidenceId: string) =>
+          `${applicationId}-${evidenceId}`;
+        this.lastRunLog.push(
+          `Application: ${application.name} (${application.applicationKey}) を集約ルートとして選択`
+        );
         this.lastRunLog.push(`Agent Search: ${fileSpaceId} からTo-Be候補を抽出`);
         this.lastRunLog.push(`GitHub: ${repoFullName} のAs-Is状態を取得`);
-        this.stories = mockStories.map((story) => ({
+        const generatedStories = storiesForApplication.map((story) => ({
           ...story,
+          id: storyIdFor(story.id),
+          applicationId,
+          applicationKey,
           fileSpaceId,
           repoFullName,
+          acceptanceCriteria: story.acceptanceCriteria.map((ac) => ({
+            ...ac,
+            evidenceIds: ac.evidenceIds.map(evidenceIdFor),
+          })),
+          evidenceIds: story.evidenceIds.map(evidenceIdFor),
           generatedAt: nowIso(),
           codeRefs: story.codeRefs.map((ref) => ({
             ...ref,
@@ -578,13 +1087,37 @@ export const useVibeControlStore = defineStore("vibeControl", {
             branch: input.defaultBranch.trim() || ref.branch,
           })),
         }));
-        this.evidence = mockEvidence.map((item) => ({
+        const generatedEvidence = evidenceForApplication.map((item) => ({
           ...item,
+          id: evidenceIdFor(item.id),
+          applicationId,
+          applicationKey,
+          storyId: storyIdFor(item.storyId),
           repoFullName: item.repoFullName ? repoFullName : item.repoFullName,
         }));
-        this.selectedStoryId = this.stories[0]?.id ?? "";
+        this.stories = [
+          ...this.stories.filter((story) => story.applicationId !== applicationId),
+          ...generatedStories,
+        ];
+        this.evidence = [
+          ...this.evidence.filter((item) => item.applicationId !== applicationId),
+          ...generatedEvidence,
+        ];
+        this.applications = this.applications.map((item) =>
+          item.id === applicationId
+            ? {
+                ...item,
+                storyCount: generatedStories.length,
+                highDriftCount: generatedStories.filter(
+                  (story) => story.driftLevel === "high"
+                ).length,
+                lastGeneratedAt: nowIso(),
+              }
+            : item
+        );
+        this.selectedStoryId = generatedStories[0]?.id ?? "";
         this.lastRunLog.push(
-          `SSOT: ${this.stories.length} stories / ${this.evidence.length} evidence refs を生成`
+          `SSOT: ${generatedStories.length} stories / ${generatedEvidence.length} evidence refs を生成`
         );
       } finally {
         this.isGenerating = false;
@@ -596,6 +1129,15 @@ export const useVibeControlStore = defineStore("vibeControl", {
       try {
         const firestoreOps = useFirestoreDocOperation();
         await Promise.all([
+          ...this.applications.map((application) =>
+            firestoreOps.createDocument({
+              collectionName: this.applicationCollectionPath(),
+              docId: application.id || `application_${createRandomDocId()}`,
+              docData: application,
+              converter: vibeControlApplicationConverter,
+              merge: true,
+            })
+          ),
           ...this.stories.map((story) =>
             firestoreOps.createDocument({
               collectionName: this.storyCollectionPath(),
@@ -636,9 +1178,13 @@ export const useVibeControlStore = defineStore("vibeControl", {
       const story = this.stories.find((item) => item.id === storyId);
       if (!story) return "";
       const evidence = this.evidenceForStory(storyId);
+      const application = this.applications.find(
+        (item) => item.id === story.applicationId
+      );
       return [
         `# ${story.storyKey} ${story.title}`,
         "",
+        `Application: ${application?.name ?? story.applicationKey} (${story.applicationKey})`,
         `Status: ${story.status}`,
         `Review: ${story.reviewState}`,
         `Confidence: ${story.confidenceScore}%`,

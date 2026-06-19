@@ -4,8 +4,8 @@
     <header class="space-y-1">
       <h1 class="text-2xl font-semibold tracking-tight">API キーの登録</h1>
       <p class="text-sm text-neutral-500">
-        AI 機能 (スライド生成 AI など) を使うために必要な、あなた自身の API キーを登録します。
-        キーは EN AI Studio の他のユーザーからは見えません。
+        VibeControl の AI 連携を使うために必要な、あなた自身の API キーを登録します。
+        キーは VibeControl の他のユーザーからは見えません。
       </p>
     </header>
 
@@ -26,7 +26,7 @@
           rel="noopener"
           class="text-purple-600 underline hover:text-purple-700"
         >aistudio.google.com/apikey</a>) で発行した API キーを貼り付けてください。
-        マスタ AI 編集・取引先登録・ホーム AI など、ブラウザから Gemini を使う機能はすべてこのキーで動きます。
+        VibeControl の AI 連携など、ブラウザから Gemini を使う機能はこのキーで動きます。
       </p>
 
       <div v-if="loading" class="text-sm text-neutral-500">読み込み中…</div>
@@ -96,7 +96,7 @@
         </h3>
       </div>
       <p class="mb-4 text-xs leading-relaxed text-neutral-600">
-        EN AIstudio はあなたの API キーを「使う」だけで、課金は Google アカウントに直接発生します。
+        VibeControl はあなたの API キーを「使う」だけで、課金は Google アカウントに直接発生します。
         現在の利用状況や月額、上限設定の管理は <strong>Google AI Studio</strong> で確認してください。
       </p>
       <div class="flex flex-wrap gap-2">
@@ -127,7 +127,7 @@
         <li>・ API キーは Firestore の `users/{あなたの uid}/secrets/geminiApiKey` に保存され、Firestore ルールで本人のみ R/W 可能です。</li>
         <li>・ AI 機能を実行中、サーバ側で一時的にあなたのキーを読み出し、Gemini API への問い合わせに使います。</li>
         <li>・ キーの利用料金はあなたの Google Cloud / AI Studio アカウントに直接請求されます。</li>
-        <li>・ EN AIstudio の利用をやめる / キーが流出した場合は、このページから削除してください。</li>
+        <li>・ VibeControl の利用をやめる / キーが流出した場合は、このページから削除してください。</li>
       </ul>
     </section>
   </div>

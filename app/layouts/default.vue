@@ -17,11 +17,11 @@ if (
 ) {
   log("INFO", "デフォルトのメタ情報を設定します");
   useHead({
-    title: "EN AIstudio | 管理画面",
+    title: "VibeControl",
     meta: [
       {
         name: "description",
-        content: "EN AIstudioの管理画面です。",
+        content: "VibeControlの管理画面です。",
       },
     ],
     link: [

@@ -33,7 +33,7 @@
               <h2 class="text-lg font-semibold">ヘッダーロゴ</h2>
             </div>
             <p class="mb-4 text-sm leading-relaxed text-neutral-600">
-              自社のロゴ画像を設定すると、ヘッダーの「EN AIstudio」文字の代わりにそのロゴが表示されます。
+              自社のロゴ画像を設定すると、ヘッダーの「VibeControl」文字の代わりにそのロゴが表示されます。
               透過 PNG / SVG を推奨します (高さ 24px 前後で表示)。
             </p>
 
@@ -50,7 +50,7 @@
                 <span
                   v-else
                   class="text-xl font-bold text-white tracking-tight font-mono"
-                >EN AIstudio</span>
+                >VibeControl</span>
               </div>
 
               <div class="flex-1 space-y-2">
@@ -72,7 +72,7 @@
                   />
                   <EButton
                     v-if="appearance.hasCustomLogo.value"
-                    label="リセット (EN AIstudio 表示に戻す)"
+                    label="リセット (VibeControl 表示に戻す)"
                     color="neutral"
                     size="md"
                     icon="material-symbols:restart-alt"
@@ -151,9 +151,9 @@
               <h2 class="text-lg font-semibold">AI アシスタントのアバター</h2>
             </div>
             <p class="mb-4 text-sm leading-relaxed text-neutral-600">
-              AI 部下や経営相談などで表示されるキャラクター画像です。
-              自社のマスコットに差し替えると、すべての AI 機能でその画像が使われます。
-              未設定なら EN AIstudio 標準のアバターが表示されます。
+              VibeControl の AI 補助で表示されるキャラクター画像です。
+              自社のマスコットに差し替えると、対応する AI 機能でその画像が使われます。
+              未設定なら VibeControl 標準のアバターが表示されます。
             </p>
 
             <div class="flex flex-col items-start gap-6 sm:flex-row">
@@ -311,7 +311,7 @@
                 </h2>
               </div>
               <p class="mt-2 text-sm leading-relaxed text-neutral-600">
-                AI Studio の画像生成（gpt-image-2）に使用します。会話の推論は引き続き Gemini API キーを使います。
+                OpenAI の画像生成（gpt-image-2）を有効にする場合に使用します。会話の推論は引き続き Gemini API キーを使います。
                 <a
                   href="https://platform.openai.com/api-keys"
                   target="_blank"
@@ -495,7 +495,7 @@
                 </h2>
               </div>
               <p class="mt-2 text-sm leading-relaxed text-neutral-600">
-                Google Drive / Sheets を AI Studio の素材投入・表計算支援・データ分析補助で使うための接続です。
+                Google Drive / Sheets を VibeControl の素材投入やデータ連携で使うための接続です。
                 OAuth クライアント登録後、上のカードから Google アカウントを接続できます。
               </p>
             </template>
@@ -533,8 +533,45 @@
         </div>
       </template>
 
+      <template #oauth-connections>
+        <div class="space-y-6">
+          <OAuthConnectionGitHubCard />
+
+          <EnCard variant="kpi" padding="spacious">
+            <template #header>
+              <div class="flex items-center gap-2">
+                <UIcon name="material-symbols:extension" class="h-5 w-5 text-neutral-500" />
+                <h2 class="text-lg font-semibold text-neutral-900">
+                  追加予定の OAuth 連携
+                </h2>
+              </div>
+              <p class="mt-2 text-sm leading-relaxed text-neutral-600">
+                Jira、Linear、Slack、Notion などの外部ツール認証はここに追加していきます。
+                ツールごとに接続状態、権限範囲、解除操作を同じ形式で管理します。
+              </p>
+            </template>
+
+            <div class="grid gap-3 md:grid-cols-3">
+              <div
+                v-for="service in plannedOAuthServices"
+                :key="service.name"
+                class="rounded-lg border border-dashed border-neutral-200 bg-neutral-50 px-4 py-3"
+              >
+                <div class="flex items-center gap-2 text-sm font-semibold text-neutral-700">
+                  <UIcon :name="service.icon" class="h-4 w-4" />
+                  {{ service.name }}
+                </div>
+                <p class="mt-2 text-xs leading-relaxed text-neutral-500">
+                  {{ service.description }}
+                </p>
+              </div>
+            </div>
+          </EnCard>
+        </div>
+      </template>
+
       <!-- Godモード (内部オンボーディング) -->
-      <template v-if="canAccessGodMode" #god-mode>
+      <template v-if="showGodMode" #god-mode>
         <GodModeOnboardingPanel />
       </template>
 
@@ -557,7 +594,7 @@
                 サービス連携設定 (Slack / BigQuery 等)
               </NuxtLink>
             </li>
-            <li v-if="canAccessGodMode">
+            <li v-if="showGodMode">
               <span class="inline-flex items-center gap-2 text-violet-600">
                 <UIcon name="material-symbols:admin-panel-settings" class="w-4 h-4" />
                 Godモードは上部タブ「Godモード」から利用できます
@@ -573,12 +610,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import GlobalPinnedKnowledgePanel from "@components/preferences/GlobalPinnedKnowledgePanel.vue";
+import OAuthConnectionGitHubCard from "@components/preferences/OAuthConnectionGitHubCard.vue";
 import OrganizationMemberManagementPanel from "@components/admin/members/OrganizationMemberManagementPanel.vue";
 import EnCard from "@components/EnCard.vue";
 import {
   themeSemanticClasses,
   type ColorThemePresetId,
-} from "~/composables/useColorTheme";
+} from "@composables/useColorTheme";
 import { getAuth } from "firebase/auth";
 import {
   doc,
@@ -639,6 +677,7 @@ const onSelectTheme = async (id: ColorThemePresetId) => {
 
 const { canAccess: canAccessGodMode } = useGodModeAccess();
 const adminUserStore = useAdminUserStore();
+const showGodMode = computed(() => canAccessGodMode.value);
 
 const tabItems = computed(() => {
   const base: Array<{ label: string; slot: string; icon: string }> = [];
@@ -656,6 +695,11 @@ const tabItems = computed(() => {
       label: "Googleクラウド連携",
       slot: "data-integration",
       icon: "material-symbols:cloud-sync",
+    },
+    {
+      label: "OAuth認証",
+      slot: "oauth-connections",
+      icon: "material-symbols:hub",
     }
   );
   if (canAccessGodMode.value) {
@@ -677,6 +721,24 @@ const isMac = computed(() => {
   if (typeof navigator === "undefined") return false;
   return navigator.platform.toUpperCase().indexOf("MAC") >= 0;
 });
+
+const plannedOAuthServices = [
+  {
+    name: "Jira",
+    icon: "i-simple-icons-jira",
+    description: "Issue / Epic / Sprint 情報との連携に利用します。",
+  },
+  {
+    name: "Linear",
+    icon: "i-simple-icons-linear",
+    description: "Issue とプロダクト開発履歴の参照に利用します。",
+  },
+  {
+    name: "Notion",
+    icon: "i-simple-icons-notion",
+    description: "仕様書やナレッジベースの参照に利用します。",
+  },
+];
 
 //#region appearance: logo & avatar
 const logoInput = ref<HTMLInputElement | null>(null);
@@ -741,7 +803,7 @@ const uploadBranding = async (file: File, kind: "logo" | "ai-avatar") => {
 };
 
 const resetLogo = async () => {
-  if (!confirm("ヘッダーロゴをリセットします (EN AIstudio 文字表示に戻ります)。よろしいですか?")) return;
+  if (!confirm("ヘッダーロゴをリセットします (VibeControl 文字表示に戻ります)。よろしいですか?")) return;
   logoError.value = null;
   uploadingLogo.value = true;
   try {

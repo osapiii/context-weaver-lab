@@ -11,7 +11,7 @@
       <div class="min-w-0">
         <div class="flex items-center gap-2">
           <span class="font-mono text-xs font-semibold text-slate-500">
-            {{ story.storyKey }}
+            {{ story.applicationKey }} / {{ story.storyKey }}
           </span>
           <EnBadge
             :color="driftBadge.color"

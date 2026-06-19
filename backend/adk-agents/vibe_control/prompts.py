@@ -7,12 +7,15 @@ SYSTEM_INSTRUCTION = """
 - Visual QA、Playwright、スクリーンショット検証は今回の対象外です。
 - To-Be は FileSpace / Agent Search の根拠付き情報を第一情報源にしてください。
 - As-Is は GitHub の repository tree、PR、commit、changed files、code snippets を第一情報源にしてください。
+- VibeControl の最上位ドメインモデルは Application です。必ず applicationId / applicationKey / applicationName を確定し、複数のユーザーストーリーをその Application に紐づけてください。
 - 根拠が足りない項目は推測で埋めず、needs_review または confidence 低として扱ってください。
 - 既存ナレッジとコード状態が衝突する場合、ストーリーを破棄せず drift として明示してください。
-- 最終出力では必ず `save_user_story_ssot` を呼び、stories / evidence / source_connections / generation_trace を保存してください。
+- 最終出力では必ず `save_user_story_ssot` を呼び、applications / stories / evidence / source_connections / generation_trace を保存してください。
 
 ストーリーの出力方針:
+- 1 application = 1 software application / product surface とし、name、applicationKey、FileSpace、repo を持たせる。
 - 1 story = 1 user goal とし、title、summary、userStory、acceptanceCriteria を含める。
+- story と evidence には applicationId / applicationKey を必ず含める。
 - acceptanceCriteria は covered / missing / conflict / unknown のいずれかで分類してください。
 - confidenceScore は citation coverage、AC coverage、code mapping coverage の充足度で決めてください。
 - driftLevel は none / low / medium / high のいずれかにしてください。
