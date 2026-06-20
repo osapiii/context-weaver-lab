@@ -3,6 +3,7 @@
     <VibeControlApplicationFormModal
       v-model:open="applicationModalOpen"
       :application="editingApplication"
+      :initial-repository="initialApplicationRepository"
       :applications="store.applications"
       :is-saving="store.isLoading"
       @save="saveApplication"
@@ -82,12 +83,13 @@
       :title="store.error"
     />
 
-    <VibeControlApplicationList
-      v-if="currentView === 'applications'"
+    <VibeControlRepositoryList
+      v-if="currentView === 'repositories'"
       :applications="store.applications"
-      :stats-by-application-id="applicationStatsById"
-      @open="openApplicationDetail"
-      @create="openCreateApplicationModal"
+      :story-count-by-application-id="storyCountByApplicationId"
+      @open-application="openApplicationDetail"
+      @configure-repository="openCreateApplicationModalForRepository"
+      @edit-application="openEditApplicationModal"
     />
 
     <template v-else-if="currentView === 'application-detail'">
@@ -106,7 +108,7 @@
         />
       </template>
 
-      <template v-else>
+      <template v-else-if="activeApplicationTab === 'basic'">
         <VibeControlApplicationDetail
           :application="selectedApplication"
           :story-count="store.activeStories.length"
@@ -126,12 +128,12 @@
           @generate="store.runMockGeneration($event)"
           @persist="store.persistCurrentSnapshot()"
         />
-
-        <VibeControlAgentRunCenter
-          v-if="store.lastRunLog.length > 0"
-          :logs="store.lastRunLog"
-        />
       </template>
+
+      <VibeControlApplicationGitPanel
+        v-else
+        :application="selectedApplication"
+      />
     </template>
 
     <template v-else>
@@ -147,16 +149,13 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useVibeControlStore } from "@stores/vibeControl";
 import type { DecodedVibeControlApplication } from "@models/vibeControl";
 import type { VibeControlApplicationInput } from "@stores/vibeControl";
+import type { GitHubRepositorySummary } from "@composables/useGitHubOAuth";
 
-type VibeControlView = "applications" | "application-detail" | "story-detail";
-type ApplicationDetailTab = "stories" | "basic";
-
-type ApplicationStats = {
-  storyCount: number;
-  averageConfidence: number;
-  needsReviewCount: number;
-  highDriftCount: number;
-};
+type VibeControlView =
+  | "repositories"
+  | "application-detail"
+  | "story-detail";
+type ApplicationDetailTab = "stories" | "basic" | "git";
 
 defineOptions({
   name: "AdminVibeControlIndexPage",
@@ -173,11 +172,12 @@ const store = useVibeControlStore();
 const toast = useToast();
 const route = useRoute();
 const router = useRouter();
-const currentView = ref<VibeControlView>("applications");
+const currentView = ref<VibeControlView>("application-detail");
 const activeApplicationTab = ref<ApplicationDetailTab>("stories");
 const applicationModalOpen = ref(false);
 const deleteConfirmOpen = ref(false);
 const editingApplicationId = ref<string | null>(null);
+const initialApplicationRepository = ref<GitHubRepositorySummary | null>(null);
 
 const selectedApplication = computed(() => store.selectedApplication);
 const selectedStory = computed(() => store.selectedStory);
@@ -190,26 +190,33 @@ const editingApplication = computed(() =>
 );
 
 const pageTitle = computed(() => {
-  if (currentView.value === "applications") {
-    return "アプリ一覧";
+  if (currentView.value === "repositories") {
+    return "Repository一覧";
   }
   if (currentView.value === "story-detail") {
     return selectedStory.value?.title ?? "ユーザーストーリー";
   }
-  return activeApplicationTab.value === "basic"
-    ? "アプリ詳細"
-    : "ユーザーストーリー一覧";
+  if (activeApplicationTab.value === "basic") return "アプリ詳細";
+  if (activeApplicationTab.value === "git") return "Git";
+  return "ユーザーストーリー一覧";
 });
 
-const pageIcon = computed(() =>
-  pageTitle.value.includes("ユーザーストーリー")
+const pageIcon = computed(() => {
+  if (currentView.value === "repositories") return "i-simple-icons-github";
+  if (
+    currentView.value === "application-detail" &&
+    activeApplicationTab.value === "git"
+  ) {
+    return "i-simple-icons-github";
+  }
+  return pageTitle.value.includes("ユーザーストーリー")
     ? "flat-color-icons:flow-chart"
-    : "flat-color-icons:deployment"
-);
+    : "flat-color-icons:deployment";
+});
 
 const pageSubtitle = computed(() => {
-  if (currentView.value === "applications") {
-    return "ユーザーストーリーを束ねるアプリ単位を選択します";
+  if (currentView.value === "repositories") {
+    return "GitHub 連携済み repository と Application 設定状況を確認します";
   }
   if (currentView.value === "story-detail") {
     return selectedStory.value
@@ -220,6 +227,11 @@ const pageSubtitle = computed(() => {
     return selectedApplication.value
       ? `${selectedApplication.value.name} の基本情報とSSOT生成設定を管理します`
       : "アプリの基本情報とSSOT生成設定を管理します";
+  }
+  if (activeApplicationTab.value === "git") {
+    return selectedApplication.value
+      ? `${selectedApplication.value.name} に紐づく repository とマージ済みPRを確認します`
+      : "repository とマージ済みPRを確認します";
   }
   return selectedApplication.value
     ? `${selectedApplication.value.name} のユーザーストーリー一覧を管理します`
@@ -238,6 +250,11 @@ const applicationTabItems = computed(() => [
     label: "基本情報",
     icon: "material-symbols:settings-outline-rounded",
   },
+  {
+    value: "git",
+    label: "Git",
+    icon: "i-simple-icons-github",
+  },
 ]);
 
 const breadcrumbItems = computed(() => {
@@ -246,20 +263,20 @@ const breadcrumbItems = computed(() => {
     icon?: string;
     onClick?: () => void;
     disabled?: boolean;
-  }> = [
-    {
-      label: "アプリ一覧",
-      icon: "material-symbols:apps-outline",
-      onClick: showApplicationList,
-    },
-  ];
+  }> = [];
 
-  if (currentView.value !== "applications") {
+  if (currentView.value === "repositories") {
     items.push({
-      label: "アプリ詳細",
-      onClick: showApplicationDetail,
+      label: "Repository一覧",
+      disabled: true,
     });
+    return items;
   }
+
+  items.push({
+    label: selectedApplication.value?.name ?? "アプリ詳細",
+    onClick: showApplicationDetail,
+  });
 
   if (currentView.value === "story-detail") {
     items.push({
@@ -272,7 +289,12 @@ const breadcrumbItems = computed(() => {
     });
   } else if (selectedApplication.value && currentView.value === "application-detail") {
     items.push({
-      label: selectedApplication.value.name,
+      label:
+        activeApplicationTab.value === "basic"
+          ? "基本情報"
+          : activeApplicationTab.value === "git"
+            ? "Git"
+            : "ユーザーストーリー",
       disabled: true,
     });
   }
@@ -280,35 +302,21 @@ const breadcrumbItems = computed(() => {
   return items;
 });
 
-const applicationStatsById = computed<Record<string, ApplicationStats>>(() => {
-  const stats: Record<string, ApplicationStats> = {};
+const storyCountByApplicationId = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = {};
   for (const application of store.applications) {
-    const stories = store.stories.filter(
+    counts[application.id] = store.stories.filter(
       (story) => story.applicationId === application.id
-    );
-    stats[application.id] = {
-      storyCount: stories.length,
-      averageConfidence:
-        stories.length === 0
-          ? 0
-          : Math.round(
-              stories.reduce((sum, story) => sum + story.confidenceScore, 0) /
-                stories.length
-            ),
-      needsReviewCount: stories.filter(
-        (story) => story.reviewState === "needs_review"
-      ).length,
-      highDriftCount: stories.filter((story) => story.driftLevel === "high")
-        .length,
-    };
+    ).length;
   }
-  return stats;
+  return counts;
 });
 
 onMounted(() => {
   applyRouteView();
   void store.fetchFromFirestore().then(() => {
     applyRouteView();
+    applyRouteAction();
   });
 });
 
@@ -319,30 +327,47 @@ watch(
   }
 );
 
+watch(
+  () => route.query.action,
+  () => {
+    applyRouteAction();
+  }
+);
+
 watch(activeApplicationTab, (tab) => {
   if (currentView.value !== "application-detail") return;
   updateViewQuery(tab === "basic" ? "application-detail" : "stories");
 });
 
-function routeView(): "applications" | "application-detail" | "stories" {
+function routeView():
+  | "repositories"
+  | "application-detail"
+  | "stories" {
+  if (route.query.view === "repositories") return "repositories";
   if (route.query.view === "stories") return "stories";
   if (route.query.view === "application-detail") return "application-detail";
-  return "applications";
+  return "stories";
 }
 
-function updateViewQuery(
-  view: "applications" | "application-detail" | "stories"
-): void {
+function updateViewQuery(view: "repositories" | "application-detail" | "stories"): void {
   if (routeView() === view) return;
   void router.replace({
     query: {
       ...route.query,
       view,
+      action: undefined,
     },
   });
 }
 
 function applyRouteView(): void {
+  normalizeLegacyApplicationView();
+
+  if (routeView() === "repositories") {
+    currentView.value = "repositories";
+    return;
+  }
+
   if (routeView() === "stories") {
     if (!selectedApplication.value && store.applications[0]) {
       store.selectApplication(store.applications[0].id);
@@ -364,15 +389,22 @@ function applyRouteView(): void {
     }
     return;
   }
-
-  if (currentView.value !== "applications") {
-    currentView.value = "applications";
-  }
+  showApplicationDetail();
 }
 
-function showApplicationList(): void {
-  currentView.value = "applications";
-  updateViewQuery("applications");
+function normalizeLegacyApplicationView(): void {
+  if (route.query.view !== "applications") return;
+  void router.replace({
+    query: {
+      ...route.query,
+      view: "stories",
+    },
+  });
+}
+
+function showRepositoryList(): void {
+  currentView.value = "repositories";
+  updateViewQuery("repositories");
 }
 
 function showApplicationDetail(): void {
@@ -382,6 +414,17 @@ function showApplicationDetail(): void {
   activeApplicationTab.value = "stories";
   currentView.value = "application-detail";
   updateViewQuery("stories");
+}
+
+function applyRouteAction(): void {
+  if (route.query.action !== "create-app") return;
+  openCreateApplicationModal();
+  void router.replace({
+    query: {
+      ...route.query,
+      action: undefined,
+    },
+  });
 }
 
 function openApplicationDetail(applicationId: string): void {
@@ -399,6 +442,15 @@ function openStoryDetail(storyId: string): void {
 
 function openCreateApplicationModal(): void {
   editingApplicationId.value = null;
+  initialApplicationRepository.value = null;
+  applicationModalOpen.value = true;
+}
+
+function openCreateApplicationModalForRepository(
+  repository: GitHubRepositorySummary
+): void {
+  editingApplicationId.value = null;
+  initialApplicationRepository.value = repository;
   applicationModalOpen.value = true;
 }
 
@@ -406,6 +458,7 @@ function openEditApplicationModal(application?: DecodedVibeControlApplication): 
   const target = application ?? selectedApplication.value;
   if (!target) return;
   editingApplicationId.value = target.id;
+  initialApplicationRepository.value = null;
   applicationModalOpen.value = true;
 }
 
@@ -413,6 +466,7 @@ async function saveApplication(input: VibeControlApplicationInput): Promise<void
   const application = await store.upsertApplication(input);
   applicationModalOpen.value = false;
   editingApplicationId.value = null;
+  initialApplicationRepository.value = null;
   store.selectApplication(application.id);
   activeApplicationTab.value = "basic";
   currentView.value = "application-detail";
@@ -435,7 +489,7 @@ async function deleteSelectedApplication(): Promise<void> {
   const deleted = await store.deleteApplication(selectedApplication.value.id);
   if (!deleted) return;
   deleteConfirmOpen.value = false;
-  currentView.value = "applications";
+  showApplicationDetail();
   toast.add({
     title: "アプリケーションを削除しました",
     description: applicationName,
