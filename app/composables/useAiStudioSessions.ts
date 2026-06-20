@@ -55,6 +55,10 @@ import {
   resolveWebPageFieldsFromRecord,
   type WebPageBuilderFields,
 } from "@utils/webPageWorkspaceState";
+import {
+  resolveApplicationScanFieldsFromRecord,
+  type ApplicationScanFields,
+} from "@utils/applicationScanWorkspaceState";
 import { resolveAdkSessionScope } from "@composables/useAdkSessionScope";
 import { omitFirestoreUndefined } from "@utils/firestorePayload";
 import {
@@ -118,6 +122,7 @@ export interface AiStudioSessionRecord {
   researchCurrentPhase?: string | null;
   researchTheme?: string | null;
   webPageFields?: WebPageBuilderFields;
+  applicationScanFields?: ApplicationScanFields;
   researchAutoMode?: boolean;
   createdAt: number;
   updatedAt: number;
@@ -165,6 +170,8 @@ const defaultTitleForJob = (jobKind: AiStudioJobKind): string => {
       return "データ分析";
     case "web_page":
       return "WEBページ";
+    case "application_scan":
+      return "アプリスキャン";
     default:
       return "新しい相談";
   }
@@ -420,6 +427,12 @@ export const buildSessionPatchContext = (
   if (record.webPageFields !== undefined) {
     ui.webPage = record.webPageFields;
   }
+  if (record.applicationScanFields !== undefined) {
+    ui.applicationScan = {
+      ...record.applicationScanFields,
+      password: record.applicationScanFields.password ? "***" : "",
+    };
+  }
   return omitFirestoreUndefined(ui) as Record<string, unknown>;
 };
 
@@ -549,6 +562,9 @@ const mapApiToRecord = (params: {
       };
     })(),
     webPageFields: resolveWebPageFieldsFromRecord({ state: params.state }),
+    applicationScanFields: resolveApplicationScanFieldsFromRecord({
+      state: params.state,
+    }),
     createdAt: updatedAt,
     updatedAt,
   };
@@ -776,6 +792,7 @@ export const useAiStudioSessions = () => {
       researchTheme: init.researchTheme ?? null,
       researchAutoMode: init.researchAutoMode,
       webPageFields: init.webPageFields,
+      applicationScanFields: init.applicationScanFields,
       createdAt: init.createdAt ?? now,
       updatedAt: init.updatedAt ?? now,
     };
@@ -819,6 +836,10 @@ export const useAiStudioSessions = () => {
               : undefined,
           webPage:
             record.jobKind === "web_page" ? record.webPageFields : undefined,
+          applicationScan:
+            record.jobKind === "application_scan"
+              ? record.applicationScanFields
+              : undefined,
         }),
         status: "active",
         createdAt: serverTimestamp(),
@@ -894,6 +915,10 @@ export const useAiStudioSessions = () => {
               : undefined,
           webPage:
             next.jobKind === "web_page" ? next.webPageFields : undefined,
+          applicationScan:
+            next.jobKind === "application_scan"
+              ? next.applicationScanFields
+              : undefined,
         }),
         updatedAt: serverTimestamp(),
         lastUpdateTime: Date.now() / 1000,

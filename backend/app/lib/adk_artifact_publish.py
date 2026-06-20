@@ -6,6 +6,7 @@ import os
 import uuid
 from typing import Any
 
+import requests
 from firebase_admin import storage as firebase_storage
 from google.api_core import exceptions as gcp_exceptions
 from google.cloud import firestore, storage
@@ -39,6 +40,10 @@ def _storage_bucket() -> str:
     ).strip()
 
 
+def _context_store_service_url() -> str:
+    return (os.environ.get("CONTEXT_STORE_SERVICE_URL") or "").strip().rstrip("/")
+
+
 def _parse_gs_uri(gs_uri: str) -> tuple[str, str]:
     if not gs_uri.startswith("gs://"):
         raise ValueError(f"invalid gs uri: {gs_uri}")
@@ -47,6 +52,39 @@ def _parse_gs_uri(gs_uri: str) -> tuple[str, str]:
     if slash <= 0:
         raise ValueError(f"invalid gs uri: {gs_uri}")
     return rest[:slash], rest[slash + 1 :]
+
+
+def _truthy_metadata(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return False
+
+
+def _metadata_value(metadata: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _custom_metadata_list(
+    metadata: dict[str, Any],
+    descriptor: ArtifactDescriptor,
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = [
+        {"key": "source", "stringValue": "application_scan"},
+        {"key": "artifactId", "stringValue": descriptor.artifact_id},
+        {"key": "adkFilename", "stringValue": descriptor.adk_filename},
+        {"key": "contentType", "stringValue": descriptor.content_type},
+    ]
+    for key in ("scanId", "phase", "url", "title", "kind"):
+        value = _metadata_value(metadata, key)
+        if value:
+            out.append({"key": key, "stringValue": value})
+    return out
 
 
 def _probe_session_doc_paths(
@@ -224,6 +262,7 @@ def upsert_artifact_doc(
     sync_error: str | None = None,
     message_id: str | None = None,
     response_id: str | None = None,
+    discovery_import: dict[str, Any] | None = None,
 ) -> None:
     ref = db.document(
         artifact_doc_path(
@@ -260,6 +299,8 @@ def upsert_artifact_doc(
         payload["messageId"] = message_id
     if response_id:
         payload["responseId"] = response_id
+    if discovery_import:
+        payload["discoveryImport"] = discovery_import
     snap = ref.get()
     if not snap.exists:
         payload["createdAt"] = firestore.SERVER_TIMESTAMP
@@ -272,6 +313,7 @@ def ingest_from_storage_event(
     object_name: str,
     content_type: str | None = None,
     size_bytes: int | None = None,
+    custom_metadata: dict[str, Any] | None = None,
     db: firestore.Client | None = None,
     storage_client: storage.Client | None = None,
 ) -> dict[str, Any] | None:
@@ -309,6 +351,15 @@ def ingest_from_storage_event(
         }
 
     org_id, space_id, uid = scope
+    storage_client = storage_client or storage.Client()
+    source_blob = storage_client.bucket(source_bucket).blob(object_name)
+    source_metadata = dict(custom_metadata or {})
+    try:
+        source_blob.reload()
+        source_metadata = {**dict(source_blob.metadata or {}), **source_metadata}
+    except Exception:
+        logger.debug("could not reload artifact metadata object=%s", object_name)
+
     descriptor = build_descriptor(
         parsed=parsed,
         source_bucket=source_bucket,
@@ -317,6 +368,7 @@ def ingest_from_storage_event(
         space_id=space_id,
         content_type=content_type,
         size_bytes=size_bytes or 0,
+        custom_metadata=source_metadata,
     )
 
     upsert_artifact_doc(
@@ -330,6 +382,13 @@ def ingest_from_storage_event(
     )
     try:
         copy_to_canonical(storage_client, descriptor=descriptor)
+        discovery_import = maybe_register_artifact_to_agent_search(
+            descriptor=descriptor,
+            metadata=source_metadata,
+            organization_id=org_id,
+            space_id=space_id,
+            uid=uid,
+        )
         upsert_artifact_doc(
             db,
             descriptor=descriptor,
@@ -338,6 +397,7 @@ def ingest_from_storage_event(
             session_id=parsed.session_id,
             uid=uid,
             status="ready",
+            discovery_import=discovery_import,
         )
     except Exception as exc:
         logger.exception("artifact ingest failed object=%s", object_name)
@@ -358,3 +418,77 @@ def ingest_from_storage_event(
         "status": "ready",
         "storageGcsPath": descriptor.storage_gcs_path,
     }
+
+
+def maybe_register_artifact_to_agent_search(
+    *,
+    descriptor: ArtifactDescriptor,
+    metadata: dict[str, Any],
+    organization_id: str,
+    space_id: str,
+    uid: str,
+) -> dict[str, Any] | None:
+    """Register selected ADK artifacts to context-store / Discovery Engine."""
+    if not _truthy_metadata(
+        metadata.get("agentSearchImport")
+        or metadata.get("agentsearchimport")
+        or metadata.get("agent_search_import")
+    ):
+        return None
+    file_space_id = _metadata_value(
+        metadata, "fileSpaceId", "filespaceid", "file_space_id"
+    )
+    service_url = _context_store_service_url()
+    if not file_space_id or not service_url:
+        return {
+            "status": "skipped",
+            "reason": "missing_file_space_or_context_store_url",
+        }
+    bucket_name, file_path = _parse_gs_uri(descriptor.storage_gcs_path)
+    request_id = f"adk-artifact-{descriptor.artifact_id}"
+    body = {
+        "request_id": request_id,
+        "input": {
+            "bucketName": bucket_name,
+            "filePath": file_path,
+            "documentId": f"adk_{descriptor.artifact_id}",
+            "customMetadata": _custom_metadata_list(metadata, descriptor),
+        },
+        "operation_metadata": {
+            "organizationId": organization_id,
+            "spaceId": space_id,
+            "requestedBy": {
+                "userId": uid,
+                "email": "system@example.com",
+                "role": "system",
+            },
+        },
+    }
+    try:
+        resp = requests.post(
+            f"{service_url}/context-store/{file_space_id}/upload",
+            json=body,
+            timeout=float(
+                os.environ.get("ADK_ARTIFACT_DISCOVERY_IMPORT_TIMEOUT_SEC", "20")
+            ),
+        )
+        ok = 200 <= resp.status_code < 300
+        return {
+            "status": "queued" if ok else "failed",
+            "fileSpaceId": file_space_id,
+            "documentId": body["input"]["documentId"],
+            "statusCode": resp.status_code,
+            "response": resp.text[:500],
+        }
+    except Exception as exc:
+        logger.warning(
+            "agent search import failed artifact=%s: %s",
+            descriptor.artifact_id,
+            exc,
+        )
+        return {
+            "status": "failed",
+            "fileSpaceId": file_space_id,
+            "documentId": body["input"]["documentId"],
+            "error": str(exc)[:500],
+        }

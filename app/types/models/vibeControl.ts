@@ -1,6 +1,7 @@
 import { Timestamp } from "firebase/firestore";
 import { z } from "zod";
 import { firestoreTypeConverter } from "./firestoreTypeConverter";
+import { RequestStatusEnum } from "./core/requestStatus";
 
 export const VibeControlStoryStatusSchema = z.enum([
   "discovery",
@@ -53,12 +54,14 @@ export const VibeControlApplicationSchema = z.object({
   domain: z.string().optional(),
   owner: z.string().optional(),
   labels: z.array(z.string()).default([]),
+  startUrl: z.string().optional(),
   fileSpaceId: z.string().optional(),
   repoFullName: z.string().min(1),
   defaultBranch: z.string().optional(),
   storyCount: z.number().min(0).default(0),
   highDriftCount: z.number().min(0).default(0),
   lastGeneratedAt: z.string().optional(),
+  lastScan: z.lazy(() => VibeControlApplicationScanRunSchema).optional(),
   createdAt: z.instanceof(Timestamp).optional(),
   updatedAt: z.instanceof(Timestamp).optional(),
 });
@@ -183,6 +186,22 @@ export const DecodedVibeControlSourceConnectionSchema =
     id: z.string(),
   });
 
+export const VibeControlApplicationScanRunSchema = z.object({
+  requestId: z.string(),
+  sessionId: z.string(),
+  responseId: z.string().optional(),
+  status: RequestStatusEnum,
+  startUrl: z.string(),
+  fileSpaceId: z.string().optional(),
+  maxPages: z.number().optional(),
+  captureScreenshots: z.boolean().optional(),
+  artifactCount: z.number().optional(),
+  errorMessage: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  completedAt: z.string().optional(),
+});
+
 export type VibeControlStoryStatus = z.infer<
   typeof VibeControlStoryStatusSchema
 >;
@@ -224,6 +243,9 @@ export type VibeControlSourceConnection = z.infer<
 >;
 export type DecodedVibeControlSourceConnection = z.infer<
   typeof DecodedVibeControlSourceConnectionSchema
+>;
+export type VibeControlApplicationScanRun = z.infer<
+  typeof VibeControlApplicationScanRunSchema
 >;
 
 export const vibeControlStoryConverter = firestoreTypeConverter(

@@ -66,6 +66,18 @@ function buildAdkSessionNavigateTarget(
   };
 }
 
+function buildVibeControlApplicationNavigateTarget(
+  applicationId?: string | null
+): WorkflowItemNavigateTarget {
+  return {
+    routeName: "admin-vibe-control",
+    query: {
+      view: "application-detail",
+      ...(applicationId ? { applicationId } : {}),
+    },
+  };
+}
+
 export function convertAdkSessionToWorkflowItems(
   session: AdkSessionWorkflowSourceDoc
 ): WorkflowItem[] {
@@ -112,9 +124,13 @@ function resolveWorkflowRequestNavigateTarget(
 ): WorkflowItemNavigateTarget | undefined {
   switch (type) {
     case "adkInvokeRequest": {
-      const sessionId = (
-        log.input as { sessionId?: string } | undefined
-      )?.sessionId;
+      const input = log.input as
+        | { mode?: unknown; sessionId?: string; workspaceId?: string }
+        | undefined;
+      if (input?.mode === "application_scan") {
+        return buildVibeControlApplicationNavigateTarget(input.workspaceId);
+      }
+      const sessionId = input?.sessionId;
       return sessionId ? buildAdkSessionNavigateTarget(sessionId) : undefined;
     }
     case "googleDriveSyncRequest":
@@ -130,9 +146,37 @@ export function convertWorkflowRequestToWorkflowItem(
   log: RequestLog
 ): WorkflowItem {
   if (type === "adkInvokeRequest") {
-    const mode = (log.input as { mode?: unknown } | undefined)?.mode;
+    const input = log.input as
+      | {
+          mode?: unknown;
+          prompt?: unknown;
+          workspaceId?: string;
+          modeState?: Record<string, unknown>;
+        }
+      | undefined;
+    const mode = input?.mode;
     const taskType = isEnAiStudioActiveTask(mode) ? mode : null;
-    const prompt = (log.input as { prompt?: unknown } | undefined)?.prompt;
+    const prompt = input?.prompt;
+    const applicationScanSetup =
+      input?.modeState &&
+      typeof input.modeState.application_scan === "object" &&
+      input.modeState.application_scan !== null &&
+      "setup" in input.modeState.application_scan &&
+      typeof (input.modeState.application_scan as { setup?: unknown }).setup ===
+        "object"
+        ? ((input.modeState.application_scan as { setup?: Record<string, unknown> })
+            .setup ?? {})
+        : {};
+    const applicationScanUrl =
+      typeof applicationScanSetup.start_url === "string"
+        ? applicationScanSetup.start_url
+        : "";
+    const progressLabel =
+      taskType === "application_scan" && applicationScanUrl
+        ? `開始URL: ${applicationScanUrl}`
+        : typeof prompt === "string" && prompt.trim()
+          ? prompt.trim().slice(0, 120)
+          : undefined;
     return {
       id: `adkInvokeRequest:${log.id}`,
       executionId: log.id,
@@ -143,10 +187,7 @@ export function convertWorkflowRequestToWorkflowItem(
       status: REQUEST_STATUS_MAP[log.status],
       createdAt: toDate(log.createdAt),
       updatedAt: toDate(log.updatedAt),
-      progressLabel:
-        typeof prompt === "string" && prompt.trim()
-          ? prompt.trim().slice(0, 120)
-          : undefined,
+      progressLabel,
       errorMessage: log.errorMessage,
       navigateTarget: resolveWorkflowRequestNavigateTarget(type, log),
       originalDoc: log.originalDoc ?? log,

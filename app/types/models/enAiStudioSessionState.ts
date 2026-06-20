@@ -9,6 +9,7 @@ export type EnAiStudioActiveTask =
   | "research"
   | "data_analysis"
   | "web_page"
+  | "application_scan"
   | "business_partner"
   | "guide"
   | "sheet";
@@ -88,6 +89,12 @@ export type WebPageTaskBucket = TaskBucketBase<
   unknown
 >;
 
+export type ApplicationScanTaskBucket = TaskBucketBase<
+  Record<string, unknown>,
+  Record<string, unknown>,
+  unknown
+>;
+
 export type BusinessPartnerTaskBucket = TaskBucketBase<
   Record<string, unknown>,
   Record<string, unknown>,
@@ -119,6 +126,7 @@ export interface EnAiStudioSessionState {
   research?: ResearchTaskBucket;
   data_analysis?: DataAnalysisTaskBucket;
   web_page?: WebPageTaskBucket;
+  application_scan?: ApplicationScanTaskBucket;
   business_partner?: BusinessPartnerTaskBucket;
   guide?: GuideTaskBucket;
 }
@@ -138,6 +146,7 @@ const EN_AISTUDIO_ACTIVE_TASKS = new Set<EnAiStudioActiveTask>([
   "research",
   "data_analysis",
   "web_page",
+  "application_scan",
   "business_partner",
   "guide",
   "sheet",

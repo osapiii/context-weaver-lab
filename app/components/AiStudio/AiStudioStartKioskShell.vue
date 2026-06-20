@@ -54,7 +54,8 @@ type KioskTheme =
   | "writing"
   | "image"
   | "dataAnalysis"
-  | "webPage";
+  | "webPage"
+  | "applicationScan";
 
 const props = withDefaults(
   defineProps<{
@@ -101,6 +102,11 @@ const THEME_CLASSES = {
   webPage: {
     panel: "border-cyan-300/80 ring-1 ring-cyan-100",
     step: "bg-cyan-100 text-cyan-800",
+    mascotAccent: "sky",
+  },
+  applicationScan: {
+    panel: "border-amber-300/80 ring-1 ring-amber-100",
+    step: "bg-amber-100 text-amber-900",
     mascotAccent: "sky",
   },
 } as const;

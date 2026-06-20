@@ -10,6 +10,7 @@ export type AiStudioWorkspaceMode = Extract<
   | "research"
   | "data_analysis"
   | "web_page"
+  | "application_scan"
 >;
 
 export const AI_STUDIO_MODE_META: Record<
@@ -63,6 +64,13 @@ export const AI_STUDIO_MODE_META: Record<
     badgeClass:
       "bg-cyan-50 text-cyan-800 ring-1 ring-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-200 dark:ring-cyan-800/50",
   },
+  application_scan: {
+    label: AI_STUDIO_HUB_JOB_META.application_scan.label,
+    shortLabel: AI_STUDIO_HUB_JOB_META.application_scan.shortLabel,
+    icon: AI_STUDIO_HUB_JOB_META.application_scan.icon,
+    badgeClass:
+      "bg-amber-50 text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-800/50",
+  },
   research: {
     label: AI_STUDIO_HUB_JOB_META.research.label,
     shortLabel: AI_STUDIO_HUB_JOB_META.research.shortLabel,
@@ -82,7 +90,8 @@ export function isAiStudioWorkspaceMode(
     value === "image" ||
     value === "research" ||
     value === "data_analysis" ||
-    value === "web_page"
+    value === "web_page" ||
+    value === "application_scan"
   );
 }
 
@@ -95,6 +104,7 @@ export const AI_STUDIO_MODE_PANEL_TITLE: Record<AiStudioWorkspaceMode, string> =
   research: "調査レポートモード",
   data_analysis: "データ分析モード",
   web_page: "WEBページモード",
+  application_scan: "アプリスキャンモード",
 };
 
 export const AI_STUDIO_CONCIERGE_PANEL_TITLE = "コンシェルジュモード";

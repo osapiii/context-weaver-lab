@@ -26,6 +26,10 @@ import {
   webPageModeStateToApi,
   type WebPageBuilderFields,
 } from "@utils/webPageWorkspaceState";
+import {
+  applicationScanModeStateToApi,
+  type ApplicationScanFields,
+} from "@utils/applicationScanWorkspaceState";
 import type {
   WritingFormState,
   WritingPhase,
@@ -45,6 +49,7 @@ export type WorkspaceTaskKey =
   | "research"
   | "data_analysis"
   | "web_page"
+  | "application_scan"
   | "guide";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -114,6 +119,10 @@ export const buildWebPageTaskApiBucket = (
   fields: WebPageBuilderFields
 ): Record<string, unknown> => webPageModeStateToApi(fields);
 
+export const buildApplicationScanTaskApiBucket = (
+  fields: ApplicationScanFields
+): Record<string, unknown> => applicationScanModeStateToApi(fields);
+
 /** Firestore golden state → ADK invoke リクエスト用 nested mode_state */
 export const buildInvokeModeStateFromWorkspaceState = (params: {
   state: Record<string, unknown>;
@@ -129,6 +138,7 @@ export const buildInvokeModeStateFromWorkspaceState = (params: {
     "research",
     "data_analysis",
     "web_page",
+    "application_scan",
   ] as const) {
     const bucket = params.state[task];
     if (isRecord(bucket)) {
@@ -158,6 +168,7 @@ export const buildWorkspaceSessionState = (params: {
   consultation?: { consultationModel?: LlmModelSelection };
   research?: ResearchStudioFields;
   webPage?: WebPageBuilderFields;
+  applicationScan?: ApplicationScanFields;
 }): Record<string, unknown> => {
   const state: Record<string, unknown> = {};
 
@@ -198,6 +209,12 @@ export const buildWorkspaceSessionState = (params: {
   if (params.webPage) {
     state.web_page = mergeGoldenTaskBucket({
       patch: buildWebPageTaskApiBucket(params.webPage),
+    });
+  }
+
+  if (params.applicationScan) {
+    state.application_scan = mergeGoldenTaskBucket({
+      patch: buildApplicationScanTaskApiBucket(params.applicationScan),
     });
   }
 

@@ -410,6 +410,12 @@ const JOB_TONES = {
     titleHover: "group-hover:text-cyan-800",
     footerBorder: "border-cyan-100",
   },
+  application_scan: {
+    card: "border-amber-200/70 bg-amber-50/40 hover:border-amber-300",
+    thumbnail: "bg-amber-50 ring-amber-100",
+    titleHover: "group-hover:text-amber-800",
+    footerBorder: "border-amber-100",
+  },
   research: {
     card: "border-slate-300/70 bg-slate-50/70 hover:border-slate-400",
     thumbnail: "bg-slate-100 ring-slate-200",

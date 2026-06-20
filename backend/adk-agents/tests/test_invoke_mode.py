@@ -39,3 +39,11 @@ def test_resolve_accepts_vibe_control_mode():
     )
     assert mode == "vibe_control"
 
+
+def test_resolve_accepts_application_scan_mode():
+    mode = resolve_invoke_agent_mode(
+        url_mode="application_scan",
+        mode_state={"active_mode": "application_scan"},
+        session_state={},
+    )
+    assert mode == "application_scan"
