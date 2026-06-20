@@ -215,6 +215,7 @@ import type { GitHubRepositorySummary } from "@composables/useGitHubOAuth";
 const props = defineProps<{
   open: boolean;
   application?: DecodedVibeControlApplication | null;
+  initialRepository?: GitHubRepositorySummary | null;
   applications: DecodedVibeControlApplication[];
   isSaving?: boolean;
 }>();
@@ -276,21 +277,24 @@ const selectableRepositories = computed(() =>
 );
 
 watch(
-  () => [props.open, props.application] as const,
+  () => [props.open, props.application, props.initialRepository] as const,
   () => {
     if (!props.open) return;
     const application = props.application;
+    const repository = application ? null : props.initialRepository;
     form.id = application?.id;
-    form.applicationKey = application?.applicationKey ?? "";
-    form.name = application?.name ?? "";
-    form.summary = application?.summary ?? "";
+    form.applicationKey =
+      application?.applicationKey ?? applicationKeyFromRepository(repository);
+    form.name = application?.name ?? repository?.name ?? "";
+    form.summary = application?.summary ?? repository?.description ?? "";
     form.domain = application?.domain ?? "";
     form.owner = application?.owner ?? "";
     form.labels = application?.labels ?? [];
     labelsText.value = application?.labels.join(", ") ?? "";
     form.fileSpaceId = application?.fileSpaceId ?? "";
-    form.repoFullName = application?.repoFullName ?? "";
-    form.defaultBranch = application?.defaultBranch ?? "main";
+    form.repoFullName = application?.repoFullName ?? repository?.fullName ?? "";
+    form.defaultBranch =
+      application?.defaultBranch ?? repository?.defaultBranch ?? "main";
     validationError.value = "";
     void loadGitHubState();
   },
@@ -373,12 +377,19 @@ function applySelectedRepository(): void {
     form.summary = repository.description;
   }
   if (!form.applicationKey.trim()) {
-    form.applicationKey = repository.name
-      .split(/[-_\s]+/)
-      .map((part) => part[0])
-      .join("")
-      .slice(0, 6)
-      .toUpperCase();
+    form.applicationKey = applicationKeyFromRepository(repository);
   }
+}
+
+function applicationKeyFromRepository(
+  repository?: GitHubRepositorySummary | null
+): string {
+  if (!repository?.name) return "";
+  return repository.name
+    .split(/[-_\s]+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 6)
+    .toUpperCase();
 }
 </script>

@@ -39,9 +39,9 @@ export type GitHubMergedPullRequest = {
   baseBranch: string;
   headBranch: string;
   labels: string[];
-  changedFiles: number;
-  additions: number;
-  deletions: number;
+  changedFiles: number | null;
+  additions: number | null;
+  deletions: number | null;
 };
 
 type GitHubCodeMessage = {
@@ -59,12 +59,38 @@ const sharedIsLoading = ref(false);
 const sharedConnection = ref<GitHubConnection>({ connected: false });
 const sharedRepositories = ref<GitHubRepositorySummary[]>([]);
 
-function githubCallbackUrl(): string {
-  return `${window.location.origin}/admin/vibe-control/github-callback`;
+function githubCallbackUrl(configuredRedirectUri?: string): string {
+  const configured = (configuredRedirectUri || "").trim();
+  if (configured) return configured;
+
+  const origin = new URL(window.location.origin);
+  if (origin.hostname === "localhost") {
+    origin.hostname = "127.0.0.1";
+  }
+  return `${origin.toString().replace(/\/$/, "")}/admin/vibe-control/github-callback`;
 }
 
-function randomState(): string {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+function encodeBase64Url(value: string): string {
+  return window
+    .btoa(value)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function randomNonce(): string {
+  const bytes = new Uint8Array(16);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function createGitHubState(): string {
+  return encodeBase64Url(
+    JSON.stringify({
+      nonce: randomNonce(),
+      openerOrigin: window.location.origin,
+    })
+  );
 }
 
 function waitForGitHubCode(
@@ -95,7 +121,6 @@ function waitForGitHubCode(
     }, 500);
 
     const onMessage = (event: MessageEvent<GitHubCodeMessage>) => {
-      if (event.origin !== window.location.origin) return;
       const payload = event.data;
       if (!payload || payload.source !== "vibe-control-github-oauth") return;
       if (payload.state !== state) return;
@@ -143,6 +168,9 @@ export function useGitHubOAuth() {
   const clientId = computed(() =>
     String(runtimeConfig.public.githubOAuthClientId || "").trim()
   );
+  const configuredRedirectUri = computed(() =>
+    String(runtimeConfig.public.githubOAuthRedirectUri || "").trim()
+  );
 
   const organizationId = computed(
     () => organizationStore.loggedInOrganizationInfo?.id || ""
@@ -180,11 +208,15 @@ export function useGitHubOAuth() {
 
     sharedIsLoading.value = true;
     try {
-      const state = randomState();
-      const redirectUri = githubCallbackUrl();
+      const state = createGitHubState();
+      const redirectUri = configuredRedirectUri.value
+        ? githubCallbackUrl(configuredRedirectUri.value)
+        : "";
       const url = new URL("https://github.com/login/oauth/authorize");
       url.searchParams.set("client_id", clientId.value);
-      url.searchParams.set("redirect_uri", redirectUri);
+      if (redirectUri) {
+        url.searchParams.set("redirect_uri", redirectUri);
+      }
       url.searchParams.set("scope", GITHUB_SCOPES);
       url.searchParams.set("state", state);
       url.searchParams.set("allow_signup", "false");
@@ -198,13 +230,13 @@ export function useGitHubOAuth() {
       );
       const code = await waitForGitHubCode(popup, state);
       const callable = httpsCallable<
-        { organizationId: string; code: string; redirectUri: string },
+        { organizationId: string; code: string; redirectUri?: string },
         { ok: boolean; login?: string; scopes?: string[] }
       >(functions(), "connect_github");
       const res = await callable({
         organizationId: organizationId.value,
         code,
-        redirectUri,
+        ...(redirectUri ? { redirectUri } : {}),
       });
       sharedConnection.value = {
         connected: Boolean(res.data.ok),

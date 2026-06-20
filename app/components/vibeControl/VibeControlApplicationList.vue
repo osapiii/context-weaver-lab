@@ -9,14 +9,25 @@
           ユーザーストーリーSSOTを管理するアプリ単位を選択します
         </p>
       </div>
-      <EnButton
-        variant="ai"
-        size="sm"
-        leading-icon="material-symbols:add"
-        @click="$emit('create')"
-      >
-        アプリを追加
-      </EnButton>
+      <div class="flex flex-wrap items-center gap-2">
+        <EnButton
+          variant="outline"
+          color="neutral"
+          size="sm"
+          leading-icon="i-simple-icons-github"
+          @click="$emit('open-repositories')"
+        >
+          Repository一覧
+        </EnButton>
+        <EnButton
+          variant="ai"
+          size="sm"
+          leading-icon="material-symbols:add"
+          @click="$emit('create')"
+        >
+          アプリを追加
+        </EnButton>
+      </div>
     </div>
 
     <div
@@ -153,6 +164,7 @@ const props = defineProps<{
 defineEmits<{
   open: [applicationId: string];
   create: [];
+  "open-repositories": [];
 }>();
 
 function metricsFor(applicationId: string) {

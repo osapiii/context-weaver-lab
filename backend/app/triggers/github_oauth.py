@@ -143,7 +143,7 @@ def _github_get(access_token: str, path: str, params: dict[str, Any] | None = No
     return resp.json()
 
 
-def _exchange_auth_code(code: str, redirect_uri: str) -> dict[str, Any]:
+def _exchange_auth_code(code: str, redirect_uri: str | None = None) -> dict[str, Any]:
     client_id = _oauth_client_id()
     client_secret = _oauth_client_secret()
     if not client_id or not client_secret:
@@ -154,15 +154,17 @@ def _exchange_auth_code(code: str, redirect_uri: str) -> dict[str, Any]:
                 "Set GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET."
             ),
         )
+    token_request = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code": code,
+    }
+    if redirect_uri:
+        token_request["redirect_uri"] = redirect_uri
     resp = requests.post(
         TOKEN_URL,
         headers={"Accept": "application/json"},
-        data={
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "code": code,
-            "redirect_uri": redirect_uri,
-        },
+        data=token_request,
         timeout=30,
     )
     if resp.status_code >= 400:
@@ -214,7 +216,18 @@ def _to_repo_dto(repo: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _to_pr_dto(pr: dict[str, Any]) -> dict[str, Any]:
+def _to_pr_dto(pr: dict[str, Any], *, include_diff_stats: bool = True) -> dict[str, Any]:
+    diff_stats = {
+        "changedFiles": pr.get("changed_files"),
+        "additions": pr.get("additions"),
+        "deletions": pr.get("deletions"),
+    }
+    if not include_diff_stats:
+        diff_stats = {
+            "changedFiles": None,
+            "additions": None,
+            "deletions": None,
+        }
     return {
         "id": pr.get("id"),
         "number": pr.get("number"),
@@ -231,9 +244,7 @@ def _to_pr_dto(pr: dict[str, Any]) -> dict[str, Any]:
             for label in pr.get("labels") or []
             if label.get("name")
         ],
-        "changedFiles": pr.get("changed_files") or 0,
-        "additions": pr.get("additions") or 0,
-        "deletions": pr.get("deletions") or 0,
+        **diff_stats,
     }
 
 
@@ -244,13 +255,13 @@ def connect_github(req: https_fn.CallableRequest) -> dict[str, Any]:
     organization_id = _require_org(data)
     code = str(data.get("code") or "").strip()
     redirect_uri = str(data.get("redirectUri") or "").strip()
-    if not code or not redirect_uri:
+    if not code:
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
-            message="OAuth authorization code and redirectUri are required",
+            message="OAuth authorization code is required",
         )
 
-    token = _exchange_auth_code(code, redirect_uri)
+    token = _exchange_auth_code(code, redirect_uri or None)
     access_token = str(token.get("access_token") or "")
     if not access_token:
         raise https_fn.HttpsError(
@@ -354,8 +365,10 @@ def list_github_merged_pull_requests(req: https_fn.CallableRequest) -> dict[str,
     organization_id = _require_org(data)
     repo = _repo_full_name(data)
     limit = max(1, min(int(data.get("limit") or 30), 30))
+    include_diff_stats = bool(data.get("includeDiffStats") or False)
     access_token = _access_token_for_user(organization_id, user_id)
     merged: list[dict[str, Any]] = []
+    per_page = max(limit, 30)
     for page in range(1, 4):
         payload = _github_get(
             access_token,
@@ -364,7 +377,7 @@ def list_github_merged_pull_requests(req: https_fn.CallableRequest) -> dict[str,
                 "state": "closed",
                 "sort": "updated",
                 "direction": "desc",
-                "per_page": 100,
+                "per_page": per_page,
                 "page": page,
             },
         )
@@ -372,10 +385,16 @@ def list_github_merged_pull_requests(req: https_fn.CallableRequest) -> dict[str,
             break
         for item in payload:
             if item.get("merged_at"):
-                detail = _github_get(access_token, f"/repos/{repo}/pulls/{item.get('number')}")
-                merged.append(_to_pr_dto(detail))
+                if include_diff_stats:
+                    detail = _github_get(
+                        access_token,
+                        f"/repos/{repo}/pulls/{item.get('number')}",
+                    )
+                    merged.append(_to_pr_dto(detail))
+                else:
+                    merged.append(_to_pr_dto(item, include_diff_stats=False))
                 if len(merged) >= limit:
                     return {"pullRequests": merged}
-        if len(payload) < 100:
+        if len(payload) < per_page:
             break
     return {"pullRequests": merged}

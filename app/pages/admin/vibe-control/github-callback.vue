@@ -20,6 +20,22 @@ definePageMeta({
   layout: false,
 });
 
+function decodeBase64Url(value: string): string {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+  return window.atob(padded);
+}
+
+function openerOriginFromState(state: unknown): string | null {
+  if (typeof state !== "string" || !state) return null;
+  try {
+    const decoded = JSON.parse(decodeBase64Url(state));
+    return typeof decoded.openerOrigin === "string" ? decoded.openerOrigin : null;
+  } catch {
+    return null;
+  }
+}
+
 onMounted(() => {
   const route = useRoute();
   const payload = {
@@ -33,7 +49,8 @@ onMounted(() => {
           : undefined,
     state: typeof route.query.state === "string" ? route.query.state : undefined,
   };
-  window.opener?.postMessage(payload, window.location.origin);
+  const targetOrigin = openerOriginFromState(route.query.state) || window.location.origin;
+  window.opener?.postMessage(payload, targetOrigin);
   window.setTimeout(() => {
     window.close();
   }, 300);

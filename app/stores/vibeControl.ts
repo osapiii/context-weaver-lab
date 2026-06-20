@@ -703,7 +703,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
           (story) => story.applicationId === this.selectedApplicationId
         );
         this.selectedStoryId = activeStories[0]?.id ?? "";
-        if (this.applications.length === 0 || this.stories.length === 0) {
+        if (this.applications.length === 0) {
           this.loadMockData();
         }
       } catch (err) {

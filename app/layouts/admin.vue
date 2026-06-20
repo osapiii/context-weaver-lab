@@ -35,7 +35,7 @@
             :show-create="false"
             :show-edit="false"
             @select="selectVibeControlApplication"
-            @manage="navigateToVibeControl"
+            @manage="isApplicationManagerOpen = true"
           />
         </div>
 
@@ -142,6 +142,22 @@
       </div>
     </footer>
 
+    <EnModal
+      v-model:open="isApplicationManagerOpen"
+      title="アプリ一覧を管理"
+      title-icon="material-symbols:apps-outline"
+      size="full"
+      :ui="{ content: 'sm:max-w-5xl' }"
+    >
+      <VibeControlApplicationList
+        :applications="vibeControl.applications"
+        :stats-by-application-id="applicationStatsById"
+        @open="openManagedApplication"
+        @create="openCreateApplication"
+        @open-repositories="openRepositoryList"
+      />
+    </EnModal>
+
     <SpaceSelectModal v-model="isSpaceModalOpen" />
   </div>
 </template>
@@ -172,12 +188,13 @@ const spaceStore = useSpaceStore();
 const vibeControl = useVibeControlStore();
 
 const isSpaceModalOpen = ref(false);
+const isApplicationManagerOpen = ref(false);
 const adminNavSidebarCollapsed = ref(false);
 
 function navigateToVibeControl(): void {
   void router.push({
     name: "admin-vibe-control",
-    query: { view: "applications" },
+    query: { view: "stories" },
   });
 }
 
@@ -213,9 +230,9 @@ const currentMode = computed(() => {
   if (routeName.value === "admin-vibe-control") {
     const view = typeof route.query.view === "string" ? route.query.view : "";
     return navModes.find((mode) =>
-      view === "stories"
-        ? mode.key === "stories"
-        : mode.key === "applications"
+      view === "repositories" || view === "application-detail"
+        ? mode.key === "applications"
+        : mode.key === "stories"
     );
   }
   return findModeByRouteName(routeName.value);
@@ -235,6 +252,57 @@ function selectVibeControlApplication(applicationId: string): void {
   void router.push({
     name: "admin-vibe-control",
     query: { view: "stories" },
+  });
+}
+
+const applicationStatsById = computed(() => {
+  const stats: Record<string, {
+    storyCount: number;
+    averageConfidence: number;
+    needsReviewCount: number;
+    highDriftCount: number;
+  }> = {};
+  for (const application of vibeControl.applications) {
+    const stories = vibeControl.stories.filter(
+      (story) => story.applicationId === application.id
+    );
+    stats[application.id] = {
+      storyCount: stories.length,
+      averageConfidence:
+        stories.length === 0
+          ? 0
+          : Math.round(
+              stories.reduce((sum, story) => sum + story.confidenceScore, 0) /
+                stories.length
+            ),
+      needsReviewCount: stories.filter(
+        (story) => story.reviewState === "needs_review"
+      ).length,
+      highDriftCount: stories.filter((story) => story.driftLevel === "high")
+        .length,
+    };
+  }
+  return stats;
+});
+
+function openManagedApplication(applicationId: string): void {
+  isApplicationManagerOpen.value = false;
+  selectVibeControlApplication(applicationId);
+}
+
+function openCreateApplication(): void {
+  isApplicationManagerOpen.value = false;
+  void router.push({
+    name: "admin-vibe-control",
+    query: { view: "stories", action: "create-app" },
+  });
+}
+
+function openRepositoryList(): void {
+  isApplicationManagerOpen.value = false;
+  void router.push({
+    name: "admin-vibe-control",
+    query: { view: "repositories" },
   });
 }
 
