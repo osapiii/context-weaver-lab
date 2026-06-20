@@ -16,6 +16,7 @@ def normalize_workspace_mode(value: Any) -> str | None:
         "research",
         "data_analysis",
         "web_page",
+        "application_scan",
         "business_partner",
         "vibe_control",
     }:

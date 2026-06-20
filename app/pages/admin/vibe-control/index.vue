@@ -121,6 +121,15 @@
           @delete="openDeleteConfirm"
         />
 
+        <VibeControlApplicationScanPanel
+          :applications="store.applications"
+          :selected-application-id="store.selectedApplicationId"
+          :is-starting-scan="store.isStartingApplicationScan"
+          @select-application="store.selectApplication($event)"
+          @start-scan="startApplicationScan"
+          @open-job-log="openJobLog"
+        />
+
         <VibeControlSourceSetup
           :selected-application="selectedApplication"
           :source-connections="store.activeSourceConnections"
@@ -129,6 +138,12 @@
           @persist="store.persistCurrentSnapshot()"
         />
       </template>
+
+      <VibeControlApplicationScanResultsPanel
+        v-else-if="activeApplicationTab === 'scan'"
+        :application="selectedApplication"
+        :run="selectedApplication?.lastScan ?? null"
+      />
 
       <VibeControlApplicationGitPanel
         v-else
@@ -147,6 +162,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useVibeControlStore } from "@stores/vibeControl";
+import type { ApplicationScanFields } from "@utils/applicationScanWorkspaceState";
 import type { DecodedVibeControlApplication } from "@models/vibeControl";
 import type { VibeControlApplicationInput } from "@stores/vibeControl";
 import type { GitHubRepositorySummary } from "@composables/useGitHubOAuth";
@@ -155,7 +171,7 @@ type VibeControlView =
   | "repositories"
   | "application-detail"
   | "story-detail";
-type ApplicationDetailTab = "stories" | "basic" | "git";
+type ApplicationDetailTab = "stories" | "basic" | "scan" | "git";
 
 defineOptions({
   name: "AdminVibeControlIndexPage",
@@ -196,18 +212,13 @@ const pageTitle = computed(() => {
   if (currentView.value === "story-detail") {
     return selectedStory.value?.title ?? "ユーザーストーリー";
   }
-  if (activeApplicationTab.value === "basic") return "アプリ詳細";
-  if (activeApplicationTab.value === "git") return "Git";
-  return "ユーザーストーリー一覧";
+  return selectedApplication.value?.name ?? "アプリ詳細";
 });
 
 const pageIcon = computed(() => {
   if (currentView.value === "repositories") return "i-simple-icons-github";
-  if (
-    currentView.value === "application-detail" &&
-    activeApplicationTab.value === "git"
-  ) {
-    return "i-simple-icons-github";
+  if (currentView.value === "application-detail") {
+    return "flat-color-icons:deployment";
   }
   return pageTitle.value.includes("ユーザーストーリー")
     ? "flat-color-icons:flow-chart"
@@ -223,19 +234,14 @@ const pageSubtitle = computed(() => {
       ? `${selectedStory.value.storyKey} / ${selectedStory.value.applicationKey}`
       : "ユーザーストーリーを確認します";
   }
-  if (activeApplicationTab.value === "basic") {
-    return selectedApplication.value
-      ? `${selectedApplication.value.name} の基本情報とSSOT生成設定を管理します`
-      : "アプリの基本情報とSSOT生成設定を管理します";
+  if (!selectedApplication.value) {
+    return "アプリケーションを選択してください";
   }
-  if (activeApplicationTab.value === "git") {
-    return selectedApplication.value
-      ? `${selectedApplication.value.name} に紐づく repository とマージ済みPRを確認します`
-      : "repository とマージ済みPRを確認します";
-  }
-  return selectedApplication.value
-    ? `${selectedApplication.value.name} のユーザーストーリー一覧を管理します`
-    : "アプリ詳細とユーザーストーリー一覧を管理します";
+  return (
+    selectedApplication.value.summary ||
+    selectedApplication.value.repoFullName ||
+    `${selectedApplication.value.applicationKey} のアプリケーション情報`
+  );
 });
 
 const applicationTabItems = computed(() => [
@@ -249,6 +255,12 @@ const applicationTabItems = computed(() => [
     value: "basic",
     label: "基本情報",
     icon: "material-symbols:settings-outline-rounded",
+  },
+  {
+    value: "scan",
+    label: "スキャン結果",
+    icon: "material-symbols:radar",
+    count: selectedApplication.value?.lastScan?.artifactCount,
   },
   {
     value: "git",
@@ -292,6 +304,8 @@ const breadcrumbItems = computed(() => {
       label:
         activeApplicationTab.value === "basic"
           ? "基本情報"
+          : activeApplicationTab.value === "scan"
+            ? "スキャン結果"
           : activeApplicationTab.value === "git"
             ? "Git"
             : "ユーザーストーリー",
@@ -328,6 +342,13 @@ watch(
 );
 
 watch(
+  () => route.query.applicationId,
+  () => {
+    applyRouteApplication();
+  }
+);
+
+watch(
   () => route.query.action,
   () => {
     applyRouteAction();
@@ -336,20 +357,30 @@ watch(
 
 watch(activeApplicationTab, (tab) => {
   if (currentView.value !== "application-detail") return;
-  updateViewQuery(tab === "basic" ? "application-detail" : "stories");
+  updateViewQuery(
+    tab === "basic"
+      ? "application-detail"
+      : tab === "scan"
+        ? "application-scan"
+        : "stories"
+  );
 });
 
 function routeView():
   | "repositories"
   | "application-detail"
+  | "application-scan"
   | "stories" {
   if (route.query.view === "repositories") return "repositories";
   if (route.query.view === "stories") return "stories";
+  if (route.query.view === "application-scan") return "application-scan";
   if (route.query.view === "application-detail") return "application-detail";
   return "stories";
 }
 
-function updateViewQuery(view: "repositories" | "application-detail" | "stories"): void {
+function updateViewQuery(
+  view: "repositories" | "application-detail" | "application-scan" | "stories"
+): void {
   if (routeView() === view) return;
   void router.replace({
     query: {
@@ -362,6 +393,7 @@ function updateViewQuery(view: "repositories" | "application-detail" | "stories"
 
 function applyRouteView(): void {
   normalizeLegacyApplicationView();
+  applyRouteApplication();
 
   if (routeView() === "repositories") {
     currentView.value = "repositories";
@@ -389,7 +421,30 @@ function applyRouteView(): void {
     }
     return;
   }
+  if (routeView() === "application-scan") {
+    if (!selectedApplication.value && store.applications[0]) {
+      store.selectApplication(store.applications[0].id);
+    }
+    if (selectedApplication.value) {
+      activeApplicationTab.value = "scan";
+      currentView.value = "application-detail";
+    }
+    return;
+  }
   showApplicationDetail();
+}
+
+function applyRouteApplication(): void {
+  const applicationId =
+    typeof route.query.applicationId === "string"
+      ? route.query.applicationId
+      : "";
+  if (!applicationId) return;
+  if (store.selectedApplicationId === applicationId) return;
+  if (!store.applications.some((application) => application.id === applicationId)) {
+    return;
+  }
+  store.selectApplication(applicationId);
 }
 
 function normalizeLegacyApplicationView(): void {
@@ -476,6 +531,30 @@ async function saveApplication(input: VibeControlApplicationInput): Promise<void
     description: application.name,
     color: "success",
   });
+}
+
+async function startApplicationScan(fields: ApplicationScanFields): Promise<void> {
+  try {
+    const requestId = await store.startApplicationScan({
+      applicationId: store.selectedApplicationId,
+      fields,
+    });
+    toast.add({
+      title: "Application Scanを開始しました",
+      description: requestId,
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "Application Scanの開始に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+function openJobLog(): void {
+  void router.push({ name: "admin-workflow-executions" });
 }
 
 function openDeleteConfirm(): void {

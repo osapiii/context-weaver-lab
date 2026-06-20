@@ -145,6 +145,7 @@ from .business_partner_workflow import (
     patch_business_partner_bucket,
     validate_business_partner_invoke,
 )
+from .application_scan_workflow import application_scan_state_patch_from_mode_state
 from .writing_action_scope import activate_writing_action, deactivate_writing_action
 from .artifact_ui_bridge import (
     message_artifact_ref_from_ref,
@@ -509,6 +510,10 @@ async def _stream_invoke(
                 business_partner_state_patch_from_mode_state(req.mode_state)
             )
             patch_business_partner_bucket(state_patch, req.mode_state)
+        if agent_mode == "application_scan":
+            state_patch.update(
+                application_scan_state_patch_from_mode_state(req.mode_state)
+            )
         if merged_image_reference is not None:
             from .workspace_state_buckets import patch_task_bucket
 

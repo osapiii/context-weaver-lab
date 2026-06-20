@@ -48,19 +48,15 @@ def require_user_or_internal_invoke(
                 detail="X-En-AIStudio-Requested-Uid required for internal invoke",
             )
         api_key = resolve_request_gemini_api_key(uid)
-        if not api_key:
-            raise HTTPException(
-                status_code=400,
-                detail="GEMINI_API_KEY_NOT_REGISTERED",
-            )
         openai_api_key = resolve_request_openai_api_key(uid)
-        activate_byok(api_key)
+        if api_key:
+            activate_byok(api_key)
         return {
             "uid": uid,
             "email": None,
-            "auth_disabled": False,
+            "auth_disabled": True,
             "internal_invoke": True,
-            "has_gemini_api_key": True,
+            "has_gemini_api_key": bool(api_key),
             "gemini_api_key": api_key,
             "has_openai_api_key": bool(openai_api_key),
             "openai_api_key": openai_api_key,

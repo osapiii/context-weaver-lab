@@ -116,6 +116,11 @@ import {
   emptyWebPageBuilderFields,
   type WebPageBuilderFields,
 } from "@utils/webPageWorkspaceState";
+import {
+  buildApplicationScanInitialPrompt,
+  emptyApplicationScanFields,
+  type ApplicationScanFields,
+} from "@utils/applicationScanWorkspaceState";
 import { fetchArtifactTextContent } from "@utils/artifactDisplayUrl";
 import { dedupeActivitiesForDisplay } from "@utils/adkToolActivities";
 import { useAdkSessionArtifacts } from "@composables/useAdkSessionArtifacts";
@@ -129,6 +134,7 @@ export type AiStudioJobKind =
   | "research"
   | "data_analysis"
   | "web_page"
+  | "application_scan"
   | null;
 
 /** 実際に SSE 接続している Agent. research は別 store なので含まない. */
@@ -278,6 +284,7 @@ export const useAiStudioStore = defineStore("aiStudio", {
     writingForm: emptyWritingFormState() as WritingFormState,
     writingReferenceState: emptyWritingReferenceState() as WritingReferenceState,
     webPageFields: emptyWebPageBuilderFields() as WebPageBuilderFields,
+    applicationScanFields: emptyApplicationScanFields() as ApplicationScanFields,
   }),
   getters: {
     hasMessages: (state) => state.messages.length > 0,
@@ -397,6 +404,11 @@ export const useAiStudioStore = defineStore("aiStudio", {
         webPageFields: {
           ...this.webPageFields,
           referenceUrls: [...this.webPageFields.referenceUrls],
+        },
+        applicationScanFields: {
+          ...this.applicationScanFields,
+          includePatterns: [...this.applicationScanFields.includePatterns],
+          excludePatterns: [...this.applicationScanFields.excludePatterns],
         },
         status: this.isStreaming ? "active" : "active",
       };
@@ -595,6 +607,8 @@ export const useAiStudioStore = defineStore("aiStudio", {
         ? coalesceWritingReferenceState(this.writingReferenceState)
         : fromRecord;
       this.webPageFields = record.webPageFields ?? emptyWebPageBuilderFields();
+      this.applicationScanFields =
+        record.applicationScanFields ?? emptyApplicationScanFields();
       this.messages = record.messages.map((message) => ({
         ...message,
         text:
@@ -697,6 +711,7 @@ export const useAiStudioStore = defineStore("aiStudio", {
           "consultation",
           "data_analysis",
           "web_page",
+          "application_scan",
         ].includes(preferredKind)
       ) {
         this.activeAgent = preferredKind as AdkAgentMode;
@@ -706,6 +721,9 @@ export const useAiStudioStore = defineStore("aiStudio", {
         }
         if (preferredKind === "web_page") {
           this.resetWebPageBuilder();
+        }
+        if (preferredKind === "application_scan") {
+          this.resetApplicationScan();
         }
       }
       const sessions = useAiStudioSessions();
@@ -746,6 +764,7 @@ export const useAiStudioStore = defineStore("aiStudio", {
           "consultation",
           "data_analysis",
           "web_page",
+          "application_scan",
         ].includes(kind)
       ) {
         this.activeAgent = kind as AdkAgentMode;
@@ -766,6 +785,7 @@ export const useAiStudioStore = defineStore("aiStudio", {
       this.resetImageStudioToCreate();
       this.resetWritingWorkflow();
       this.resetWebPageBuilder();
+      this.resetApplicationScan();
       await useAiStudioSessions().create({
         sessionId: this.sessionId,
         jobKind: this.jobKind,
@@ -828,6 +848,10 @@ export const useAiStudioStore = defineStore("aiStudio", {
       this.webPageFields = emptyWebPageBuilderFields();
     },
 
+    resetApplicationScan(): void {
+      this.applicationScanFields = emptyApplicationScanFields();
+    },
+
     async startWebPageBuilder(fields: WebPageBuilderFields): Promise<void> {
       this.webPageFields = {
         purpose: fields.purpose,
@@ -838,6 +862,18 @@ export const useAiStudioStore = defineStore("aiStudio", {
       this.jobKind = "web_page";
       await this.persistCurrentSession();
       await this.send(buildWebPageInitialPrompt(this.webPageFields));
+    },
+
+    async startApplicationScan(fields: ApplicationScanFields): Promise<void> {
+      this.applicationScanFields = {
+        ...fields,
+        includePatterns: [...fields.includePatterns],
+        excludePatterns: [...fields.excludePatterns],
+      };
+      this.activeAgent = "application_scan";
+      this.jobKind = "application_scan";
+      await this.persistCurrentSession();
+      await this.send(buildApplicationScanInitialPrompt(this.applicationScanFields));
     },
 
     initWritingWorkflowIfNeeded(): void {
@@ -1461,11 +1497,16 @@ export const useAiStudioStore = defineStore("aiStudio", {
       if (!this.activeAgent) {
         try {
           const router = useConciergeRouter();
+          const preferredConciergeAgent =
+            this.jobKind &&
+            ["writing", "sheet", "image", "consultation", "research"].includes(
+              this.jobKind
+            )
+              ? (this.jobKind as ConciergeTargetAgent)
+              : null;
           const result = await router.route(
             trimmed,
-            this.jobKind && this.jobKind !== "research"
-              ? (this.jobKind as ConciergeTargetAgent)
-              : null
+            preferredConciergeAgent
           );
           if (result.agent === "research") {
             this.jobKind = "research";
@@ -1657,12 +1698,8 @@ export const useAiStudioStore = defineStore("aiStudio", {
             imageReferenceState: this.imageReferenceState,
           };
         }
-        if (mode === "writing") {
-          workspaceBucketInput.writing = {
-            writingPhase: this.writingPhase,
-            writingForm: this.writingForm,
-            writingReferenceState: this.writingReferenceState,
-          };
+        if (mode === "application_scan") {
+          workspaceBucketInput.applicationScan = this.applicationScanFields;
         }
         if (invokeMode === "consultation") {
           workspaceBucketInput.consultation = {

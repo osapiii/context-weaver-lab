@@ -12,6 +12,9 @@ export const AdkInvokeModeEnum = z.enum([
   "image",
   "consultation",
   "research",
+  "data_analysis",
+  "web_page",
+  "application_scan",
   "business_partner",
 ]);
 

@@ -26,6 +26,7 @@ import {
 } from "@utils/writingWorkspaceState";
 import type { ResearchStudioFields } from "@utils/researchStudioState";
 import type { WebPageBuilderFields } from "@utils/webPageWorkspaceState";
+import type { ApplicationScanFields } from "@utils/applicationScanWorkspaceState";
 
 export const resolveWorkspaceModeFromFirestoreState = (params: {
   state: Record<string, unknown>;
@@ -55,6 +56,7 @@ export const buildAiStudioFirestoreSessionState = (params: {
   consultationModel?: import("@models/llmModelSelection").LlmModelSelection;
   research?: ResearchStudioFields;
   webPage?: WebPageBuilderFields;
+  applicationScan?: ApplicationScanFields;
 }): Record<string, unknown> => {
   const activeTask =
     (isEnAiStudioActiveTask(params.activeAgent) ? params.activeAgent : null) ??
@@ -148,6 +150,10 @@ export const buildAiStudioFirestoreSessionState = (params: {
 
   if (workspaceMode === "web_page" && params.webPage) {
     bucketParams.webPage = params.webPage;
+  }
+
+  if (workspaceMode === "application_scan" && params.applicationScan) {
+    bucketParams.applicationScan = params.applicationScan;
   }
 
   return buildWorkspaceSessionState(bucketParams);

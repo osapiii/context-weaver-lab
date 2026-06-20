@@ -31,6 +31,7 @@ export type AdkAgentMode =
   | "research"
   | "data_analysis"
   | "web_page"
+  | "application_scan"
   | "business_partner";
 
 export interface AgentSseArtifact {
@@ -323,7 +324,8 @@ const parseWorkspaceMode = (value: unknown): AdkAgentMode | undefined => {
     value === "consultation" ||
     value === "research" ||
     value === "data_analysis" ||
-    value === "web_page"
+    value === "web_page" ||
+    value === "application_scan"
   ) {
     return value;
   }
@@ -339,17 +341,20 @@ const resolveEndpoint = (mode: AdkAgentMode): string => {
   const base = pick(pub.enAiStudioAdkBaseUrl);
   if (base) return base;
 
-  const perMode =
-    mode === "guide"
-      ? pick(pub.enAiStudioAdkGuideUrl)
-      : mode === "writing"
-        ? pick(pub.enAiStudioAdkWritingUrl)
-        : mode === "sheet"
-          ? pick(pub.enAiStudioAdkSheetUrl)
-          : mode === "image"
-            ? pick(pub.enAiStudioAdkImageUrl)
-            : pick(pub.enAiStudioAdkConsultationUrl);
-  return perMode;
+  switch (mode) {
+    case "guide":
+      return pick(pub.enAiStudioAdkGuideUrl);
+    case "writing":
+      return pick(pub.enAiStudioAdkWritingUrl);
+    case "sheet":
+      return pick(pub.enAiStudioAdkSheetUrl);
+    case "image":
+      return pick(pub.enAiStudioAdkImageUrl);
+    case "consultation":
+      return pick(pub.enAiStudioAdkConsultationUrl);
+    default:
+      return "";
+  }
 };
 
 export const useAgentSseClient = () => {

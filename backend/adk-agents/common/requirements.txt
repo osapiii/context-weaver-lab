@@ -27,6 +27,7 @@ google-cloud-storage>=2.19.0
 # HTTP
 requests>=2.31.0
 openai>=1.50.0
+playwright>=1.45.0
 
 # 画像マスク (OpenAI inpainting)
 Pillow>=10.0.0

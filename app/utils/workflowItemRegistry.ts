@@ -36,6 +36,7 @@ export const ADK_TASK_LABELS: Record<EnAiStudioActiveTask, string> = {
   sheet: "シート編集",
   data_analysis: "データ分析",
   web_page: "WEBページ",
+  application_scan: "アプリスキャン",
 };
 
 /** ADK セッションのバッジ色 (CLAUDE.md の AI = violet 規約に準拠) */

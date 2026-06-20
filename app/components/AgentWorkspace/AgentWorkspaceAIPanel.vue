@@ -14,6 +14,7 @@
     :hide-welcome-quick-actions="
       store.activeAgent === 'sheet' ||
         showConsultationStartGate ||
+        showApplicationScanGate ||
         store.activeAgent === 'image' ||
         store.activeAgent === 'writing'
     "
@@ -125,7 +126,8 @@
         showWritingKioskGate ||
         showWritingWorkflowCenter ||
         showDataAnalysisStartGate ||
-        showWebPageBuilderGate
+        showWebPageBuilderGate ||
+        showApplicationScanGate
       "
       #welcome-replace
     >
@@ -271,6 +273,12 @@
         :fields="store.webPageFields"
         :disabled="store.isStreaming"
         @submit="onWebPageBuilderSubmit"
+      />
+      <ApplicationScanKioskPanel
+        v-else-if="showApplicationScanGate"
+        :fields="store.applicationScanFields"
+        :disabled="store.isStreaming"
+        @submit="onApplicationScanSubmit"
       />
     </template>
 
@@ -512,7 +520,9 @@ import WritingFormKioskPanel from "@components/AgentWorkspace/WritingFormKioskPa
 import WritingStudioWorkflowCenter from "@components/AgentWorkspace/WritingStudioWorkflowCenter.vue";
 import DataAnalysisStartKioskPanel from "@components/AgentWorkspace/DataAnalysisStartKioskPanel.vue";
 import WebPageBuilderKioskPanel from "@components/AgentWorkspace/WebPageBuilderKioskPanel.vue";
+import ApplicationScanKioskPanel from "@components/AgentWorkspace/ApplicationScanKioskPanel.vue";
 import type { WebPageBuilderFields } from "@utils/webPageWorkspaceState";
+import type { ApplicationScanFields } from "@utils/applicationScanWorkspaceState";
 import { useWritingReferenceSources } from "@composables/useWritingReferenceSources";
 import { coalesceWritingReferenceState } from "@utils/writingWorkspaceState";
 import type { WritingFormField } from "@models/writingForm";
@@ -574,6 +584,10 @@ const showDataAnalysisStartGate = computed(
 
 const showWebPageBuilderGate = computed(
   () => store.activeAgent === "web_page" && store.messages.length === 0
+);
+
+const showApplicationScanGate = computed(
+  () => store.activeAgent === "application_scan" && store.messages.length === 0
 );
 
 const consultationKnowledgeSummary = computed(() =>
@@ -743,6 +757,7 @@ const writingCenterWelcomeReplace = computed(
 const workspaceHideMessageThread = computed(
   () =>
     showConsultationStartGate.value ||
+    showApplicationScanGate.value ||
     imageHideMessageThread.value ||
     writingHideMessageThread.value
 );
@@ -750,6 +765,7 @@ const workspaceHideMessageThread = computed(
 const centerWelcomeReplace = computed(
   () =>
     showConsultationStartGate.value ||
+    showApplicationScanGate.value ||
     imageCenterWelcomeReplace.value ||
     writingCenterWelcomeReplace.value
 );
@@ -844,7 +860,7 @@ const showImageKioskGate = computed(
 
 /** お手本＋プロンプトの2カラムはやや広め、書類キオスクはフル幅 */
 const welcomeReplaceMaxWidthClass = computed(() => {
-  if (showConsultationStartGate.value) {
+  if (showConsultationStartGate.value || showApplicationScanGate.value) {
     return "max-w-none";
   }
   if (showWritingKioskGate.value) {
@@ -866,7 +882,7 @@ const welcomeReplaceMaxWidthClass = computed(() => {
 });
 
 const welcomeReplaceContainerClass = computed(() => {
-  if (showWritingKioskGate.value) {
+  if (showWritingKioskGate.value || showApplicationScanGate.value) {
     return "items-start justify-stretch px-3 py-4 sm:px-5 sm:py-5";
   }
   return "items-center justify-center";
@@ -895,6 +911,7 @@ const hideImageComposer = computed(
 const hideWorkspaceComposer = computed(
   () =>
     showConsultationStartGate.value ||
+    showApplicationScanGate.value ||
     hideImageComposer.value ||
     store.activeAgent === "writing"
 );
@@ -1175,6 +1192,10 @@ const onChangeSheetConnection = (): void => {
 
 const onWebPageBuilderSubmit = (fields: WebPageBuilderFields): void => {
   void store.startWebPageBuilder(fields);
+};
+
+const onApplicationScanSubmit = (fields: ApplicationScanFields): void => {
+  void store.startApplicationScan(fields);
 };
 
 const onChangeImageCreationMode = (): void => {

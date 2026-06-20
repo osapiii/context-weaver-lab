@@ -159,6 +159,8 @@
     </EnModal>
 
     <SpaceSelectModal v-model="isSpaceModalOpen" />
+    <NotificationSlideover />
+    <WorkflowNotificationPet v-show="!context.focusModeIsActive" />
   </div>
 </template>
 
@@ -178,6 +180,7 @@ import {
 
 const actionIcons = useActionIcons();
 const appearance = useAppAppearance();
+const context = useContextStore();
 const router = useRouter();
 const route = useRoute();
 const auth = useAdminUserStore();

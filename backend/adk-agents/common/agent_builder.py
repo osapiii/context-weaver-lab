@@ -209,6 +209,27 @@ def build_agent_for_mode(
             tools=tools,
         )
 
+    if mode == "application_scan":
+        from application_scan.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from application_scan.tools import (  # type: ignore
+            read_application_scan_setup,
+            run_application_scan,
+        )
+
+        tools = [
+            *base_tools,
+            FunctionTool(func=read_application_scan_setup),
+            FunctionTool(func=run_application_scan),
+            FunctionTool(func=add_markdown_document),
+            FunctionTool(func=add_html_document),
+        ]
+        return LlmAgent(
+            name="en_aistudio_application_scan_agent",
+            model=model,
+            instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
+            tools=tools,
+        )
+
     if mode == "vibe_control":
         from vibe_control.prompts import SYSTEM_INSTRUCTION  # type: ignore
         from vibe_control.tools import (  # type: ignore

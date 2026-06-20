@@ -1,13 +1,32 @@
 import { defineStore } from "pinia";
+import { getAuth } from "firebase/auth";
 import log from "@utils/logger";
 import createRandomDocId from "@utils/createRandomDocId";
 import { useFirestoreDocOperation } from "@composables/firestore-doc-operation";
+import {
+  createAdkInvokeRequest,
+  watchAdkInvokeRequest,
+} from "@composables/useAdkInvokeRequest";
 import { useContextStore } from "./context";
+import { useOrganizationStore } from "./organization";
+import { useSpaceStore } from "./space";
+import { buildAdkInvokeInput } from "@utils/adkInvokeInputBuilder";
+import {
+  buildApplicationScanInitialPrompt,
+  type ApplicationScanFields,
+} from "@utils/applicationScanWorkspaceState";
+import {
+  buildInvokeModeStateFromWorkspaceState,
+  buildWorkspaceSessionState,
+} from "@utils/workspaceSessionBuckets";
+import { defaultLlmModelSelectionForAdkMode } from "@models/llmModelSelection";
+import type { RequestStatus } from "@models/core/requestStatus";
 import type {
   DecodedVibeControlApplication,
   DecodedVibeControlSourceConnection,
   DecodedVibeControlStory,
   DecodedVibeControlStoryEvidence,
+  VibeControlApplicationScanRun,
   VibeControlDriftLevel,
   VibeControlReviewState,
   VibeControlStoryStatus,
@@ -447,6 +466,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
     selectedStoryId: "" as string,
     isLoading: false,
     isGenerating: false,
+    isStartingApplicationScan: false,
     error: null as string | null,
     lastRunLog: [] as string[],
     filters: {
@@ -1173,6 +1193,183 @@ export const useVibeControlStore = defineStore("vibeControl", {
       } finally {
         this.isLoading = false;
       }
+    },
+    async persistApplicationScanRun(params: {
+      application: DecodedVibeControlApplication;
+      run: VibeControlApplicationScanRun;
+    }): Promise<void> {
+      const firestoreOps = useFirestoreDocOperation();
+      const nextApplication: DecodedVibeControlApplication = {
+        ...params.application,
+        startUrl: params.run.startUrl,
+        fileSpaceId: params.run.fileSpaceId || params.application.fileSpaceId,
+        lastScan: params.run,
+      };
+      const index = this.applications.findIndex(
+        (item) => item.id === params.application.id
+      );
+      if (index >= 0) {
+        this.applications.splice(index, 1, nextApplication);
+      }
+      await firestoreOps.createDocument({
+        collectionName: this.applicationCollectionPath(),
+        docId: params.application.id,
+        docData: nextApplication,
+        converter: vibeControlApplicationConverter,
+        merge: true,
+      });
+    },
+    async startApplicationScan(params: {
+      applicationId: string;
+      fields: ApplicationScanFields;
+    }): Promise<string> {
+      const application = this.applications.find(
+        (item) => item.id === params.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+
+      const orgId = useOrganizationStore().loggedInOrganizationInfo?.id ?? "";
+      const spaceId = useSpaceStore().selectedSpace?.id ?? "";
+      const uid = getAuth().currentUser?.uid;
+      if (!orgId || !spaceId || !uid) {
+        throw new Error("組織・スペース・ログイン状態を確認してください");
+      }
+
+      this.isStartingApplicationScan = true;
+      this.error = null;
+      const now = nowIso();
+      const sessionId = `vibecontrol-appscan-${application.id}-${Date.now()}-${createRandomDocId()}`;
+      const responseId = `appscan-response-${createRandomDocId()}`;
+      const workspaceState = buildWorkspaceSessionState({
+        enAiStudioUi: {},
+        activeMode: "application_scan",
+        applicationScan: params.fields,
+      });
+      const modeState = buildInvokeModeStateFromWorkspaceState({
+        state: workspaceState,
+        activeMode: "application_scan",
+      });
+
+      const pendingRun: VibeControlApplicationScanRun = {
+        requestId: "",
+        sessionId,
+        responseId,
+        status: "pending",
+        startUrl: params.fields.startUrl.trim(),
+        fileSpaceId: params.fields.fileSpaceId.trim() || undefined,
+        maxPages: params.fields.maxPages,
+        captureScreenshots: params.fields.captureScreenshots,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      try {
+        await this.persistApplicationScanRun({
+          application,
+          run: pendingRun,
+        });
+
+        const requestId = await createAdkInvokeRequest({
+          organizationId: orgId,
+          spaceId,
+          input: buildAdkInvokeInput({
+            mode: "application_scan",
+            sessionId,
+            organizationId: orgId,
+            spaceId,
+            userId: uid,
+            prompt: buildApplicationScanInitialPrompt(params.fields),
+            responseId,
+            model: defaultLlmModelSelectionForAdkMode("application_scan"),
+            fileSpaceId: params.fields.fileSpaceId.trim() || null,
+            workspaceId: application.id,
+            history: [],
+            modeState,
+          }),
+        });
+
+        const startedRun: VibeControlApplicationScanRun = {
+          ...pendingRun,
+          requestId,
+          updatedAt: nowIso(),
+        };
+        await this.persistApplicationScanRun({
+          application: {
+            ...application,
+            lastScan: pendingRun,
+          },
+          run: startedRun,
+        });
+        this.lastRunLog.unshift(
+          `Application Scan: ${application.name} (${startedRun.startUrl}) のrequestDocを発行`
+        );
+
+        const stopWatch = watchAdkInvokeRequest({
+          organizationId: orgId,
+          spaceId,
+          requestId,
+          onUpdate: (status: RequestStatus, errorMessage?: string) => {
+            void this.updateApplicationScanStatus({
+              applicationId: application.id,
+              requestId,
+              status,
+              errorMessage,
+            });
+            if (status === "completed" || status === "error") {
+              stopWatch();
+            }
+          },
+        });
+
+        return requestId;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Application Scanの開始に失敗しました";
+        this.error = message;
+        const failedRun: VibeControlApplicationScanRun = {
+          ...pendingRun,
+          status: "error",
+          errorMessage: message,
+          updatedAt: nowIso(),
+          completedAt: nowIso(),
+        };
+        await this.persistApplicationScanRun({
+          application,
+          run: failedRun,
+        });
+        throw err;
+      } finally {
+        this.isStartingApplicationScan = false;
+      }
+    },
+    async updateApplicationScanStatus(params: {
+      applicationId: string;
+      requestId: string;
+      status: RequestStatus;
+      errorMessage?: string;
+    }): Promise<void> {
+      const application = this.applications.find(
+        (item) => item.id === params.applicationId
+      );
+      if (!application?.lastScan) return;
+      if (application.lastScan.requestId !== params.requestId) return;
+
+      const nextRun: VibeControlApplicationScanRun = {
+        ...application.lastScan,
+        status: params.status,
+        errorMessage: params.errorMessage,
+        updatedAt: nowIso(),
+        completedAt:
+          params.status === "completed" || params.status === "error"
+            ? nowIso()
+            : application.lastScan.completedAt,
+      };
+      await this.persistApplicationScanRun({
+        application,
+        run: nextRun,
+      });
     },
     exportStoryMarkdown(storyId: string): string {
       const story = this.stories.find((item) => item.id === storyId);

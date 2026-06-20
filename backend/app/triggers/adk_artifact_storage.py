@@ -49,6 +49,7 @@ def on_adk_artifact_object_finalized(
         object_name=name,
         content_type=data.content_type,
         size_bytes=int(data.size) if data.size is not None else None,
+        custom_metadata=dict(data.metadata or {}),
     )
     if result:
         logger.info("adk artifact ingest %s %s -> %s", bucket, name, result)
