@@ -2,14 +2,14 @@
   <section class="rounded-lg border border-slate-200 bg-white">
     <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 p-4">
       <div class="min-w-0">
-        <p class="text-xs font-medium uppercase tracking-wide text-slate-500">
-          Scan Results
+        <p class="text-xs font-medium uppercase tracking-wide text-emerald-600">
+          Visual QA Evidence
         </p>
         <h2 class="mt-1 truncate text-base font-semibold text-slate-900">
           {{ application?.name ?? "Application" }}
         </h2>
         <p class="mt-1 text-xs text-slate-500">
-          取得したsitemap・スクリーンショット・summaryを確認します
+          画面遷移、スクリーンショット、summaryを品質保証の証跡として確認します
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -24,7 +24,7 @@
             :name="isStartingScan ? 'svg-spinners:180-ring' : 'material-symbols:refresh-rounded'"
             class="h-4 w-4"
           />
-          再スキャン
+          Visual QAを再取得
         </button>
         <EnBadge v-if="run" :color="statusBadge.color" variant="soft">
           {{ statusBadge.label }}
@@ -41,10 +41,10 @@
         class="h-12 w-12 text-slate-300"
       />
       <p class="mt-3 text-sm font-semibold text-slate-700">
-        まだスキャン結果がありません
+        まだVisual QA証跡がありません
       </p>
       <p class="mt-1 text-xs text-slate-500">
-        基本情報タブからApplication Scanを実行すると、結果がここに保存されます
+        基本情報タブからApplication Scanを実行すると、画面品質の証跡がここに保存されます
       </p>
     </div>
 
@@ -57,13 +57,13 @@
           </p>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p class="text-xs font-semibold text-slate-500">Screenshots</p>
+          <p class="text-xs font-semibold text-slate-500">Visual Evidence</p>
           <p class="mt-1 text-sm font-semibold text-slate-900">
             {{ screenshotCards.length }}
           </p>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p class="text-xs font-semibold text-slate-500">Sitemap</p>
+          <p class="text-xs font-semibold text-slate-500">Flow Map</p>
           <p class="mt-1 text-sm font-semibold text-slate-900">
             {{ sitemapSummary }}
           </p>
@@ -81,9 +81,9 @@
           <div class="rounded-lg border border-slate-200 p-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p class="text-sm font-bold text-slate-900">スクリーンショット</p>
+                <p class="text-sm font-bold text-slate-900">Visual QAスクリーンショット</p>
                 <p class="text-xs text-slate-500">
-                  巡回中に保存された画面キャプチャ
+                  Playwright巡回で保存された画面状態の証跡
                 </p>
               </div>
               <EnBadge v-if="syncingCount > 0" color="info" variant="soft">
@@ -101,9 +101,9 @@
               <div class="overflow-x-auto rounded-lg border border-slate-200 bg-slate-950 p-4">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p class="text-sm font-bold text-white">URL Path Flow</p>
+                    <p class="text-sm font-bold text-white">Interaction Flow Map</p>
                     <p class="text-xs text-slate-400">
-                      スクリーンショットをURL階層で並べた遷移ツリー
+                      URL階層とスクリーンショットをつないだ画面遷移ツリー
                     </p>
                   </div>
                   <EnBadge variant="tag">
@@ -230,12 +230,12 @@
           </div>
 
           <div class="rounded-lg border border-slate-200 p-4">
-            <p class="text-sm font-bold text-slate-900">Artifact一覧</p>
+            <p class="text-sm font-bold text-slate-900">QA Artifact一覧</p>
             <div
               v-if="nonScreenshotCards.length === 0"
               class="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-xs text-slate-500"
             >
-              Artifactを同期中です
+              QA Artifactを同期中です
             </div>
             <div v-else class="mt-4 grid gap-3 md:grid-cols-2">
               <article
@@ -259,7 +259,7 @@
 
         <aside class="min-w-0 space-y-4">
           <div class="rounded-lg border border-slate-200 p-4">
-            <p class="text-sm font-bold text-slate-900">Sitemap URL一覧</p>
+            <p class="text-sm font-bold text-slate-900">Flow URL一覧</p>
             <div
               v-if="sitemapUrls.length === 0"
               class="mt-3 rounded-md bg-slate-50 p-3 text-xs text-slate-500"
@@ -285,7 +285,7 @@
           </div>
 
           <div class="rounded-lg border border-slate-200 p-4">
-            <p class="text-sm font-bold text-slate-900">Summary</p>
+            <p class="text-sm font-bold text-slate-900">Visual QA Summary</p>
             <EnMarkdown
               v-if="summaryBody"
               :markdown-text="summaryBody"
@@ -425,10 +425,10 @@ const parsedSitemapPages = computed<ScanSitemapPage[]>(() => {
     const parsed = JSON.parse(text) as {
       pages?: Array<Record<string, unknown>>;
     };
-    return (parsed.pages ?? [])
-      .map((page) => {
-        const url = typeof page.url === "string" ? page.url.trim() : "";
-        if (!url) return null;
+    const pages: ScanSitemapPage[] = [];
+    for (const page of parsed.pages ?? []) {
+      const url = typeof page.url === "string" ? page.url.trim() : "";
+      if (!url) continue;
         const screenshot = isRecord(page.screenshot)
           ? {
               filename:
@@ -441,13 +441,13 @@ const parsedSitemapPages = computed<ScanSitemapPage[]>(() => {
                   : undefined,
             }
           : null;
-        return {
-          url,
-          title: typeof page.title === "string" ? page.title : "",
-          screenshot,
-        };
-      })
-      .filter((page): page is ScanSitemapPage => Boolean(page));
+      pages.push({
+        url,
+        title: typeof page.title === "string" ? page.title : "",
+        screenshot,
+      });
+    }
+    return pages;
   } catch {
     return [];
   }

@@ -111,12 +111,25 @@
       />
 
       <template v-if="activeApplicationTab === 'stories'">
-        <VibeControlStoryList
-          :stories="store.activeStories"
-          :evidence-count-by-story="store.evidenceCountByStory"
-          :selected-story-id="store.selectedStoryId"
-          @open-story="openStoryDetail"
-        />
+        <div class="space-y-4">
+          <VibeControlGovernanceHud
+            :application="selectedApplication"
+            :stories="store.activeStories"
+            :filtered-count="store.filteredStories.length"
+            :filters="store.filters"
+            :domains="store.domains"
+            :milestones="store.milestones"
+            @update-filter="updateStoryFilter"
+            @clear-filters="store.clearFilters()"
+          />
+
+          <VibeControlStoryBoard
+            :stories="store.filteredStories"
+            :evidence-count-by-story="store.evidenceCountByStory"
+            :selected-story-id="store.selectedStoryId"
+            @select-story="openStoryDetail"
+          />
+        </div>
       </template>
 
       <template v-else-if="activeApplicationTab === 'basic'">
@@ -167,6 +180,7 @@
     <template v-else>
       <VibeControlStoryDetail
         :story="selectedStory"
+        :evidence="store.selectedEvidence"
       />
     </template>
   </div>
@@ -177,7 +191,10 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useVibeControlStore } from "@stores/vibeControl";
 import type { ApplicationScanFields } from "@utils/applicationScanWorkspaceState";
 import type { DecodedVibeControlApplication } from "@models/vibeControl";
-import type { VibeControlApplicationInput } from "@stores/vibeControl";
+import type {
+  VibeControlApplicationInput,
+  VibeControlFilters,
+} from "@stores/vibeControl";
 import type { GitHubRepositorySummary } from "@composables/useGitHubOAuth";
 
 type VibeControlView =
@@ -272,8 +289,8 @@ const applicationTabItems = computed(() => [
   },
   {
     value: "scan",
-    label: "スキャン結果",
-    icon: "material-symbols:radar",
+    label: "Visual QA",
+    icon: "material-symbols:preview-outline",
     count: selectedApplication.value?.lastScan?.artifactCount,
   },
   {
@@ -319,7 +336,7 @@ const breadcrumbItems = computed(() => {
         activeApplicationTab.value === "basic"
           ? "基本情報"
           : activeApplicationTab.value === "scan"
-            ? "スキャン結果"
+            ? "Visual QA"
           : activeApplicationTab.value === "git"
             ? "Git"
             : "ユーザーストーリー",
@@ -502,6 +519,13 @@ function openStoryDetail(storyId: string): void {
   store.selectStory(storyId);
   currentView.value = "story-detail";
   updateViewQuery("stories");
+}
+
+function updateStoryFilter<K extends keyof VibeControlFilters>(
+  key: K,
+  value: VibeControlFilters[K]
+): void {
+  store.setFilter(key, value);
 }
 
 function openCreateApplicationModal(): void {

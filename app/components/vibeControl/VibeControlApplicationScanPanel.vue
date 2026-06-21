@@ -5,7 +5,7 @@
     title="Application Scan設定"
     subtitle="URLやログイン情報を確認してから再スキャンします"
     title-icon="material-symbols:radar"
-    size="4xl"
+    size="3xl"
     padding="lg"
     :close-on-backdrop="!isStartingScan"
   >
