@@ -34,23 +34,23 @@ def _ensure_initialized() -> None:
         logger.info("firebase_admin initialized")
 
 
-def require_user(authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    """FastAPI dependency. token を verify し BYOK api_key を request scope にセット."""
-    if _ALLOW_UNAUTH:
-        dev_key = resolve_request_gemini_api_key("local-dev")
-        dev_openai = resolve_request_openai_api_key("local-dev")
-        if dev_key:
-            activate_byok(dev_key)
-        return {
-            "uid": "local-dev",
-            "email": "dev@localhost",
-            "auth_disabled": True,
-            "has_gemini_api_key": bool(dev_key),
-            "gemini_api_key": dev_key,
-            "has_openai_api_key": bool(dev_openai),
-            "openai_api_key": dev_openai,
-        }
+def _local_dev_user() -> dict[str, Any]:
+    dev_key = resolve_request_gemini_api_key("local-dev")
+    dev_openai = resolve_request_openai_api_key("local-dev")
+    if dev_key:
+        activate_byok(dev_key)
+    return {
+        "uid": "local-dev",
+        "email": "dev@localhost",
+        "auth_disabled": True,
+        "has_gemini_api_key": bool(dev_key),
+        "gemini_api_key": dev_key,
+        "has_openai_api_key": bool(dev_openai),
+        "openai_api_key": dev_openai,
+    }
 
+
+def _verified_claims(authorization: str | None) -> dict[str, Any]:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(
             status_code=401, detail="Authorization: Bearer <id_token> required"
@@ -62,29 +62,51 @@ def require_user(authorization: str | None = Header(default=None)) -> dict[str, 
     except Exception as exc:  # pragma: no cover
         logger.warning("ID token verify failed: %s", exc)
         raise HTTPException(status_code=401, detail="invalid id token") from exc
+    return decoded
 
+
+def _build_user(decoded: dict[str, Any], *, require_gemini_api_key: bool) -> dict[str, Any]:
     uid = decoded["uid"]
     api_key = resolve_request_gemini_api_key(uid)
     if not api_key:
-        logger.warning("BYOK missing for uid=%s", uid)
-        raise HTTPException(
-            status_code=400,
-            detail="GEMINI_API_KEY_NOT_REGISTERED",
-        )
+        if require_gemini_api_key:
+            logger.warning("BYOK missing for uid=%s", uid)
+            raise HTTPException(
+                status_code=400,
+                detail="GEMINI_API_KEY_NOT_REGISTERED",
+            )
+        logger.info("Gemini BYOK not configured for uid=%s", uid)
 
     global_system_prompt = load_user_global_system_prompt(uid)
     pinned_knowledge = load_user_pinned_knowledge(uid)
     openai_api_key = resolve_request_openai_api_key(uid)
-    activate_byok(api_key)
-    logger.info("BYOK loaded for uid=%s suffix=...%s", uid, api_key[-4:])
+    if api_key:
+        activate_byok(api_key)
+        logger.info("BYOK loaded for uid=%s suffix=...%s", uid, api_key[-4:])
     return {
         "uid": uid,
         "email": decoded.get("email"),
         "claims": decoded,
-        "has_gemini_api_key": True,
+        "has_gemini_api_key": bool(api_key),
         "gemini_api_key": api_key,
         "has_openai_api_key": bool(openai_api_key),
         "openai_api_key": openai_api_key,
         "global_system_prompt": global_system_prompt,
         "pinned_knowledge": pinned_knowledge,
     }
+
+
+def require_user(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    """FastAPI dependency. token を verify し BYOK api_key を request scope にセット."""
+    if _ALLOW_UNAUTH:
+        return _local_dev_user()
+    return _build_user(_verified_claims(authorization), require_gemini_api_key=True)
+
+
+def require_user_optional_gemini(
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Firebase 認証のみ必須にし、Gemini BYOK は利用可能な場合だけ注入する."""
+    if _ALLOW_UNAUTH:
+        return _local_dev_user()
+    return _build_user(_verified_claims(authorization), require_gemini_api_key=False)

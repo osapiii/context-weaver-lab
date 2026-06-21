@@ -75,6 +75,17 @@
         />
       </label>
 
+      <label class="block min-w-0 md:col-span-2">
+        <span class="text-xs font-medium text-slate-600">Start URL</span>
+        <input
+          v-model="form.startUrl"
+          type="url"
+          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+          placeholder="https://example.com/"
+          :disabled="isSaving"
+        >
+      </label>
+
       <label class="block min-w-0">
         <span class="text-xs font-medium text-slate-600">FileSpace ID</span>
         <input
@@ -238,6 +249,7 @@ const form = reactive<VibeControlApplicationInput>({
   domain: "",
   owner: "",
   labels: [],
+  startUrl: "",
   fileSpaceId: "",
   repoFullName: "",
   defaultBranch: "main",
@@ -291,6 +303,8 @@ watch(
     form.owner = application?.owner ?? "";
     form.labels = application?.labels ?? [];
     labelsText.value = application?.labels.join(", ") ?? "";
+    form.startUrl =
+      application?.startUrl ?? application?.lastScan?.startUrl ?? "";
     form.fileSpaceId = application?.fileSpaceId ?? "";
     form.repoFullName = application?.repoFullName ?? repository?.fullName ?? "";
     form.defaultBranch =
@@ -332,6 +346,7 @@ function submit(): void {
     ...form,
     applicationKey: form.applicationKey.trim(),
     name: form.name.trim(),
+    startUrl: form.startUrl?.trim(),
     repoFullName: form.repoFullName.trim(),
     labels,
   });

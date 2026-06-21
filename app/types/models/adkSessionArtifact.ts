@@ -23,6 +23,7 @@ export const AdkSessionArtifactSchema = z.object({
   bytes: z.number().default(0),
   name: z.string().optional(),
   prompt: z.string().optional(),
+  customMetadata: z.record(z.unknown()).optional(),
   messageId: z.string().optional(),
   responseId: z.string().optional(),
   status: AdkSessionArtifactStatusEnum.default("syncing"),

@@ -1,7 +1,7 @@
 """Tests for application_scan tools."""
 from __future__ import annotations
 
-from application_scan.tools import read_application_scan_setup
+from application_scan.tools import _normalize_url, read_application_scan_setup
 
 
 class FakeContext:
@@ -37,3 +37,18 @@ def test_read_application_scan_setup_requires_start_url():
     result = read_application_scan_setup(FakeContext({"application_scan": {"setup": {}}}))
     assert result["ok"] is False
     assert result["missing"] == ["start_url"]
+
+
+def test_normalize_url_ignores_query_and_fragment():
+    assert (
+        _normalize_url("https://example.com/?business=0#service")
+        == "https://example.com/"
+    )
+    assert (
+        _normalize_url("?business=1#section", base_url="https://example.com/")
+        == "https://example.com/"
+    )
+    assert (
+        _normalize_url("/news/article?utm_source=x", base_url="https://example.com/")
+        == "https://example.com/news/article"
+    )

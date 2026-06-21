@@ -36,3 +36,30 @@ def test_internal_invoke_allows_adc_without_gemini_byok(monkeypatch):
     assert user["internal_invoke"] is True
     assert user["auth_disabled"] is True
     assert user["has_gemini_api_key"] is False
+
+
+def test_external_invoke_uses_optional_gemini_auth(monkeypatch):
+    monkeypatch.delenv("ADK_INTERNAL_INVOKE_SECRET", raising=False)
+
+    def fake_require_user_optional_gemini(authorization):
+        return {
+            "uid": "user-1",
+            "authorization": authorization,
+            "has_gemini_api_key": False,
+        }
+
+    monkeypatch.setattr(
+        invoke_internal_auth,
+        "require_user_optional_gemini",
+        fake_require_user_optional_gemini,
+    )
+
+    user = invoke_internal_auth.require_user_or_internal_invoke(
+        authorization="Bearer token"
+    )
+
+    assert user == {
+        "uid": "user-1",
+        "authorization": "Bearer token",
+        "has_gemini_api_key": False,
+    }

@@ -9,6 +9,17 @@
       @save="saveApplication"
     />
 
+    <VibeControlApplicationScanPanel
+      v-model:open="scanSettingsModalOpen"
+      variant="modal"
+      :applications="store.applications"
+      :selected-application-id="store.selectedApplicationId"
+      :is-starting-scan="store.isStartingApplicationScan"
+      @select-application="store.selectApplication($event)"
+      @start-scan="startApplicationScan"
+      @open-job-log="openJobLog"
+    />
+
     <EnModal
       v-model:open="deleteConfirmOpen"
       title="アプリケーションを削除しますか?"
@@ -143,6 +154,8 @@
         v-else-if="activeApplicationTab === 'scan'"
         :application="selectedApplication"
         :run="selectedApplication?.lastScan ?? null"
+        :is-starting-scan="store.isStartingApplicationScan"
+        @rescan="rescanSelectedApplication"
       />
 
       <VibeControlApplicationGitPanel
@@ -191,6 +204,7 @@ const router = useRouter();
 const currentView = ref<VibeControlView>("application-detail");
 const activeApplicationTab = ref<ApplicationDetailTab>("stories");
 const applicationModalOpen = ref(false);
+const scanSettingsModalOpen = ref(false);
 const deleteConfirmOpen = ref(false);
 const editingApplicationId = ref<string | null>(null);
 const initialApplicationRepository = ref<GitHubRepositorySummary | null>(null);
@@ -457,11 +471,6 @@ function normalizeLegacyApplicationView(): void {
   });
 }
 
-function showRepositoryList(): void {
-  currentView.value = "repositories";
-  updateViewQuery("repositories");
-}
-
 function showApplicationDetail(): void {
   if (!selectedApplication.value && store.applications[0]) {
     store.selectApplication(store.applications[0].id);
@@ -539,6 +548,7 @@ async function startApplicationScan(fields: ApplicationScanFields): Promise<void
       applicationId: store.selectedApplicationId,
       fields,
     });
+    scanSettingsModalOpen.value = false;
     toast.add({
       title: "Application Scanを開始しました",
       description: requestId,
@@ -551,6 +561,12 @@ async function startApplicationScan(fields: ApplicationScanFields): Promise<void
       color: "error",
     });
   }
+}
+
+async function rescanSelectedApplication(): Promise<void> {
+  const application = selectedApplication.value;
+  if (!application) return;
+  scanSettingsModalOpen.value = true;
 }
 
 function openJobLog(): void {

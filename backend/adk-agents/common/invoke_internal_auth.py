@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import Header, HTTPException
 
-from .auth import require_user
+from .auth import require_user_optional_gemini
 from .byok_auth import (
     resolve_request_gemini_api_key,
     resolve_request_openai_api_key,
@@ -64,4 +64,4 @@ def require_user_or_internal_invoke(
             "pinned_knowledge": load_user_pinned_knowledge(uid),
         }
 
-    return require_user(authorization)
+    return require_user_optional_gemini(authorization)

@@ -1,5 +1,60 @@
 <template>
-  <section class="rounded-lg border border-slate-200 bg-white p-4">
+  <EnModal
+    v-if="variant === 'modal'"
+    v-model:open="isOpen"
+    title="Application Scan設定"
+    subtitle="URLやログイン情報を確認してから再スキャンします"
+    title-icon="material-symbols:radar"
+    size="4xl"
+    padding="lg"
+    :close-on-backdrop="!isStartingScan"
+  >
+    <VibeControlApplicationScanSettingsFields
+      v-model:include-patterns-text="includePatternsText"
+      v-model:exclude-patterns-text="excludePatternsText"
+      :applications="applications"
+      :selected-application-id="selectedApplicationId"
+      :draft="draft"
+      hide-application-select
+      @patch-draft="patchDraft"
+      @select-application="emit('selectApplication', $event)"
+    />
+    <label class="mt-4 flex items-center gap-2 text-sm text-slate-700">
+      <input
+        v-model="draft.captureScreenshots"
+        type="checkbox"
+        class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+      >
+      Screenshot
+    </label>
+
+    <template #footer>
+      <EnButton
+        variant="ghost"
+        color="neutral"
+        size="sm"
+        :disabled="isStartingScan"
+        @click="isOpen = false"
+      >
+        キャンセル
+      </EnButton>
+      <EnButton
+        variant="ai"
+        size="sm"
+        leading-icon="material-symbols:photo-camera-outline"
+        :disabled="!canStart"
+        :loading="isStartingScan"
+        @click="emitStart"
+      >
+        Scan開始
+      </EnButton>
+    </template>
+  </EnModal>
+
+  <section
+    v-else
+    class="rounded-lg border border-slate-200 bg-white p-4"
+  >
     <VibeControlApplicationScanProgressModal
       v-model:open="progressModalOpen"
       :application="selectedApplication"
@@ -46,138 +101,16 @@
       </div>
     </div>
 
-    <div class="mt-4 grid gap-3 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)_10rem_8rem]">
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Application</span>
-        <select
-          :value="selectedApplicationId"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          @change="$emit('selectApplication', ($event.target as HTMLSelectElement).value)"
-        >
-          <option
-            v-for="application in applications"
-            :key="application.id"
-            :value="application.id"
-          >
-            {{ application.name }}
-          </option>
-        </select>
-      </label>
-
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Start URL</span>
-        <input
-          v-model="draft.startUrl"
-          type="url"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="https://example.com/"
-        >
-      </label>
-
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">FileSpace</span>
-        <input
-          v-model="draft.fileSpaceId"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="w-default"
-        >
-      </label>
-
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Max pages</span>
-        <input
-          v-model.number="draft.maxPages"
-          type="number"
-          min="1"
-          max="50"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-        >
-      </label>
-    </div>
-
-    <div class="mt-3 grid gap-3 lg:grid-cols-3">
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Login URL</span>
-        <input
-          v-model="draft.loginUrl"
-          type="url"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="未指定"
-        >
-      </label>
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Username</span>
-        <input
-          v-model="draft.username"
-          type="text"
-          autocomplete="username"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="未指定"
-        >
-      </label>
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Password</span>
-        <input
-          v-model="draft.password"
-          type="password"
-          autocomplete="current-password"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="未指定"
-        >
-      </label>
-    </div>
-
-    <div class="mt-3 grid gap-3 lg:grid-cols-3">
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Username selector</span>
-        <input
-          v-model="draft.usernameSelector"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="input[name=email]"
-        >
-      </label>
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Password selector</span>
-        <input
-          v-model="draft.passwordSelector"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="input[type=password]"
-        >
-      </label>
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Submit selector</span>
-        <input
-          v-model="draft.submitSelector"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="button[type=submit]"
-        >
-      </label>
-    </div>
-
-    <div class="mt-3 grid gap-3 lg:grid-cols-2">
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Include patterns</span>
-        <textarea
-          v-model="includePatternsText"
-          rows="2"
-          class="mt-1 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="1行に1パターン"
-        />
-      </label>
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Exclude patterns</span>
-        <textarea
-          v-model="excludePatternsText"
-          rows="2"
-          class="mt-1 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="1行に1パターン"
-        />
-      </label>
-    </div>
+    <VibeControlApplicationScanSettingsFields
+      v-model:include-patterns-text="includePatternsText"
+      v-model:exclude-patterns-text="excludePatternsText"
+      class="mt-4"
+      :applications="applications"
+      :selected-application-id="selectedApplicationId"
+      :draft="draft"
+      @patch-draft="patchDraft"
+      @select-application="emit('selectApplication', $event)"
+    />
 
     <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
       <div class="min-w-0 text-xs text-slate-500">
@@ -231,16 +164,26 @@ import {
 } from "@utils/applicationScanWorkspaceState";
 
 const props = defineProps<{
+  open?: boolean;
+  variant?: "inline" | "modal";
   applications: DecodedVibeControlApplication[];
   selectedApplicationId: string;
   isStartingScan: boolean;
 }>();
 
 const emit = defineEmits<{
+  "update:open": [value: boolean];
   selectApplication: [applicationId: string];
   startScan: [fields: ApplicationScanFields];
   openJobLog: [];
 }>();
+
+const isOpen = computed({
+  get: () => props.open ?? false,
+  set: (value) => emit("update:open", value),
+});
+
+const variant = computed(() => props.variant ?? "inline");
 
 const draft = reactive<ApplicationScanFields>(emptyApplicationScanFields());
 const includePatternsText = ref("");
@@ -333,6 +276,10 @@ function linesToList(value: string): string[] {
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function patchDraft(patch: Partial<ApplicationScanFields>): void {
+  Object.assign(draft, patch);
 }
 
 function emitStart(): void {

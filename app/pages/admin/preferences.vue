@@ -257,12 +257,12 @@
               <UFormField
                 label="新しい API キー"
                 :required="!hasGeminiKey"
-                help="プレフィックス AIzaSy 〜 から始まる Gemini API キー"
+                help="Google AI Studio で発行した Gemini API キー"
               >
                 <UInput
                   v-model="newGeminiKey"
                   type="text"
-                  :placeholder="hasGeminiKey ? '（更新する場合のみ入力）' : 'AIzaSy…'"
+                  :placeholder="hasGeminiKey ? '（更新する場合のみ入力）' : 'Gemini API キー'"
                   class="w-full font-mono"
                 />
               </UFormField>
@@ -634,6 +634,10 @@ import {
   getDownloadURL,
 } from "firebase/storage";
 
+defineOptions({
+  name: "AdminPreferencesPage",
+});
+
 definePageMeta({
   name: "admin-preferences",
   layout: "admin",
@@ -876,9 +880,6 @@ const saveGeminiKey = async () => {
   geminiSuccess.value = null;
   try {
     const key = newGeminiKey.value.trim();
-    if (!key.startsWith("AIza")) {
-      throw new Error('Gemini API キーは通常 "AIza" から始まります。コピペ漏れが無いか確認してください。');
-    }
     await setDoc(
       geminiDocRef(),
       { apiKey: key, updatedAt: serverTimestamp() },

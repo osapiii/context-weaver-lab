@@ -80,7 +80,7 @@ def _normalize_url(raw_url: str, *, base_url: str | None = None) -> str | None:
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return None
     path = parsed.path or "/"
-    normalized = parsed._replace(path=path, fragment="").geturl()
+    normalized = parsed._replace(path=path, query="", fragment="").geturl()
     return normalized.rstrip("/") if path != "/" else normalized
 
 
