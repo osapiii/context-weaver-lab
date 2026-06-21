@@ -65,6 +65,7 @@ export type VibeControlApplicationInput = {
   domain?: string;
   owner?: string;
   labels?: string[];
+  startUrl?: string;
   fileSpaceId?: string;
   repoFullName: string;
   defaultBranch?: string;
@@ -812,6 +813,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
           domain: input.domain?.trim() || undefined,
           owner: input.owner?.trim() || undefined,
           labels: input.labels?.map((label) => label.trim()).filter(Boolean) ?? [],
+          startUrl: input.startUrl?.trim() || undefined,
           fileSpaceId: input.fileSpaceId?.trim() || undefined,
           repoFullName,
           defaultBranch: input.defaultBranch?.trim() || "main",

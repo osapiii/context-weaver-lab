@@ -262,6 +262,7 @@ def upsert_artifact_doc(
     sync_error: str | None = None,
     message_id: str | None = None,
     response_id: str | None = None,
+    custom_metadata: dict[str, Any] | None = None,
     discovery_import: dict[str, Any] | None = None,
 ) -> None:
     ref = db.document(
@@ -289,6 +290,8 @@ def upsert_artifact_doc(
         "status": status,
         "updatedAt": firestore.SERVER_TIMESTAMP,
     }
+    if custom_metadata:
+        payload["customMetadata"] = custom_metadata
     if descriptor.prompt:
         payload["prompt"] = descriptor.prompt
     if sync_error:
@@ -379,6 +382,7 @@ def ingest_from_storage_event(
         session_id=parsed.session_id,
         uid=uid,
         status="syncing",
+        custom_metadata=source_metadata,
     )
     try:
         copy_to_canonical(storage_client, descriptor=descriptor)
@@ -397,6 +401,7 @@ def ingest_from_storage_event(
             session_id=parsed.session_id,
             uid=uid,
             status="ready",
+            custom_metadata=source_metadata,
             discovery_import=discovery_import,
         )
     except Exception as exc:
@@ -410,6 +415,7 @@ def ingest_from_storage_event(
             uid=uid,
             status="failed",
             sync_error=str(exc)[:500],
+            custom_metadata=source_metadata,
         )
         return {"artifactId": descriptor.artifact_id, "status": "failed"}
 

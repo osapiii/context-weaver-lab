@@ -1,7 +1,7 @@
 /**
  * Firestore adkSessions/{sessionId}/artifacts — onSnapshot SSOT for artifact metadata.
  */
-import { ref, shallowRef, type Ref } from "vue";
+import { shallowRef, type Ref } from "vue";
 import {
   collection,
   getDocs,
@@ -80,6 +80,10 @@ const mapDoc = (
   bytes: Number(data.bytes ?? 0),
   name: typeof data.name === "string" ? data.name : undefined,
   prompt: typeof data.prompt === "string" ? data.prompt : undefined,
+  customMetadata:
+    data.customMetadata && typeof data.customMetadata === "object"
+      ? (data.customMetadata as Record<string, unknown>)
+      : undefined,
   messageId: typeof data.messageId === "string" ? data.messageId : undefined,
   responseId: typeof data.responseId === "string" ? data.responseId : undefined,
   status: (data.status as DecodedAdkSessionArtifact["status"]) ?? "syncing",

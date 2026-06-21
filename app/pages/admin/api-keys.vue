@@ -45,12 +45,12 @@
         <UFormField
           label="新しい API キー"
           :required="!hasKey"
-          help="プレフィックス AIzaSy 〜 から始まる Gemini API キー"
+          help="Google AI Studio で発行した Gemini API キー"
         >
           <UInput
             v-model="newKey"
             type="text"
-            :placeholder="hasKey ? '（更新する場合のみ入力）' : 'AIzaSy…'"
+            :placeholder="hasKey ? '（更新する場合のみ入力）' : 'Gemini API キー'"
             class="w-full font-mono"
           />
         </UFormField>
@@ -199,9 +199,6 @@ const save = async () => {
   lastSuccess.value = null;
   try {
     const key = newKey.value.trim();
-    if (!key.startsWith("AIza")) {
-      throw new Error('Gemini API キーは通常 "AIza" から始まります。コピペ漏れが無いか確認してください。');
-    }
     await setDoc(
       _docRef(),
       { apiKey: key, updatedAt: serverTimestamp() },

@@ -1434,7 +1434,11 @@ def create_unified_app(*, agents: dict[str, AgentBundle]) -> FastAPI:
         mode = effective_mode
         bundle = agents[mode]
         gemini_api_key = gemini_api_key_from_user(user)
-        if not gemini_api_key and not user.get("auth_disabled"):
+        if (
+            mode != "application_scan"
+            and not gemini_api_key
+            and not user.get("auth_disabled")
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="GEMINI_API_KEY_NOT_REGISTERED",
