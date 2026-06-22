@@ -47,3 +47,18 @@ def test_resolve_accepts_application_scan_mode():
         session_state={},
     )
     assert mode == "application_scan"
+
+
+def test_resolve_accepts_separated_vibe_modes():
+    capability_mode = resolve_invoke_agent_mode(
+        url_mode="vibe_capability_structuring",
+        mode_state={"active_mode": "vibe_capability_structuring"},
+        session_state={},
+    )
+    story_mode = resolve_invoke_agent_mode(
+        url_mode="vibe_story_generation",
+        mode_state={"active_mode": "vibe_story_generation"},
+        session_state={},
+    )
+    assert capability_mode == "vibe_capability_structuring"
+    assert story_mode == "vibe_story_generation"

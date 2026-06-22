@@ -25,6 +25,9 @@ export const VibeControlDriftLevelSchema = z.enum([
 export const VibeControlEvidenceTypeSchema = z.enum([
   "knowledge",
   "ticket",
+  "screen",
+  "video",
+  "journey",
   "code",
   "pr",
   "commit",
@@ -65,6 +68,82 @@ export const VibeControlOperationVideoDisplaySurfaceSchema = z.enum([
   "monitor",
   "window",
   "unknown",
+]);
+
+export const VibeControlCapabilityStatusSchema = z.enum([
+  "draft",
+  "active",
+  "archived",
+]);
+
+export const VibeControlSourceAssetTypeSchema = z.enum([
+  "knowledge_document",
+  "application_screenshot",
+  "application_scan_sitemap",
+  "application_scan_summary",
+  "operation_video",
+  "operation_video_transcript",
+  "operation_video_scene_summary",
+  "operation_video_journey",
+  "github_repository",
+  "github_file",
+  "github_pull_request",
+  "github_commit",
+]);
+
+export const VibeControlSourceAssetDiscoveryStatusSchema = z.enum([
+  "not_registered",
+  "queued",
+  "completed",
+  "error",
+]);
+
+export const VibeControlGenerationSessionPhaseSchema = z.enum([
+  "source_ingest",
+  "capability_structuring",
+  "story_generation",
+  "review",
+  "completed",
+  "error",
+]);
+
+export const VibeControlGenerationSessionStatusSchema = z.enum([
+  "idle",
+  "running",
+  "waiting_user",
+  "completed",
+  "error",
+]);
+
+export const VibeControlDraftPatchAgentSchema = z.enum([
+  "capability",
+  "story",
+  "media_ingest",
+]);
+
+export const VibeControlDraftPatchTargetTypeSchema = z.enum([
+  "capability",
+  "story",
+  "evidence",
+  "source_asset",
+]);
+
+export const VibeControlDraftPatchOperationSchema = z.enum([
+  "create",
+  "update",
+  "delete",
+  "merge",
+  "split",
+  "move_evidence",
+  "reorder",
+  "lock",
+]);
+
+export const VibeControlDraftPatchStatusSchema = z.enum([
+  "proposed",
+  "applied",
+  "rejected",
+  "superseded",
 ]);
 
 export const VibeControlApplicationSchema = z.object({
@@ -125,6 +204,10 @@ export const VibeControlStorySchema = z.object({
   id: z.string().optional(),
   applicationId: z.string().default("app-default"),
   applicationKey: z.string().default("APP"),
+  capabilityId: z.string().optional(),
+  capabilityKey: z.string().optional(),
+  capabilityName: z.string().optional(),
+  sequence: z.number().min(0).default(0),
   storyKey: z.string(),
   title: z.string(),
   summary: z.string(),
@@ -161,8 +244,11 @@ export const VibeControlStoryEvidenceSchema = z.object({
   id: z.string().optional(),
   applicationId: z.string().default("app-default"),
   applicationKey: z.string().default("APP"),
-  storyId: z.string(),
-  storyKey: z.string(),
+  capabilityId: z.string().optional(),
+  capabilityKey: z.string().optional(),
+  storyId: z.string().default(""),
+  storyKey: z.string().default(""),
+  sourceAssetId: z.string().optional(),
   type: VibeControlEvidenceTypeSchema,
   title: z.string(),
   excerpt: z.string(),
@@ -173,6 +259,9 @@ export const VibeControlStoryEvidenceSchema = z.object({
   pullRequest: z.string().optional(),
   commit: z.string().optional(),
   path: z.string().optional(),
+  observedUserAction: z.string().optional(),
+  observedUiSurface: z.string().optional(),
+  codeRef: VibeControlCodeRefSchema.optional(),
   citation: z.object({
     title: z.string(),
     uri: z.string().optional(),
@@ -227,6 +316,11 @@ export const VibeControlOperationVideoSchema = z.object({
   fileSpaceRequestId: z.string().optional(),
   metadataFileName: z.string().optional(),
   metadataStoragePath: z.string().optional(),
+  journeyFileName: z.string().optional(),
+  journeyStoragePath: z.string().optional(),
+  journeyFileSpaceRequestId: z.string().optional(),
+  sourceAssetId: z.string().optional(),
+  journeySourceAssetId: z.string().optional(),
   discoveryStatus: VibeControlOperationVideoDiscoveryStatusSchema.default(
     "not_registered"
   ),
@@ -254,11 +348,138 @@ export const VibeControlApplicationScanRunSchema = z.object({
   maxPages: z.number().optional(),
   captureScreenshots: z.boolean().optional(),
   artifactCount: z.number().optional(),
+  sourceAssetCount: z.number().optional(),
+  discoveryQueuedCount: z.number().optional(),
   errorMessage: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   completedAt: z.string().optional(),
 });
+
+export const VibeControlCapabilitySchema = z.object({
+  id: z.string().optional(),
+  applicationId: z.string().default("app-default"),
+  applicationKey: z.string().default("APP"),
+  capabilityKey: z.string(),
+  name: z.string(),
+  summary: z.string().optional(),
+  domain: z.string().optional(),
+  owner: z.string().optional(),
+  labels: z.array(z.string()).default([]),
+  parentCapabilityId: z.string().optional(),
+  order: z.number().min(0).default(0),
+  status: VibeControlCapabilityStatusSchema.default("draft"),
+  reviewState: VibeControlReviewStateSchema.default("needs_review"),
+  evidenceIds: z.array(z.string()).default([]),
+  storyCount: z.number().min(0).default(0),
+  highDriftCount: z.number().min(0).default(0),
+  confidenceScore: z.number().min(0).max(100).default(0),
+  driftLevel: VibeControlDriftLevelSchema.default("medium"),
+  driftReason: z.string().optional(),
+  locked: z.boolean().default(false),
+  generatedAt: z.string(),
+  createdAt: z.instanceof(Timestamp).optional(),
+  updatedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlCapabilitySchema =
+  VibeControlCapabilitySchema.extend({
+    id: z.string(),
+  });
+
+export const VibeControlSourceAssetSchema = z.object({
+  id: z.string().optional(),
+  applicationId: z.string().default("app-default"),
+  applicationKey: z.string().default("APP"),
+  sourceType: VibeControlSourceAssetTypeSchema,
+  title: z.string(),
+  summary: z.string().optional(),
+  uri: z.string().optional(),
+  gcsPath: z.string().optional(),
+  storagePath: z.string().optional(),
+  fileSpaceId: z.string().optional(),
+  fileSpaceDocumentId: z.string().optional(),
+  fileSpaceRequestId: z.string().optional(),
+  repoFullName: z.string().optional(),
+  path: z.string().optional(),
+  pullRequest: z.string().optional(),
+  commit: z.string().optional(),
+  discoveryStatus: VibeControlSourceAssetDiscoveryStatusSchema.default(
+    "not_registered"
+  ),
+  discoveryDocumentId: z.string().optional(),
+  discoveryErrorMessage: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  createdAt: z.instanceof(Timestamp).optional(),
+  updatedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlSourceAssetSchema =
+  VibeControlSourceAssetSchema.extend({
+    id: z.string(),
+  });
+
+export const VibeControlGenerationSessionSchema = z.object({
+  id: z.string().optional(),
+  applicationId: z.string().default("app-default"),
+  applicationKey: z.string().default("APP"),
+  phase: VibeControlGenerationSessionPhaseSchema,
+  adkMode: z.string().optional(),
+  requestId: z.string().optional(),
+  responseId: z.string().optional(),
+  capabilityAdkSessionId: z.string().optional(),
+  storyAdkSessionIds: z.array(z.string()).default([]),
+  activeCapabilityId: z.string().optional(),
+  activePatchId: z.string().optional(),
+  status: VibeControlGenerationSessionStatusSchema.default("idle"),
+  lastMessage: z.string().optional(),
+  errorMessage: z.string().optional(),
+  sourceSnapshot: z
+    .object({
+      fileSpaceId: z.string().optional(),
+      repoFullName: z.string().optional(),
+      defaultBranch: z.string().optional(),
+      screenshotCount: z.number().min(0).default(0),
+      videoCount: z.number().min(0).default(0),
+      evidenceCount: z.number().min(0).default(0),
+    })
+    .default({
+      screenshotCount: 0,
+      videoCount: 0,
+      evidenceCount: 0,
+    }),
+  createdAt: z.instanceof(Timestamp).optional(),
+  updatedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlGenerationSessionSchema =
+  VibeControlGenerationSessionSchema.extend({
+    id: z.string(),
+  });
+
+export const VibeControlDraftPatchSchema = z.object({
+  id: z.string().optional(),
+  generationSessionId: z.string(),
+  applicationId: z.string().default("app-default"),
+  agent: VibeControlDraftPatchAgentSchema,
+  targetType: VibeControlDraftPatchTargetTypeSchema,
+  operation: VibeControlDraftPatchOperationSchema,
+  status: VibeControlDraftPatchStatusSchema.default("proposed"),
+  title: z.string(),
+  rationale: z.string(),
+  before: z.record(z.string(), z.unknown()).optional(),
+  after: z.record(z.string(), z.unknown()).optional(),
+  affectedIds: z.array(z.string()).default([]),
+  evidenceIds: z.array(z.string()).default([]),
+  createdBy: z.enum(["agent", "user"]).default("agent"),
+  createdAt: z.instanceof(Timestamp).optional(),
+  appliedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlDraftPatchSchema =
+  VibeControlDraftPatchSchema.extend({
+    id: z.string(),
+  });
 
 export type VibeControlStoryStatus = z.infer<
   typeof VibeControlStoryStatusSchema
@@ -320,6 +541,33 @@ export type DecodedVibeControlOperationVideo = z.infer<
 export type VibeControlApplicationScanRun = z.infer<
   typeof VibeControlApplicationScanRunSchema
 >;
+export type VibeControlCapabilityStatus = z.infer<
+  typeof VibeControlCapabilityStatusSchema
+>;
+export type VibeControlSourceAssetType = z.infer<
+  typeof VibeControlSourceAssetTypeSchema
+>;
+export type VibeControlSourceAssetDiscoveryStatus = z.infer<
+  typeof VibeControlSourceAssetDiscoveryStatusSchema
+>;
+export type VibeControlCapability = z.infer<typeof VibeControlCapabilitySchema>;
+export type DecodedVibeControlCapability = z.infer<
+  typeof DecodedVibeControlCapabilitySchema
+>;
+export type VibeControlSourceAsset = z.infer<typeof VibeControlSourceAssetSchema>;
+export type DecodedVibeControlSourceAsset = z.infer<
+  typeof DecodedVibeControlSourceAssetSchema
+>;
+export type VibeControlGenerationSession = z.infer<
+  typeof VibeControlGenerationSessionSchema
+>;
+export type DecodedVibeControlGenerationSession = z.infer<
+  typeof DecodedVibeControlGenerationSessionSchema
+>;
+export type VibeControlDraftPatch = z.infer<typeof VibeControlDraftPatchSchema>;
+export type DecodedVibeControlDraftPatch = z.infer<
+  typeof DecodedVibeControlDraftPatchSchema
+>;
 
 export const vibeControlStoryConverter = firestoreTypeConverter(
   DecodedVibeControlStorySchema
@@ -335,6 +583,18 @@ export const vibeControlSourceConnectionConverter = firestoreTypeConverter(
 );
 export const vibeControlOperationVideoConverter = firestoreTypeConverter(
   DecodedVibeControlOperationVideoSchema
+);
+export const vibeControlCapabilityConverter = firestoreTypeConverter(
+  DecodedVibeControlCapabilitySchema
+);
+export const vibeControlSourceAssetConverter = firestoreTypeConverter(
+  DecodedVibeControlSourceAssetSchema
+);
+export const vibeControlGenerationSessionConverter = firestoreTypeConverter(
+  DecodedVibeControlGenerationSessionSchema
+);
+export const vibeControlDraftPatchConverter = firestoreTypeConverter(
+  DecodedVibeControlDraftPatchSchema
 );
 
 export const VIBE_CONTROL_STATUS_LABELS: Record<

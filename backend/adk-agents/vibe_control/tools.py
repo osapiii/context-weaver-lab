@@ -9,7 +9,17 @@ from common.tool_state import read_tool_state  # type: ignore
 
 StoryStatus = {"discovery", "ready_for_dev", "implemented", "released"}
 DriftLevels = {"none", "low", "medium", "high"}
-EvidenceTypes = {"knowledge", "ticket", "code", "pr", "commit", "agent"}
+EvidenceTypes = {
+    "knowledge",
+    "ticket",
+    "screen",
+    "video",
+    "journey",
+    "code",
+    "pr",
+    "commit",
+    "agent",
+}
 
 
 def _now_iso() -> str:
@@ -142,8 +152,11 @@ def _normalize_evidence(
         "id": evidence_id,
         "applicationId": application_id,
         "applicationKey": application_key,
+        "capabilityId": _clean_text(raw.get("capabilityId")) or None,
+        "capabilityKey": _clean_text(raw.get("capabilityKey")) or None,
         "storyId": _clean_text(raw.get("storyId")),
         "storyKey": _clean_text(raw.get("storyKey"), story_key),
+        "sourceAssetId": _clean_text(raw.get("sourceAssetId")) or None,
         "type": evidence_type,
         "title": title,
         "excerpt": excerpt,
@@ -154,6 +167,8 @@ def _normalize_evidence(
         "pullRequest": _clean_text(raw.get("pullRequest")) or None,
         "commit": _clean_text(raw.get("commit")) or None,
         "path": _clean_text(raw.get("path")) or None,
+        "observedUserAction": _clean_text(raw.get("observedUserAction")) or None,
+        "observedUiSurface": _clean_text(raw.get("observedUiSurface")) or None,
         "citation": {
             "title": _clean_text(citation.get("title"), title),
             "uri": _clean_text(citation.get("uri")) or _clean_text(raw.get("sourceUrl")) or None,
@@ -269,6 +284,10 @@ def build_story_ssot_package(
             "id": _clean_text(raw.get("id"), f"story-{story_key.lower()}"),
             "applicationId": application_id,
             "applicationKey": application_key,
+            "capabilityId": _clean_text(raw.get("capabilityId")) or None,
+            "capabilityKey": _clean_text(raw.get("capabilityKey")) or None,
+            "capabilityName": _clean_text(raw.get("capabilityName")) or None,
+            "sequence": _bounded_score(raw.get("sequence"), index + 1),
             "storyKey": story_key,
             "title": _clean_text(raw.get("title"), f"{story_key} user story"),
             "summary": _clean_text(raw.get("summary"), "根拠付きユーザーストーリー候補"),

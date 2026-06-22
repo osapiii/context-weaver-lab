@@ -16,6 +16,8 @@ export const AdkInvokeModeEnum = z.enum([
   "web_page",
   "application_scan",
   "business_partner",
+  "vibe_capability_structuring",
+  "vibe_story_generation",
 ]);
 
 export const AdkInvokeAttachmentSchema = z.object({
@@ -137,6 +139,7 @@ export const DecodedAdkInvokeRequestSchema = AdkInvokeRequestSchema.extend({
 
 export type DecodedAdkInvokeRequest = z.infer<typeof DecodedAdkInvokeRequestSchema>;
 export type AdkInvokeInput = z.infer<typeof AdkInvokeInputSchema>;
+export type AdkInvokeOutput = z.infer<typeof AdkInvokeOutputSchema>;
 
 export const adkInvokeRequestConverter = firestoreTypeConverter(
   DecodedAdkInvokeRequestSchema

@@ -251,6 +251,48 @@ def build_agent_for_mode(
             tools=tools,
         )
 
+    if mode == "vibe_capability_structuring":
+        from vibe_capability_structuring.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from vibe_capability_structuring.tools import (  # type: ignore
+            read_capability_structuring_context,
+            save_capability_structure,
+        )
+
+        tools = [
+            *base_tools,
+            FunctionTool(func=read_capability_structuring_context),
+            FunctionTool(func=save_capability_structure),
+            FunctionTool(func=add_markdown_document),
+            FunctionTool(func=add_html_document),
+        ]
+        return LlmAgent(
+            name="vibe_capability_structuring_agent",
+            model=model,
+            instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
+            tools=tools,
+        )
+
+    if mode == "vibe_story_generation":
+        from vibe_story_generation.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from vibe_story_generation.tools import (  # type: ignore
+            read_story_generation_context,
+            save_story_generation,
+        )
+
+        tools = [
+            *base_tools,
+            FunctionTool(func=read_story_generation_context),
+            FunctionTool(func=save_story_generation),
+            FunctionTool(func=add_markdown_document),
+            FunctionTool(func=add_html_document),
+        ]
+        return LlmAgent(
+            name="vibe_story_generation_agent",
+            model=model,
+            instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
+            tools=tools,
+        )
+
     if mode == "business_partner":
         from business_partner.agent import build_root_agent  # type: ignore
 

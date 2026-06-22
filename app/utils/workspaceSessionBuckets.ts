@@ -12,7 +12,6 @@ import {
   imageGoldenToEffectiveFlat,
   mergeGoldenTaskBucket,
   researchGoldenToEffectiveFlat,
-  writingGoldenToEffectiveFlat,
 } from "@utils/goldenTaskBucket";
 import {
   buildResearchModeState,
@@ -50,6 +49,8 @@ export type WorkspaceTaskKey =
   | "data_analysis"
   | "web_page"
   | "application_scan"
+  | "vibe_capability_structuring"
+  | "vibe_story_generation"
   | "guide";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -139,6 +140,8 @@ export const buildInvokeModeStateFromWorkspaceState = (params: {
     "data_analysis",
     "web_page",
     "application_scan",
+    "vibe_capability_structuring",
+    "vibe_story_generation",
   ] as const) {
     const bucket = params.state[task];
     if (isRecord(bucket)) {

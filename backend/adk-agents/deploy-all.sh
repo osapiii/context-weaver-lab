@@ -10,7 +10,8 @@
 # 任意 env:
 #   REGION       — Cloud Run リージョン (既定: asia-northeast1)
 #   IMAGE_BUCKET — image agent の生成画像保存先 GCS バケット (未指定なら data URL fallback)
-#   ONLY         — "unified" / "writing" / "sheet" / "image" / "consultation" / "all" (既定 unified)
+#   ONLY         — "unified" / "writing" / "sheet" / "image" / "consultation" /
+#                  "vibe_capability_structuring" / "vibe_story_generation" / "all" (既定 unified)
 #   DD_*         — Datadog LLM Observability non-secret env (API key は Secret Manager 推奨)
 
 set -euo pipefail
@@ -30,16 +31,65 @@ DD_SITE="${DD_SITE:-ap1.datadoghq.com}"
 
 deploy_one() {
   local mode="$1"
-  echo "::: Deploying en-aistudio-${mode}-agent (project=${PROJECT_ID} region=${REGION})"
-  local dd_service="vibe-control-${mode}-agent"
+  local service_name
+  service_name="$(service_name_for_mode "${mode}")"
+  echo "::: Deploying ${service_name} (project=${PROJECT_ID} region=${REGION})"
+  local dd_service
+  dd_service="$(dd_service_for_mode "${mode}")"
   local sub="_REGION=${REGION},_DD_LLMOBS_ENABLED=${DD_LLMOBS_ENABLED},_DD_LLMOBS_AGENTLESS_ENABLED=${DD_LLMOBS_AGENTLESS_ENABLED},_DD_LLMOBS_ML_APP=${DD_LLMOBS_ML_APP},_DD_SERVICE=${dd_service},_DD_ENV=${DD_ENV},_DD_SITE=${DD_SITE}"
   if [[ "${mode}" == "image" && -n "${IMAGE_BUCKET}" ]]; then
     sub="${sub},_IMAGE_BUCKET=${IMAGE_BUCKET}"
+  fi
+  if [[ "${mode}" == vibe_* ]]; then
+    local artifact_bucket="${ARTIFACT_BUCKET:-${IMAGE_BUCKET:-}}"
+    if [[ -z "${artifact_bucket}" ]]; then
+      artifact_bucket="${PROJECT_ID}-adk-artifacts"
+    fi
+    sub="${sub},_ARTIFACT_BUCKET=${artifact_bucket}"
+    if [[ -n "${ADK_INTERNAL_INVOKE_SECRET:-}" ]]; then
+      sub="${sub},_ADK_INTERNAL_INVOKE_SECRET=${ADK_INTERNAL_INVOKE_SECRET}"
+    fi
   fi
   gcloud builds submit "${SCRIPT_DIR}" \
     --project="${PROJECT_ID}" \
     --config="${SCRIPT_DIR}/${mode}/cloudbuild.yaml" \
     --substitutions="${sub}"
+  if [[ "${mode}" == vibe_* ]]; then
+    gcloud run services add-iam-policy-binding "${service_name}" \
+      --project="${PROJECT_ID}" \
+      --region="${REGION}" \
+      --member=allUsers \
+      --role=roles/run.invoker \
+      --quiet >/dev/null
+  fi
+}
+
+service_name_for_mode() {
+  case "$1" in
+    vibe_capability_structuring)
+      echo "vibe-capability-structuring-agent"
+      ;;
+    vibe_story_generation)
+      echo "vibe-story-generation-agent"
+      ;;
+    *)
+      echo "en-aistudio-$1-agent"
+      ;;
+  esac
+}
+
+dd_service_for_mode() {
+  case "$1" in
+    vibe_capability_structuring)
+      echo "vibe-control-capability-structuring-agent"
+      ;;
+    vibe_story_generation)
+      echo "vibe-control-story-generation-agent"
+      ;;
+    *)
+      echo "vibe-control-${1//_/-}-agent"
+      ;;
+  esac
 }
 
 deploy_unified() {
@@ -73,12 +123,14 @@ case "${ONLY}" in
     deploy_one sheet
     deploy_one image
     deploy_one consultation
+    deploy_one vibe_capability_structuring
+    deploy_one vibe_story_generation
     ;;
-  writing|sheet|image|consultation)
+  writing|sheet|image|consultation|vibe_capability_structuring|vibe_story_generation)
     deploy_one "${ONLY}"
     ;;
   *)
-    echo "ONLY must be one of: unified | writing | sheet | image | consultation | all" >&2
+    echo "ONLY must be one of: unified | writing | sheet | image | consultation | vibe_capability_structuring | vibe_story_generation | all" >&2
     exit 1
     ;;
 esac
@@ -90,8 +142,9 @@ url=$(gcloud run services describe "en-aistudio-adk-agent" \
 if [[ -n "${url}" ]]; then
   echo "NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL=${url}"
 fi
-for mode in writing sheet image consultation; do
-  url=$(gcloud run services describe "en-aistudio-${mode}-agent" \
+for mode in writing sheet image consultation vibe_capability_structuring vibe_story_generation; do
+  service_name="$(service_name_for_mode "${mode}")"
+  url=$(gcloud run services describe "${service_name}" \
     --project="${PROJECT_ID}" --region="${REGION}" \
     --format='value(status.url)' 2>/dev/null || true)
   if [[ -n "${url}" ]]; then

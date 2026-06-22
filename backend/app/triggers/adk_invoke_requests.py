@@ -18,11 +18,29 @@ from google.cloud import firestore
 db = firestore.Client()
 
 
-def _adk_base_url() -> str:
-    return os.getenv(
-        "EN_AISTUDIO_ADK_AGENT_URL",
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+def _adk_base_url(mode: str | None = None) -> str:
+    normalized = (mode or "").strip().lower()
+    mode_env = ""
+    if normalized == "vibe_capability_structuring":
+        mode_env = os.getenv("EN_AISTUDIO_ADK_VIBE_CAPABILITY_STRUCTURING_URL", "")
+    elif normalized == "vibe_story_generation":
+        mode_env = os.getenv("EN_AISTUDIO_ADK_VIBE_STORY_GENERATION_URL", "")
+    return (
+        mode_env
+        or os.getenv(
+            "EN_AISTUDIO_ADK_AGENT_URL",
+            "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+        )
     ).rstrip("/")
+
+
+def _adk_service_name(mode: str) -> str:
+    normalized = (mode or "").strip().lower()
+    if normalized == "vibe_capability_structuring":
+        return "vibe-capability-structuring-agent"
+    if normalized == "vibe_story_generation":
+        return "vibe-story-generation-agent"
+    return "en-aistudio-adk-agent"
 
 
 def _internal_secret() -> str:
@@ -307,7 +325,7 @@ def on_adk_invoke_request_created(
             input_data=input_data,
             operation_metadata=operation_metadata,
         )
-        url = f"{_adk_base_url()}/v1/agents/{mode}/invoke"
+        url = f"{_adk_base_url(mode)}/v1/agents/{mode}/invoke"
         headers = {
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
@@ -324,7 +342,11 @@ def on_adk_invoke_request_created(
         ).strip()
         if caller_token:
             headers["Authorization"] = f"Bearer {caller_token}"
-        micro_payload = {"name": "en-aistudio-adk-agent", "endpoint": url, "payload": body}
+        micro_payload = {
+            "name": _adk_service_name(mode),
+            "endpoint": url,
+            "payload": body,
+        }
         _update_doc(
             collection_path,
             request_id,

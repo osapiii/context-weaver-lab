@@ -146,6 +146,10 @@ from .business_partner_workflow import (
     validate_business_partner_invoke,
 )
 from .application_scan_workflow import application_scan_state_patch_from_mode_state
+from .vibe_control_workflow import (
+    vibe_capability_structuring_state_patch_from_mode_state,
+    vibe_story_generation_state_patch_from_mode_state,
+)
 from .writing_action_scope import activate_writing_action, deactivate_writing_action
 from .artifact_ui_bridge import (
     message_artifact_ref_from_ref,
@@ -513,6 +517,16 @@ async def _stream_invoke(
         if agent_mode == "application_scan":
             state_patch.update(
                 application_scan_state_patch_from_mode_state(req.mode_state)
+            )
+        if agent_mode == "vibe_capability_structuring":
+            state_patch.update(
+                vibe_capability_structuring_state_patch_from_mode_state(
+                    req.mode_state
+                )
+            )
+        if agent_mode == "vibe_story_generation":
+            state_patch.update(
+                vibe_story_generation_state_patch_from_mode_state(req.mode_state)
             )
         if merged_image_reference is not None:
             from .workspace_state_buckets import patch_task_bucket
@@ -1511,7 +1525,8 @@ def create_app(*, mode: str, app_name: str, root_agent: Any) -> FastAPI:
 
     @app.post(f"/v1/agents/{mode}/invoke")
     async def invoke(
-        req: InvokeRequest, user: dict[str, Any] = Depends(require_user)
+        req: InvokeRequest,
+        user: dict[str, Any] = Depends(require_user_or_internal_invoke),
     ) -> StreamingResponse:
         runner: Runner = app.state.runner
         session_service = app.state.session_service

@@ -19,6 +19,8 @@ def normalize_workspace_mode(value: Any) -> str | None:
         "application_scan",
         "business_partner",
         "vibe_control",
+        "vibe_capability_structuring",
+        "vibe_story_generation",
     }:
         return normalized
     return None

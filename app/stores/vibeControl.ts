@@ -19,18 +19,27 @@ import {
 import { resolveStorageBucketName } from "@utils/adkAttachments";
 import { manualUploadRelativePath } from "@utils/knowledgeStoragePaths";
 import {
+  buildOperationVideoJourneyMarkdown,
+  buildOperationVideoMetadataMarkdown,
+} from "@utils/vibeControlEvidenceDocuments";
+import {
   buildInvokeModeStateFromWorkspaceState,
   buildWorkspaceSessionState,
 } from "@utils/workspaceSessionBuckets";
 import { useGeminiFileSpaceOperatorStore } from "./geminiFileSpaceOperator";
 import { defaultLlmModelSelectionForAdkMode } from "@models/llmModelSelection";
+import type { AdkInvokeOutput } from "@models/adkInvokeRequest";
 import type { RequestStatus } from "@models/core/requestStatus";
 import type { DecodedFileSpaceOperationRequest } from "@models/geminiFileSpaceRequest";
 import type {
   VibeControlApplicationFileSpaceProvisioningStatus,
   DecodedVibeControlApplication,
+  DecodedVibeControlCapability,
+  DecodedVibeControlDraftPatch,
+  DecodedVibeControlGenerationSession,
   DecodedVibeControlOperationVideo,
   DecodedVibeControlSourceConnection,
+  DecodedVibeControlSourceAsset,
   DecodedVibeControlStory,
   DecodedVibeControlStoryEvidence,
   VibeControlApplicationScanRun,
@@ -41,7 +50,11 @@ import type {
 } from "@models/vibeControl";
 import {
   vibeControlApplicationConverter,
+  vibeControlCapabilityConverter,
+  vibeControlDraftPatchConverter,
+  vibeControlGenerationSessionConverter,
   vibeControlOperationVideoConverter,
+  vibeControlSourceAssetConverter,
   vibeControlSourceConnectionConverter,
   vibeControlStoryConverter,
   vibeControlStoryEvidenceConverter,
@@ -64,6 +77,8 @@ export type VibeControlGenerationInput = {
   fileSpaceId: string;
   repoFullName: string;
   defaultBranch: string;
+  capabilityId?: string;
+  prompt?: string;
 };
 
 export type VibeControlApplicationInput = {
@@ -88,6 +103,16 @@ export type VibeControlOperationVideoSaveInput = {
   durationMs?: number;
   contentType?: string;
   sourceDisplaySurface?: VibeControlOperationVideoDisplaySurface;
+};
+
+export type VibeControlSeparatedAdkMode =
+  | "vibe_capability_structuring"
+  | "vibe_story_generation";
+
+export type VibeControlGenerationAgentInput = {
+  applicationId: string;
+  capabilityId?: string;
+  prompt?: string;
 };
 
 const nowIso = () => new Date().toISOString();
@@ -249,6 +274,7 @@ const mockStories: DecodedVibeControlStory[] = [
     id: "story-st101",
     applicationId: "app-vibe-control-platform",
     applicationKey: "VC",
+    sequence: 1,
     storyKey: "ST-101",
     title: "初回ユーザーが組織スペースを作成できる",
     summary:
@@ -319,6 +345,7 @@ const mockStories: DecodedVibeControlStory[] = [
     id: "story-st104",
     applicationId: "app-demo-commerce",
     applicationKey: "SHOP",
+    sequence: 1,
     storyKey: "ST-104",
     title: "カートから決済を完了できる",
     summary:
@@ -390,6 +417,7 @@ const mockStories: DecodedVibeControlStory[] = [
     id: "story-st201",
     applicationId: "app-vibe-control-platform",
     applicationKey: "VC",
+    sequence: 2,
     storyKey: "ST-201",
     title: "AIエディタがストーリーSSOTを参照できる",
     summary:
@@ -491,10 +519,14 @@ const mockConnections: DecodedVibeControlSourceConnection[] = [
 export const useVibeControlStore = defineStore("vibeControl", {
   state: () => ({
     applications: [] as DecodedVibeControlApplication[],
+    capabilities: [] as DecodedVibeControlCapability[],
     stories: [] as DecodedVibeControlStory[],
     evidence: [] as DecodedVibeControlStoryEvidence[],
     sourceConnections: [] as DecodedVibeControlSourceConnection[],
+    sourceAssets: [] as DecodedVibeControlSourceAsset[],
     operationVideos: [] as DecodedVibeControlOperationVideo[],
+    generationSessions: [] as DecodedVibeControlGenerationSession[],
+    draftPatches: [] as DecodedVibeControlDraftPatch[],
     selectedApplicationId: "" as string,
     selectedStoryId: "" as string,
     isLoading: false,
@@ -528,11 +560,39 @@ export const useVibeControlStore = defineStore("vibeControl", {
       if (!applicationId) return state.stories;
       return state.stories.filter((story) => story.applicationId === applicationId);
     },
+    activeCapabilities(state): DecodedVibeControlCapability[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      const capabilities = !applicationId
+        ? state.capabilities
+        : state.capabilities.filter(
+            (capability) => capability.applicationId === applicationId
+          );
+      return [...capabilities].sort((a, b) => a.order - b.order);
+    },
     activeEvidence(state): DecodedVibeControlStoryEvidence[] {
       const applicationId =
         state.selectedApplicationId || state.applications[0]?.id || "";
       if (!applicationId) return state.evidence;
       return state.evidence.filter((item) => item.applicationId === applicationId);
+    },
+    activeSourceAssets(state): DecodedVibeControlSourceAsset[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      if (!applicationId) return state.sourceAssets;
+      return state.sourceAssets.filter(
+        (asset) => asset.applicationId === applicationId
+      );
+    },
+    activeGenerationSessions(state): DecodedVibeControlGenerationSession[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      const sessions = !applicationId
+        ? state.generationSessions
+        : state.generationSessions.filter(
+            (session) => session.applicationId === applicationId
+          );
+      return [...sessions].sort((a, b) => b.id.localeCompare(a.id));
     },
     activeSourceConnections(state): DecodedVibeControlSourceConnection[] {
       const applicationId =
@@ -705,6 +765,18 @@ export const useVibeControlStore = defineStore("vibeControl", {
     operationVideoCollectionPath(): string {
       return useContextStore().baseFirestorePath("vibeControlOperationVideos");
     },
+    capabilityCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlCapabilities");
+    },
+    sourceAssetCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlSourceAssets");
+    },
+    generationSessionCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlGenerationSessions");
+    },
+    draftPatchCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlDraftPatches");
+    },
     applicationFileSpaceStatus(
       application: DecodedVibeControlApplication | null
     ): VibeControlApplicationFileSpaceProvisioningStatus {
@@ -717,7 +789,11 @@ export const useVibeControlStore = defineStore("vibeControl", {
       this.stories = [...mockStories];
       this.evidence = [...mockEvidence];
       this.sourceConnections = [...mockConnections];
+      this.capabilities = [];
+      this.sourceAssets = [];
       this.operationVideos = [];
+      this.generationSessions = [];
+      this.draftPatches = [];
       this.selectedApplicationId = this.applications.some(
         (application) => application.id === this.selectedApplicationId
       )
@@ -746,6 +822,10 @@ export const useVibeControlStore = defineStore("vibeControl", {
           evidence,
           sourceConnections,
           operationVideos,
+          capabilities,
+          sourceAssets,
+          generationSessions,
+          draftPatches,
         ] = await Promise.all([
           firestoreOps.getDocumentsWithQueryAndConverter({
             collectionName: this.applicationCollectionPath(),
@@ -775,12 +855,37 @@ export const useVibeControlStore = defineStore("vibeControl", {
             orderBy: { field: "recordedAt", direction: "desc" },
             limit: 200,
           }),
+          firestoreOps.getDocumentsWithQueryAndConverter({
+            collectionName: this.capabilityCollectionPath(),
+            converter: vibeControlCapabilityConverter,
+            orderBy: { field: "order", direction: "asc" },
+            limit: 500,
+          }),
+          firestoreOps.getDocumentsWithQueryAndConverter({
+            collectionName: this.sourceAssetCollectionPath(),
+            converter: vibeControlSourceAssetConverter,
+            limit: 1000,
+          }),
+          firestoreOps.getDocumentsWithQueryAndConverter({
+            collectionName: this.generationSessionCollectionPath(),
+            converter: vibeControlGenerationSessionConverter,
+            limit: 100,
+          }),
+          firestoreOps.getDocumentsWithQueryAndConverter({
+            collectionName: this.draftPatchCollectionPath(),
+            converter: vibeControlDraftPatchConverter,
+            limit: 300,
+          }),
         ]);
         this.applications = applications;
         this.stories = stories;
         this.evidence = evidence;
         this.sourceConnections = sourceConnections;
         this.operationVideos = operationVideos;
+        this.capabilities = capabilities;
+        this.sourceAssets = sourceAssets;
+        this.generationSessions = generationSessions;
+        this.draftPatches = draftPatches;
         this.selectedApplicationId = this.applications.some(
           (application) => application.id === this.selectedApplicationId
         )
@@ -1178,6 +1283,18 @@ export const useVibeControlStore = defineStore("vibeControl", {
         const videos = this.operationVideos.filter(
           (video) => video.applicationId === applicationId
         );
+        const capabilities = this.capabilities.filter(
+          (capability) => capability.applicationId === applicationId
+        );
+        const sourceAssets = this.sourceAssets.filter(
+          (asset) => asset.applicationId === applicationId
+        );
+        const generationSessions = this.generationSessions.filter(
+          (session) => session.applicationId === applicationId
+        );
+        const draftPatches = this.draftPatches.filter(
+          (patch) => patch.applicationId === applicationId
+        );
 
         await Promise.all([
           firestoreOps.deleteDocument({
@@ -1208,6 +1325,30 @@ export const useVibeControlStore = defineStore("vibeControl", {
               docId: video.id,
             })
           ),
+          ...capabilities.map((capability) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.capabilityCollectionPath(),
+              docId: capability.id,
+            })
+          ),
+          ...sourceAssets.map((asset) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.sourceAssetCollectionPath(),
+              docId: asset.id,
+            })
+          ),
+          ...generationSessions.map((session) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.generationSessionCollectionPath(),
+              docId: session.id,
+            })
+          ),
+          ...draftPatches.map((patch) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.draftPatchCollectionPath(),
+              docId: patch.id,
+            })
+          ),
         ]);
 
         this.applications = this.applications.filter(
@@ -1224,6 +1365,18 @@ export const useVibeControlStore = defineStore("vibeControl", {
         );
         this.operationVideos = this.operationVideos.filter(
           (video) => video.applicationId !== applicationId
+        );
+        this.capabilities = this.capabilities.filter(
+          (capability) => capability.applicationId !== applicationId
+        );
+        this.sourceAssets = this.sourceAssets.filter(
+          (asset) => asset.applicationId !== applicationId
+        );
+        this.generationSessions = this.generationSessions.filter(
+          (session) => session.applicationId !== applicationId
+        );
+        this.draftPatches = this.draftPatches.filter(
+          (patch) => patch.applicationId !== applicationId
         );
         this.selectedApplicationId = this.applications[0]?.id ?? "";
         this.selectedStoryId =
@@ -1417,6 +1570,310 @@ export const useVibeControlStore = defineStore("vibeControl", {
         this.isGenerating = false;
       }
     },
+    sourceAssetPayloadForApplication(applicationId: string): Record<string, unknown>[] {
+      return this.sourceAssets
+        .filter((asset) => asset.applicationId === applicationId)
+        .slice(0, 200)
+        .map((asset) => ({
+          id: asset.id,
+          sourceType: asset.sourceType,
+          title: asset.title,
+          summary: asset.summary,
+          uri: asset.uri,
+          gcsPath: asset.gcsPath,
+          storagePath: asset.storagePath,
+          fileSpaceId: asset.fileSpaceId,
+          fileSpaceDocumentId: asset.fileSpaceDocumentId,
+          repoFullName: asset.repoFullName,
+          path: asset.path,
+          discoveryStatus: asset.discoveryStatus,
+          metadata: asset.metadata,
+        }));
+    },
+    async persistGenerationSession(
+      session: DecodedVibeControlGenerationSession
+    ): Promise<void> {
+      this.generationSessions = [
+        session,
+        ...this.generationSessions.filter((item) => item.id !== session.id),
+      ];
+      await useFirestoreDocOperation().createDocument({
+        collectionName: this.generationSessionCollectionPath(),
+        docId: session.id,
+        docData: session,
+        converter: vibeControlGenerationSessionConverter,
+        merge: true,
+      });
+    },
+    buildVibeGenerationModeState(params: {
+      mode: VibeControlSeparatedAdkMode;
+      application: DecodedVibeControlApplication;
+      generationSessionId: string;
+      capability?: DecodedVibeControlCapability | null;
+      prompt?: string;
+    }): Record<string, unknown> {
+      const applicationId = params.application.id;
+      const setup: Record<string, unknown> = {
+        confirmed: true,
+        generation_session_id: params.generationSessionId,
+        application_id: params.application.id,
+        application_key: params.application.applicationKey,
+        application_name: params.application.name,
+        file_space_id: params.application.fileSpaceId,
+        repo_full_name: params.application.repoFullName,
+        default_branch: params.application.defaultBranch || "main",
+      };
+      if (params.capability) {
+        setup.capability_id = params.capability.id;
+        setup.capability_key = params.capability.capabilityKey;
+      }
+
+      const payload: Record<string, unknown> = {
+        source_assets: this.sourceAssetPayloadForApplication(applicationId),
+        existing_capabilities: this.capabilities.filter(
+          (capability) => capability.applicationId === applicationId
+        ),
+        existing_stories: this.stories.filter(
+          (story) => story.applicationId === applicationId
+        ),
+        existing_evidence: this.evidence.filter(
+          (item) => item.applicationId === applicationId
+        ),
+        user_notes: params.prompt?.trim() || undefined,
+      };
+      if (params.capability) {
+        payload.capability = params.capability;
+      }
+
+      return {
+        active_mode: params.mode,
+        [params.mode]: {
+          phase: "drafting",
+          setup,
+          payload,
+        },
+      };
+    },
+    async startCapabilityStructuring(
+      input: VibeControlGenerationAgentInput
+    ): Promise<string> {
+      return this.startSeparatedGenerationAgent({
+        ...input,
+        mode: "vibe_capability_structuring",
+      });
+    },
+    async startStoryGeneration(
+      input: VibeControlGenerationAgentInput
+    ): Promise<string> {
+      return this.startSeparatedGenerationAgent({
+        ...input,
+        mode: "vibe_story_generation",
+      });
+    },
+    async startSeparatedGenerationAgent(
+      input: VibeControlGenerationAgentInput & {
+        mode: VibeControlSeparatedAdkMode;
+      }
+    ): Promise<string> {
+      const application = this.applications.find(
+        (item) => item.id === input.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      const fileSpaceId = application.fileSpaceId?.trim();
+      if (!fileSpaceId) {
+        throw new Error("VibeControl ADKに渡すFileSpace IDを設定してください");
+      }
+
+      const orgId = useOrganizationStore().loggedInOrganizationInfo?.id ?? "";
+      const spaceId = useSpaceStore().selectedSpace?.id ?? "";
+      const uid = getAuth().currentUser?.uid;
+      if (!orgId || !spaceId || !uid) {
+        throw new Error("組織・スペース・ログイン状態を確認してください");
+      }
+
+      const phase =
+        input.mode === "vibe_capability_structuring"
+          ? "capability_structuring"
+          : "story_generation";
+      const generationSessionId = `vibecontrol-${phase}-${application.id}-${Date.now()}-${createRandomDocId()}`;
+      const responseId = `${phase}-response-${createRandomDocId()}`;
+      const capability = input.capabilityId?.trim()
+        ? this.capabilities.find((item) => item.id === input.capabilityId)
+        : undefined;
+      const sourceAssets = this.sourceAssets.filter(
+        (asset) => asset.applicationId === application.id
+      );
+      const generationSession: DecodedVibeControlGenerationSession = {
+        id: generationSessionId,
+        applicationId: application.id,
+        applicationKey: application.applicationKey,
+        phase,
+        adkMode: input.mode,
+        responseId,
+        capabilityAdkSessionId:
+          input.mode === "vibe_capability_structuring"
+            ? generationSessionId
+            : undefined,
+        storyAdkSessionIds:
+          input.mode === "vibe_story_generation" ? [generationSessionId] : [],
+        activeCapabilityId:
+          input.mode === "vibe_story_generation" ? capability?.id : undefined,
+        status: "running",
+        lastMessage:
+          input.mode === "vibe_capability_structuring"
+            ? "Capability解析ADKを起動しました"
+            : "Story生成ADKを起動しました",
+        sourceSnapshot: {
+          fileSpaceId,
+          repoFullName: application.repoFullName,
+          defaultBranch: application.defaultBranch || "main",
+          screenshotCount: sourceAssets.filter(
+            (asset) => asset.sourceType === "application_screenshot"
+          ).length,
+          videoCount: sourceAssets.filter((asset) =>
+            asset.sourceType.startsWith("operation_video")
+          ).length,
+          evidenceCount: this.evidence.filter(
+            (item) => item.applicationId === application.id
+          ).length,
+        },
+      };
+
+      this.isGenerating = true;
+      this.error = null;
+      try {
+        await this.persistGenerationSession(generationSession);
+        const modeState = this.buildVibeGenerationModeState({
+          mode: input.mode,
+          application,
+          generationSessionId,
+          capability,
+          prompt: input.prompt,
+        });
+        const prompt =
+          input.prompt?.trim() ||
+          (input.mode === "vibe_capability_structuring"
+            ? `${application.name} のSourceAssetからCapability構造案を作成してください。`
+            : capability
+              ? `${application.name} の ${capability.name} 配下に置くユーザーストーリー案を生成してください。`
+              : `${application.name} の既存Capability群に紐づくユーザーストーリー案を生成してください。`);
+
+        const requestId = await createAdkInvokeRequest({
+          organizationId: orgId,
+          spaceId,
+          input: buildAdkInvokeInput({
+            mode: input.mode,
+            sessionId: generationSessionId,
+            organizationId: orgId,
+            spaceId,
+            userId: uid,
+            prompt,
+            responseId,
+            model: defaultLlmModelSelectionForAdkMode(input.mode),
+            fileSpaceId,
+            workspaceId: application.id,
+            history: [],
+            modeState,
+          }),
+        });
+
+        const startedSession: DecodedVibeControlGenerationSession = {
+          ...generationSession,
+          requestId,
+          lastMessage: `${input.mode} RequestDocを発行しました`,
+        };
+        await this.persistGenerationSession(startedSession);
+        this.lastRunLog.unshift(
+          input.mode === "vibe_capability_structuring"
+            ? `Capability ADK: ${application.name} の解析を開始`
+            : `Story ADK: ${application.name} の生成を開始`
+        );
+
+        const stopWatch = watchAdkInvokeRequest({
+          organizationId: orgId,
+          spaceId,
+          requestId,
+          onUpdate: (
+            status: RequestStatus,
+            errorMessage?: string,
+            output?: AdkInvokeOutput
+          ) => {
+            void this.updateGenerationSessionStatus({
+              generationSessionId,
+              requestId,
+              status,
+              errorMessage,
+              output,
+            });
+            if (status === "completed" || status === "error") {
+              stopWatch();
+            }
+          },
+        });
+
+        return requestId;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "VibeControl ADKの開始に失敗しました";
+        const failedSession: DecodedVibeControlGenerationSession = {
+          ...generationSession,
+          status: "error",
+          errorMessage: message,
+          lastMessage: message,
+        };
+        await this.persistGenerationSession(failedSession);
+        this.error = message;
+        throw err;
+      } finally {
+        this.isGenerating = false;
+      }
+    },
+    async updateGenerationSessionStatus(params: {
+      generationSessionId: string;
+      requestId: string;
+      status: RequestStatus;
+      errorMessage?: string;
+      output?: AdkInvokeOutput;
+    }): Promise<void> {
+      const session = this.generationSessions.find(
+        (item) => item.id === params.generationSessionId
+      );
+      if (!session || session.requestId !== params.requestId) return;
+      const artifactCount = params.output?.artifactCount ?? 0;
+      const completedWithoutArtifact =
+        params.status === "completed" &&
+        (session.adkMode === "vibe_capability_structuring" ||
+          session.adkMode === "vibe_story_generation") &&
+        artifactCount === 0;
+      const nextStatus: DecodedVibeControlGenerationSession["status"] =
+        completedWithoutArtifact
+          ? "error"
+          : params.status === "completed"
+          ? "waiting_user"
+          : params.status === "error"
+            ? "error"
+            : "running";
+      const noArtifactMessage =
+        session.adkMode === "vibe_capability_structuring"
+          ? "Capability構造案が生成されませんでした。SourceAsset / Evidence / Story を取り込んでから再実行してください"
+          : "Story生成案が生成されませんでした。Capability と根拠データを確認してから再実行してください";
+      const nextSession: DecodedVibeControlGenerationSession = {
+        ...session,
+        status: nextStatus,
+        errorMessage: completedWithoutArtifact
+          ? noArtifactMessage
+          : params.errorMessage,
+        lastMessage:
+          completedWithoutArtifact
+            ? noArtifactMessage
+            : params.status === "completed"
+            ? "ADKの構造案が生成されました。レビュー待ちです"
+            : params.errorMessage || `RequestDoc status: ${params.status}`,
+      };
+      await this.persistGenerationSession(nextSession);
+    },
     async persistCurrentSnapshot(): Promise<void> {
       this.isLoading = true;
       this.error = null;
@@ -1468,6 +1925,42 @@ export const useVibeControlStore = defineStore("vibeControl", {
               merge: true,
             })
           ),
+          ...this.capabilities.map((item) =>
+            firestoreOps.createDocument({
+              collectionName: this.capabilityCollectionPath(),
+              docId: item.id || `capability_${createRandomDocId()}`,
+              docData: item,
+              converter: vibeControlCapabilityConverter,
+              merge: true,
+            })
+          ),
+          ...this.sourceAssets.map((item) =>
+            firestoreOps.createDocument({
+              collectionName: this.sourceAssetCollectionPath(),
+              docId: item.id || `source_asset_${createRandomDocId()}`,
+              docData: item,
+              converter: vibeControlSourceAssetConverter,
+              merge: true,
+            })
+          ),
+          ...this.generationSessions.map((item) =>
+            firestoreOps.createDocument({
+              collectionName: this.generationSessionCollectionPath(),
+              docId: item.id || `generation_session_${createRandomDocId()}`,
+              docData: item,
+              converter: vibeControlGenerationSessionConverter,
+              merge: true,
+            })
+          ),
+          ...this.draftPatches.map((item) =>
+            firestoreOps.createDocument({
+              collectionName: this.draftPatchCollectionPath(),
+              docId: item.id || `draft_patch_${createRandomDocId()}`,
+              docData: item,
+              converter: vibeControlDraftPatchConverter,
+              merge: true,
+            })
+          ),
         ]);
         this.lastRunLog.push("Firestore: 現在のSSOT snapshotを保存");
       } catch (err) {
@@ -1490,38 +1983,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
       recordedAt: string;
       sourceDisplaySurface?: VibeControlOperationVideoDisplaySurface;
     }): string {
-      const durationSeconds =
-        typeof params.durationMs === "number"
-          ? Math.round(params.durationMs / 1000)
-          : null;
-      return [
-        `# ${params.title}`,
-        "",
-        params.description?.trim() || "操作動画のメタデータです。",
-        "",
-        "## Application",
-        `- Name: ${params.application.name}`,
-        `- Application ID: ${params.application.id}`,
-        `- Application Key: ${params.application.applicationKey}`,
-        `- Repository: ${params.application.repoFullName}`,
-        params.application.startUrl
-          ? `- Start URL: ${params.application.startUrl}`
-          : "",
-        "",
-        "## Recording",
-        `- Video ID: ${params.videoId}`,
-        `- Recorded At: ${params.recordedAt}`,
-        `- Display Surface: ${params.sourceDisplaySurface ?? "unknown"}`,
-        durationSeconds !== null ? `- Duration: ${durationSeconds} seconds` : "",
-        `- Content Type: ${params.contentType}`,
-        `- Size Bytes: ${params.sizeBytes}`,
-        "",
-        "## Storage",
-        `- Bucket: ${params.bucketName}`,
-        `- Path: ${params.storagePath}`,
-      ]
-        .filter((line) => line !== "")
-        .join("\n");
+      return buildOperationVideoMetadataMarkdown(params);
     },
     async saveOperationVideoCapture(
       input: VibeControlOperationVideoSaveInput
@@ -1604,11 +2066,34 @@ export const useVibeControlStore = defineStore("vibeControl", {
           recordedAt: now,
           sourceDisplaySurface: input.sourceDisplaySurface,
         });
+        const journeyFileName = `${safeTitle}-${timestamp}-journey.md`;
+        const journeyStoragePath = contextStore.baseGcsPath(
+          manualUploadRelativePath({
+            fileSpaceId,
+            fileName: journeyFileName,
+          })
+        );
+        const journeyMarkdown = buildOperationVideoJourneyMarkdown({
+          application,
+          videoId,
+          title,
+          description: input.description,
+          bucketName,
+          storagePath,
+          contentType,
+          sizeBytes: input.blob.size,
+          durationMs: input.durationMs,
+          recordedAt: now,
+          sourceDisplaySurface: input.sourceDisplaySurface,
+        });
 
         let fileSpaceRequestId: string | undefined;
+        let journeyFileSpaceRequestId: string | undefined;
         let discoveryStatus: DecodedVibeControlOperationVideo["discoveryStatus"] =
           "not_registered";
-        let discoveryErrorMessage: string | undefined;
+        const sourceAssetId = `source-asset-${videoId}`;
+        const journeySourceAssetId = `source-asset-${videoId}-journey`;
+        const requestErrors: string[] = [];
 
         const metadataUploaded = await storageOps.uploadPdfFile({
           bucketName,
@@ -1632,7 +2117,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
                 { key: "applicationId", value: application.id },
                 { key: "applicationKey", value: application.applicationKey },
                 { key: "operationVideoId", value: videoId },
+                { key: "sourceAssetId", value: sourceAssetId },
                 { key: "videoStoragePath", value: storagePath },
+                { key: "documentKind", value: "operation_video_metadata" },
               ],
               originalFileInfo: {
                 fileName: metadataFileName,
@@ -1643,16 +2130,61 @@ export const useVibeControlStore = defineStore("vibeControl", {
             });
           if (requestDoc?.id) {
             fileSpaceRequestId = requestDoc.id;
-            discoveryStatus = "queued";
           } else {
-            discoveryStatus = "error";
-            discoveryErrorMessage =
-              "FileSpace upload RequestDocの作成に失敗しました";
+            requestErrors.push("動画メタデータのFileSpace upload RequestDoc作成に失敗しました");
           }
         } else {
-          discoveryStatus = "error";
-          discoveryErrorMessage = "検索用メタデータMarkdownの保存に失敗しました";
+          requestErrors.push("検索用メタデータMarkdownの保存に失敗しました");
         }
+
+        const journeyUploaded = await storageOps.uploadPdfFile({
+          bucketName,
+          filePath: journeyStoragePath,
+          rawData: new Blob([journeyMarkdown], { type: "text/markdown" }),
+          mimeType: "text/markdown",
+        });
+
+        if (journeyUploaded) {
+          const requestDoc =
+            await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
+              operationType: "fileSpaceUpload",
+              storeId: fileSpaceId,
+              bucketName,
+              filePath: journeyStoragePath,
+              mimeType: "text/markdown",
+              documentId: `vibecontrol-operation-video-journey-${videoId}`,
+              description: `VibeControl operation journey evidence: ${title}`,
+              customMetadata: [
+                { key: "source", value: "vibe-control-operation-video-journey" },
+                { key: "applicationId", value: application.id },
+                { key: "applicationKey", value: application.applicationKey },
+                { key: "applicationName", value: application.name },
+                { key: "repoFullName", value: application.repoFullName },
+                { key: "operationVideoId", value: videoId },
+                { key: "sourceAssetId", value: journeySourceAssetId },
+                { key: "videoStoragePath", value: storagePath },
+                { key: "documentKind", value: "operation_video_journey" },
+              ],
+              originalFileInfo: {
+                fileName: journeyFileName,
+                bytes: new Blob([journeyMarkdown]).size,
+              },
+              organizationId,
+              spaceId,
+            });
+          if (requestDoc?.id) {
+            journeyFileSpaceRequestId = requestDoc.id;
+          } else {
+            requestErrors.push("操作JourneyのFileSpace upload RequestDoc作成に失敗しました");
+          }
+        } else {
+          requestErrors.push("操作Journey Markdownの保存に失敗しました");
+        }
+
+        discoveryStatus =
+          fileSpaceRequestId || journeyFileSpaceRequestId ? "queued" : "error";
+        const discoveryErrorMessage =
+          requestErrors.length > 0 ? requestErrors.join(" / ") : undefined;
 
         const video: DecodedVibeControlOperationVideo = {
           id: videoId,
@@ -1670,23 +2202,100 @@ export const useVibeControlStore = defineStore("vibeControl", {
           fileSpaceRequestId,
           metadataFileName,
           metadataStoragePath,
+          journeyFileName,
+          journeyStoragePath,
+          journeyFileSpaceRequestId,
+          sourceAssetId,
+          journeySourceAssetId,
           discoveryStatus,
           discoveryErrorMessage,
           sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
           recordedAt: now,
         };
 
-        await useFirestoreDocOperation().createDocument({
-          collectionName: this.operationVideoCollectionPath(),
-          docId: video.id,
-          docData: video,
-          converter: vibeControlOperationVideoConverter,
-          merge: true,
-        });
+        const sourceAssets: DecodedVibeControlSourceAsset[] = [
+          {
+            id: sourceAssetId,
+            applicationId: application.id,
+            applicationKey: application.applicationKey,
+            sourceType: "operation_video",
+            title,
+            summary: input.description?.trim() || undefined,
+            uri: `gs://${bucketName}/${storagePath}`,
+            gcsPath: `gs://${bucketName}/${storagePath}`,
+            storagePath,
+            fileSpaceId,
+            fileSpaceRequestId,
+            discoveryStatus: fileSpaceRequestId ? "queued" : "error",
+            discoveryDocumentId: `vibecontrol-operation-video-${videoId}`,
+            discoveryErrorMessage: fileSpaceRequestId
+              ? undefined
+              : "動画メタデータのDiscovery Engine登録に失敗しました",
+            metadata: {
+              operationVideoId: videoId,
+              contentType,
+              sizeBytes: input.blob.size,
+              durationMs: input.durationMs,
+              metadataStoragePath,
+              sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
+            },
+          },
+          {
+            id: journeySourceAssetId,
+            applicationId: application.id,
+            applicationKey: application.applicationKey,
+            sourceType: "operation_video_journey",
+            title: `Operation Journey: ${title}`,
+            summary:
+              input.description?.trim() ||
+              "操作動画から生成したユーザージャーニー検索用証跡",
+            uri: `gs://${bucketName}/${journeyStoragePath}`,
+            gcsPath: `gs://${bucketName}/${journeyStoragePath}`,
+            storagePath: journeyStoragePath,
+            fileSpaceId,
+            fileSpaceRequestId: journeyFileSpaceRequestId,
+            discoveryStatus: journeyFileSpaceRequestId ? "queued" : "error",
+            discoveryDocumentId: `vibecontrol-operation-video-journey-${videoId}`,
+            discoveryErrorMessage: journeyFileSpaceRequestId
+              ? undefined
+              : "操作JourneyのDiscovery Engine登録に失敗しました",
+            metadata: {
+              operationVideoId: videoId,
+              videoStoragePath: storagePath,
+              sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
+            },
+          },
+        ];
+
+        const firestoreOps = useFirestoreDocOperation();
+        await Promise.all([
+          firestoreOps.createDocument({
+            collectionName: this.operationVideoCollectionPath(),
+            docId: video.id,
+            docData: video,
+            converter: vibeControlOperationVideoConverter,
+            merge: true,
+          }),
+          ...sourceAssets.map((asset) =>
+            firestoreOps.createDocument({
+              collectionName: this.sourceAssetCollectionPath(),
+              docId: asset.id,
+              docData: asset,
+              converter: vibeControlSourceAssetConverter,
+              merge: true,
+            })
+          ),
+        ]);
 
         this.operationVideos = [
           video,
           ...this.operationVideos.filter((item) => item.id !== video.id),
+        ];
+        this.sourceAssets = [
+          ...sourceAssets,
+          ...this.sourceAssets.filter(
+            (item) => !sourceAssets.some((asset) => asset.id === item.id)
+          ),
         ];
         this.lastRunLog.unshift(
           `Operation Video: ${application.name} に ${title} を保存`
@@ -1766,6 +2375,23 @@ export const useVibeControlStore = defineStore("vibeControl", {
         state: workspaceState,
         activeMode: "application_scan",
       });
+      const applicationScanState = modeState.application_scan;
+      if (
+        applicationScanState &&
+        typeof applicationScanState === "object" &&
+        !Array.isArray(applicationScanState)
+      ) {
+        const setup = (applicationScanState as Record<string, unknown>).setup;
+        if (setup && typeof setup === "object" && !Array.isArray(setup)) {
+          Object.assign(setup as Record<string, unknown>, {
+            application_id: application.id,
+            application_key: application.applicationKey,
+            application_name: application.name,
+            repo_full_name: application.repoFullName,
+            default_branch: application.defaultBranch || "main",
+          });
+        }
+      }
 
       const pendingRun: VibeControlApplicationScanRun = {
         requestId: "",
