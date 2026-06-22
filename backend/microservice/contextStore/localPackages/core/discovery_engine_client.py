@@ -156,7 +156,7 @@ class DiscoveryEngineClient:
     def create_data_store(
         self, *, display_name: str | None = None, data_store_id: str | None = None
     ) -> dict[str, Any]:
-        store_id = data_store_id or uuid.uuid4().hex[:24]
+        store_id = data_store_id or f"fs-{uuid.uuid4().hex[:21]}"
         url = (
             f"{_api_root(LOCATION)}/v1alpha/{_collection_path()}/dataStores"
             f"?dataStoreId={store_id}"
@@ -167,7 +167,22 @@ class DiscoveryEngineClient:
             "solutionTypes": ["SOLUTION_TYPE_SEARCH"],
             "contentConfig": "CONTENT_REQUIRED",
         }
-        result = self._request("POST", url, json_data=body)
+        self._request("POST", url, json_data=body)
+        result: dict[str, Any] = {}
+        for _ in range(30):
+            try:
+                result = self.get_data_store(store_id).get("response") or {}
+                break
+            except FatalStepError as exc:
+                if "HTTP 404" not in str(exc):
+                    raise
+                time.sleep(2)
+        if not result:
+            raise FatalStepError(
+                step_name="create_data_store",
+                message=f"Data store creation did not become readable: {store_id}",
+                error_code="CREATE_TIMEOUT",
+            )
         name = result.get("name") or _datastore_path(store_id)
         return {
             "status_code": 200,

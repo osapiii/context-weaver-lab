@@ -171,6 +171,87 @@
         @rescan="rescanSelectedApplication"
       />
 
+      <template v-else-if="activeApplicationTab === 'knowledge-space'">
+        <VibeControlApplicationKnowledgeSpacePanel
+          v-if="!applicationKnowledgeFileSpaceId"
+          :application="selectedApplication"
+          :is-provisioning="store.isProvisioningApplicationFileSpace"
+          :is-uploading="isUploadingApplicationKnowledge"
+          @create-file-space="provisionSelectedApplicationFileSpace"
+          @upload-files="uploadApplicationKnowledgeFiles"
+          @refresh="store.fetchFromFirestore()"
+        />
+
+        <div
+          v-else
+          class="space-y-5"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+                Knowledge Space
+              </p>
+              <p class="mt-1 break-all text-sm font-semibold text-slate-900">
+                {{ applicationKnowledgeFileSpaceId }}
+              </p>
+            </div>
+            <div class="flex shrink-0 flex-wrap items-center gap-2">
+              <EnToggle
+                v-model="applicationKnowledgeMode"
+                :items="applicationKnowledgeModeItems"
+              />
+              <EnButton
+                variant="outline"
+                color="neutral"
+                size="sm"
+                leading-icon="material-symbols:refresh"
+                :loading="isApplicationKnowledgeLoading"
+                @click="refreshApplicationKnowledgeDocuments"
+              >
+                再読込
+              </EnButton>
+            </div>
+          </div>
+
+          <Transition
+            enter-active-class="transition duration-300 ease-out"
+            enter-from-class="opacity-0 translate-y-4"
+            enter-to-class="opacity-100 translate-y-0"
+            leave-active-class="transition duration-150 ease-in"
+            leave-from-class="opacity-100 translate-y-0"
+            leave-to-class="opacity-0 -translate-y-4"
+            mode="out-in"
+          >
+            <DataSourceUploadMode
+              v-if="applicationKnowledgeMode === 'upload'"
+              :file-space-id="applicationKnowledgeFileSpaceId"
+              :documents="selectedApplicationKnowledgeDocuments"
+              :is-loading-documents="isApplicationKnowledgeLoading"
+              @refresh="refreshApplicationKnowledgeDocuments"
+              @switch-to-view="applicationKnowledgeMode = 'view'"
+            />
+            <DataSourceViewMode
+              v-else
+              :file-space-id="applicationKnowledgeFileSpaceId"
+              :documents="selectedApplicationKnowledgeDocuments"
+              :is-loading-documents="isApplicationKnowledgeLoading"
+              @refresh="refreshApplicationKnowledgeDocuments"
+            />
+          </Transition>
+        </div>
+      </template>
+
+      <VibeControlOperationVideoPanel
+        v-else-if="activeApplicationTab === 'operation-videos'"
+        :application="selectedApplication"
+        :videos="store.activeOperationVideos"
+        :is-saving="store.isSavingOperationVideo"
+        :is-provisioning-file-space="store.isProvisioningApplicationFileSpace"
+        @create-file-space="provisionSelectedApplicationFileSpace"
+        @save="saveOperationVideo"
+        @refresh="store.fetchFromFirestore()"
+      />
+
       <VibeControlApplicationGitPanel
         v-else
         :application="selectedApplication"
@@ -188,12 +269,24 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { storeToRefs } from "pinia";
 import { useVibeControlStore } from "@stores/vibeControl";
+import { useGeminiFileSpaceOperatorStore } from "@stores/geminiFileSpaceOperator";
+import { useGlobalLoadingStore } from "@stores/global-loading";
+import { useOrganizationStore } from "@stores/organization";
+import { useSpaceStore } from "@stores/space";
+import { useGeminiFileSpaceSnapshot } from "@composables/useGeminiFileSpaceSnapshot";
+import { useGoogleDriveFolderSync } from "@composables/useGoogleDriveFolderSync";
+import DataSourceUploadMode from "@components/dataSource/DataSourceUploadMode.vue";
+import DataSourceViewMode from "@components/dataSource/DataSourceViewMode.vue";
+import VibeControlApplicationKnowledgeSpacePanel from "@components/vibeControl/VibeControlApplicationKnowledgeSpacePanel.vue";
 import type { ApplicationScanFields } from "@utils/applicationScanWorkspaceState";
 import type { DecodedVibeControlApplication } from "@models/vibeControl";
+import type { Document } from "@models/geminiFileSpaceRequest";
 import type {
   VibeControlApplicationInput,
   VibeControlFilters,
+  VibeControlOperationVideoSaveInput,
 } from "@stores/vibeControl";
 import type { GitHubRepositorySummary } from "@composables/useGitHubOAuth";
 
@@ -201,7 +294,21 @@ type VibeControlView =
   | "repositories"
   | "application-detail"
   | "story-detail";
-type ApplicationDetailTab = "stories" | "basic" | "scan" | "git";
+type ApplicationDetailTab =
+  | "stories"
+  | "basic"
+  | "scan"
+  | "knowledge-space"
+  | "operation-videos"
+  | "git";
+type ApplicationKnowledgeMode = "upload" | "view";
+type RouteView =
+  | "repositories"
+  | "application-detail"
+  | "application-scan"
+  | "application-knowledge"
+  | "application-videos"
+  | "stories";
 
 defineOptions({
   name: "AdminVibeControlIndexPage",
@@ -215,19 +322,40 @@ definePageMeta({
 });
 
 const store = useVibeControlStore();
+const fileSpaceStore = useGeminiFileSpaceOperatorStore();
+const organizationStore = useOrganizationStore();
+const spaceStore = useSpaceStore();
+const globalLoading = useGlobalLoadingStore();
 const toast = useToast();
 const route = useRoute();
 const router = useRouter();
+const { documents: fileSpaceDocuments, isLoadingDocuments } =
+  storeToRefs(fileSpaceStore);
+const { syncCompletedTick } = useGoogleDriveFolderSync();
 const currentView = ref<VibeControlView>("application-detail");
 const activeApplicationTab = ref<ApplicationDetailTab>("stories");
+const applicationKnowledgeMode = ref<ApplicationKnowledgeMode>("upload");
+const applicationKnowledgeDocumentsByFileSpace = ref<Record<string, Document[]>>(
+  {}
+);
 const applicationModalOpen = ref(false);
 const scanSettingsModalOpen = ref(false);
 const deleteConfirmOpen = ref(false);
 const editingApplicationId = ref<string | null>(null);
 const initialApplicationRepository = ref<GitHubRepositorySummary | null>(null);
+const isUploadingApplicationKnowledge = ref(false);
 
 const selectedApplication = computed(() => store.selectedApplication);
 const selectedStory = computed(() => store.selectedStory);
+const applicationKnowledgeFileSpaceId = computed(
+  () => selectedApplication.value?.fileSpaceId?.trim() || null
+);
+const selectedApplicationKnowledgeDocuments = computed(() => {
+  const fileSpaceId = applicationKnowledgeFileSpaceId.value;
+  if (!fileSpaceId) return [];
+  return applicationKnowledgeDocumentsByFileSpace.value[fileSpaceId] ?? [];
+});
+const isApplicationKnowledgeLoading = computed(() => isLoadingDocuments.value);
 const editingApplication = computed(() =>
   editingApplicationId.value
     ? store.applications.find(
@@ -294,9 +422,37 @@ const applicationTabItems = computed(() => [
     count: selectedApplication.value?.lastScan?.artifactCount,
   },
   {
+    value: "knowledge-space",
+    label: "ナレッジスペース",
+    icon: "material-symbols:hub-outline",
+    count: applicationKnowledgeFileSpaceId.value
+      ? selectedApplicationKnowledgeDocuments.value.length
+      : undefined,
+  },
+  {
+    value: "operation-videos",
+    label: "操作動画",
+    icon: "material-symbols:video-camera-back-outline",
+    count: store.activeOperationVideos.length,
+  },
+  {
     value: "git",
     label: "Git",
     icon: "i-simple-icons-github",
+  },
+]);
+
+const applicationKnowledgeModeItems = computed(() => [
+  {
+    value: "upload",
+    label: "知識を教える",
+    icon: "i-heroicons-academic-cap",
+  },
+  {
+    value: "view",
+    label: "知識を確認",
+    icon: "i-heroicons-magnifying-glass",
+    count: selectedApplicationKnowledgeDocuments.value.length,
   },
 ]);
 
@@ -337,6 +493,10 @@ const breadcrumbItems = computed(() => {
           ? "基本情報"
           : activeApplicationTab.value === "scan"
             ? "Visual QA"
+          : activeApplicationTab.value === "knowledge-space"
+            ? "ナレッジスペース"
+          : activeApplicationTab.value === "operation-videos"
+            ? "操作動画"
           : activeApplicationTab.value === "git"
             ? "Git"
             : "ユーザーストーリー",
@@ -388,30 +548,41 @@ watch(
 
 watch(activeApplicationTab, (tab) => {
   if (currentView.value !== "application-detail") return;
-  updateViewQuery(
-    tab === "basic"
-      ? "application-detail"
-      : tab === "scan"
-        ? "application-scan"
-        : "stories"
-  );
+  const viewByTab: Record<ApplicationDetailTab, RouteView> = {
+    stories: "stories",
+    basic: "application-detail",
+    scan: "application-scan",
+    "knowledge-space": "application-knowledge",
+    "operation-videos": "application-videos",
+    git: "application-detail",
+  };
+  updateViewQuery(viewByTab[tab]);
 });
 
-function routeView():
-  | "repositories"
-  | "application-detail"
-  | "application-scan"
-  | "stories" {
+watch(
+  [activeApplicationTab, applicationKnowledgeFileSpaceId],
+  ([tab, fileSpaceId]) => {
+    if (tab !== "knowledge-space" || !fileSpaceId) return;
+    void refreshApplicationKnowledgeDocuments();
+  }
+);
+
+watch(syncCompletedTick, () => {
+  if (activeApplicationTab.value !== "knowledge-space") return;
+  void refreshApplicationKnowledgeDocuments();
+});
+
+function routeView(): RouteView {
   if (route.query.view === "repositories") return "repositories";
   if (route.query.view === "stories") return "stories";
   if (route.query.view === "application-scan") return "application-scan";
+  if (route.query.view === "application-knowledge") return "application-knowledge";
+  if (route.query.view === "application-videos") return "application-videos";
   if (route.query.view === "application-detail") return "application-detail";
   return "stories";
 }
 
-function updateViewQuery(
-  view: "repositories" | "application-detail" | "application-scan" | "stories"
-): void {
+function updateViewQuery(view: RouteView): void {
   if (routeView() === view) return;
   void router.replace({
     query: {
@@ -458,6 +629,26 @@ function applyRouteView(): void {
     }
     if (selectedApplication.value) {
       activeApplicationTab.value = "scan";
+      currentView.value = "application-detail";
+    }
+    return;
+  }
+  if (routeView() === "application-knowledge") {
+    if (!selectedApplication.value && store.applications[0]) {
+      store.selectApplication(store.applications[0].id);
+    }
+    if (selectedApplication.value) {
+      activeApplicationTab.value = "knowledge-space";
+      currentView.value = "application-detail";
+    }
+    return;
+  }
+  if (routeView() === "application-videos") {
+    if (!selectedApplication.value && store.applications[0]) {
+      store.selectApplication(store.applications[0].id);
+    }
+    if (selectedApplication.value) {
+      activeApplicationTab.value = "operation-videos";
       currentView.value = "application-detail";
     }
     return;
@@ -591,6 +782,165 @@ async function rescanSelectedApplication(): Promise<void> {
   const application = selectedApplication.value;
   if (!application) return;
   scanSettingsModalOpen.value = true;
+}
+
+async function provisionSelectedApplicationFileSpace(): Promise<void> {
+  const application = selectedApplication.value;
+  if (!application) return;
+
+  try {
+    const requestId = await store.provisionApplicationFileSpace(application.id);
+    if (requestId === application.fileSpaceId) {
+      toast.add({
+        title: "専用FileSpaceは設定済みです",
+        description: application.fileSpaceId,
+        color: "success",
+      });
+      return;
+    }
+
+    toast.add({
+      title: "専用FileSpaceの作成を開始しました",
+      description: requestId,
+      color: "success",
+    });
+
+    let watcher: ReturnType<typeof useGeminiFileSpaceSnapshot> | null = null;
+    watcher = useGeminiFileSpaceSnapshot(requestId, (request) => {
+      void store
+        .resolveApplicationFileSpaceProvisioning({
+          applicationId: application.id,
+          request,
+        })
+        .then((updatedApplication) => {
+          if (request.status === "completed") {
+            toast.add({
+              title: "アプリに専用FileSpaceを紐付けました",
+              description: updatedApplication?.fileSpaceId,
+              color: "success",
+            });
+            if (activeApplicationTab.value === "knowledge-space") {
+              void refreshApplicationKnowledgeDocuments();
+            }
+            watcher?.unsubscribe();
+          } else if (request.status === "error") {
+            toast.add({
+              title: "専用FileSpaceの作成に失敗しました",
+              description:
+                request.errorMessage ||
+                updatedApplication?.fileSpaceErrorMessage ||
+                "RequestDocを確認してください",
+              color: "error",
+            });
+            watcher?.unsubscribe();
+          }
+        });
+    });
+  } catch (err) {
+    toast.add({
+      title: "専用FileSpaceの作成に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function refreshApplicationKnowledgeDocuments(): Promise<void> {
+  const fileSpaceId = applicationKnowledgeFileSpaceId.value;
+  if (!fileSpaceId) return;
+  await fileSpaceStore.fetchDocumentsFromFirestore(fileSpaceId);
+  applicationKnowledgeDocumentsByFileSpace.value = {
+    ...applicationKnowledgeDocumentsByFileSpace.value,
+    [fileSpaceId]: [...fileSpaceDocuments.value],
+  };
+}
+
+async function uploadApplicationKnowledgeFiles(files: File[]): Promise<void> {
+  const application = selectedApplication.value;
+  const fileSpaceId = application?.fileSpaceId?.trim();
+  if (!application || !fileSpaceId) {
+    toast.add({
+      title: "専用FileSpaceを作成してください",
+      color: "warning",
+    });
+    return;
+  }
+
+  const organizationId = organizationStore.getLoggedInOrganizationId;
+  const spaceId = spaceStore.selectedSpace?.id;
+  if (!organizationId || !spaceId) {
+    toast.add({
+      title: "組織・スペースを確認してください",
+      color: "error",
+    });
+    return;
+  }
+
+  isUploadingApplicationKnowledge.value = true;
+  const succeeded: string[] = [];
+  const failed: string[] = [];
+  try {
+    for (const file of files) {
+      try {
+        const requestDoc = await fileSpaceStore.uploadFileToFileSpace({
+          storeId: fileSpaceId,
+          file,
+          mimeType: file.type || undefined,
+          description: `VibeControl knowledge for ${application.name}: ${file.name}`,
+          organizationId,
+          spaceId,
+        });
+        if (!requestDoc?.id) {
+          failed.push(file.name);
+          continue;
+        }
+        useGeminiFileSpaceSnapshot(requestDoc.id);
+        succeeded.push(file.name);
+      } catch {
+        failed.push(file.name);
+      }
+    }
+  } finally {
+    isUploadingApplicationKnowledge.value = false;
+    globalLoading.stopLoading();
+  }
+
+  if (succeeded.length > 0) {
+    toast.add({
+      title: `${succeeded.length}件を専用FileSpaceに投入しました`,
+      description: application.name,
+      color: "success",
+    });
+  }
+  if (failed.length > 0) {
+    toast.add({
+      title: `${failed.length}件の投入に失敗しました`,
+      description: failed.join(", "),
+      color: "error",
+    });
+  }
+}
+
+async function saveOperationVideo(
+  input: VibeControlOperationVideoSaveInput
+): Promise<void> {
+  try {
+    const video = await store.saveOperationVideoCapture(input);
+    toast.add({
+      title: "操作動画を保存しました",
+      description:
+        video.discoveryStatus === "queued"
+          ? "DiscoveryEngine登録を開始しました"
+          : "動画は保存されましたが、検索登録を確認してください",
+      color: video.discoveryStatus === "queued" ? "success" : "warning",
+    });
+  } catch (err) {
+    toast.add({
+      title: "操作動画の保存に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
 }
 
 function openJobLog(): void {

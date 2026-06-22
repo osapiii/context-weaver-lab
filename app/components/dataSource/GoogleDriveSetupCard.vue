@@ -139,10 +139,10 @@
           Drive から消えたファイルは App からも削除します（App → Drive への反映はしません）。
         </p>
         <button
-          v-if="config?.linkedFileSpaceId"
+          v-if="effectiveFileSpaceId"
           type="button"
           class="mt-2 inline-flex items-center gap-1 font-mono text-[10px] text-gray-400 hover:text-purple-700 dark:hover:text-purple-400"
-          :title="config.linkedFileSpaceId"
+          :title="effectiveFileSpaceId"
           @click="copyFileSpaceId"
         >
           <UIcon
@@ -275,14 +275,30 @@ import {
   extractDriveFolderId,
 } from "@composables/useGoogleDriveConfig";
 import { useGoogleDriveSyncStore } from "@stores/googleDriveSync";
+import { useGeminiFileSpaceOperatorStore } from "@stores/geminiFileSpaceOperator";
+import { useOrganizationStore } from "@stores/organization";
+import { useSpaceStore } from "@stores/space";
 import { useDefaultFileSpace } from "@composables/useDefaultFileSpace";
 import { useGoogleDriveFolderSync } from "@composables/useGoogleDriveFolderSync";
+import type { FirestoreDriveDoc } from "@utils/computeDrivePendingDiff";
+
+const props = withDefaults(
+  defineProps<{
+    fileSpaceId?: string | null;
+  }>(),
+  {
+    fileSpaceId: null,
+  }
+);
 
 const driveStore = useGoogleDriveSyncStore();
+const fileSpaceStore = useGeminiFileSpaceOperatorStore();
+const organizationStore = useOrganizationStore();
+const spaceStore = useSpaceStore();
 const googleWorkspace = useGoogleWorkspaceOAuth();
 const { config, isConfigured, serviceAccountEmail, refresh } =
   useGoogleDriveConfig();
-const { fileSpaceId } = useDefaultFileSpace();
+const { fileSpaceId: defaultFileSpaceId } = useDefaultFileSpace();
 const {
   isSyncInProgress,
   isPendingScanInProgress,
@@ -290,10 +306,16 @@ const {
   pendingScan,
   pendingNewFileCount,
   hasPendingImports,
-  runPendingDriveScan,
-  triggerDriveImport,
 } = useGoogleDriveFolderSync();
 const toast = useToast();
+
+const effectiveFileSpaceId = computed(
+  () =>
+    props.fileSpaceId?.trim() ||
+    config.value?.linkedFileSpaceId?.trim() ||
+    defaultFileSpaceId.value?.trim() ||
+    null
+);
 
 const showEditor = ref(false);
 const folderInput = ref("");
@@ -389,7 +411,7 @@ const copySA = async () => {
 };
 
 const copyFileSpaceId = async () => {
-  const id = config.value?.linkedFileSpaceId;
+  const id = effectiveFileSpaceId.value;
   if (!id) return;
   try {
     await navigator.clipboard.writeText(id);
@@ -424,6 +446,58 @@ const openDriveFolder = () => {
     "_blank",
     "noopener,noreferrer"
   );
+};
+
+const resolveSyncContext = () => {
+  const organizationId = organizationStore.getLoggedInOrganizationId;
+  const spaceId = spaceStore.selectedSpace?.id;
+  const fileSpaceId = effectiveFileSpaceId.value;
+  const rootFolderId = config.value?.rootFolderId;
+  if (!organizationId || !spaceId || !fileSpaceId || !rootFolderId) return null;
+  return { organizationId, spaceId, fileSpaceId, rootFolderId };
+};
+
+const runPendingDriveScan = async (): Promise<boolean> => {
+  const ctx = resolveSyncContext();
+  if (!ctx) return false;
+
+  try {
+    await fileSpaceStore.fetchDocumentsFromFirestore(ctx.fileSpaceId);
+  } catch {
+    // Firestore 取得失敗時は既存 store 状態で差分算出を試す.
+  }
+
+  const existingDocs: FirestoreDriveDoc[] = fileSpaceStore.documents.map(
+    (doc) => ({
+      driveFileId: doc.driveFileId ?? null,
+      driveModifiedTime: doc.driveModifiedTime ?? null,
+      name: doc.name ?? null,
+      agentSearchDocumentId: doc.agentSearchDocumentId ?? null,
+      registration: doc.registration ?? null,
+      filePath: doc.filePath ?? null,
+    })
+  );
+
+  return driveStore.scanPendingDriveFiles({
+    ...ctx,
+    existingDocs,
+  });
+};
+
+const triggerDriveImport = async (): Promise<boolean> => {
+  const ctx = resolveSyncContext();
+  if (!ctx) return false;
+  driveStore.lastTerminalSyncNotice = null;
+  const created = await driveStore.triggerImportFromDrive(ctx);
+  if (created) {
+    toast.add({
+      title: "Drive 取り込みを開始しました",
+      description:
+        "バックグラウンドで実行中です。ヘッダーからいつでも進捗を確認できます",
+      color: "info",
+    });
+  }
+  return Boolean(created);
 };
 
 const onRescanClick = async () => {
@@ -518,7 +592,7 @@ const onSave = async () => {
       rootFolderId: extractedFolderId.value,
       rootFolderName: testResult.value.rootFolderName || null,
       serviceAccountEmail,
-      linkedFileSpaceId: fileSpaceId.value ?? null,
+      linkedFileSpaceId: effectiveFileSpaceId.value,
     });
     toast.add({
       title: "Drive 連携を保存しました",
@@ -527,7 +601,7 @@ const onSave = async () => {
     });
     showEditor.value = false;
     await refresh();
-    if (fileSpaceId.value) {
+    if (effectiveFileSpaceId.value) {
       void runPendingDriveScan();
     }
   } catch (e) {

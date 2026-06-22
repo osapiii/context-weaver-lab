@@ -21,7 +21,7 @@ async def handle(context: ExecutionContext) -> dict:
     try:
         step1_list_documents.execute(context)
         
-        result = context.get('documents_list')
+        result = context.get('documents_info')
         next_page_token = context.get('next_page_token')
         
         # resultはstatus_codeとresponseを含む辞書形式
@@ -60,4 +60,3 @@ async def handle(context: ExecutionContext) -> dict:
             message="Unexpected server error",
             status_code=500
         )
-

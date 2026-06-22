@@ -11,6 +11,7 @@ from triggers import auth_email_link  # noqa: F401
 from triggers import google_workspace_oauth  # noqa: F401
 from triggers import github_oauth  # noqa: F401
 from triggers import guide_assistant  # noqa: F401
+from triggers import context_store_requests  # noqa: F401
 from triggers import member_user_requests  # noqa: F401
 from triggers import research_completion_email  # noqa: F401
 from triggers import saas_onboarding  # noqa: F401
@@ -34,6 +35,7 @@ from triggers.github_oauth import get_github_repository  # noqa: F401
 from triggers.github_oauth import list_github_merged_pull_requests  # noqa: F401
 from triggers.github_oauth import list_github_repositories  # noqa: F401
 from triggers.guide_assistant import ask_en_aistudio_guide  # noqa: F401
+from triggers.context_store_requests import on_context_store_request_created  # noqa: F401
 from triggers.member_user_requests import on_member_user_create_request_created  # noqa: F401
 from triggers.member_user_requests import on_member_user_delete_request_created  # noqa: F401
 from triggers.member_user_requests import on_member_user_update_request_created  # noqa: F401

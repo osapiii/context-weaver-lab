@@ -10,29 +10,38 @@ import {
 import { useContextStore } from "./context";
 import { useOrganizationStore } from "./organization";
 import { useSpaceStore } from "./space";
+import { useFirebaseStorageOperations } from "@composables/firebase-storage-operations";
 import { buildAdkInvokeInput } from "@utils/adkInvokeInputBuilder";
 import {
   buildApplicationScanInitialPrompt,
   type ApplicationScanFields,
 } from "@utils/applicationScanWorkspaceState";
+import { resolveStorageBucketName } from "@utils/adkAttachments";
+import { manualUploadRelativePath } from "@utils/knowledgeStoragePaths";
 import {
   buildInvokeModeStateFromWorkspaceState,
   buildWorkspaceSessionState,
 } from "@utils/workspaceSessionBuckets";
+import { useGeminiFileSpaceOperatorStore } from "./geminiFileSpaceOperator";
 import { defaultLlmModelSelectionForAdkMode } from "@models/llmModelSelection";
 import type { RequestStatus } from "@models/core/requestStatus";
+import type { DecodedFileSpaceOperationRequest } from "@models/geminiFileSpaceRequest";
 import type {
+  VibeControlApplicationFileSpaceProvisioningStatus,
   DecodedVibeControlApplication,
+  DecodedVibeControlOperationVideo,
   DecodedVibeControlSourceConnection,
   DecodedVibeControlStory,
   DecodedVibeControlStoryEvidence,
   VibeControlApplicationScanRun,
   VibeControlDriftLevel,
+  VibeControlOperationVideoDisplaySurface,
   VibeControlReviewState,
   VibeControlStoryStatus,
 } from "@models/vibeControl";
 import {
   vibeControlApplicationConverter,
+  vibeControlOperationVideoConverter,
   vibeControlSourceConnectionConverter,
   vibeControlStoryConverter,
   vibeControlStoryEvidenceConverter,
@@ -71,6 +80,16 @@ export type VibeControlApplicationInput = {
   defaultBranch?: string;
 };
 
+export type VibeControlOperationVideoSaveInput = {
+  applicationId: string;
+  title: string;
+  description?: string;
+  blob: Blob;
+  durationMs?: number;
+  contentType?: string;
+  sourceDisplaySurface?: VibeControlOperationVideoDisplaySurface;
+};
+
 const nowIso = () => new Date().toISOString();
 
 const toDocId = (value: string, fallback: string): string => {
@@ -80,6 +99,18 @@ const toDocId = (value: string, fallback: string): string => {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return normalized || fallback;
+};
+
+const extractFileSpaceIdFromCreateRequest = (
+  request: DecodedFileSpaceOperationRequest
+): string => {
+  const output = request.output;
+  if (!output || typeof output !== "object" || !("name" in output)) {
+    return "";
+  }
+  const name = output.name;
+  if (typeof name !== "string" || !name.trim()) return "";
+  return name.split("/").filter(Boolean).at(-1) ?? "";
 };
 
 const mockApplications: DecodedVibeControlApplication[] = [
@@ -463,11 +494,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
     stories: [] as DecodedVibeControlStory[],
     evidence: [] as DecodedVibeControlStoryEvidence[],
     sourceConnections: [] as DecodedVibeControlSourceConnection[],
+    operationVideos: [] as DecodedVibeControlOperationVideo[],
     selectedApplicationId: "" as string,
     selectedStoryId: "" as string,
     isLoading: false,
     isGenerating: false,
     isStartingApplicationScan: false,
+    isProvisioningApplicationFileSpace: false,
+    isSavingOperationVideo: false,
     error: null as string | null,
     lastRunLog: [] as string[],
     filters: {
@@ -506,6 +540,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
       if (!applicationId) return state.sourceConnections;
       return state.sourceConnections.filter(
         (source) => source.applicationId === applicationId
+      );
+    },
+    activeOperationVideos(state): DecodedVibeControlOperationVideo[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      if (!applicationId) return state.operationVideos;
+      return state.operationVideos.filter(
+        (video) => video.applicationId === applicationId
       );
     },
     filteredStories(state): DecodedVibeControlStory[] {
@@ -660,11 +702,22 @@ export const useVibeControlStore = defineStore("vibeControl", {
     sourceConnectionCollectionPath(): string {
       return useContextStore().baseFirestorePath("vibeControlSourceConnections");
     },
+    operationVideoCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlOperationVideos");
+    },
+    applicationFileSpaceStatus(
+      application: DecodedVibeControlApplication | null
+    ): VibeControlApplicationFileSpaceProvisioningStatus {
+      if (!application) return "missing";
+      if (application.fileSpaceId?.trim()) return "ready";
+      return application.fileSpaceProvisioningStatus ?? "missing";
+    },
     loadMockData(): void {
       this.applications = [...mockApplications];
       this.stories = [...mockStories];
       this.evidence = [...mockEvidence];
       this.sourceConnections = [...mockConnections];
+      this.operationVideos = [];
       this.selectedApplicationId = this.applications.some(
         (application) => application.id === this.selectedApplicationId
       )
@@ -687,7 +740,13 @@ export const useVibeControlStore = defineStore("vibeControl", {
       this.error = null;
       try {
         const firestoreOps = useFirestoreDocOperation();
-        const [applications, stories, evidence, sourceConnections] = await Promise.all([
+        const [
+          applications,
+          stories,
+          evidence,
+          sourceConnections,
+          operationVideos,
+        ] = await Promise.all([
           firestoreOps.getDocumentsWithQueryAndConverter({
             collectionName: this.applicationCollectionPath(),
             converter: vibeControlApplicationConverter,
@@ -710,11 +769,18 @@ export const useVibeControlStore = defineStore("vibeControl", {
             converter: vibeControlSourceConnectionConverter,
             limit: 50,
           }),
+          firestoreOps.getDocumentsWithQueryAndConverter({
+            collectionName: this.operationVideoCollectionPath(),
+            converter: vibeControlOperationVideoConverter,
+            orderBy: { field: "recordedAt", direction: "desc" },
+            limit: 200,
+          }),
         ]);
         this.applications = applications;
         this.stories = stories;
         this.evidence = evidence;
         this.sourceConnections = sourceConnections;
+        this.operationVideos = operationVideos;
         this.selectedApplicationId = this.applications.some(
           (application) => application.id === this.selectedApplicationId
         )
@@ -805,6 +871,16 @@ export const useVibeControlStore = defineStore("vibeControl", {
         const currentStories = this.stories.filter(
           (story) => story.applicationId === applicationId
         );
+        const fileSpaceId = input.fileSpaceId?.trim() || undefined;
+        const fileSpaceProvisioningStatus:
+          | VibeControlApplicationFileSpaceProvisioningStatus
+          | undefined = fileSpaceId
+          ? "ready"
+          : currentApplication?.fileSpaceProvisioningStatus === "creating"
+            ? "creating"
+            : currentApplication?.fileSpaceProvisioningStatus === "error"
+              ? "error"
+              : "missing";
         const application: DecodedVibeControlApplication = {
           id: applicationId,
           applicationKey,
@@ -814,7 +890,13 @@ export const useVibeControlStore = defineStore("vibeControl", {
           owner: input.owner?.trim() || undefined,
           labels: input.labels?.map((label) => label.trim()).filter(Boolean) ?? [],
           startUrl: input.startUrl?.trim() || undefined,
-          fileSpaceId: input.fileSpaceId?.trim() || undefined,
+          fileSpaceId,
+          fileSpaceCreateRequestId: currentApplication?.fileSpaceCreateRequestId,
+          fileSpaceProvisioningStatus,
+          fileSpaceErrorMessage:
+            fileSpaceProvisioningStatus === "error"
+              ? currentApplication?.fileSpaceErrorMessage
+              : undefined,
           repoFullName,
           defaultBranch: input.defaultBranch?.trim() || "main",
           storyCount: currentStories.length || currentApplication?.storyCount || 0,
@@ -901,6 +983,180 @@ export const useVibeControlStore = defineStore("vibeControl", {
       });
       return sources;
     },
+    async persistApplicationAndSourceConnections(
+      application: DecodedVibeControlApplication,
+      syncedAt = nowIso()
+    ): Promise<void> {
+      this.applications = [
+        application,
+        ...this.applications.filter((item) => item.id !== application.id),
+      ];
+      this.sourceConnections = this.buildSourceConnectionsForApplication(
+        application,
+        syncedAt
+      );
+
+      const firestoreOps = useFirestoreDocOperation();
+      await Promise.all([
+        firestoreOps.createDocument({
+          collectionName: this.applicationCollectionPath(),
+          docId: application.id,
+          docData: application,
+          converter: vibeControlApplicationConverter,
+          merge: true,
+        }),
+        ...this.sourceConnections
+          .filter((source) => source.applicationId === application.id)
+          .map((source) =>
+            firestoreOps.createDocument({
+              collectionName: this.sourceConnectionCollectionPath(),
+              docId: source.id,
+              docData: source,
+              converter: vibeControlSourceConnectionConverter,
+              merge: true,
+            })
+          ),
+      ]);
+    },
+    async provisionApplicationFileSpace(applicationId: string): Promise<string> {
+      const application = this.applications.find(
+        (item) => item.id === applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      if (application.fileSpaceId?.trim()) {
+        const nextApplication: DecodedVibeControlApplication = {
+          ...application,
+          fileSpaceProvisioningStatus: "ready",
+          fileSpaceErrorMessage: undefined,
+        };
+        await this.persistApplicationAndSourceConnections(nextApplication);
+        return application.fileSpaceId;
+      }
+
+      const organizationId = useOrganizationStore().getLoggedInOrganizationId;
+      const spaceId = useSpaceStore().selectedSpace?.id ?? "";
+      if (!organizationId || !spaceId) {
+        throw new Error("組織・スペースを確認してください");
+      }
+
+      this.isProvisioningApplicationFileSpace = true;
+      this.error = null;
+      try {
+        const requestDoc = await useGeminiFileSpaceOperatorStore().createFileSpace({
+          displayName: `VibeControl / ${application.name}`,
+          description: [
+            "Application-scoped VibeControl knowledge space.",
+            `Application ID: ${application.id}`,
+            `Application Key: ${application.applicationKey}`,
+            `Repository: ${application.repoFullName}`,
+            application.startUrl ? `Start URL: ${application.startUrl}` : "",
+            "Use this isolated FileSpace for product docs, operation videos, QA evidence, and user story generation sources.",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          fileSpaceType: "manual",
+          organizationId,
+          spaceId,
+        });
+
+        if (!requestDoc?.id) {
+          throw new Error(
+            useGeminiFileSpaceOperatorStore().crudError ||
+              "FileSpace作成リクエストの作成に失敗しました"
+          );
+        }
+
+        const nextApplication: DecodedVibeControlApplication = {
+          ...application,
+          fileSpaceCreateRequestId: requestDoc.id,
+          fileSpaceProvisioningStatus: "creating",
+          fileSpaceErrorMessage: undefined,
+        };
+        await this.persistApplicationAndSourceConnections(nextApplication);
+        this.lastRunLog.unshift(
+          `Knowledge Space: ${application.name} の専用FileSpace作成を開始`
+        );
+        return requestDoc.id;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "FileSpace作成に失敗しました";
+        const failedApplication: DecodedVibeControlApplication = {
+          ...application,
+          fileSpaceProvisioningStatus: "error",
+          fileSpaceErrorMessage: message,
+        };
+        await this.persistApplicationAndSourceConnections(failedApplication);
+        this.error = message;
+        throw err;
+      } finally {
+        this.isProvisioningApplicationFileSpace = false;
+      }
+    },
+    async resolveApplicationFileSpaceProvisioning(params: {
+      applicationId: string;
+      request: DecodedFileSpaceOperationRequest;
+    }): Promise<DecodedVibeControlApplication | null> {
+      const application = this.applications.find(
+        (item) => item.id === params.applicationId
+      );
+      if (!application) return null;
+      if (params.request.input.operationType !== "fileSpaceCreate") return null;
+      if (
+        application.fileSpaceCreateRequestId &&
+        application.fileSpaceCreateRequestId !== params.request.id
+      ) {
+        return null;
+      }
+
+      if (params.request.status === "completed") {
+        const fileSpaceId = extractFileSpaceIdFromCreateRequest(params.request);
+        if (!fileSpaceId) {
+          const failedApplication: DecodedVibeControlApplication = {
+            ...application,
+            fileSpaceProvisioningStatus: "error",
+            fileSpaceErrorMessage:
+              "FileSpace作成は完了しましたが、FileSpace IDを取得できませんでした",
+          };
+          await this.persistApplicationAndSourceConnections(failedApplication);
+          return failedApplication;
+        }
+
+        const nextApplication: DecodedVibeControlApplication = {
+          ...application,
+          fileSpaceId,
+          fileSpaceCreateRequestId: params.request.id,
+          fileSpaceProvisioningStatus: "ready",
+          fileSpaceErrorMessage: undefined,
+        };
+        await this.persistApplicationAndSourceConnections(nextApplication);
+        this.lastRunLog.unshift(
+          `Knowledge Space: ${application.name} を ${fileSpaceId} に紐付け`
+        );
+        return nextApplication;
+      }
+
+      if (params.request.status === "error") {
+        const failedApplication: DecodedVibeControlApplication = {
+          ...application,
+          fileSpaceProvisioningStatus: "error",
+          fileSpaceErrorMessage:
+            params.request.errorMessage || "FileSpace作成に失敗しました",
+        };
+        await this.persistApplicationAndSourceConnections(failedApplication);
+        return failedApplication;
+      }
+
+      const creatingApplication: DecodedVibeControlApplication = {
+        ...application,
+        fileSpaceCreateRequestId: params.request.id,
+        fileSpaceProvisioningStatus: "creating",
+        fileSpaceErrorMessage: undefined,
+      };
+      await this.persistApplicationAndSourceConnections(creatingApplication);
+      return creatingApplication;
+    },
     async deleteApplication(applicationId: string): Promise<boolean> {
       if (this.applications.length <= 1) {
         this.error = "少なくとも1つのアプリケーションが必要です";
@@ -918,6 +1174,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
         );
         const sources = this.sourceConnections.filter(
           (source) => source.applicationId === applicationId
+        );
+        const videos = this.operationVideos.filter(
+          (video) => video.applicationId === applicationId
         );
 
         await Promise.all([
@@ -943,6 +1202,12 @@ export const useVibeControlStore = defineStore("vibeControl", {
               docId: source.id,
             })
           ),
+          ...videos.map((video) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.operationVideoCollectionPath(),
+              docId: video.id,
+            })
+          ),
         ]);
 
         this.applications = this.applications.filter(
@@ -956,6 +1221,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
         );
         this.sourceConnections = this.sourceConnections.filter(
           (source) => source.applicationId !== applicationId
+        );
+        this.operationVideos = this.operationVideos.filter(
+          (video) => video.applicationId !== applicationId
         );
         this.selectedApplicationId = this.applications[0]?.id ?? "";
         this.selectedStoryId =
@@ -1016,7 +1284,11 @@ export const useVibeControlStore = defineStore("vibeControl", {
         domain: currentApplication?.domain,
         owner: currentApplication?.owner,
         labels: currentApplication?.labels ?? [],
+        startUrl: currentApplication?.startUrl,
         fileSpaceId,
+        fileSpaceCreateRequestId: currentApplication?.fileSpaceCreateRequestId,
+        fileSpaceProvisioningStatus: "ready",
+        fileSpaceErrorMessage: undefined,
         repoFullName,
         defaultBranch,
         storyCount: currentApplication?.storyCount ?? 0,
@@ -1187,6 +1459,15 @@ export const useVibeControlStore = defineStore("vibeControl", {
               merge: true,
             })
           ),
+          ...this.operationVideos.map((item) =>
+            firestoreOps.createDocument({
+              collectionName: this.operationVideoCollectionPath(),
+              docId: item.id || `operation_video_${createRandomDocId()}`,
+              docData: item,
+              converter: vibeControlOperationVideoConverter,
+              merge: true,
+            })
+          ),
         ]);
         this.lastRunLog.push("Firestore: 現在のSSOT snapshotを保存");
       } catch (err) {
@@ -1194,6 +1475,230 @@ export const useVibeControlStore = defineStore("vibeControl", {
         this.error = err instanceof Error ? err.message : "SSOT保存に失敗しました";
       } finally {
         this.isLoading = false;
+      }
+    },
+    buildOperationVideoMarkdown(params: {
+      application: DecodedVibeControlApplication;
+      videoId: string;
+      title: string;
+      description?: string;
+      bucketName: string;
+      storagePath: string;
+      contentType: string;
+      sizeBytes: number;
+      durationMs?: number;
+      recordedAt: string;
+      sourceDisplaySurface?: VibeControlOperationVideoDisplaySurface;
+    }): string {
+      const durationSeconds =
+        typeof params.durationMs === "number"
+          ? Math.round(params.durationMs / 1000)
+          : null;
+      return [
+        `# ${params.title}`,
+        "",
+        params.description?.trim() || "操作動画のメタデータです。",
+        "",
+        "## Application",
+        `- Name: ${params.application.name}`,
+        `- Application ID: ${params.application.id}`,
+        `- Application Key: ${params.application.applicationKey}`,
+        `- Repository: ${params.application.repoFullName}`,
+        params.application.startUrl
+          ? `- Start URL: ${params.application.startUrl}`
+          : "",
+        "",
+        "## Recording",
+        `- Video ID: ${params.videoId}`,
+        `- Recorded At: ${params.recordedAt}`,
+        `- Display Surface: ${params.sourceDisplaySurface ?? "unknown"}`,
+        durationSeconds !== null ? `- Duration: ${durationSeconds} seconds` : "",
+        `- Content Type: ${params.contentType}`,
+        `- Size Bytes: ${params.sizeBytes}`,
+        "",
+        "## Storage",
+        `- Bucket: ${params.bucketName}`,
+        `- Path: ${params.storagePath}`,
+      ]
+        .filter((line) => line !== "")
+        .join("\n");
+    },
+    async saveOperationVideoCapture(
+      input: VibeControlOperationVideoSaveInput
+    ): Promise<DecodedVibeControlOperationVideo> {
+      const application = this.applications.find(
+        (item) => item.id === input.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      const fileSpaceId = application.fileSpaceId?.trim();
+      if (!fileSpaceId) {
+        throw new Error("操作動画をDiscoveryEngineへ登録するFileSpace IDを設定してください");
+      }
+
+      const organizationStore = useOrganizationStore();
+      const spaceStore = useSpaceStore();
+      const organizationId = organizationStore.getLoggedInOrganizationId;
+      const spaceId = spaceStore.selectedSpace?.id ?? "";
+      if (!organizationId || !spaceId) {
+        throw new Error("組織・スペースを確認してください");
+      }
+
+      const title = input.title.trim();
+      if (!title) {
+        throw new Error("動画タイトルを入力してください");
+      }
+      if (input.blob.size <= 0) {
+        throw new Error("録画データが空です");
+      }
+
+      this.isSavingOperationVideo = true;
+      this.error = null;
+
+      try {
+        const contextStore = useContextStore();
+        const storageOps = useFirebaseStorageOperations();
+        const config = useRuntimeConfig();
+        const bucketName = resolveStorageBucketName(
+          config.public.firebase.storageBucket
+        );
+        const now = nowIso();
+        const videoId = `operation-video-${createRandomDocId()}`;
+        const safeTitle = toDocId(title, "operation-video");
+        const timestamp = now.replace(/[:.]/g, "-");
+        const contentType = input.contentType || input.blob.type || "video/webm";
+        const extension = contentType.includes("mp4") ? "mp4" : "webm";
+        const fileName = `${safeTitle}-${timestamp}.${extension}`;
+        const storagePath = contextStore.baseGcsPath(
+          `vibeControl/applications/${application.id}/operationVideos/${videoId}/${fileName}`
+        );
+
+        const uploaded = await storageOps.uploadPdfFile({
+          bucketName,
+          filePath: storagePath,
+          rawData: input.blob,
+          mimeType: contentType,
+        });
+        if (!uploaded) {
+          throw new Error("操作動画のFirebase Storage保存に失敗しました");
+        }
+
+        const metadataFileName = `${safeTitle}-${timestamp}.md`;
+        const metadataStoragePath = contextStore.baseGcsPath(
+          manualUploadRelativePath({
+            fileSpaceId,
+            fileName: metadataFileName,
+          })
+        );
+        const metadataMarkdown = this.buildOperationVideoMarkdown({
+          application,
+          videoId,
+          title,
+          description: input.description,
+          bucketName,
+          storagePath,
+          contentType,
+          sizeBytes: input.blob.size,
+          durationMs: input.durationMs,
+          recordedAt: now,
+          sourceDisplaySurface: input.sourceDisplaySurface,
+        });
+
+        let fileSpaceRequestId: string | undefined;
+        let discoveryStatus: DecodedVibeControlOperationVideo["discoveryStatus"] =
+          "not_registered";
+        let discoveryErrorMessage: string | undefined;
+
+        const metadataUploaded = await storageOps.uploadPdfFile({
+          bucketName,
+          filePath: metadataStoragePath,
+          rawData: new Blob([metadataMarkdown], { type: "text/markdown" }),
+          mimeType: "text/markdown",
+        });
+
+        if (metadataUploaded) {
+          const requestDoc =
+            await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
+              operationType: "fileSpaceUpload",
+              storeId: fileSpaceId,
+              bucketName,
+              filePath: metadataStoragePath,
+              mimeType: "text/markdown",
+              documentId: `vibecontrol-operation-video-${videoId}`,
+              description: `VibeControl operation video metadata: ${title}`,
+              customMetadata: [
+                { key: "source", value: "vibe-control-operation-video" },
+                { key: "applicationId", value: application.id },
+                { key: "applicationKey", value: application.applicationKey },
+                { key: "operationVideoId", value: videoId },
+                { key: "videoStoragePath", value: storagePath },
+              ],
+              originalFileInfo: {
+                fileName: metadataFileName,
+                bytes: new Blob([metadataMarkdown]).size,
+              },
+              organizationId,
+              spaceId,
+            });
+          if (requestDoc?.id) {
+            fileSpaceRequestId = requestDoc.id;
+            discoveryStatus = "queued";
+          } else {
+            discoveryStatus = "error";
+            discoveryErrorMessage =
+              "FileSpace upload RequestDocの作成に失敗しました";
+          }
+        } else {
+          discoveryStatus = "error";
+          discoveryErrorMessage = "検索用メタデータMarkdownの保存に失敗しました";
+        }
+
+        const video: DecodedVibeControlOperationVideo = {
+          id: videoId,
+          applicationId: application.id,
+          applicationKey: application.applicationKey,
+          title,
+          description: input.description?.trim() || undefined,
+          fileName,
+          bucketName,
+          storagePath,
+          contentType,
+          sizeBytes: input.blob.size,
+          durationMs: input.durationMs,
+          fileSpaceId,
+          fileSpaceRequestId,
+          metadataFileName,
+          metadataStoragePath,
+          discoveryStatus,
+          discoveryErrorMessage,
+          sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
+          recordedAt: now,
+        };
+
+        await useFirestoreDocOperation().createDocument({
+          collectionName: this.operationVideoCollectionPath(),
+          docId: video.id,
+          docData: video,
+          converter: vibeControlOperationVideoConverter,
+          merge: true,
+        });
+
+        this.operationVideos = [
+          video,
+          ...this.operationVideos.filter((item) => item.id !== video.id),
+        ];
+        this.lastRunLog.unshift(
+          `Operation Video: ${application.name} に ${title} を保存`
+        );
+        return video;
+      } catch (err) {
+        log("ERROR", "VibeControl operation video save failed", err);
+        this.error =
+          err instanceof Error ? err.message : "操作動画の保存に失敗しました";
+        throw err;
+      } finally {
+        this.isSavingOperationVideo = false;
       }
     },
     async persistApplicationScanRun(params: {
@@ -1205,6 +1710,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
         ...params.application,
         startUrl: params.run.startUrl,
         fileSpaceId: params.run.fileSpaceId || params.application.fileSpaceId,
+        fileSpaceProvisioningStatus:
+          params.run.fileSpaceId || params.application.fileSpaceId
+            ? "ready"
+            : params.application.fileSpaceProvisioningStatus,
+        fileSpaceErrorMessage:
+          params.run.fileSpaceId || params.application.fileSpaceId
+            ? undefined
+            : params.application.fileSpaceErrorMessage,
         lastScan: params.run,
       };
       const index = this.applications.findIndex(

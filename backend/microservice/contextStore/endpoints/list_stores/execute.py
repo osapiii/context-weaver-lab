@@ -21,10 +21,10 @@ async def handle(context: ExecutionContext) -> dict:
     try:
         step1_list_stores.execute(context)
         
-        stores_list = context.get('stores_list')
+        stores_info = context.get('stores_info')
         return ResponseFormatter.success(
             request_id=context.request_id,
-            output={'stores': stores_list}
+            output=stores_info
         )
     except FatalStepError as e:
         if context.logger:
@@ -51,4 +51,3 @@ async def handle(context: ExecutionContext) -> dict:
             message="Unexpected server error",
             status_code=500
         )
-

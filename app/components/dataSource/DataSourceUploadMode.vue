@@ -244,7 +244,7 @@
           tone="blue"
           layout="tile"
         >
-          <GoogleDriveSetupCard />
+          <GoogleDriveSetupCard :file-space-id="fileSpaceId" />
         </IngestMethodCard>
 
         <!-- D. クリップボード -->
@@ -398,7 +398,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useToast } from "#imports";
 import log from "@utils/logger";
-import EnAlert from "@components/EnAlert.vue";
 import EnButton from "@components/EnButton.vue";
 import ConsultationKnowledgeListThumb from "@components/AgentWorkspace/ConsultationKnowledgeListThumb.vue";
 import PenguinCompanion from "@components/dataSource/PenguinCompanion.vue";
