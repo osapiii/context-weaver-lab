@@ -32,7 +32,9 @@ export type AdkAgentMode =
   | "data_analysis"
   | "web_page"
   | "application_scan"
-  | "business_partner";
+  | "business_partner"
+  | "vibe_capability_structuring"
+  | "vibe_story_generation";
 
 export interface AgentSseArtifact {
   kind:
@@ -325,7 +327,9 @@ const parseWorkspaceMode = (value: unknown): AdkAgentMode | undefined => {
     value === "research" ||
     value === "data_analysis" ||
     value === "web_page" ||
-    value === "application_scan"
+    value === "application_scan" ||
+    value === "vibe_capability_structuring" ||
+    value === "vibe_story_generation"
   ) {
     return value;
   }
@@ -352,6 +356,10 @@ const resolveEndpoint = (mode: AdkAgentMode): string => {
       return pick(pub.enAiStudioAdkImageUrl);
     case "consultation":
       return pick(pub.enAiStudioAdkConsultationUrl);
+    case "vibe_capability_structuring":
+      return pick(pub.enAiStudioAdkVibeCapabilityStructuringUrl) || base;
+    case "vibe_story_generation":
+      return pick(pub.enAiStudioAdkVibeStoryGenerationUrl) || base;
     default:
       return "";
   }
@@ -435,7 +443,6 @@ export const useAgentSseClient = () => {
     let buffer = "";
     let receivedDone = false;
 
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;

@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 from lib.adk_artifact_catalog import ArtifactDescriptor
-from lib.adk_artifact_publish import maybe_register_artifact_to_agent_search
+from lib.adk_artifact_publish import (
+    maybe_register_artifact_to_agent_search,
+    upsert_vibe_control_source_asset,
+)
 
 
 def _descriptor() -> ArtifactDescriptor:
@@ -49,7 +52,13 @@ def test_maybe_register_artifact_posts_to_context_store(monkeypatch):
         metadata={
             "agentSearchImport": "true",
             "fileSpaceId": "fs1",
+            "source": "vibe-control-application-scan-sitemap",
             "scanId": "scan-1",
+            "applicationId": "app-1",
+            "applicationKey": "APP",
+            "applicationName": "Example App",
+            "repoFullName": "enostech/example",
+            "sourceAssetId": "source-asset-sitemap",
         },
         organization_id="org",
         space_id="space",
@@ -59,3 +68,65 @@ def test_maybe_register_artifact_posts_to_context_store(monkeypatch):
     assert calls[0][0] == "https://context-store.example/context-store/fs1/upload"
     assert calls[0][1]["input"]["bucketName"] == "storage-bucket"
     assert calls[0][1]["input"]["documentId"] == "adk_abc123"
+    custom = {
+        item["key"]: item["stringValue"]
+        for item in calls[0][1]["input"]["customMetadata"]
+    }
+    assert custom["source"] == "vibe-control-application-scan-sitemap"
+    assert custom["applicationId"] == "app-1"
+    assert custom["sourceAssetId"] == "source-asset-sitemap"
+
+
+def test_upsert_vibe_control_source_asset_catalog_doc():
+    writes = []
+
+    class Snap:
+        exists = False
+
+    class Ref:
+        def get(self):
+            return Snap()
+
+        def set(self, payload, merge):
+            writes.append((payload, merge))
+
+    class FakeDb:
+        def __init__(self):
+            self.path = ""
+
+        def document(self, path):
+            self.path = path
+            return Ref()
+
+    db = FakeDb()
+    upsert_vibe_control_source_asset(
+        db,
+        descriptor=_descriptor(),
+        metadata={
+            "agentSearchImport": "true",
+            "fileSpaceId": "fs1",
+            "source": "vibe-control-application-screenshot-observation",
+            "scanId": "scan-1",
+            "phase": "screen_observation",
+            "url": "https://example.com/app",
+            "title": "Application screen observation 001",
+            "applicationId": "app-1",
+            "applicationKey": "APP",
+            "applicationName": "Example App",
+            "repoFullName": "enostech/example",
+            "sourceAssetId": "source-asset-screen-001",
+            "screenshotFilename": "application_scan_001_screenshot.png",
+        },
+        organization_id="org",
+        space_id="space",
+        discovery_import={"status": "queued", "documentId": "adk_abc123"},
+    )
+
+    assert db.path.endswith("/vibeControlSourceAssets/source-asset-screen-001")
+    assert writes
+    payload, merge = writes[0]
+    assert merge is True
+    assert payload["applicationId"] == "app-1"
+    assert payload["sourceType"] == "application_screenshot"
+    assert payload["discoveryStatus"] == "queued"
+    assert payload["metadata"]["screenshotFilename"] == "application_scan_001_screenshot.png"

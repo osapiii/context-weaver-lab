@@ -10,6 +10,7 @@ import { RequestMetadataSchema } from "@models/core/operationMetadata";
 import {
   ADK_INVOKE_REQUEST_COLLECTION,
   adkInvokeRequestConverter,
+  type AdkInvokeOutput,
   type AdkInvokeInput,
 } from "@models/adkInvokeRequest";
 import type { RequestStatus } from "@models/core/requestStatus";
@@ -85,7 +86,11 @@ export const watchAdkInvokeRequest = (params: {
   organizationId: string;
   spaceId: string;
   requestId: string;
-  onUpdate: (status: RequestStatus, errorMessage?: string) => void;
+  onUpdate: (
+    status: RequestStatus,
+    errorMessage?: string,
+    output?: AdkInvokeOutput
+  ) => void;
 }): (() => void) => {
   const contextStore = useContextStore();
   const path = contextStore.baseFirestorePath(ADK_INVOKE_REQUEST_COLLECTION);
@@ -100,7 +105,7 @@ export const watchAdkInvokeRequest = (params: {
       const status = (data?.status as RequestStatus) ?? "pending";
       const errorMessage =
         typeof data?.errorMessage === "string" ? data.errorMessage : undefined;
-      params.onUpdate(status, errorMessage);
+      params.onUpdate(status, errorMessage, data?.output as AdkInvokeOutput);
     },
     (error) => {
       log("ERROR", "[useAdkInvokeRequest] watch failed", error);

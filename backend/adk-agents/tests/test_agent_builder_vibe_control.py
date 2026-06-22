@@ -27,3 +27,29 @@ def test_build_vibe_control_agent_has_ssot_tools(monkeypatch):
     joined = " ".join(_tool_names(agent)).lower()
     assert "read_vibe_control_sources" in joined
     assert "save_user_story_ssot" in joined
+
+
+def test_build_vibe_capability_structuring_agent_has_tools(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    agent = build_agent_for_mode(
+        "vibe_capability_structuring",
+        datastore_path=None,
+        model="gemini-2.5-flash",
+    )
+    assert agent.name == "vibe_capability_structuring_agent"
+    joined = " ".join(_tool_names(agent)).lower()
+    assert "read_capability_structuring_context" in joined
+    assert "save_capability_structure" in joined
+
+
+def test_build_vibe_story_generation_agent_has_tools(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    agent = build_agent_for_mode(
+        "vibe_story_generation",
+        datastore_path=None,
+        model="gemini-2.5-flash",
+    )
+    assert agent.name == "vibe_story_generation_agent"
+    joined = " ".join(_tool_names(agent)).lower()
+    assert "read_story_generation_context" in joined
+    assert "save_story_generation" in joined

@@ -37,6 +37,8 @@ export const ADK_TASK_LABELS: Record<EnAiStudioActiveTask, string> = {
   data_analysis: "データ分析",
   web_page: "WEBページ",
   application_scan: "アプリスキャン",
+  vibe_capability_structuring: "Capability解析",
+  vibe_story_generation: "Story生成",
 };
 
 /** ADK セッションのバッジ色 (CLAUDE.md の AI = violet 規約に準拠) */

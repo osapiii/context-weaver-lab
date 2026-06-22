@@ -112,6 +112,16 @@
 
       <template v-if="activeApplicationTab === 'stories'">
         <div class="space-y-4">
+          <VibeControlStoryGenerationPanel
+            :application="selectedApplication"
+            :capabilities="store.activeCapabilities"
+            :stories="store.activeStories"
+            :evidence="store.activeEvidence"
+            :source-assets="store.activeSourceAssets"
+            :is-generating="store.isGenerating"
+            @generate-stories="startStoryGeneration"
+          />
+
           <VibeControlGovernanceHud
             :application="selectedApplication"
             :stories="store.activeStories"
@@ -130,6 +140,19 @@
             @select-story="openStoryDetail"
           />
         </div>
+      </template>
+
+      <template v-else-if="activeApplicationTab === 'capabilities'">
+        <VibeControlGenerationWorkbench
+          :application="selectedApplication"
+          :capabilities="store.activeCapabilities"
+          :stories="store.activeStories"
+          :evidence="store.activeEvidence"
+          :source-assets="store.activeSourceAssets"
+          :generation-sessions="store.activeGenerationSessions"
+          :is-generating="store.isGenerating"
+          @structure-capabilities="startCapabilityStructuring"
+        />
       </template>
 
       <template v-else-if="activeApplicationTab === 'basic'">
@@ -157,8 +180,6 @@
         <VibeControlSourceSetup
           :selected-application="selectedApplication"
           :source-connections="store.activeSourceConnections"
-          :is-generating="store.isGenerating"
-          @generate="store.runMockGeneration($event)"
           @persist="store.persistCurrentSnapshot()"
         />
       </template>
@@ -286,6 +307,7 @@ import type { Document } from "@models/geminiFileSpaceRequest";
 import type {
   VibeControlApplicationInput,
   VibeControlFilters,
+  VibeControlGenerationInput,
   VibeControlOperationVideoSaveInput,
 } from "@stores/vibeControl";
 import type { GitHubRepositorySummary } from "@composables/useGitHubOAuth";
@@ -295,6 +317,7 @@ type VibeControlView =
   | "application-detail"
   | "story-detail";
 type ApplicationDetailTab =
+  | "capabilities"
   | "stories"
   | "basic"
   | "scan"
@@ -305,6 +328,7 @@ type ApplicationKnowledgeMode = "upload" | "view";
 type RouteView =
   | "repositories"
   | "application-detail"
+  | "application-capabilities"
   | "application-scan"
   | "application-knowledge"
   | "application-videos"
@@ -405,6 +429,12 @@ const pageSubtitle = computed(() => {
 
 const applicationTabItems = computed(() => [
   {
+    value: "capabilities",
+    label: "Capability",
+    icon: "material-symbols:account-tree-outline",
+    count: store.activeCapabilities.length,
+  },
+  {
     value: "stories",
     label: "ユーザーストーリー",
     icon: "material-symbols:article-outline",
@@ -491,6 +521,8 @@ const breadcrumbItems = computed(() => {
       label:
         activeApplicationTab.value === "basic"
           ? "基本情報"
+          : activeApplicationTab.value === "capabilities"
+            ? "Capability"
           : activeApplicationTab.value === "scan"
             ? "Visual QA"
           : activeApplicationTab.value === "knowledge-space"
@@ -549,6 +581,7 @@ watch(
 watch(activeApplicationTab, (tab) => {
   if (currentView.value !== "application-detail") return;
   const viewByTab: Record<ApplicationDetailTab, RouteView> = {
+    capabilities: "application-capabilities",
     stories: "stories",
     basic: "application-detail",
     scan: "application-scan",
@@ -575,6 +608,9 @@ watch(syncCompletedTick, () => {
 function routeView(): RouteView {
   if (route.query.view === "repositories") return "repositories";
   if (route.query.view === "stories") return "stories";
+  if (route.query.view === "application-capabilities") {
+    return "application-capabilities";
+  }
   if (route.query.view === "application-scan") return "application-scan";
   if (route.query.view === "application-knowledge") return "application-knowledge";
   if (route.query.view === "application-videos") return "application-videos";
@@ -608,6 +644,17 @@ function applyRouteView(): void {
     }
     if (selectedApplication.value) {
       activeApplicationTab.value = "stories";
+      currentView.value = "application-detail";
+    }
+    return;
+  }
+
+  if (routeView() === "application-capabilities") {
+    if (!selectedApplication.value && store.applications[0]) {
+      store.selectApplication(store.applications[0].id);
+    }
+    if (selectedApplication.value) {
+      activeApplicationTab.value = "capabilities";
       currentView.value = "application-detail";
     }
     return;
@@ -772,6 +819,55 @@ async function startApplicationScan(fields: ApplicationScanFields): Promise<void
   } catch (err) {
     toast.add({
       title: "Application Scanの開始に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function startCapabilityStructuring(
+  input: VibeControlGenerationInput
+): Promise<void> {
+  try {
+    const requestId = await store.startCapabilityStructuring({
+      applicationId: input.applicationId || store.selectedApplicationId,
+      prompt:
+        input.prompt ||
+        `${input.applicationName} のCapability構造をSourceAssetから解析してください。`,
+    });
+    toast.add({
+      title: "Capability解析ADKを開始しました",
+      description: requestId,
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "Capability解析ADKの開始に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function startStoryGeneration(
+  input: VibeControlGenerationInput
+): Promise<void> {
+  try {
+    const requestId = await store.startStoryGeneration({
+      applicationId: input.applicationId || store.selectedApplicationId,
+      capabilityId: input.capabilityId,
+      prompt:
+        input.prompt ||
+        `${input.applicationName} のCapability配下に置くユーザーストーリーを生成してください。`,
+    });
+    toast.add({
+      title: "Story生成ADKを開始しました",
+      description: requestId,
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "Story生成ADKの開始に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });

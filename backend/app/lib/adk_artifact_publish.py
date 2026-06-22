@@ -74,17 +74,145 @@ def _custom_metadata_list(
     metadata: dict[str, Any],
     descriptor: ArtifactDescriptor,
 ) -> list[dict[str, Any]]:
+    source = _metadata_value(metadata, "source") or "application_scan"
     out: list[dict[str, Any]] = [
-        {"key": "source", "stringValue": "application_scan"},
+        {"key": "source", "stringValue": source},
         {"key": "artifactId", "stringValue": descriptor.artifact_id},
         {"key": "adkFilename", "stringValue": descriptor.adk_filename},
         {"key": "contentType", "stringValue": descriptor.content_type},
     ]
-    for key in ("scanId", "phase", "url", "title", "kind"):
+    for key in (
+        "scanId",
+        "phase",
+        "url",
+        "title",
+        "kind",
+        "applicationId",
+        "applicationKey",
+        "applicationName",
+        "repoFullName",
+        "sourceAssetId",
+        "screenshotFilename",
+        "documentKind",
+    ):
         value = _metadata_value(metadata, key)
         if value:
             out.append({"key": key, "stringValue": value})
     return out
+
+
+def _source_asset_type_from_metadata(
+    metadata: dict[str, Any],
+    descriptor: ArtifactDescriptor,
+) -> str | None:
+    source = _metadata_value(metadata, "source")
+    phase = _metadata_value(metadata, "phase")
+    document_kind = _metadata_value(metadata, "documentKind")
+    if source == "vibe-control-application-screenshot-observation":
+        return "application_screenshot"
+    if source == "vibe-control-application-scan-sitemap":
+        return "application_scan_sitemap"
+    if source == "vibe-control-application-scan-summary":
+        return "application_scan_summary"
+    if source == "vibe-control-operation-video-journey":
+        return "operation_video_journey"
+    if source == "vibe-control-operation-video" or document_kind == "operation_video_metadata":
+        return "operation_video"
+    if phase == "screen_observation" and descriptor.kind == "markdown_document":
+        return "application_screenshot"
+    if phase == "sitemap":
+        return "application_scan_sitemap"
+    if phase == "summary":
+        return "application_scan_summary"
+    return None
+
+
+def _discovery_status(discovery_import: dict[str, Any] | None) -> str:
+    if not discovery_import:
+        return "not_registered"
+    status = str(discovery_import.get("status") or "").strip().lower()
+    if status == "queued":
+        return "queued"
+    if status == "failed":
+        return "error"
+    return "not_registered"
+
+
+def upsert_vibe_control_source_asset(
+    db: firestore.Client,
+    *,
+    descriptor: ArtifactDescriptor,
+    metadata: dict[str, Any],
+    organization_id: str,
+    space_id: str,
+    discovery_import: dict[str, Any] | None,
+) -> None:
+    """Mirror searchable VibeControl ADK artifacts into the SourceAsset catalog."""
+    if not _truthy_metadata(
+        metadata.get("agentSearchImport")
+        or metadata.get("agentsearchimport")
+        or metadata.get("agent_search_import")
+    ):
+        return
+    source_type = _source_asset_type_from_metadata(metadata, descriptor)
+    application_id = _metadata_value(metadata, "applicationId", "application_id")
+    if not source_type or not application_id:
+        return
+
+    source_asset_id = _metadata_value(metadata, "sourceAssetId") or (
+        f"source-asset-{descriptor.artifact_id}"
+    )
+    _bucket_name, file_path = _parse_gs_uri(descriptor.storage_gcs_path)
+    discovery_state = _discovery_status(discovery_import)
+    discovery_error = ""
+    if discovery_import and discovery_state != "queued":
+        discovery_error = (
+            str(discovery_import.get("reason") or "")
+            or str(discovery_import.get("error") or "")
+            or str(discovery_import.get("response") or "")
+        )[:500]
+
+    payload: dict[str, Any] = {
+        "id": source_asset_id,
+        "applicationId": application_id,
+        "applicationKey": _metadata_value(metadata, "applicationKey") or "APP",
+        "sourceType": source_type,
+        "title": _metadata_value(metadata, "title") or descriptor.name,
+        "summary": _metadata_value(metadata, "url") or descriptor.name,
+        "uri": descriptor.storage_gcs_path,
+        "gcsPath": descriptor.storage_gcs_path,
+        "storagePath": file_path,
+        "fileSpaceId": _metadata_value(metadata, "fileSpaceId", "file_space_id"),
+        "repoFullName": _metadata_value(metadata, "repoFullName"),
+        "discoveryStatus": discovery_state,
+        "discoveryDocumentId": (
+            str(discovery_import.get("documentId"))
+            if discovery_import and discovery_import.get("documentId")
+            else f"adk_{descriptor.artifact_id}"
+        ),
+        "metadata": {
+            "source": _metadata_value(metadata, "source"),
+            "artifactId": descriptor.artifact_id,
+            "adkFilename": descriptor.adk_filename,
+            "phase": _metadata_value(metadata, "phase"),
+            "scanId": _metadata_value(metadata, "scanId"),
+            "url": _metadata_value(metadata, "url"),
+            "applicationName": _metadata_value(metadata, "applicationName"),
+            "screenshotFilename": _metadata_value(metadata, "screenshotFilename"),
+            "contentType": descriptor.content_type,
+        },
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    if discovery_error:
+        payload["discoveryErrorMessage"] = discovery_error
+
+    ref = db.document(
+        f"organizations/{organization_id}/spaces/{space_id}/"
+        f"vibeControlSourceAssets/{source_asset_id}"
+    )
+    if not ref.get().exists:
+        payload["createdAt"] = firestore.SERVER_TIMESTAMP
+    ref.set(payload, merge=True)
 
 
 def _probe_session_doc_paths(
@@ -392,6 +520,14 @@ def ingest_from_storage_event(
             organization_id=org_id,
             space_id=space_id,
             uid=uid,
+        )
+        upsert_vibe_control_source_asset(
+            db,
+            descriptor=descriptor,
+            metadata=source_metadata,
+            organization_id=org_id,
+            space_id=space_id,
+            discovery_import=discovery_import,
         )
         upsert_artifact_doc(
             db,

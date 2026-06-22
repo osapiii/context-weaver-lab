@@ -58,15 +58,6 @@
         >
           Snapshot保存
         </EnButton>
-        <EnButton
-          variant="ai"
-          size="sm"
-          leading-icon="material-symbols:auto-awesome"
-          :loading="isGenerating"
-          @click="$emit('generate', { ...localInput })"
-        >
-          SSOT生成
-        </EnButton>
       </div>
     </div>
   </section>
@@ -82,11 +73,9 @@ import type { VibeControlGenerationInput } from "@stores/vibeControl";
 const props = defineProps<{
   selectedApplication: DecodedVibeControlApplication | null;
   sourceConnections: DecodedVibeControlSourceConnection[];
-  isGenerating: boolean;
 }>();
 
 defineEmits<{
-  generate: [input: VibeControlGenerationInput];
   persist: [];
 }>();
 

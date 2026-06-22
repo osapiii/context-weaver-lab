@@ -13,6 +13,12 @@ from data_analysis.agent import build_root_agent as build_data_analysis_agent
 from web_page.agent import build_root_agent as build_web_page_agent
 from application_scan.agent import build_root_agent as build_application_scan_agent
 from vibe_control.agent import build_root_agent as build_vibe_control_agent
+from vibe_capability_structuring.agent import (
+    build_root_agent as build_vibe_capability_structuring_agent,
+)
+from vibe_story_generation.agent import (
+    build_root_agent as build_vibe_story_generation_agent,
+)
 
 
 def build_agent_registry() -> dict[str, AgentBundle]:
@@ -56,5 +62,13 @@ def build_agent_registry() -> dict[str, AgentBundle]:
         "vibe_control": AgentBundle(
             app_name=UNIFIED_APP_NAME,
             root_agent=build_vibe_control_agent(),
+        ),
+        "vibe_capability_structuring": AgentBundle(
+            app_name=UNIFIED_APP_NAME,
+            root_agent=build_vibe_capability_structuring_agent(),
+        ),
+        "vibe_story_generation": AgentBundle(
+            app_name=UNIFIED_APP_NAME,
+            root_agent=build_vibe_story_generation_agent(),
         ),
     }

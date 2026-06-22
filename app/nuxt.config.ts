@@ -268,6 +268,14 @@ export default defineNuxtConfig({
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_CONSULTATION_URL ||
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
         "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+      enAiStudioAdkVibeCapabilityStructuringUrl:
+        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_VIBE_CAPABILITY_STRUCTURING_URL ||
+        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
+        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+      enAiStudioAdkVibeStoryGenerationUrl:
+        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_VIBE_STORY_GENERATION_URL ||
+        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
+        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
       /** false 明示時のみ legacy SSE。デフォルトは RequestDoc + Firebase trigger */
       adkInvokeViaRequestDoc:
         process.env.NUXT_PUBLIC_ADK_INVOKE_VIA_REQUEST_DOC !== "false",

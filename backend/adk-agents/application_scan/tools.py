@@ -133,6 +133,48 @@ def _metadata(
     return meta
 
 
+def _screen_observation_markdown(
+    *,
+    application_name: str,
+    application_id: str,
+    application_key: str,
+    repo_full_name: str,
+    scan_id: str,
+    page_index: int,
+    url: str,
+    title: str,
+    text_preview: str,
+    screenshot_filename: str,
+) -> str:
+    lines = [
+        f"# Screen Observation {page_index:03d}: {title or url}",
+        "",
+        "This document is searchable evidence generated from an application scan screenshot.",
+        "",
+        "## Application",
+        f"- Name: {application_name or '(unknown)'}",
+        f"- Application ID: {application_id or '(unknown)'}",
+        f"- Application Key: {application_key or '(unknown)'}",
+        f"- Repository: {repo_full_name or '(unknown)'}",
+        "",
+        "## Screen",
+        f"- Scan ID: {scan_id}",
+        f"- Page Index: {page_index}",
+        f"- URL: {url}",
+        f"- Title: {title or '(no title)'}",
+        f"- Screenshot Artifact: {screenshot_filename or '(not captured)'}",
+        "",
+        "## Visible Text Preview",
+        text_preview.strip() or "(no visible text extracted)",
+        "",
+        "## Evidence Usage",
+        "- Capability boundary discovery",
+        "- Story and acceptance criteria grounding",
+        "- UI implementation comparison with GitHub sources",
+    ]
+    return "\n".join(lines)
+
+
 def read_application_scan_setup(tool_context: Any = None) -> dict[str, Any]:
     """Read the system-provided application scan setup from session state."""
     bucket = _application_scan_bucket(tool_context)
@@ -152,6 +194,10 @@ def read_application_scan_setup(tool_context: Any = None) -> dict[str, Any]:
         "include_patterns": _as_str_list(setup.get("include_patterns")),
         "exclude_patterns": _as_str_list(setup.get("exclude_patterns")),
         "file_space_id": _as_str(setup.get("file_space_id")) or None,
+        "application_id": _as_str(setup.get("application_id")) or None,
+        "application_key": _as_str(setup.get("application_key")) or None,
+        "application_name": _as_str(setup.get("application_name")) or None,
+        "repo_full_name": _as_str(setup.get("repo_full_name")) or None,
     }
 
 
@@ -256,6 +302,10 @@ async def run_application_scan(
     include_patterns = _as_str_list(setup.get("include_patterns"))
     exclude_patterns = _as_str_list(setup.get("exclude_patterns"))
     file_space_id = _as_str(setup.get("file_space_id"))
+    application_id = _as_str(setup.get("application_id"))
+    application_key = _as_str(setup.get("application_key"))
+    application_name = _as_str(setup.get("application_name"))
+    repo_full_name = _as_str(setup.get("repo_full_name"))
     scan_id = f"application-scan-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
     _patch_scan_state(
         tool_context,
@@ -283,6 +333,7 @@ async def run_application_scan(
     pages: list[dict[str, Any]] = []
     failures: list[dict[str, str]] = []
     screenshot_refs: list[dict[str, Any]] = []
+    screen_observation_refs: list[dict[str, Any]] = []
     visited: set[str] = set()
     queue: deque[str] = deque([start_url])
 
@@ -322,11 +373,13 @@ async def run_application_scan(
                 extracted = await _extract_page(page, url)
                 page_index = len(pages) + 1
                 screenshot_ref = None
+                screen_observation_ref = None
                 if should_capture:
                     png = await page.screenshot(full_page=True, type="png")
                     filename = safe_artifact_filename(
                         f"application_scan_{page_index:03d}_screenshot", ".png"
                     )
+                    source_asset_id = f"source-asset-{scan_id}-{page_index:03d}"
                     screenshot_ref = await save_bytes_artifact(
                         tool_context,
                         filename=filename,
@@ -339,13 +392,71 @@ async def run_application_scan(
                             title=f"Application screenshot {page_index:03d}",
                             phase="screenshot",
                             file_space_id=file_space_id,
-                            agent_search_import=True,
+                            agent_search_import=False,
+                            source="vibe-control-application-screenshot",
+                            applicationId=application_id,
+                            applicationKey=application_key,
+                            applicationName=application_name,
+                            repoFullName=repo_full_name,
+                            sourceAssetId=source_asset_id,
                             url=url,
                             scanId=scan_id,
                         ),
                     )
                     if screenshot_ref:
                         screenshot_refs.append({**screenshot_ref, "url": url})
+                        observation_body = _screen_observation_markdown(
+                            application_name=application_name,
+                            application_id=application_id,
+                            application_key=application_key,
+                            repo_full_name=repo_full_name,
+                            scan_id=scan_id,
+                            page_index=page_index,
+                            url=url,
+                            title=extracted["title"],
+                            text_preview=extracted["text"][:2400],
+                            screenshot_filename=str(
+                                screenshot_ref.get("filename") or ""
+                            ),
+                        )
+                        screen_observation_ref = await save_text_artifact(
+                            tool_context,
+                            filename=safe_artifact_filename(
+                                f"application_scan_{page_index:03d}_screen_observation",
+                                ".md",
+                            ),
+                            body=observation_body,
+                            mime_type="text/markdown; charset=utf-8",
+                            kind="markdown_document",
+                            title=(
+                                f"Screen Observation {page_index:03d}: "
+                                f"{extracted['title'] or url}"
+                            ),
+                            custom_metadata=_metadata(
+                                kind="markdown_document",
+                                title=(
+                                    f"Application screen observation {page_index:03d}"
+                                ),
+                                phase="screen_observation",
+                                file_space_id=file_space_id,
+                                agent_search_import=True,
+                                source="vibe-control-application-screenshot-observation",
+                                applicationId=application_id,
+                                applicationKey=application_key,
+                                applicationName=application_name,
+                                repoFullName=repo_full_name,
+                                sourceAssetId=source_asset_id,
+                                screenshotFilename=str(
+                                    screenshot_ref.get("filename") or ""
+                                ),
+                                url=url,
+                                scanId=scan_id,
+                            ),
+                        )
+                        if screen_observation_ref:
+                            screen_observation_refs.append(
+                                {**screen_observation_ref, "url": url}
+                            )
                 pages.append(
                     {
                         "url": url,
@@ -353,6 +464,7 @@ async def run_application_scan(
                         "textPreview": extracted["text"][:1200],
                         "outboundLinkCount": len(extracted["links"]),
                         "screenshot": screenshot_ref,
+                        "screenObservation": screen_observation_ref,
                     }
                 )
                 for raw_link in extracted["links"]:
@@ -407,6 +519,12 @@ async def run_application_scan(
             phase="sitemap",
             file_space_id=file_space_id,
             agent_search_import=True,
+            source="vibe-control-application-scan-sitemap",
+            applicationId=application_id,
+            applicationKey=application_key,
+            applicationName=application_name,
+            repoFullName=repo_full_name,
+            sourceAssetId=f"source-asset-{scan_id}-sitemap",
             scanId=scan_id,
         ),
     )
@@ -438,11 +556,26 @@ async def run_application_scan(
             phase="summary",
             file_space_id=file_space_id,
             agent_search_import=True,
+            source="vibe-control-application-scan-summary",
+            applicationId=application_id,
+            applicationKey=application_key,
+            applicationName=application_name,
+            repoFullName=repo_full_name,
+            sourceAssetId=f"source-asset-{scan_id}-summary",
             scanId=scan_id,
         ),
     )
 
-    artifact_refs = [ref for ref in [sitemap_ref, summary_ref, *screenshot_refs] if ref]
+    artifact_refs = [
+        ref
+        for ref in [
+            sitemap_ref,
+            summary_ref,
+            *screenshot_refs,
+            *screen_observation_refs,
+        ]
+        if ref
+    ]
     _patch_scan_state(
         tool_context,
         {
@@ -458,6 +591,7 @@ async def run_application_scan(
                 "sitemap_filename": sitemap_ref.get("filename") if sitemap_ref else None,
                 "summary_filename": summary_ref.get("filename") if summary_ref else None,
                 "screenshot_count": len(screenshot_refs),
+                "screen_observation_count": len(screen_observation_refs),
             },
         },
     )
@@ -467,6 +601,7 @@ async def run_application_scan(
             "scan_id": scan_id,
             "page_count": len(pages),
             "screenshot_count": len(screenshot_refs),
+            "screen_observation_count": len(screen_observation_refs),
             "failure_count": len(failures),
             "file_space_id": file_space_id or None,
         },
