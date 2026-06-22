@@ -18,9 +18,10 @@ class CreateStoreInput(BaseModel):
     data_store_id: Optional[str] = Field(
         None,
         description="Datastore ID (= FileSpace ID). 未指定時は自動生成",
+        alias="dataStoreId",
     )
 
-    model_config = ConfigDict(populate_by_name=False)
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class CreateStoreRequest(BaseModel):
@@ -33,4 +34,3 @@ class CreateStoreRequest(BaseModel):
     )
     
     model_config = ConfigDict(populate_by_name=False)
-

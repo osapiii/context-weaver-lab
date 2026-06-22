@@ -46,6 +46,27 @@ export const VibeControlSourceConnectionStatusSchema = z.enum([
   "error",
 ]);
 
+export const VibeControlApplicationFileSpaceProvisioningStatusSchema = z.enum([
+  "missing",
+  "creating",
+  "ready",
+  "error",
+]);
+
+export const VibeControlOperationVideoDiscoveryStatusSchema = z.enum([
+  "not_registered",
+  "queued",
+  "completed",
+  "error",
+]);
+
+export const VibeControlOperationVideoDisplaySurfaceSchema = z.enum([
+  "browser",
+  "monitor",
+  "window",
+  "unknown",
+]);
+
 export const VibeControlApplicationSchema = z.object({
   id: z.string().optional(),
   applicationKey: z.string(),
@@ -56,6 +77,10 @@ export const VibeControlApplicationSchema = z.object({
   labels: z.array(z.string()).default([]),
   startUrl: z.string().optional(),
   fileSpaceId: z.string().optional(),
+  fileSpaceCreateRequestId: z.string().optional(),
+  fileSpaceProvisioningStatus:
+    VibeControlApplicationFileSpaceProvisioningStatusSchema.optional(),
+  fileSpaceErrorMessage: z.string().optional(),
   repoFullName: z.string().min(1),
   defaultBranch: z.string().optional(),
   storyCount: z.number().min(0).default(0),
@@ -186,6 +211,39 @@ export const DecodedVibeControlSourceConnectionSchema =
     id: z.string(),
   });
 
+export const VibeControlOperationVideoSchema = z.object({
+  id: z.string().optional(),
+  applicationId: z.string().default("app-default"),
+  applicationKey: z.string().default("APP"),
+  title: z.string(),
+  description: z.string().optional(),
+  fileName: z.string(),
+  bucketName: z.string(),
+  storagePath: z.string(),
+  contentType: z.string().default("video/webm"),
+  sizeBytes: z.number().min(0).default(0),
+  durationMs: z.number().min(0).optional(),
+  fileSpaceId: z.string().optional(),
+  fileSpaceRequestId: z.string().optional(),
+  metadataFileName: z.string().optional(),
+  metadataStoragePath: z.string().optional(),
+  discoveryStatus: VibeControlOperationVideoDiscoveryStatusSchema.default(
+    "not_registered"
+  ),
+  discoveryErrorMessage: z.string().optional(),
+  sourceDisplaySurface: VibeControlOperationVideoDisplaySurfaceSchema.default(
+    "unknown"
+  ),
+  recordedAt: z.string(),
+  createdAt: z.instanceof(Timestamp).optional(),
+  updatedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlOperationVideoSchema =
+  VibeControlOperationVideoSchema.extend({
+    id: z.string(),
+  });
+
 export const VibeControlApplicationScanRunSchema = z.object({
   requestId: z.string(),
   sessionId: z.string(),
@@ -214,6 +272,15 @@ export type VibeControlEvidenceType = z.infer<
 >;
 export type VibeControlSourceProvider = z.infer<
   typeof VibeControlSourceProviderSchema
+>;
+export type VibeControlApplicationFileSpaceProvisioningStatus = z.infer<
+  typeof VibeControlApplicationFileSpaceProvisioningStatusSchema
+>;
+export type VibeControlOperationVideoDiscoveryStatus = z.infer<
+  typeof VibeControlOperationVideoDiscoveryStatusSchema
+>;
+export type VibeControlOperationVideoDisplaySurface = z.infer<
+  typeof VibeControlOperationVideoDisplaySurfaceSchema
 >;
 export type VibeControlApplication = z.infer<
   typeof VibeControlApplicationSchema
@@ -244,6 +311,12 @@ export type VibeControlSourceConnection = z.infer<
 export type DecodedVibeControlSourceConnection = z.infer<
   typeof DecodedVibeControlSourceConnectionSchema
 >;
+export type VibeControlOperationVideo = z.infer<
+  typeof VibeControlOperationVideoSchema
+>;
+export type DecodedVibeControlOperationVideo = z.infer<
+  typeof DecodedVibeControlOperationVideoSchema
+>;
 export type VibeControlApplicationScanRun = z.infer<
   typeof VibeControlApplicationScanRunSchema
 >;
@@ -259,6 +332,9 @@ export const vibeControlStoryEvidenceConverter = firestoreTypeConverter(
 );
 export const vibeControlSourceConnectionConverter = firestoreTypeConverter(
   DecodedVibeControlSourceConnectionSchema
+);
+export const vibeControlOperationVideoConverter = firestoreTypeConverter(
+  DecodedVibeControlOperationVideoSchema
 );
 
 export const VIBE_CONTROL_STATUS_LABELS: Record<
