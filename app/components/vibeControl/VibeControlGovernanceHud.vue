@@ -7,7 +7,7 @@
             SSOT Command Center
           </p>
           <h2 class="mt-1 text-lg font-bold tracking-tight">
-            User Story を軸に仕様・進行・コード・Visual QAを統合
+            User Story を軸に仕様・進行・コード・Screen Atlasを統合
           </h2>
           <p class="mt-1 max-w-3xl text-xs leading-relaxed text-slate-300">
             Vibe Codingの速度を保ちながら、仕様と実態の乖離をストーリー単位で監視します。
@@ -190,7 +190,7 @@ const mappedCodeRefCount = computed(() =>
   props.stories.reduce((sum, story) => sum + story.codeRefs.length, 0)
 );
 
-const visualQaCount = computed(() => props.application?.lastScan?.artifactCount ?? 0);
+const screenAtlasCount = computed(() => props.application?.lastScan?.artifactCount ?? 0);
 
 const implementedCount = computed(
   () =>
@@ -232,9 +232,9 @@ const quadrantMetrics = computed(() => [
     iconWrapClass: "bg-indigo-50 text-indigo-600",
   },
   {
-    label: "Visual QA",
-    value: visualQaCount.value,
-    caption: "Application Scan artifacts",
+    label: "Screen Atlas",
+    value: screenAtlasCount.value,
+    caption: "Screen and variant assets",
     icon: "material-symbols:preview-outline",
     iconWrapClass: "bg-amber-50 text-amber-600",
   },

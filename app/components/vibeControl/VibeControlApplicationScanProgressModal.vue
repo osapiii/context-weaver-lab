@@ -65,15 +65,38 @@
             size="sm"
           />
         </div>
+
+        <div class="mt-4 grid gap-2 sm:grid-cols-4">
+          <div
+            v-for="phase in phaseCards"
+            :key="phase.label"
+            class="rounded-md border px-3 py-2"
+            :class="phase.active ? 'border-primary-200 bg-primary-50' : 'border-slate-200 bg-slate-50'"
+          >
+            <div class="flex items-center gap-2">
+              <UIcon
+                :name="phase.icon"
+                class="h-4 w-4"
+                :class="phase.active ? 'text-primary-600' : 'text-slate-400'"
+              />
+              <p class="text-xs font-bold" :class="phase.active ? 'text-primary-800' : 'text-slate-500'">
+                {{ phase.label }}
+              </p>
+            </div>
+            <p class="mt-1 truncate text-[11px]" :class="phase.active ? 'text-primary-700' : 'text-slate-400'">
+              {{ phase.caption }}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div class="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section class="min-w-0 space-y-4">
-          <div class="grid gap-3 sm:grid-cols-3">
+          <div class="grid gap-3 sm:grid-cols-4">
             <div class="rounded-lg border border-slate-200 bg-white p-3">
               <p class="text-xs font-semibold text-slate-500">Start URL</p>
               <p class="mt-1 truncate text-sm font-semibold text-slate-900">
-                {{ run?.startUrl ?? "-" }}
+                {{ displayStartUrl }}
               </p>
             </div>
             <div class="rounded-lg border border-slate-200 bg-white p-3">
@@ -86,6 +109,12 @@
               <p class="text-xs font-semibold text-slate-500">Sitemap</p>
               <p class="mt-1 text-sm font-semibold text-slate-900">
                 {{ sitemapSummary }}
+              </p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3">
+              <p class="text-xs font-semibold text-slate-500">Current</p>
+              <p class="mt-1 truncate text-sm font-semibold text-slate-900">
+                {{ currentUrlLabel }}
               </p>
             </div>
           </div>
@@ -105,17 +134,21 @@
 
             <div
               v-if="artifactCards.length === 0"
-              class="mt-4 flex min-h-56 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 text-center"
+              class="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4"
             >
-              <UIcon
-                name="material-symbols:hourglass-top"
-                class="h-10 w-10 text-slate-300"
-              />
-              <p class="mt-3 text-sm font-semibold text-slate-700">
-                Artifactの到着を待っています
-              </p>
-              <p class="mt-1 text-xs text-slate-500">
-                巡回が進むとスクリーンショットやsitemapがここに並びます
+              <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div
+                  v-for="i in 6"
+                  :key="i"
+                  class="rounded-lg border border-slate-200 bg-white p-3"
+                >
+                  <USkeleton class="aspect-video w-full rounded-md" />
+                  <USkeleton class="mt-3 h-3 w-4/5 rounded" />
+                  <USkeleton class="mt-2 h-3 w-1/2 rounded" />
+                </div>
+              </div>
+              <p class="mt-4 text-center text-xs font-semibold text-slate-500">
+                巡回・ログイン・撮影の完了を待っています
               </p>
             </div>
 
@@ -173,7 +206,10 @@
 
         <aside class="min-w-0 space-y-4">
           <div class="rounded-lg border border-slate-200 bg-white p-4">
-            <p class="text-sm font-bold text-slate-900">Latest Output</p>
+            <p class="text-sm font-bold text-slate-900">Live Trace</p>
+            <p class="mt-1 text-xs text-slate-500">
+              RequestDoc と ADK state から読み取った進行状況
+            </p>
             <div class="mt-3 space-y-2">
               <div
                 v-for="item in latestEvents"
@@ -185,6 +221,54 @@
                   class="mt-0.5 h-3.5 w-3.5 flex-none text-emerald-500"
                 />
                 <span class="min-w-0 break-words">{{ item }}</span>
+              </div>
+              <div
+                v-if="latestEvents.length === 0"
+                class="space-y-2 rounded-md bg-slate-50 p-3"
+              >
+                <USkeleton class="h-3 w-full rounded" />
+                <USkeleton class="h-3 w-5/6 rounded" />
+                <USkeleton class="h-3 w-2/3 rounded" />
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <p class="text-sm font-bold text-slate-900">RequestDoc</p>
+            <dl class="mt-3 space-y-2 text-xs">
+              <div class="flex justify-between gap-3">
+                <dt class="text-slate-500">Status</dt>
+                <dd class="font-semibold text-slate-900">{{ requestDocStatusLabel }}</dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-slate-500">Request</dt>
+                <dd class="truncate font-mono text-[11px] text-slate-700">
+                  {{ run?.requestId || "-" }}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-slate-500">Session</dt>
+                <dd class="truncate font-mono text-[11px] text-slate-700">
+                  {{ run?.sessionId || "-" }}
+                </dd>
+              </div>
+            </dl>
+            <div
+              v-if="requestDocLogs.length > 0"
+              class="mt-3 max-h-44 space-y-2 overflow-y-auto rounded-md bg-slate-950 p-3"
+            >
+              <div
+                v-for="log in requestDocLogs.slice(-8)"
+                :key="`${log.timestampLabel}-${log.message}`"
+                class="text-[11px] leading-relaxed"
+              >
+                <span class="font-mono text-slate-500">{{ log.timestampLabel }}</span>
+                <span
+                  class="ml-2"
+                  :class="log.type === 'error' ? 'text-rose-300' : log.type === 'warning' ? 'text-amber-300' : 'text-slate-200'"
+                >
+                  {{ log.message }}
+                </span>
               </div>
             </div>
           </div>
@@ -233,6 +317,8 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { doc, onSnapshot, type Unsubscribe } from "firebase/firestore";
+import { useFirestore } from "vuefire";
 import AdkArtifactImage from "@components/AgentWorkspace/AdkArtifactImage.vue";
 import { useAdkSessionArtifacts } from "@composables/useAdkSessionArtifacts";
 import type { DecodedAdkSessionArtifact } from "@models/adkSessionArtifact";
@@ -242,6 +328,8 @@ import type {
 } from "@models/vibeControl";
 import type { RequestStatus } from "@models/core/requestStatus";
 import { fetchArtifactTextContent } from "@utils/artifactDisplayUrl";
+import { ADK_INVOKE_REQUEST_COLLECTION } from "@models/adkInvokeRequest";
+import { useContextStore } from "@stores/context";
 
 const props = defineProps<{
   open: boolean;
@@ -255,13 +343,24 @@ const emit = defineEmits<{
 }>();
 
 type ArtifactCardKind = "screenshot" | "sitemap" | "summary" | "other";
+type RequestDocLog = {
+  message: string;
+  type: "info" | "warning" | "error";
+  timestamp?: unknown;
+};
 
 const artifacts = ref<DecodedAdkSessionArtifact[]>([]);
 const textByArtifactId = ref<Record<string, string>>({});
 const previewArtifactId = ref("");
+const requestDoc = ref<Record<string, unknown> | null>(null);
+const sessionState = ref<Record<string, unknown> | null>(null);
 let stopArtifacts: (() => void) | null = null;
+let stopRequestDoc: Unsubscribe | null = null;
+let stopSessionState: Unsubscribe | null = null;
 
 const { subscribe } = useAdkSessionArtifacts();
+const db = useFirestore();
+const contextStore = useContextStore();
 
 const statusLabels: Record<RequestStatus, string> = {
   pending: "待機中",
@@ -334,6 +433,51 @@ const syncingCount = computed(
   () => artifacts.value.filter((artifact) => artifact.status === "syncing").length
 );
 
+const applicationScanState = computed(() => {
+  const bucket = sessionState.value?.application_scan;
+  return bucket && typeof bucket === "object" && !Array.isArray(bucket)
+    ? (bucket as Record<string, unknown>)
+    : {};
+});
+
+const scanProgress = computed(() => {
+  const progress = applicationScanState.value.progress;
+  return progress && typeof progress === "object" && !Array.isArray(progress)
+    ? (progress as Record<string, unknown>)
+    : {};
+});
+
+const processedPages = computed(() =>
+  typeof scanProgress.value.processed_pages === "number"
+    ? scanProgress.value.processed_pages
+    : screenshotCards.value.length
+);
+
+const totalPages = computed(() =>
+  typeof scanProgress.value.total_pages === "number"
+    ? scanProgress.value.total_pages
+    : props.run?.maxPages ?? 0
+);
+
+const currentUrlLabel = computed(() => {
+  const value = scanProgress.value.current_url;
+  return typeof value === "string" && value.trim() ? value.trim() : "-";
+});
+
+const displayStartUrl = computed(() => {
+  if (props.run?.startUrl) return props.run.startUrl;
+  const setup = applicationScanState.value.setup;
+  if (
+    setup &&
+    typeof setup === "object" &&
+    !Array.isArray(setup) &&
+    (setup as Record<string, unknown>).auth_mode === "email_link_manual"
+  ) {
+    return "メールリンク認証";
+  }
+  return "-";
+});
+
 const sitemapUrls = computed(() => {
   const text = sitemapCard.value
     ? textByArtifactId.value[sitemapCard.value.artifact.artifactId]
@@ -362,6 +506,7 @@ const activeStep = computed({
     if (props.run?.status === "completed") return 4;
     if (summaryCard.value || sitemapCard.value) return 3;
     if (screenshotCards.value.length > 0) return 2;
+    if (processedPages.value > 0) return 2;
     if (props.run?.status === "processing") return 1;
     return props.run?.requestId ? 0 : 0;
   },
@@ -392,6 +537,8 @@ const stepperItems = computed(() => [
     description:
       screenshotCards.value.length > 0
         ? `${screenshotCards.value.length}枚`
+        : processedPages.value > 0
+          ? `${processedPages.value}/${totalPages.value || "-"} pages`
         : "ページ解析中",
     icon: "material-symbols:photo-camera-outline",
   },
@@ -420,6 +567,9 @@ const headline = computed(() => {
   if (props.run?.status === "completed") {
     return "スキャン結果の同期が完了しました";
   }
+  if (currentUrlLabel.value !== "-") {
+    return `現在 ${currentUrlLabel.value} を解析しています`;
+  }
   if (screenshotCards.value.length > 0) {
     return `ページを巡回しながら ${screenshotCards.value.length} 枚のスクリーンショットを保存しています`;
   }
@@ -429,10 +579,50 @@ const headline = computed(() => {
   return "RequestDocを発行してAgentの起動を待っています";
 });
 
+const phaseCards = computed(() => [
+  {
+    label: "Request",
+    caption: props.run?.requestId ? "RequestDoc発行済み" : "発行待ち",
+    icon: "material-symbols:receipt-long-outline",
+    active: activeStep.value === 0,
+  },
+  {
+    label: "Login",
+    caption:
+      displayStartUrl.value === "メールリンク認証"
+        ? "メールリンク認証を確認"
+        : "アクセス準備",
+    icon: "material-symbols:passkey-outline",
+    active: activeStep.value === 1,
+  },
+  {
+    label: "Capture",
+    caption:
+      processedPages.value > 0
+        ? `${processedPages.value}/${totalPages.value || "-"} pages`
+        : "Playwright巡回",
+    icon: "material-symbols:screenshot-monitor-outline",
+    active: activeStep.value === 2,
+  },
+  {
+    label: "Atlas",
+    caption:
+      artifactCards.value.length > 0
+        ? `${artifactCards.value.length} artifacts`
+        : "Artifact生成",
+    icon: "material-symbols:dataset-outline",
+    active: activeStep.value >= 3,
+  },
+]);
+
 const latestEvents = computed(() => {
   const events: string[] = [];
   if (props.run?.requestId) events.push(`RequestDoc: ${props.run.requestId}`);
-  if (props.run?.startUrl) events.push(`開始URL: ${props.run.startUrl}`);
+  if (displayStartUrl.value !== "-") events.push(`起点: ${displayStartUrl.value}`);
+  if (currentUrlLabel.value !== "-") events.push(`現在URL: ${currentUrlLabel.value}`);
+  if (processedPages.value > 0) {
+    events.push(`巡回 ${processedPages.value}/${totalPages.value || "-"} pages`);
+  }
   if (screenshotCards.value.length > 0) {
     events.push(`スクリーンショット ${screenshotCards.value.length} 件を検出`);
   }
@@ -443,6 +633,31 @@ const latestEvents = computed(() => {
     events.push(props.run.errorMessage || "Application Scan失敗");
   }
   return events.slice(-6).reverse();
+});
+
+const requestDocStatus = computed(() => {
+  const status = requestDoc.value?.status;
+  return typeof status === "string" ? status : props.run?.status ?? "pending";
+});
+
+const requestDocStatusLabel = computed(
+  () => statusLabels[requestDocStatus.value as RequestStatus] ?? requestDocStatus.value
+);
+
+const requestDocLogs = computed(() => {
+  const rawLogs = requestDoc.value?.logs;
+  if (!Array.isArray(rawLogs)) return [];
+  return rawLogs
+    .filter((item): item is RequestDocLog =>
+      Boolean(item) &&
+      typeof item === "object" &&
+      typeof (item as RequestDocLog).message === "string"
+    )
+    .map((item) => ({
+      message: item.message,
+      type: item.type ?? "info",
+      timestampLabel: formatLogTimestamp(item.timestamp),
+    }));
 });
 
 const previewArtifact = computed(() =>
@@ -475,7 +690,47 @@ watch(
 
 onBeforeUnmount(() => {
   stopArtifacts?.();
+  stopRequestDoc?.();
+  stopSessionState?.();
 });
+
+watch(
+  () => props.run?.requestId,
+  (requestId) => {
+    stopRequestDoc?.();
+    stopRequestDoc = null;
+    requestDoc.value = null;
+    if (!requestId) return;
+    const ref = doc(
+      db,
+      contextStore.baseFirestorePath(`${ADK_INVOKE_REQUEST_COLLECTION}/${requestId}`)
+    );
+    stopRequestDoc = onSnapshot(ref, (snap) => {
+      requestDoc.value = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+    });
+  },
+  { immediate: true }
+);
+
+watch(
+  () => props.run?.sessionId,
+  (sessionId) => {
+    stopSessionState?.();
+    stopSessionState = null;
+    sessionState.value = null;
+    if (!sessionId) return;
+    const ref = doc(db, contextStore.baseFirestorePath(`adkSessions/${sessionId}`));
+    stopSessionState = onSnapshot(ref, (snap) => {
+      const data = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+      const state = data?.state;
+      sessionState.value =
+        state && typeof state === "object" && !Array.isArray(state)
+          ? (state as Record<string, unknown>)
+          : null;
+    });
+  },
+  { immediate: true }
+);
 
 async function loadTextArtifacts(): Promise<void> {
   const textArtifacts = artifacts.value.filter((artifact) => {
@@ -538,5 +793,20 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatLogTimestamp(value: unknown): string {
+  const maybeTimestamp = value as { toDate?: () => Date } | undefined;
+  const date =
+    maybeTimestamp && typeof maybeTimestamp.toDate === "function"
+      ? maybeTimestamp.toDate()
+      : value instanceof Date
+        ? value
+        : null;
+  if (!date) return "--:--";
+  return new Intl.DateTimeFormat("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 </script>

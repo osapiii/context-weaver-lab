@@ -92,6 +92,15 @@ def _custom_metadata_list(
         "applicationName",
         "repoFullName",
         "sourceAssetId",
+        "screenId",
+        "variantId",
+        "screenUrl",
+        "routeKey",
+        "captureKind",
+        "captureMethod",
+        "variantKind",
+        "parentScreenAssetId",
+        "interactionSteps",
         "screenshotFilename",
         "documentKind",
     ):
@@ -108,6 +117,14 @@ def _source_asset_type_from_metadata(
     source = _metadata_value(metadata, "source")
     phase = _metadata_value(metadata, "phase")
     document_kind = _metadata_value(metadata, "documentKind")
+    if source == "vibe-control-application-screen-observation":
+        return "application_screen"
+    if source == "vibe-control-application-screen-variant-observation":
+        return "application_screen_variant"
+    if source == "vibe-control-application-screen-atlas":
+        return "application_screen_atlas"
+    if source == "vibe-control-application-screen-atlas-summary":
+        return "application_scan_summary"
     if source == "vibe-control-application-screenshot-observation":
         return "application_screenshot"
     if source == "vibe-control-application-scan-sitemap":
@@ -119,7 +136,11 @@ def _source_asset_type_from_metadata(
     if source == "vibe-control-operation-video" or document_kind == "operation_video_metadata":
         return "operation_video"
     if phase == "screen_observation" and descriptor.kind == "markdown_document":
-        return "application_screenshot"
+        return "application_screen"
+    if phase == "screen_variant" and descriptor.kind == "markdown_document":
+        return "application_screen_variant"
+    if phase == "screen_atlas":
+        return "application_screen_atlas"
     if phase == "sitemap":
         return "application_scan_sitemap"
     if phase == "summary":
@@ -197,6 +218,15 @@ def upsert_vibe_control_source_asset(
             "phase": _metadata_value(metadata, "phase"),
             "scanId": _metadata_value(metadata, "scanId"),
             "url": _metadata_value(metadata, "url"),
+            "screenId": _metadata_value(metadata, "screenId"),
+            "variantId": _metadata_value(metadata, "variantId"),
+            "screenUrl": _metadata_value(metadata, "screenUrl"),
+            "routeKey": _metadata_value(metadata, "routeKey"),
+            "captureKind": _metadata_value(metadata, "captureKind"),
+            "captureMethod": _metadata_value(metadata, "captureMethod"),
+            "variantKind": _metadata_value(metadata, "variantKind"),
+            "parentScreenAssetId": _metadata_value(metadata, "parentScreenAssetId"),
+            "interactionSteps": _metadata_value(metadata, "interactionSteps"),
             "applicationName": _metadata_value(metadata, "applicationName"),
             "screenshotFilename": _metadata_value(metadata, "screenshotFilename"),
             "contentType": descriptor.content_type,

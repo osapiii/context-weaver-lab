@@ -11,6 +11,8 @@ from common.byok_auth import (
     resolve_request_gemini_api_key,
     resolve_request_openai_api_key,
 )
+from common.byok_patch import current_user_api_key
+from common.byok_scope import resume_byok, suspend_byok
 
 
 @pytest.fixture
@@ -67,3 +69,25 @@ def test_resolve_request_openai_api_key_env_fallback(monkeypatch):
     )
     monkeypatch.setenv("OPENAI_API_KEY", "sk-env-dev")
     assert resolve_request_openai_api_key("uid-abc") == "sk-env-dev"
+
+
+def test_suspend_byok_temporarily_clears_gemini_keys(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-user-key")
+    monkeypatch.setenv("GOOGLE_API_KEY", "google-user-key")
+    original_token = current_user_api_key.set("context-user-key")
+
+    token, previous_gemini_env, previous_google_env = suspend_byok()
+    try:
+        assert current_user_api_key.get() is None
+        assert "GEMINI_API_KEY" not in __import__("os").environ
+        assert "GOOGLE_API_KEY" not in __import__("os").environ
+    finally:
+        resume_byok(
+            token,
+            previous_gemini_env=previous_gemini_env,
+            previous_google_env=previous_google_env,
+        )
+        current_user_api_key.reset(original_token)
+
+    assert __import__("os").environ["GEMINI_API_KEY"] == "gemini-user-key"
+    assert __import__("os").environ["GOOGLE_API_KEY"] == "google-user-key"

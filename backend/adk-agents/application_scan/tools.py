@@ -16,6 +16,17 @@ from common.adk_artifact_io import (  # type: ignore
 )
 from common.tool_state import get_writable_state, read_tool_state  # type: ignore
 
+from .computer_use_explorer import explore_screen_variants
+from .screen_atlas import (
+    BASE_VARIANT_KIND,
+    route_key_for_url,
+    screen_id_for,
+    screen_observation_markdown,
+    source_asset_metadata,
+    variant_id_for,
+    variant_observation_markdown,
+)
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -117,6 +128,23 @@ def _allowed_url(
     return True
 
 
+def _looks_like_email_signin_page(url: str, text: str) -> bool:
+    lowered = text.lower()
+    return (
+        "/signin" in urlparse(url).path.lower()
+        and any(
+            marker in lowered
+            for marker in [
+                "メールでログイン",
+                "ログインリンクを送信",
+                "会社メールアドレス",
+                "passwordless",
+                "email address",
+            ]
+        )
+    )
+
+
 def _metadata(
     *,
     kind: str,
@@ -146,33 +174,21 @@ def _screen_observation_markdown(
     text_preview: str,
     screenshot_filename: str,
 ) -> str:
-    lines = [
-        f"# Screen Observation {page_index:03d}: {title or url}",
-        "",
-        "This document is searchable evidence generated from an application scan screenshot.",
-        "",
-        "## Application",
-        f"- Name: {application_name or '(unknown)'}",
-        f"- Application ID: {application_id or '(unknown)'}",
-        f"- Application Key: {application_key or '(unknown)'}",
-        f"- Repository: {repo_full_name or '(unknown)'}",
-        "",
-        "## Screen",
-        f"- Scan ID: {scan_id}",
-        f"- Page Index: {page_index}",
-        f"- URL: {url}",
-        f"- Title: {title or '(no title)'}",
-        f"- Screenshot Artifact: {screenshot_filename or '(not captured)'}",
-        "",
-        "## Visible Text Preview",
-        text_preview.strip() or "(no visible text extracted)",
-        "",
-        "## Evidence Usage",
-        "- Capability boundary discovery",
-        "- Story and acceptance criteria grounding",
-        "- UI implementation comparison with GitHub sources",
-    ]
-    return "\n".join(lines)
+    screen_id = screen_id_for(scan_id, page_index, url, title)
+    return screen_observation_markdown(
+        application_name=application_name,
+        application_id=application_id,
+        application_key=application_key,
+        repo_full_name=repo_full_name,
+        scan_id=scan_id,
+        screen_id=screen_id,
+        page_index=page_index,
+        url=url,
+        route_key=route_key_for_url(url),
+        title=title,
+        text_preview=text_preview,
+        screenshot_filename=screenshot_filename,
+    )
 
 
 def read_application_scan_setup(tool_context: Any = None) -> dict[str, Any]:
@@ -180,17 +196,37 @@ def read_application_scan_setup(tool_context: Any = None) -> dict[str, Any]:
     bucket = _application_scan_bucket(tool_context)
     setup = _setup_from_bucket(bucket)
     start_url = _as_str(setup.get("start_url"))
-    missing = [] if start_url else ["start_url"]
+    auth_mode = _as_str(setup.get("auth_mode")) or "none"
+    authenticated_url = _as_str(setup.get("authenticated_url"))
+    missing: list[str] = []
+    if auth_mode == "email_link_manual":
+        if not authenticated_url:
+            missing.append("authenticated_url")
+    elif not start_url:
+        missing.append("start_url")
     return {
         "ok": len(missing) == 0,
         "missing": missing,
         "phase": bucket.get("phase") or "setup",
+        "auth_mode": auth_mode,
         "start_url": start_url,
         "login_url": _as_str(setup.get("login_url")) or None,
         "has_username": bool(_as_str(setup.get("username"))),
         "has_password": bool(_as_str(setup.get("password"))),
+        "has_email_hint": bool(_as_str(setup.get("email_hint"))),
+        "has_authenticated_url": bool(_as_str(setup.get("authenticated_url"))),
         "max_pages": _as_int(setup.get("max_pages"), 12, 1, 50),
         "capture_screenshots": _as_bool(setup.get("capture_screenshots"), True),
+        "explore_variants": _as_bool(setup.get("explore_variants"), False),
+        "max_variants_per_screen": _as_int(
+            setup.get("max_variants_per_screen"), 5, 0, 10
+        ),
+        "max_steps_per_screen": _as_int(setup.get("max_steps_per_screen"), 12, 1, 30),
+        "allow_chat_send": _as_bool(setup.get("allow_chat_send"), False),
+        "variant_only": _as_bool(setup.get("variant_only"), False),
+        "target_screen_id": _as_str(setup.get("target_screen_id")) or None,
+        "target_screen_url": _as_str(setup.get("target_screen_url")) or None,
+        "target_route_key": _as_str(setup.get("target_route_key")) or None,
         "include_patterns": _as_str_list(setup.get("include_patterns")),
         "exclude_patterns": _as_str_list(setup.get("exclude_patterns")),
         "file_space_id": _as_str(setup.get("file_space_id")) or None,
@@ -201,7 +237,159 @@ def read_application_scan_setup(tool_context: Any = None) -> dict[str, Any]:
     }
 
 
+async def _maybe_complete_email_link_confirmation(
+    page: Any,
+    *,
+    email_hint: str,
+) -> dict[str, Any]:
+    if not email_hint:
+        return {"attempted": False, "ok": None, "reason": "email_hint_not_provided"}
+
+    try:
+        text = await page.locator("body").inner_text(timeout=5000)
+    except Exception:
+        text = ""
+    lowered = text.lower() if isinstance(text, str) else ""
+    if not any(
+        marker in lowered
+        for marker in [
+            "メールアドレス",
+            "会社メール",
+            "email address",
+            "confirm your email",
+            "メールでログイン",
+        ]
+    ):
+        return {"attempted": False, "ok": None, "reason": "email_prompt_not_detected"}
+
+    input_selectors = [
+        "input[type='email']",
+        "input[name='email']",
+        "input[autocomplete='email']",
+        "input[type='text']",
+        "input:not([type])",
+    ]
+    filled = False
+    for selector in input_selectors:
+        locator = page.locator(selector).first
+        try:
+            if await locator.count() and await locator.is_visible():
+                await locator.fill(email_hint)
+                filled = True
+                break
+        except Exception:
+            continue
+    if not filled:
+        return {"attempted": True, "ok": False, "reason": "email_input_not_found"}
+
+    before_url = page.url
+    clicked = False
+    for name in [
+        re.compile("ログインを完了|ログイン|続行|確認|完了"),
+        re.compile("complete|continue|confirm|sign in", re.IGNORECASE),
+    ]:
+        try:
+            button = page.get_by_role("button", name=name).first
+            if await button.count() and await button.is_visible():
+                await button.click()
+                clicked = True
+                break
+        except Exception:
+            continue
+    if not clicked:
+        for selector in ["button[type='submit']", "button", "input[type='submit']"]:
+            locator = page.locator(selector).first
+            try:
+                if await locator.count() and await locator.is_visible():
+                    await locator.click()
+                    clicked = True
+                    break
+            except Exception:
+                continue
+    if not clicked:
+        await page.keyboard.press("Enter")
+
+    try:
+        await page.wait_for_load_state("networkidle", timeout=30000)
+    except Exception:
+        await page.wait_for_load_state("domcontentloaded", timeout=10000)
+    try:
+        await page.wait_for_url(lambda url: url != before_url, timeout=20000)
+    except Exception:
+        pass
+    try:
+        final_text = await page.locator("body").inner_text(timeout=5000)
+    except Exception:
+        final_text = ""
+    if _looks_like_email_signin_page(page.url, final_text):
+        return {
+            "attempted": True,
+            "ok": False,
+            "method": "email_link_confirmation",
+            "reason": "email_link_sign_in_not_completed",
+        }
+    return {"attempted": True, "ok": True, "method": "email_link_confirmation"}
+
+
 async def _maybe_login(page: Any, setup: dict[str, Any], start_url: str) -> dict[str, Any]:
+    auth_mode = _as_str(setup.get("auth_mode")) or "none"
+    authenticated_url = _as_str(setup.get("authenticated_url"))
+    if auth_mode == "email_link_manual":
+        if not authenticated_url:
+            return {
+                "attempted": False,
+                "ok": None,
+                "reason": "authenticated_url_not_provided",
+            }
+        await page.goto(authenticated_url, wait_until="domcontentloaded", timeout=45000)
+        try:
+            await page.wait_for_load_state("networkidle", timeout=20000)
+        except Exception:
+            await page.wait_for_load_state("domcontentloaded", timeout=10000)
+        confirmation_result = await _maybe_complete_email_link_confirmation(
+            page,
+            email_hint=_as_str(setup.get("email_hint"))
+            or _as_str(setup.get("username")),
+        )
+        if confirmation_result.get("attempted") and confirmation_result.get("ok") is False:
+            return {
+                "attempted": True,
+                "ok": False,
+                "method": "email_link_manual",
+                "confirmation": confirmation_result,
+            }
+        if not confirmation_result.get("attempted"):
+            try:
+                current_text = await page.locator("body").inner_text(timeout=5000)
+            except Exception:
+                current_text = ""
+            if _looks_like_email_signin_page(page.url, current_text):
+                return {
+                    "attempted": True,
+                    "ok": False,
+                    "method": "email_link_manual",
+                    "confirmation": confirmation_result,
+                    "reason": "email_confirmation_required",
+                }
+        resolved_url = _normalize_url(page.url)
+        if start_url:
+            await page.goto(start_url, wait_until="domcontentloaded", timeout=45000)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=20000)
+            except Exception:
+                await page.wait_for_load_state("domcontentloaded", timeout=10000)
+            resolved_url = _normalize_url(page.url) or start_url
+        return {
+            "attempted": True,
+            "ok": True,
+            "method": "email_link_manual",
+            "confirmation": confirmation_result,
+            "resolved_start_url": resolved_url,
+        }
+
+    if auth_mode != "credentials":
+        return {"attempted": False, "ok": None}
+
     login_url = _as_str(setup.get("login_url")) or start_url
     username = _as_str(setup.get("username"))
     password = _as_str(setup.get("password"))
@@ -281,6 +469,155 @@ async def _extract_page(page: Any, url: str) -> dict[str, Any]:
     }
 
 
+async def _save_screen_variant(
+    *,
+    tool_context: Any,
+    page: Any,
+    application_name: str,
+    application_id: str,
+    application_key: str,
+    repo_full_name: str,
+    file_space_id: str,
+    scan_id: str,
+    screen_id: str,
+    screen_source_asset_id: str,
+    screen_index: int,
+    variant_index: int,
+    url: str,
+    route_key: str,
+    title: str,
+    variant: dict[str, Any],
+) -> dict[str, Any]:
+    label = _as_str(variant.get("label"), f"Variant {variant_index:02d}")
+    variant_kind = _as_str(variant.get("variantKind"), "unknown")
+    variant_id = variant_id_for(screen_id, variant_index, label)
+    variant_source_asset_id = f"source-asset-{scan_id}-{variant_id}"
+    interaction_steps = [
+        item
+        for item in (variant.get("interactionSteps") or [])
+        if isinstance(item, dict)
+    ]
+    png = await page.screenshot(full_page=True, type="png")
+    screenshot_ref = await save_bytes_artifact(
+        tool_context,
+        filename=safe_artifact_filename(
+            f"application_screen_{screen_index:03d}_variant_{variant_index:02d}_screenshot",
+            ".png",
+        ),
+        data=png,
+        mime_type="image/png",
+        kind="image",
+        title=f"Screen variant {variant_index:02d}: {label}",
+        custom_metadata=source_asset_metadata(
+            source="vibe-control-application-screen-variant-screenshot",
+            title=(
+                "Application screen variant screenshot "
+                f"{screen_index:03d}-{variant_index:02d}"
+            ),
+            phase="screen_variant_screenshot",
+            file_space_id=file_space_id,
+            agent_search_import=False,
+            application_id=application_id,
+            application_key=application_key,
+            application_name=application_name,
+            repo_full_name=repo_full_name,
+            source_asset_id=variant_source_asset_id,
+            scan_id=scan_id,
+            screen_id=screen_id,
+            variant_id=variant_id,
+            screen_url=url,
+            route_key=route_key,
+            capture_kind="screen_variant",
+            capture_method="gemini_computer_use",
+            variant_kind=variant_kind,
+            parent_screen_asset_id=screen_source_asset_id,
+            interaction_steps=interaction_steps,
+        ),
+    )
+    screenshot_filename = (
+        str(screenshot_ref.get("filename") or "") if screenshot_ref else ""
+    )
+    body = variant_observation_markdown(
+        application_name=application_name,
+        application_id=application_id,
+        application_key=application_key,
+        repo_full_name=repo_full_name,
+        scan_id=scan_id,
+        screen_id=screen_id,
+        variant_id=variant_id,
+        variant_index=variant_index,
+        url=url,
+        route_key=route_key,
+        title=title,
+        label=label,
+        variant_kind=variant_kind,
+        changed_from_base=_as_str(variant.get("changedFromBase")),
+        visible_elements=[
+            str(item)
+            for item in (variant.get("visibleElements") or [])
+            if str(item).strip()
+        ],
+        user_intent_clues=[
+            str(item)
+            for item in (variant.get("userIntentClues") or [])
+            if str(item).strip()
+        ],
+        interaction_steps=interaction_steps,
+        screenshot_filename=screenshot_filename,
+        risk_level=_as_str(variant.get("riskLevel"), "safe_readonly"),
+    )
+    observation_ref = await save_text_artifact(
+        tool_context,
+        filename=safe_artifact_filename(
+            f"application_screen_{screen_index:03d}_variant_{variant_index:02d}_observation",
+            ".md",
+        ),
+        body=body,
+        mime_type="text/markdown; charset=utf-8",
+        kind="markdown_document",
+        title=f"Screen Variant {variant_index:02d}: {label}",
+        custom_metadata=source_asset_metadata(
+            source="vibe-control-application-screen-variant-observation",
+            title=(
+                "Application screen variant observation "
+                f"{screen_index:03d}-{variant_index:02d}"
+            ),
+            phase="screen_variant",
+            file_space_id=file_space_id,
+            agent_search_import=True,
+            application_id=application_id,
+            application_key=application_key,
+            application_name=application_name,
+            repo_full_name=repo_full_name,
+            source_asset_id=variant_source_asset_id,
+            scan_id=scan_id,
+            screen_id=screen_id,
+            variant_id=variant_id,
+            screen_url=url,
+            route_key=route_key,
+            capture_kind="screen_variant",
+            capture_method="gemini_computer_use",
+            variant_kind=variant_kind,
+            parent_screen_asset_id=screen_source_asset_id,
+            screenshot_filename=screenshot_filename,
+            interaction_steps=interaction_steps,
+        ),
+    )
+    record = {
+        "variantId": variant_id,
+        "sourceAssetId": variant_source_asset_id,
+        "label": label,
+        "variantKind": variant_kind,
+        "captureMethod": "gemini_computer_use",
+        "changedFromBase": _as_str(variant.get("changedFromBase")),
+        "riskLevel": _as_str(variant.get("riskLevel"), "safe_readonly"),
+        "interactionSteps": interaction_steps,
+        "screenshot": screenshot_ref,
+        "screenObservation": observation_ref,
+    }
+    return {"screenshot": screenshot_ref, "observation": observation_ref, "record": record}
+
+
 async def run_application_scan(
     max_pages: int | None = None,
     capture_screenshots: bool | None = None,
@@ -290,8 +627,16 @@ async def run_application_scan(
     bucket = _application_scan_bucket(tool_context)
     setup = _setup_from_bucket(bucket)
     start_url = _normalize_url(_as_str(setup.get("start_url")))
-    if not start_url:
+    auth_mode = _as_str(setup.get("auth_mode")) or "none"
+    authenticated_url_raw = _as_str(setup.get("authenticated_url"))
+    authenticated_url_for_display = _normalize_url(authenticated_url_raw)
+    if not start_url and auth_mode != "email_link_manual":
         return {"ok": False, "error": "application_scan.setup.start_url is required"}
+    if auth_mode == "email_link_manual" and not authenticated_url_raw:
+        return {
+            "ok": False,
+            "error": "application_scan.setup.authenticated_url is required",
+        }
 
     page_limit = _as_int(max_pages, _as_int(setup.get("max_pages"), 12, 1, 50), 1, 50)
     should_capture = (
@@ -299,6 +644,16 @@ async def run_application_scan(
         if capture_screenshots is not None
         else _as_bool(setup.get("capture_screenshots"), True)
     )
+    explore_variants = _as_bool(setup.get("explore_variants"), False)
+    max_variants_per_screen = _as_int(
+        setup.get("max_variants_per_screen"), 5, 0, 10
+    )
+    max_steps_per_screen = _as_int(setup.get("max_steps_per_screen"), 12, 1, 30)
+    allow_chat_send = _as_bool(setup.get("allow_chat_send"), False)
+    variant_only = _as_bool(setup.get("variant_only"), False)
+    target_screen_id = _as_str(setup.get("target_screen_id"))
+    target_screen_url = _normalize_url(_as_str(setup.get("target_screen_url")))
+    target_route_key = _as_str(setup.get("target_route_key"))
     include_patterns = _as_str_list(setup.get("include_patterns"))
     exclude_patterns = _as_str_list(setup.get("exclude_patterns"))
     file_space_id = _as_str(setup.get("file_space_id"))
@@ -306,6 +661,14 @@ async def run_application_scan(
     application_key = _as_str(setup.get("application_key"))
     application_name = _as_str(setup.get("application_name"))
     repo_full_name = _as_str(setup.get("repo_full_name"))
+    initial_url = (
+        target_screen_url
+        if variant_only and target_screen_url
+        else start_url or authenticated_url_for_display
+    )
+    if variant_only:
+        page_limit = 1
+        explore_variants = True
     scan_id = f"application-scan-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
     _patch_scan_state(
         tool_context,
@@ -315,7 +678,7 @@ async def run_application_scan(
                 "scan_id": scan_id,
                 "processed_pages": 0,
                 "total_pages": page_limit,
-                "current_url": start_url,
+                "current_url": initial_url,
                 "started_at": _now_iso(),
             },
         },
@@ -334,8 +697,11 @@ async def run_application_scan(
     failures: list[dict[str, str]] = []
     screenshot_refs: list[dict[str, Any]] = []
     screen_observation_refs: list[dict[str, Any]] = []
+    variant_refs: list[dict[str, Any]] = []
+    variant_observation_refs: list[dict[str, Any]] = []
+    variant_failures: list[dict[str, Any]] = []
     visited: set[str] = set()
-    queue: deque[str] = deque([start_url])
+    queue: deque[str] = deque()
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -345,6 +711,29 @@ async def run_application_scan(
         )
         page = await context.new_page()
         login_result = await _maybe_login(page, setup, start_url)
+        if login_result.get("attempted") and login_result.get("ok") is False:
+            await context.close()
+            await browser.close()
+            return {
+                "ok": False,
+                "error": "application_scan login failed",
+                "login": login_result,
+            }
+        resolved_start_url = _normalize_url(
+            _as_str(login_result.get("resolved_start_url"))
+        )
+        if resolved_start_url and not (variant_only and target_screen_url):
+            start_url = resolved_start_url
+            initial_url = resolved_start_url
+        if not initial_url:
+            initial_url = _normalize_url(page.url)
+        if not initial_url:
+            await browser.close()
+            return {
+                "ok": False,
+                "error": "application_scan could not resolve a start URL",
+            }
+        queue.append(initial_url)
 
         while queue and len(pages) < page_limit:
             url = queue.popleft()
@@ -372,14 +761,20 @@ async def run_application_scan(
                     pass
                 extracted = await _extract_page(page, url)
                 page_index = len(pages) + 1
+                route_key = target_route_key if variant_only and target_route_key else route_key_for_url(url)
+                screen_id = (
+                    target_screen_id
+                    if variant_only and target_screen_id
+                    else screen_id_for(scan_id, page_index, url, str(extracted["title"] or ""))
+                )
+                screen_source_asset_id = f"source-asset-{scan_id}-{screen_id}"
                 screenshot_ref = None
                 screen_observation_ref = None
                 if should_capture:
                     png = await page.screenshot(full_page=True, type="png")
                     filename = safe_artifact_filename(
-                        f"application_scan_{page_index:03d}_screenshot", ".png"
+                        f"application_screen_{page_index:03d}_base_screenshot", ".png"
                     )
-                    source_asset_id = f"source-asset-{scan_id}-{page_index:03d}"
                     screenshot_ref = await save_bytes_artifact(
                         tool_context,
                         filename=filename,
@@ -398,21 +793,29 @@ async def run_application_scan(
                             applicationKey=application_key,
                             applicationName=application_name,
                             repoFullName=repo_full_name,
-                            sourceAssetId=source_asset_id,
+                            sourceAssetId=screen_source_asset_id,
                             url=url,
+                            screenUrl=url,
+                            routeKey=route_key,
+                            screenId=screen_id,
+                            captureKind="base_screen",
+                            captureMethod="static_link_scan",
+                            variantKind=BASE_VARIANT_KIND,
                             scanId=scan_id,
                         ),
                     )
                     if screenshot_ref:
                         screenshot_refs.append({**screenshot_ref, "url": url})
-                        observation_body = _screen_observation_markdown(
+                        observation_body = screen_observation_markdown(
                             application_name=application_name,
                             application_id=application_id,
                             application_key=application_key,
                             repo_full_name=repo_full_name,
                             scan_id=scan_id,
+                            screen_id=screen_id,
                             page_index=page_index,
                             url=url,
+                            route_key=route_key,
                             title=extracted["title"],
                             text_preview=extracted["text"][:2400],
                             screenshot_filename=str(
@@ -422,7 +825,7 @@ async def run_application_scan(
                         screen_observation_ref = await save_text_artifact(
                             tool_context,
                             filename=safe_artifact_filename(
-                                f"application_scan_{page_index:03d}_screen_observation",
+                                f"application_screen_{page_index:03d}_observation",
                                 ".md",
                             ),
                             body=observation_body,
@@ -432,42 +835,119 @@ async def run_application_scan(
                                 f"Screen Observation {page_index:03d}: "
                                 f"{extracted['title'] or url}"
                             ),
-                            custom_metadata=_metadata(
-                                kind="markdown_document",
+                            custom_metadata=source_asset_metadata(
                                 title=(
                                     f"Application screen observation {page_index:03d}"
                                 ),
+                                source="vibe-control-application-screen-observation",
                                 phase="screen_observation",
                                 file_space_id=file_space_id,
                                 agent_search_import=True,
-                                source="vibe-control-application-screenshot-observation",
-                                applicationId=application_id,
-                                applicationKey=application_key,
-                                applicationName=application_name,
-                                repoFullName=repo_full_name,
-                                sourceAssetId=source_asset_id,
-                                screenshotFilename=str(
+                                application_id=application_id,
+                                application_key=application_key,
+                                application_name=application_name,
+                                repo_full_name=repo_full_name,
+                                source_asset_id=screen_source_asset_id,
+                                screen_id=screen_id,
+                                screen_url=url,
+                                route_key=route_key,
+                                capture_kind="base_screen",
+                                capture_method="static_link_scan",
+                                variant_kind=BASE_VARIANT_KIND,
+                                screenshot_filename=str(
                                     screenshot_ref.get("filename") or ""
                                 ),
-                                url=url,
-                                scanId=scan_id,
+                                scan_id=scan_id,
                             ),
                         )
                         if screen_observation_ref:
                             screen_observation_refs.append(
                                 {**screen_observation_ref, "url": url}
                             )
+                screen_record: dict[str, Any] = {
+                    "screenId": screen_id,
+                    "sourceAssetId": screen_source_asset_id,
+                    "url": url,
+                    "routeKey": route_key,
+                    "title": extracted["title"],
+                    "textPreview": extracted["text"][:1200],
+                    "outboundLinkCount": len(extracted["links"]),
+                    "screenshot": screenshot_ref,
+                    "screenObservation": screen_observation_ref,
+                    "variants": [],
+                }
+                if explore_variants and should_capture and max_variants_per_screen > 0:
+                    try:
+                        await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                        try:
+                            await page.wait_for_load_state("networkidle", timeout=5000)
+                        except Exception:
+                            pass
+                        variant_result = await explore_screen_variants(
+                            page=page,
+                            screen=screen_record,
+                            origin=start_url,
+                            max_variants=max_variants_per_screen,
+                            max_steps=max_steps_per_screen,
+                            allow_chat_send=allow_chat_send,
+                        )
+                        for failure in variant_result.get("failures") or []:
+                            if isinstance(failure, dict):
+                                variant_failures.append(failure)
+                                _patch_scan_state(
+                                    tool_context,
+                                    {
+                                        "variantFailures": variant_failures[-20:],
+                                    },
+                                )
+                        for variant_index, variant in enumerate(
+                            [
+                                item
+                                for item in variant_result.get("variants", [])
+                                if isinstance(item, dict)
+                            ],
+                            start=1,
+                        ):
+                            variant_ref = await _save_screen_variant(
+                                tool_context=tool_context,
+                                page=page,
+                                application_name=application_name,
+                                application_id=application_id,
+                                application_key=application_key,
+                                repo_full_name=repo_full_name,
+                                file_space_id=file_space_id,
+                                scan_id=scan_id,
+                                screen_id=screen_id,
+                                screen_source_asset_id=screen_source_asset_id,
+                                screen_index=page_index,
+                                variant_index=variant_index,
+                                url=url,
+                                route_key=route_key,
+                                title=str(extracted["title"] or ""),
+                                variant=variant,
+                            )
+                            if variant_ref["screenshot"]:
+                                variant_refs.append({**variant_ref["screenshot"], "url": url})
+                            if variant_ref["observation"]:
+                                variant_observation_refs.append(
+                                    {**variant_ref["observation"], "url": url}
+                                )
+                            screen_record["variants"].append(variant_ref["record"])
+                    except Exception as exc:
+                        variant_failures.append(
+                            {
+                                "screenId": screen_id,
+                                "url": url,
+                                "phase": "variant_exploration",
+                                "error": str(exc)[:300],
+                            }
+                        )
                 pages.append(
-                    {
-                        "url": url,
-                        "title": extracted["title"],
-                        "textPreview": extracted["text"][:1200],
-                        "outboundLinkCount": len(extracted["links"]),
-                        "screenshot": screenshot_ref,
-                        "screenObservation": screen_observation_ref,
-                    }
+                    screen_record
                 )
                 for raw_link in extracted["links"]:
+                    if variant_only:
+                        break
                     if not isinstance(raw_link, str):
                         continue
                     normalized = _normalize_url(raw_link, base_url=url)
@@ -487,7 +967,7 @@ async def run_application_scan(
         await browser.close()
 
     sitemap = {
-        "schemaVersion": "application-scan-v1",
+        "schemaVersion": "screen-atlas-v1",
         "scanId": scan_id,
         "generatedAt": _now_iso(),
         "target": {
@@ -497,72 +977,108 @@ async def run_application_scan(
             "includePatterns": include_patterns,
             "excludePatterns": exclude_patterns,
         },
+        "explorationPolicy": {
+            "exploreVariants": explore_variants,
+            "maxVariantsPerScreen": max_variants_per_screen,
+            "maxStepsPerScreen": max_steps_per_screen,
+            "allowChatSend": allow_chat_send,
+            "variantOnly": variant_only,
+            "targetScreenId": target_screen_id or None,
+            "targetScreenUrl": target_screen_url or None,
+            "targetRouteKey": target_route_key or None,
+            "sameOriginOnly": True,
+            "destructiveActionPolicy": "block",
+        },
         "summary": {
             "pageCount": len(pages),
             "screenshotCount": len(screenshot_refs),
+            "variantCount": len(variant_refs),
+            "variantObservationCount": len(variant_observation_refs),
             "failureCount": len(failures),
+            "variantFailureCount": len(variant_failures),
         },
         "pages": pages,
+        "screens": pages,
         "failures": failures,
+        "variantFailures": variant_failures,
     }
     sitemap_body = json.dumps(sitemap, ensure_ascii=False, indent=2)
     sitemap_ref = await save_text_artifact(
         tool_context,
-        filename=safe_artifact_filename("application_scan_sitemap", ".json"),
+        filename=safe_artifact_filename("application_screen_atlas", ".json"),
         body=sitemap_body,
         mime_type="application/json; charset=utf-8",
         kind="json_document",
-        title="Application Scan Sitemap",
-        custom_metadata=_metadata(
-            kind="json_document",
-            title="Application Scan Sitemap",
-            phase="sitemap",
+        title="Application Screen Atlas",
+        custom_metadata=source_asset_metadata(
+            source="vibe-control-application-screen-atlas",
+            title="Application Screen Atlas",
+            phase="screen_atlas",
             file_space_id=file_space_id,
             agent_search_import=True,
-            source="vibe-control-application-scan-sitemap",
-            applicationId=application_id,
-            applicationKey=application_key,
-            applicationName=application_name,
-            repoFullName=repo_full_name,
-            sourceAssetId=f"source-asset-{scan_id}-sitemap",
-            scanId=scan_id,
+            application_id=application_id,
+            application_key=application_key,
+            application_name=application_name,
+            repo_full_name=repo_full_name,
+            source_asset_id=f"source-asset-{scan_id}-atlas",
+            scan_id=scan_id,
+            capture_kind="screen_atlas",
+            capture_method="static_link_scan",
         ),
     )
     summary_lines = [
-        "# Application Scan Summary",
+        "# Screen Atlas Summary",
         "",
         f"- Scan ID: `{scan_id}`",
         f"- Start URL: {start_url}",
-        f"- Pages: {len(pages)}",
-        f"- Screenshots: {len(screenshot_refs)}",
+        f"- Screens: {len(pages)}",
+        f"- Base Screenshots: {len(screenshot_refs)}",
+        f"- Variants: {len(variant_refs)}",
         f"- Failures: {len(failures)}",
+        f"- Variant Failures: {len(variant_failures)}",
         "",
-        "## Sitemap",
-        *[f"- {item['title'] or '(no title)'}: {item['url']}" for item in pages],
+        "## Screens",
+        *[
+            (
+                f"- {item['title'] or '(no title)'}: {item['url']}"
+                f" ({len(item.get('variants') or [])} variants)"
+            )
+            for item in pages
+        ],
     ]
     if failures:
         summary_lines.extend(["", "## Failures"])
         summary_lines.extend([f"- {item['url']}: {item['error']}" for item in failures])
+    if variant_failures:
+        summary_lines.extend(["", "## Variant Failures"])
+        summary_lines.extend(
+            [
+                f"- {item.get('url') or item.get('screenId')}: {item.get('error')}"
+                for item in variant_failures
+                if isinstance(item, dict)
+            ]
+        )
     summary_ref = await save_text_artifact(
         tool_context,
-        filename=safe_artifact_filename("application_scan_summary", ".md"),
+        filename=safe_artifact_filename("application_screen_atlas_summary", ".md"),
         body="\n".join(summary_lines),
         mime_type="text/markdown; charset=utf-8",
         kind="markdown_document",
-        title="Application Scan Summary",
-        custom_metadata=_metadata(
-            kind="markdown_document",
-            title="Application Scan Summary",
+        title="Screen Atlas Summary",
+        custom_metadata=source_asset_metadata(
+            source="vibe-control-application-screen-atlas-summary",
+            title="Screen Atlas Summary",
             phase="summary",
             file_space_id=file_space_id,
             agent_search_import=True,
-            source="vibe-control-application-scan-summary",
-            applicationId=application_id,
-            applicationKey=application_key,
-            applicationName=application_name,
-            repoFullName=repo_full_name,
-            sourceAssetId=f"source-asset-{scan_id}-summary",
-            scanId=scan_id,
+            application_id=application_id,
+            application_key=application_key,
+            application_name=application_name,
+            repo_full_name=repo_full_name,
+            source_asset_id=f"source-asset-{scan_id}-summary",
+            scan_id=scan_id,
+            capture_kind="screen_atlas_summary",
+            capture_method="static_link_scan",
         ),
     )
 
@@ -573,6 +1089,8 @@ async def run_application_scan(
             summary_ref,
             *screenshot_refs,
             *screen_observation_refs,
+            *variant_refs,
+            *variant_observation_refs,
         ]
         if ref
     ]
@@ -592,6 +1110,8 @@ async def run_application_scan(
                 "summary_filename": summary_ref.get("filename") if summary_ref else None,
                 "screenshot_count": len(screenshot_refs),
                 "screen_observation_count": len(screen_observation_refs),
+                "variant_count": len(variant_refs),
+                "variant_observation_count": len(variant_observation_refs),
             },
         },
     )
@@ -600,9 +1120,13 @@ async def run_application_scan(
         "application_scan": {
             "scan_id": scan_id,
             "page_count": len(pages),
+            "screen_count": len(pages),
             "screenshot_count": len(screenshot_refs),
             "screen_observation_count": len(screen_observation_refs),
+            "variant_count": len(variant_refs),
+            "variant_observation_count": len(variant_observation_refs),
             "failure_count": len(failures),
+            "variant_failure_count": len(variant_failures),
             "file_space_id": file_space_id or None,
         },
         "artifact_refs": artifact_refs,

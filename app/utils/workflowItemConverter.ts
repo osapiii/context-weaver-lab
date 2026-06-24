@@ -10,13 +10,11 @@ import type {
   WorkflowItemStatus,
 } from "@models/workflowItem";
 import type {
+  EnAiStudioActiveTask,
   TaskBucketBase,
   TaskInvokeStatus,
 } from "@models/enAiStudioSessionState";
-import {
-  isEnAiStudioActiveTask,
-  type EnAiStudioActiveTask,
-} from "@models/enAiStudioSessionState";
+import { isEnAiStudioActiveTask } from "@models/enAiStudioSessionState";
 import type { RequestLog } from "@stores/requestLogHistory";
 import { parseRequestLogDate } from "@utils/requestLogDate";
 import {
@@ -67,13 +65,17 @@ function buildAdkSessionNavigateTarget(
 }
 
 function buildVibeControlApplicationNavigateTarget(
-  applicationId?: string | null
+  applicationId?: string | null,
+  applicationScanRequestId?: string | null
 ): WorkflowItemNavigateTarget {
   return {
     routeName: "admin-vibe-control",
     query: {
-      view: "application-detail",
+      view: applicationScanRequestId ? "application-scan" : "application-detail",
       ...(applicationId ? { applicationId } : {}),
+      ...(applicationScanRequestId
+        ? { applicationScanRequestId, openApplicationScanProgress: "1" }
+        : {}),
     },
   };
 }
@@ -128,7 +130,7 @@ function resolveWorkflowRequestNavigateTarget(
         | { mode?: unknown; sessionId?: string; workspaceId?: string }
         | undefined;
       if (input?.mode === "application_scan") {
-        return buildVibeControlApplicationNavigateTarget(input.workspaceId);
+        return buildVibeControlApplicationNavigateTarget(input.workspaceId, log.id);
       }
       const sessionId = input?.sessionId;
       return sessionId ? buildAdkSessionNavigateTarget(sessionId) : undefined;
@@ -171,8 +173,15 @@ export function convertWorkflowRequestToWorkflowItem(
       typeof applicationScanSetup.start_url === "string"
         ? applicationScanSetup.start_url
         : "";
+    const applicationScanAuthMode =
+      typeof applicationScanSetup.auth_mode === "string"
+        ? applicationScanSetup.auth_mode
+        : "";
     const progressLabel =
-      taskType === "application_scan" && applicationScanUrl
+      taskType === "application_scan" &&
+      applicationScanAuthMode === "email_link_manual"
+        ? "メールリンク認証"
+        : taskType === "application_scan" && applicationScanUrl
         ? `開始URL: ${applicationScanUrl}`
         : typeof prompt === "string" && prompt.trim()
           ? prompt.trim().slice(0, 120)

@@ -104,7 +104,7 @@ export const AI_STUDIO_MODE_PANEL_TITLE: Record<AiStudioWorkspaceMode, string> =
   research: "調査レポートモード",
   data_analysis: "データ分析モード",
   web_page: "WEBページモード",
-  application_scan: "アプリスキャンモード",
+  application_scan: "Screen Atlasモード",
 };
 
 export const AI_STUDIO_CONCIERGE_PANEL_TITLE = "コンシェルジュモード";

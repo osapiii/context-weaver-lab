@@ -78,6 +78,9 @@ export const VibeControlCapabilityStatusSchema = z.enum([
 
 export const VibeControlSourceAssetTypeSchema = z.enum([
   "knowledge_document",
+  "application_screen",
+  "application_screen_variant",
+  "application_screen_atlas",
   "application_screenshot",
   "application_scan_sitemap",
   "application_scan_summary",
@@ -96,6 +99,12 @@ export const VibeControlSourceAssetDiscoveryStatusSchema = z.enum([
   "queued",
   "completed",
   "error",
+]);
+
+export const VibeControlScanAuthModeSchema = z.enum([
+  "none",
+  "credentials",
+  "email_link_manual",
 ]);
 
 export const VibeControlGenerationSessionPhaseSchema = z.enum([
@@ -347,6 +356,10 @@ export const VibeControlApplicationScanRunSchema = z.object({
   fileSpaceId: z.string().optional(),
   maxPages: z.number().optional(),
   captureScreenshots: z.boolean().optional(),
+  exploreVariants: z.boolean().optional(),
+  maxVariantsPerScreen: z.number().optional(),
+  maxStepsPerScreen: z.number().optional(),
+  allowChatSend: z.boolean().optional(),
   artifactCount: z.number().optional(),
   sourceAssetCount: z.number().optional(),
   discoveryQueuedCount: z.number().optional(),
@@ -355,6 +368,35 @@ export const VibeControlApplicationScanRunSchema = z.object({
   updatedAt: z.string(),
   completedAt: z.string().optional(),
 });
+
+export const VibeControlApplicationScanProfileSchema = z.object({
+  id: z.string().optional(),
+  applicationId: z.string().default("app-default"),
+  applicationKey: z.string().default("APP"),
+  name: z.string(),
+  authMode: VibeControlScanAuthModeSchema.default("none"),
+  entryUrl: z.string(),
+  loginUrl: z.string().optional(),
+  username: z.string().optional(),
+  passwordConfigured: z.boolean().default(false),
+  passwordUpdatedAt: z.string().optional(),
+  usernameSelector: z.string().optional(),
+  passwordSelector: z.string().optional(),
+  submitSelector: z.string().optional(),
+  includePatterns: z.array(z.string()).default([]),
+  excludePatterns: z.array(z.string()).default([]),
+  defaultExploreVariants: z.boolean().default(false),
+  maxPages: z.number().min(1).max(50).default(12),
+  maxVariantsPerScreen: z.number().min(0).max(10).default(5),
+  maxStepsPerScreen: z.number().min(1).max(30).default(12),
+  createdAt: z.instanceof(Timestamp).optional(),
+  updatedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlApplicationScanProfileSchema =
+  VibeControlApplicationScanProfileSchema.extend({
+    id: z.string(),
+  });
 
 export const VibeControlCapabilitySchema = z.object({
   id: z.string().optional(),
@@ -541,6 +583,15 @@ export type DecodedVibeControlOperationVideo = z.infer<
 export type VibeControlApplicationScanRun = z.infer<
   typeof VibeControlApplicationScanRunSchema
 >;
+export type VibeControlApplicationScanProfile = z.infer<
+  typeof VibeControlApplicationScanProfileSchema
+>;
+export type DecodedVibeControlApplicationScanProfile = z.infer<
+  typeof DecodedVibeControlApplicationScanProfileSchema
+>;
+export type VibeControlScanAuthMode = z.infer<
+  typeof VibeControlScanAuthModeSchema
+>;
 export type VibeControlCapabilityStatus = z.infer<
   typeof VibeControlCapabilityStatusSchema
 >;
@@ -583,6 +634,9 @@ export const vibeControlSourceConnectionConverter = firestoreTypeConverter(
 );
 export const vibeControlOperationVideoConverter = firestoreTypeConverter(
   DecodedVibeControlOperationVideoSchema
+);
+export const vibeControlApplicationScanProfileConverter = firestoreTypeConverter(
+  DecodedVibeControlApplicationScanProfileSchema
 );
 export const vibeControlCapabilityConverter = firestoreTypeConverter(
   DecodedVibeControlCapabilitySchema

@@ -20,6 +20,33 @@ def activate_byok(api_key: str | None) -> contextvars.Token[str | None] | None:
     return token
 
 
+def suspend_byok() -> tuple[contextvars.Token[str | None], str | None, str | None]:
+    """Temporarily clear request/user Gemini API keys so ADC/Vertex is used."""
+    previous_gemini_env = os.environ.get("GEMINI_API_KEY")
+    previous_google_env = os.environ.get("GOOGLE_API_KEY")
+    token = current_user_api_key.set(None)
+    os.environ.pop("GEMINI_API_KEY", None)
+    os.environ.pop("GOOGLE_API_KEY", None)
+    return token, previous_gemini_env, previous_google_env
+
+
+def resume_byok(
+    token: contextvars.Token[str | None],
+    *,
+    previous_gemini_env: str | None,
+    previous_google_env: str | None,
+) -> None:
+    current_user_api_key.reset(token)
+    if previous_gemini_env is None:
+        os.environ.pop("GEMINI_API_KEY", None)
+    else:
+        os.environ["GEMINI_API_KEY"] = previous_gemini_env
+    if previous_google_env is None:
+        os.environ.pop("GOOGLE_API_KEY", None)
+    else:
+        os.environ["GOOGLE_API_KEY"] = previous_google_env
+
+
 def deactivate_byok(
     token: contextvars.Token[str | None] | None,
     *,

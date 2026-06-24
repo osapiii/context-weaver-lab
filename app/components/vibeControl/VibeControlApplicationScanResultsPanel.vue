@@ -3,16 +3,28 @@
     <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 p-4">
       <div class="min-w-0">
         <p class="text-xs font-medium uppercase tracking-wide text-emerald-600">
-          Visual QA Evidence
+          Screen Atlas Assets
         </p>
         <h2 class="mt-1 truncate text-base font-semibold text-slate-900">
           {{ application?.name ?? "Application" }}
         </h2>
         <p class="mt-1 text-xs text-slate-500">
-          画面遷移、スクリーンショット、summaryを品質保証の証跡として確認します
+          画面遷移、スクリーンショット、状態Variantをアプリ資産として確認します
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <button
+          v-if="run"
+          type="button"
+          class="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-primary-200 hover:text-primary-600"
+          @click="emit('openProgress')"
+        >
+          <UIcon
+            :name="run.status === 'pending' || run.status === 'processing' ? 'svg-spinners:180-ring' : 'material-symbols:timeline'"
+            class="h-4 w-4"
+          />
+          進捗
+        </button>
         <button
           v-if="application"
           type="button"
@@ -24,7 +36,7 @@
             :name="isStartingScan ? 'svg-spinners:180-ring' : 'material-symbols:refresh-rounded'"
             class="h-4 w-4"
           />
-          Visual QAを再取得
+          Screen Atlasを再取得
         </button>
         <EnBadge v-if="run" :color="statusBadge.color" variant="soft">
           {{ statusBadge.label }}
@@ -41,10 +53,10 @@
         class="h-12 w-12 text-slate-300"
       />
       <p class="mt-3 text-sm font-semibold text-slate-700">
-        まだVisual QA証跡がありません
+        まだScreen Atlasがありません
       </p>
       <p class="mt-1 text-xs text-slate-500">
-        基本情報タブからApplication Scanを実行すると、画面品質の証跡がここに保存されます
+        基本情報タブからApplication Scanを実行すると、画面と状態のアセットがここに保存されます
       </p>
     </div>
 
@@ -57,13 +69,13 @@
           </p>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p class="text-xs font-semibold text-slate-500">Visual Evidence</p>
+          <p class="text-xs font-semibold text-slate-500">Screen Assets</p>
           <p class="mt-1 text-sm font-semibold text-slate-900">
             {{ screenshotCards.length }}
           </p>
         </div>
         <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p class="text-xs font-semibold text-slate-500">Flow Map</p>
+          <p class="text-xs font-semibold text-slate-500">Detected Routes</p>
           <p class="mt-1 text-sm font-semibold text-slate-900">
             {{ sitemapSummary }}
           </p>
@@ -81,9 +93,9 @@
           <div class="rounded-lg border border-slate-200 p-4">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p class="text-sm font-bold text-slate-900">Visual QAスクリーンショット</p>
+                <p class="text-sm font-bold text-slate-900">Captured Screens</p>
                 <p class="text-xs text-slate-500">
-                  Playwright巡回で保存された画面状態の証跡
+                  Playwright巡回とVariant探索で保存された画面状態
                 </p>
               </div>
               <EnBadge v-if="syncingCount > 0" color="info" variant="soft">
@@ -187,42 +199,60 @@
 
               <div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
               <button
-                v-for="card in screenshotCards"
-                :key="card.artifact.artifactId"
+                v-for="screen in screenCards"
+                :key="screen.id"
                 type="button"
                 class="group overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
-                @click="previewArtifactId = card.artifact.artifactId"
+                :class="screen.id === selectedScreen?.id ? 'border-primary-300 ring-2 ring-primary-100' : ''"
+                @click="selectedScreenId = screen.id"
               >
                 <div class="aspect-video overflow-hidden bg-slate-100">
                   <AdkArtifactImage
-                    :artifact-id="card.artifact.artifactId"
+                    v-if="screen.screenshotCard"
+                    :artifact-id="screen.screenshotCard.artifact.artifactId"
                     :session-id="run.sessionId"
-                    :adk-filename="card.artifact.adkFilename"
-                    :artifact-version="card.artifact.adkVersion"
-                    :alt="card.title"
+                    :adk-filename="screen.screenshotCard.artifact.adkFilename"
+                    :artifact-version="screen.screenshotCard.artifact.adkVersion"
+                    :alt="screen.title"
                     class="h-full w-full object-cover transition duration-200 group-hover:scale-[1.03]"
                   />
+                  <div
+                    v-else
+                    class="flex h-full items-center justify-center text-xs text-slate-400"
+                  >
+                    Screenshot同期中
+                  </div>
                 </div>
                 <div class="p-3">
                   <p class="truncate text-xs font-bold text-slate-900">
-                    {{ card.title }}
+                    {{ screen.title }}
                   </p>
                   <a
-                    v-if="card.pageUrl"
-                    :href="card.pageUrl"
+                    v-if="screen.url"
+                    :href="screen.url"
                     target="_blank"
                     rel="noopener"
                     class="mt-1 block truncate font-mono text-[11px] text-slate-500 hover:text-primary-600 hover:underline"
                     @click.stop
                   >
-                    {{ card.pageUrl }}
+                    {{ screen.url }}
                   </a>
                   <p v-else class="mt-1 truncate font-mono text-[11px] text-amber-600">
                     URL同期待ち
                   </p>
-                  <p class="mt-1 text-[11px] text-slate-500">
-                    {{ formatBytes(card.artifact.bytes) }}
-                  </p>
+                  <div class="mt-2 flex items-center justify-between gap-2">
+                    <p class="text-[11px] text-slate-500">
+                      {{ screen.variants.length }} variants
+                    </p>
+                    <button
+                      v-if="screen.screenshotCard"
+                      type="button"
+                      class="rounded-md border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-primary-200 hover:text-primary-600"
+                      @click.stop="previewArtifactId = screen.screenshotCard.artifact.artifactId"
+                    >
+                      Preview
+                    </button>
+                  </div>
                 </div>
               </button>
               </div>
@@ -230,12 +260,12 @@
           </div>
 
           <div class="rounded-lg border border-slate-200 p-4">
-            <p class="text-sm font-bold text-slate-900">QA Artifact一覧</p>
+            <p class="text-sm font-bold text-slate-900">Screen Atlas Artifact一覧</p>
             <div
               v-if="nonScreenshotCards.length === 0"
               class="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-xs text-slate-500"
             >
-              QA Artifactを同期中です
+              Screen Atlas Artifactを同期中です
             </div>
             <div v-else class="mt-4 grid gap-3 md:grid-cols-2">
               <article
@@ -259,7 +289,94 @@
 
         <aside class="min-w-0 space-y-4">
           <div class="rounded-lg border border-slate-200 p-4">
-            <p class="text-sm font-bold text-slate-900">Flow URL一覧</p>
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-slate-900">Screen詳細</p>
+                <p class="mt-1 truncate font-mono text-[11px] text-slate-500">
+                  {{ selectedScreen?.routeKey || "未選択" }}
+                </p>
+              </div>
+              <EnButton
+                v-if="selectedScreen?.url"
+                variant="ai"
+                size="xs"
+                leading-icon="material-symbols:auto-awesome-outline"
+                :disabled="isStartingScan"
+                :loading="isStartingScan"
+                @click="requestVariantExploration(selectedScreen)"
+              >
+                Variant探索
+              </EnButton>
+            </div>
+
+            <div
+              v-if="!selectedScreen"
+              class="mt-3 rounded-md bg-slate-50 p-3 text-xs text-slate-500"
+            >
+              Screenを選択してください
+            </div>
+            <div v-else class="mt-3 space-y-3">
+              <div>
+                <p class="text-xs font-semibold text-slate-500">Title</p>
+                <p class="mt-1 text-sm font-semibold text-slate-900">
+                  {{ selectedScreen.title }}
+                </p>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-slate-500">URL</p>
+                <a
+                  :href="selectedScreen.url"
+                  target="_blank"
+                  rel="noopener"
+                  class="mt-1 block break-all font-mono text-[11px] text-primary-600 hover:underline"
+                >
+                  {{ selectedScreen.url }}
+                </a>
+              </div>
+              <div>
+                <p class="text-xs font-semibold text-slate-500">Variants</p>
+                <div
+                  v-if="selectedScreenVariantItems.length === 0"
+                  class="mt-2 rounded-md bg-slate-50 p-3 text-xs text-slate-500"
+                >
+                  まだVariantはありません。探索を実行するとここに追加されます。
+                </div>
+                <div v-else class="mt-2 space-y-2">
+                  <article
+                    v-for="variant in selectedScreenVariantItems"
+                    :key="variant.id"
+                    class="rounded-md border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <p class="truncate text-xs font-bold text-slate-900">
+                        {{ variant.label }}
+                      </p>
+                      <EnBadge variant="tag">
+                        {{ variant.variantKind }}
+                      </EnBadge>
+                    </div>
+                    <p
+                      v-if="variant.changedFromBase"
+                      class="mt-2 line-clamp-3 text-[11px] leading-relaxed text-slate-600"
+                    >
+                      {{ variant.changedFromBase }}
+                    </p>
+                    <button
+                      v-if="variant.screenshotArtifactId"
+                      type="button"
+                      class="mt-2 text-[11px] font-semibold text-primary-600 hover:underline"
+                      @click="previewArtifactId = variant.screenshotArtifactId"
+                    >
+                      Screenshotを見る
+                    </button>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-sm font-bold text-slate-900">Detected Routes</p>
             <div
               v-if="sitemapUrls.length === 0"
               class="mt-3 rounded-md bg-slate-50 p-3 text-xs text-slate-500"
@@ -285,7 +402,7 @@
           </div>
 
           <div class="rounded-lg border border-slate-200 p-4">
-            <p class="text-sm font-bold text-slate-900">Visual QA Summary</p>
+            <p class="text-sm font-bold text-slate-900">Screen Atlas Summary</p>
             <EnMarkdown
               v-if="summaryBody"
               :markdown-text="summaryBody"
@@ -318,12 +435,212 @@
         class="max-h-[70vh] w-full rounded-lg border border-slate-200 bg-slate-50 object-contain"
       />
     </EnModal>
+
+    <EnModal
+      v-model:open="variantMonitorOpen"
+      title="Variant探索モニター"
+      subtitle="対象画面、操作状態、生成Artifactを同期して確認します"
+      title-icon="material-symbols:auto-awesome-motion-outline"
+      size="3xl"
+      padding="lg"
+    >
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div class="min-w-0 space-y-4">
+          <div class="overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-3 py-2">
+              <div class="min-w-0">
+                <p class="text-xs font-bold text-white">
+                  {{ monitorPreviewLabel }}
+                </p>
+                <p class="mt-0.5 truncate font-mono text-[10px] text-slate-400">
+                  {{ selectedScreen?.url || run?.startUrl || "" }}
+                </p>
+              </div>
+              <EnBadge
+                v-if="monitorPreviewCard?.kind"
+                variant="tag"
+              >
+                {{ monitorPreviewCard.kind }}
+              </EnBadge>
+            </div>
+            <div class="aspect-video bg-slate-900">
+              <AdkArtifactImage
+                v-if="monitorPreviewCard && run"
+                :artifact-id="monitorPreviewCard.artifact.artifactId"
+                :session-id="run.sessionId"
+                :adk-filename="monitorPreviewCard.artifact.adkFilename"
+                :artifact-version="monitorPreviewCard.artifact.adkVersion"
+                :alt="monitorPreviewLabel"
+                class="h-full w-full object-contain"
+              />
+              <div
+                v-else
+                class="flex h-full items-center justify-center text-xs text-slate-400"
+              >
+                画面プレビューを待っています
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  対象Screen
+                </p>
+                <p class="mt-1 truncate text-sm font-bold text-slate-900">
+                  {{ selectedScreen?.title || "Screen" }}
+                </p>
+                <p class="mt-1 truncate font-mono text-[11px] text-slate-500">
+                  {{ selectedScreen?.url || run?.startUrl || "" }}
+                </p>
+              </div>
+              <EnBadge :color="statusBadge.color" variant="soft">
+                {{ statusBadge.label }}
+              </EnBadge>
+            </div>
+          </div>
+
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-sm font-bold text-slate-900">探索ステップ</p>
+            <div
+              v-if="variantProgressEvents.length === 0"
+              class="mt-3 rounded-md bg-slate-50 p-3 text-xs text-slate-500"
+            >
+              ADK session stateの更新を待っています
+            </div>
+            <ol v-else class="mt-3 space-y-2">
+              <li
+                v-for="event in variantProgressEvents"
+                :key="event.key"
+                class="rounded-md border border-slate-200 bg-white p-3"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-xs font-bold text-slate-900">
+                    {{ event.label }}
+                  </p>
+                  <span class="font-mono text-[10px] text-slate-400">
+                    {{ event.time }}
+                  </span>
+                </div>
+                <p class="mt-1 break-all text-[11px] leading-relaxed text-slate-600">
+                  {{ event.detail }}
+                </p>
+              </li>
+            </ol>
+          </div>
+
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-sm font-bold text-slate-900">生成Variant</p>
+            <div
+              v-if="selectedScreenVariantItems.length === 0"
+              class="mt-3 rounded-md bg-slate-50 p-3 text-xs text-slate-500"
+            >
+              Variant Artifactを待っています
+            </div>
+            <div v-else class="mt-3 grid gap-3 md:grid-cols-2">
+              <article
+                v-for="variant in selectedScreenVariantItems"
+                :key="variant.id"
+                class="rounded-lg border border-slate-200 bg-white p-3"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <p class="truncate text-xs font-bold text-slate-900">
+                    {{ variant.label }}
+                  </p>
+                  <EnBadge variant="tag">
+                    {{ variant.variantKind }}
+                  </EnBadge>
+                </div>
+                <p
+                  v-if="variant.changedFromBase"
+                  class="mt-2 line-clamp-4 text-[11px] leading-relaxed text-slate-600"
+                >
+                  {{ variant.changedFromBase }}
+                </p>
+                <button
+                  v-if="variant.screenshotArtifactId"
+                  type="button"
+                  class="mt-2 text-[11px] font-semibold text-primary-600 hover:underline"
+                  @click="previewArtifactId = variant.screenshotArtifactId"
+                >
+                  Screenshotを開く
+                </button>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <aside class="min-w-0 space-y-4">
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-sm font-bold text-slate-900">Session状態</p>
+            <dl class="mt-3 space-y-2 text-xs">
+              <div class="flex justify-between gap-3">
+                <dt class="text-slate-500">Session</dt>
+                <dd class="min-w-0 truncate font-mono text-slate-700">
+                  {{ run?.sessionId || "-" }}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-slate-500">Phase</dt>
+                <dd class="font-semibold text-slate-800">
+                  {{ applicationScanSessionState.phase || "-" }}
+                </dd>
+              </div>
+              <div class="flex justify-between gap-3">
+                <dt class="text-slate-500">Current</dt>
+                <dd class="min-w-0 truncate font-mono text-slate-700">
+                  {{ currentProgressUrl || "-" }}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+            <p class="text-sm font-bold text-emerald-900">安全制約</p>
+            <ul class="mt-2 space-y-1 text-[11px] leading-relaxed text-emerald-800">
+              <li>同一origin内の非破壊操作のみ探索します</li>
+              <li>保存、送信、購入、招待、削除はブロックします</li>
+              <li>チャット送信とフォーム送信は既定では実行しません</li>
+            </ul>
+          </div>
+
+          <div class="rounded-lg border border-slate-200 p-4">
+            <p class="text-sm font-bold text-slate-900">同期Artifact</p>
+            <div class="mt-3 space-y-2">
+              <article
+                v-for="card in recentVariantArtifacts"
+                :key="card.artifact.artifactId"
+                class="rounded-md bg-slate-50 p-2"
+              >
+                <p class="truncate text-[11px] font-bold text-slate-800">
+                  {{ card.title }}
+                </p>
+                <p class="mt-1 text-[10px] text-slate-500">
+                  {{ card.kind }} / {{ card.artifact.status }}
+                </p>
+              </article>
+              <p
+                v-if="recentVariantArtifacts.length === 0"
+                class="rounded-md bg-slate-50 p-3 text-xs text-slate-500"
+              >
+                Artifact syncを待っています
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </EnModal>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import AdkArtifactImage from "@components/AgentWorkspace/AdkArtifactImage.vue";
+import {
+  fetchAdkSessionState,
+  subscribeActiveAdkSession,
+} from "@composables/useAiStudioSessions";
 import { useAdkSessionArtifacts } from "@composables/useAdkSessionArtifacts";
 import type { DecodedAdkSessionArtifact } from "@models/adkSessionArtifact";
 import type {
@@ -341,6 +658,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   rescan: [];
+  openProgress: [];
+  exploreScreenVariants: [
+    input: { screenId: string; screenUrl: string; routeKey?: string },
+  ];
 }>();
 
 type ArtifactCardKind = "screenshot" | "sitemap" | "summary" | "other";
@@ -351,9 +672,22 @@ type ScanSitemapScreenshotRef = {
 };
 
 type ScanSitemapPage = {
+  screenId: string;
+  sourceAssetId?: string;
   url: string;
+  routeKey: string;
   title: string;
   screenshot?: ScanSitemapScreenshotRef | null;
+  variants: ScanSitemapVariant[];
+};
+
+type ScanSitemapVariant = {
+  id: string;
+  label: string;
+  variantKind: string;
+  changedFromBase: string;
+  screenshotFilename?: string;
+  screenshotArtifactId?: string;
 };
 
 type ScreenshotFlowNode = {
@@ -373,10 +707,34 @@ type ScreenshotFlowLevel = {
   nodes: ScreenshotFlowNode[];
 };
 
+type ArtifactCard = {
+  artifact: DecodedAdkSessionArtifact;
+  kind: ArtifactCardKind;
+  title: string;
+  pageUrl: string;
+  urlPath: string;
+  preview: string;
+  icon: string;
+  iconClass: string;
+};
+
+type ScreenCard = {
+  id: string;
+  url: string;
+  routeKey: string;
+  title: string;
+  screenshotCard: ArtifactCard | null;
+  variants: ScanSitemapVariant[];
+};
+
 const artifacts = ref<DecodedAdkSessionArtifact[]>([]);
 const textByArtifactId = ref<Record<string, string>>({});
 const previewArtifactId = ref("");
+const selectedScreenId = ref("");
+const variantMonitorOpen = ref(false);
+const sessionState = ref<Record<string, unknown>>({});
 let stopArtifacts: (() => void) | null = null;
+let stopSession: (() => void) | null = null;
 
 const { subscribe } = useAdkSessionArtifacts();
 
@@ -405,7 +763,8 @@ const statusBadge = computed(() => {
 const sitemapArtifact = computed(() =>
   artifacts.value.find((artifact) => {
     const filename = artifact.adkFilename || artifact.name || artifact.artifactId;
-    return filename.toLowerCase().includes("sitemap");
+    const lower = filename.toLowerCase();
+    return lower.includes("sitemap") || lower.includes("screen_atlas");
   })
 );
 
@@ -429,22 +788,33 @@ const parsedSitemapPages = computed<ScanSitemapPage[]>(() => {
     for (const page of parsed.pages ?? []) {
       const url = typeof page.url === "string" ? page.url.trim() : "";
       if (!url) continue;
-        const screenshot = isRecord(page.screenshot)
-          ? {
-              filename:
-                typeof page.screenshot.filename === "string"
-                  ? page.screenshot.filename
-                  : undefined,
-              version:
-                typeof page.screenshot.version === "number"
-                  ? page.screenshot.version
-                  : undefined,
-            }
-          : null;
+      const screenshot = isRecord(page.screenshot)
+        ? {
+            filename:
+              typeof page.screenshot.filename === "string"
+                ? page.screenshot.filename
+                : undefined,
+            version:
+              typeof page.screenshot.version === "number"
+                ? page.screenshot.version
+                : undefined,
+          }
+        : null;
       pages.push({
+        screenId:
+          typeof page.screenId === "string" && page.screenId.trim()
+            ? page.screenId.trim()
+            : `screen-${pages.length + 1}`,
+        sourceAssetId:
+          typeof page.sourceAssetId === "string" ? page.sourceAssetId : undefined,
         url,
+        routeKey:
+          typeof page.routeKey === "string" && page.routeKey.trim()
+            ? page.routeKey
+            : formatUrlPath(url),
         title: typeof page.title === "string" ? page.title : "",
         screenshot,
+        variants: parseSitemapVariants(page.variants),
       });
     }
     return pages;
@@ -466,13 +836,13 @@ const sitemapPageByArtifactKey = computed(() => {
   return out;
 });
 
-const artifactCards = computed(() =>
+const artifactCards = computed<ArtifactCard[]>(() =>
   artifacts.value.map((artifact) => {
     const filename = artifact.adkFilename || artifact.name || artifact.artifactId;
     const lower = filename.toLowerCase();
     const kind: ArtifactCardKind = lower.includes("screenshot")
       ? "screenshot"
-      : lower.includes("sitemap")
+      : lower.includes("sitemap") || lower.includes("screen_atlas")
         ? "sitemap"
         : lower.includes("summary")
           ? "summary"
@@ -509,9 +879,112 @@ const screenshotCards = computed(() =>
   artifactCards.value.filter((card) => card.kind === "screenshot")
 );
 
+const screenCards = computed<ScreenCard[]>(() => {
+  const cardsByFilename = new Map<string, ArtifactCard>();
+  const baseScreenshotCards: ArtifactCard[] = [];
+  for (const card of screenshotCards.value) {
+    const captureKind = metadataString(card.artifact.customMetadata, "captureKind");
+    const filename = card.artifact.adkFilename.trim();
+    if (filename) cardsByFilename.set(filename, card);
+    if (captureKind !== "screen_variant") {
+      baseScreenshotCards.push(card);
+    }
+  }
+  const pages = parsedSitemapPages.value;
+  if (pages.length > 0) {
+    return pages.map((page, index) => {
+      const screenshotCard =
+        (page.screenshot?.filename
+          ? cardsByFilename.get(page.screenshot.filename)
+          : undefined) ??
+        baseScreenshotCards.find((card) => card.pageUrl === page.url) ??
+        baseScreenshotCards[index] ??
+        null;
+      return {
+        id: page.screenId,
+        url: page.url,
+        routeKey: page.routeKey,
+        title: page.title || page.routeKey || page.url,
+        screenshotCard,
+        variants: mergeVariantArtifacts(page.variants, page.screenId),
+      };
+    });
+  }
+  return baseScreenshotCards.map((card, index) => {
+    const screenId =
+      metadataString(card.artifact.customMetadata, "screenId") ||
+      `screen-${index + 1}`;
+    return {
+      id: screenId,
+      url: card.pageUrl,
+      routeKey:
+        metadataString(card.artifact.customMetadata, "routeKey") ||
+        formatUrlPath(card.pageUrl),
+      title: card.title,
+      screenshotCard: card,
+      variants: mergeVariantArtifacts([], screenId),
+    };
+  });
+});
+
+const selectedScreen = computed<ScreenCard | null>(() => {
+  if (screenCards.value.length === 0) return null;
+  return (
+    screenCards.value.find((screen) => screen.id === selectedScreenId.value) ??
+    screenCards.value[0] ??
+    null
+  );
+});
+
+const selectedScreenVariantItems = computed<ScanSitemapVariant[]>(() =>
+  selectedScreen.value?.variants ?? []
+);
+
 const nonScreenshotCards = computed(() =>
   artifactCards.value.filter((card) => card.kind !== "screenshot")
 );
+
+const recentVariantArtifacts = computed(() =>
+  artifactCards.value
+    .filter((card) => {
+      const captureKind = metadataString(card.artifact.customMetadata, "captureKind");
+      const filename = card.artifact.adkFilename.toLowerCase();
+      return captureKind === "screen_variant" || filename.includes("variant");
+    })
+    .slice(-8)
+);
+
+const monitorPreviewCard = computed<ArtifactCard | null>(() => {
+  const latestVariantWithScreenshot = [...selectedScreenVariantItems.value]
+    .reverse()
+    .find((variant) => variant.screenshotArtifactId);
+  if (latestVariantWithScreenshot?.screenshotArtifactId) {
+    const variantCard = artifactCards.value.find(
+      (card) =>
+        card.artifact.artifactId ===
+        latestVariantWithScreenshot.screenshotArtifactId
+    );
+    if (variantCard) return variantCard;
+  }
+  const latestSyncedVariantScreenshot = [...recentVariantArtifacts.value]
+    .reverse()
+    .find((card) => card.kind === "screenshot");
+  return (
+    latestSyncedVariantScreenshot ??
+    selectedScreen.value?.screenshotCard ??
+    null
+  );
+});
+
+const monitorPreviewLabel = computed(() => {
+  const variant = [...selectedScreenVariantItems.value]
+    .reverse()
+    .find((item) => item.screenshotArtifactId === monitorPreviewCard.value?.artifact.artifactId);
+  if (variant) return `最新Variant: ${variant.label}`;
+  return selectedScreen.value?.title
+    ? `Base Screen: ${selectedScreen.value.title}`
+    : "画面プレビュー";
+});
 
 const syncingCount = computed(
   () => artifacts.value.filter((artifact) => artifact.status === "syncing").length
@@ -555,6 +1028,74 @@ const screenshotFlowLevels = computed<ScreenshotFlowLevel[]>(() => {
     }));
 });
 
+const applicationScanSessionState = computed<Record<string, unknown>>(() => {
+  const bucket = sessionState.value.application_scan;
+  return isRecord(bucket) ? bucket : {};
+});
+
+const applicationScanProgress = computed<Record<string, unknown>>(() => {
+  const progress = applicationScanSessionState.value.progress;
+  return isRecord(progress) ? progress : {};
+});
+
+const currentProgressUrl = computed(
+  () =>
+    stringValue(applicationScanProgress.value.current_url) ||
+    stringValue(applicationScanProgress.value.currentUrl)
+);
+
+const variantProgressEvents = computed(() => {
+  const progress = applicationScanProgress.value;
+  const events: Array<{ key: string; label: string; detail: string; time: string }> = [];
+  const currentUrl =
+    stringValue(progress.current_url) || stringValue(progress.currentUrl);
+  const startedAt =
+    stringValue(progress.started_at) || stringValue(progress.startedAt);
+  const updatedAt =
+    stringValue(progress.updated_at) || stringValue(progress.updatedAt);
+  if (startedAt) {
+    events.push({
+      key: "started",
+      label: "探索開始",
+      detail: currentUrl || selectedScreen.value?.url || "",
+      time: startedAt,
+    });
+  }
+  if (currentUrl) {
+    events.push({
+      key: "current",
+      label: "画面操作中",
+      detail: currentUrl,
+      time: updatedAt || startedAt || "",
+    });
+  }
+  for (const failure of variantFailureEvents.value) {
+    events.push(failure);
+  }
+  if (selectedScreenVariantItems.value.length > 0) {
+    events.push({
+      key: "variants",
+      label: "Variant生成",
+      detail: `${selectedScreenVariantItems.value.length}件のvariantを検出`,
+      time: updatedAt || "",
+    });
+  }
+  return events;
+});
+
+const variantFailureEvents = computed(() => {
+  const failures = applicationScanSessionState.value.variantFailures;
+  if (!Array.isArray(failures)) return [];
+  return failures
+    .filter(isRecord)
+    .map((failure, index) => ({
+      key: `failure-${index}`,
+      label: "探索スキップ/ブロック",
+      detail: stringValue(failure.error) || JSON.stringify(failure),
+      time: "",
+    }));
+});
+
 watch(
   () => props.run?.sessionId,
   (sessionId) => {
@@ -563,7 +1104,22 @@ watch(
     artifacts.value = [];
     textByArtifactId.value = {};
     previewArtifactId.value = "";
+    sessionState.value = {};
+    stopSession?.();
+    stopSession = null;
     if (!sessionId) return;
+    stopSession = subscribeActiveAdkSession({
+      sessionId,
+      onRecord: (record) => {
+        if (!record) {
+          sessionState.value = {};
+          return;
+        }
+        void fetchAdkSessionState(sessionId).then((state) => {
+          sessionState.value = state ?? {};
+        });
+      },
+    });
     stopArtifacts = subscribe({
       sessionId,
       onUpdate: (next) => {
@@ -579,8 +1135,23 @@ watch(
   { immediate: true }
 );
 
+watch(
+  screenCards,
+  (screens) => {
+    if (screens.length === 0) {
+      selectedScreenId.value = "";
+      return;
+    }
+    if (!screens.some((screen) => screen.id === selectedScreenId.value)) {
+      selectedScreenId.value = screens[0]?.id ?? "";
+    }
+  },
+  { immediate: true }
+);
+
 onBeforeUnmount(() => {
   stopArtifacts?.();
+  stopSession?.();
 });
 
 async function loadTextArtifacts(): Promise<void> {
@@ -617,6 +1188,79 @@ async function loadTextArtifacts(): Promise<void> {
 
 function textArtifactGcsPath(artifact: DecodedAdkSessionArtifact): string {
   return artifact.storageGcsPath.trim() || artifact.sourceGcsPath.trim();
+}
+
+function requestVariantExploration(screen: ScreenCard): void {
+  variantMonitorOpen.value = true;
+  emit("exploreScreenVariants", {
+    screenId: screen.id,
+    screenUrl: screen.url,
+    routeKey: screen.routeKey,
+  });
+}
+
+function parseSitemapVariants(value: unknown): ScanSitemapVariant[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).map((variant, index) => {
+    const screenshot = isRecord(variant.screenshot)
+      ? variant.screenshot
+      : undefined;
+    const observation = isRecord(variant.observation)
+      ? variant.observation
+      : undefined;
+    return {
+      id:
+        stringValue(variant.variantId) ||
+        stringValue(variant.id) ||
+        `variant-${index + 1}`,
+      label:
+        stringValue(variant.label) ||
+        stringValue(variant.variantKind) ||
+        `Variant ${index + 1}`,
+      variantKind: stringValue(variant.variantKind) || "unknown",
+      changedFromBase: stringValue(variant.changedFromBase),
+      screenshotFilename:
+        stringValue(variant.screenshotFilename) ||
+        stringValue(screenshot?.filename) ||
+        stringValue(observation?.screenshotFilename),
+    };
+  });
+}
+
+function mergeVariantArtifacts(
+  baseVariants: ScanSitemapVariant[],
+  screenId: string
+): ScanSitemapVariant[] {
+  const byId = new Map<string, ScanSitemapVariant>();
+  for (const variant of baseVariants) {
+    byId.set(variant.id, { ...variant });
+  }
+  for (const card of artifactCards.value) {
+    const metadata = card.artifact.customMetadata;
+    if (metadataString(metadata, "screenId") !== screenId) continue;
+    if (metadataString(metadata, "captureKind") !== "screen_variant") continue;
+    const variantId =
+      metadataString(metadata, "variantId") ||
+      metadataString(metadata, "sourceAssetId") ||
+      card.artifact.artifactId;
+    const existing = byId.get(variantId) ?? {
+      id: variantId,
+      label:
+        metadataString(metadata, "variantKind") ||
+        card.title ||
+        "Screen Variant",
+      variantKind: metadataString(metadata, "variantKind") || "unknown",
+      changedFromBase: "",
+    };
+    if (card.kind === "screenshot") {
+      existing.screenshotArtifactId = card.artifact.artifactId;
+      existing.screenshotFilename = card.artifact.adkFilename;
+    } else if (!existing.changedFromBase && card.preview) {
+      existing.changedFromBase = card.preview;
+    }
+    byId.set(variantId, existing);
+  }
+  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function buildScreenshotFlowNodes(): ScreenshotFlowNode[] {
@@ -705,6 +1349,10 @@ function metadataString(
   key: string
 ): string {
   const value = metadata?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function stringValue(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
@@ -809,10 +1457,4 @@ function previewText(params: {
   return "Artifactを同期中です";
 }
 
-function formatBytes(bytes: number): string {
-  if (!bytes) return "syncing";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 </script>

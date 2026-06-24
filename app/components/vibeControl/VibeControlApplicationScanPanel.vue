@@ -13,6 +13,7 @@
       v-model:include-patterns-text="includePatternsText"
       v-model:exclude-patterns-text="excludePatternsText"
       :applications="applications"
+      :scan-profiles="scanProfiles"
       :selected-application-id="selectedApplicationId"
       :draft="draft"
       hide-application-select
@@ -106,6 +107,7 @@
       v-model:exclude-patterns-text="excludePatternsText"
       class="mt-4"
       :applications="applications"
+      :scan-profiles="scanProfiles"
       :selected-application-id="selectedApplicationId"
       :draft="draft"
       @patch-draft="patchDraft"
@@ -155,10 +157,13 @@
 import { computed, reactive, ref, watch } from "vue";
 import type {
   DecodedVibeControlApplication,
+  DecodedVibeControlApplicationScanProfile,
+  VibeControlScanAuthMode,
   VibeControlApplicationScanRun,
 } from "@models/vibeControl";
 import type { RequestStatus } from "@models/core/requestStatus";
 import {
+  applicationScanFieldsComplete,
   emptyApplicationScanFields,
   type ApplicationScanFields,
 } from "@utils/applicationScanWorkspaceState";
@@ -167,6 +172,7 @@ const props = defineProps<{
   open?: boolean;
   variant?: "inline" | "modal";
   applications: DecodedVibeControlApplication[];
+  scanProfiles?: DecodedVibeControlApplicationScanProfile[];
   selectedApplicationId: string;
   isStartingScan: boolean;
 }>();
@@ -200,6 +206,19 @@ const selectedApplication = computed<DecodedVibeControlApplication | null>(
     null
 );
 
+const activeScanProfiles = computed(() =>
+  (props.scanProfiles ?? []).filter(
+    (profile) => profile.applicationId === selectedApplication.value?.id
+  )
+);
+
+const selectedScanProfile = computed(
+  () =>
+    activeScanProfiles.value.find((profile) => profile.id === draft.scanProfileId) ??
+    activeScanProfiles.value[0] ??
+    null
+);
+
 const lastScan = computed<VibeControlApplicationScanRun | null>(
   () => selectedApplication.value?.lastScan ?? null
 );
@@ -227,21 +246,35 @@ const statusBadge = computed(() => {
 });
 
 const canStart = computed(
-  () => Boolean(selectedApplication.value) && draft.startUrl.trim().length > 0
+  () => Boolean(selectedApplication.value) && applicationScanFieldsComplete(draft)
 );
 
 watch(
   selectedApplication,
   (application) => {
+    const profile = selectedScanProfile.value;
+    if (profile) {
+      applyScanProfile(profile);
+      return;
+    }
     draft.startUrl =
       application?.startUrl || application?.lastScan?.startUrl || "";
+    draft.scanProfileId = "";
+    draft.scanProfileName = "Default";
     draft.fileSpaceId =
       application?.fileSpaceId || application?.lastScan?.fileSpaceId || "";
     draft.maxPages = application?.lastScan?.maxPages ?? 12;
     draft.captureScreenshots = application?.lastScan?.captureScreenshots ?? true;
+    draft.exploreVariants = application?.lastScan?.exploreVariants ?? false;
+    draft.maxVariantsPerScreen =
+      application?.lastScan?.maxVariantsPerScreen ?? 5;
+    draft.maxStepsPerScreen = application?.lastScan?.maxStepsPerScreen ?? 12;
+    draft.allowChatSend = false;
+    draft.authMode = "none";
     draft.loginUrl = "";
     draft.username = "";
     draft.password = "";
+    draft.authenticatedUrl = "";
     draft.usernameSelector = "";
     draft.passwordSelector = "";
     draft.submitSelector = "";
@@ -251,6 +284,15 @@ watch(
     excludePatternsText.value = "";
   },
   { immediate: true }
+);
+
+watch(
+  () => props.scanProfiles,
+  () => {
+    const profile = selectedScanProfile.value;
+    if (profile) applyScanProfile(profile);
+  },
+  { deep: true }
 );
 
 watch(
@@ -280,6 +322,47 @@ function linesToList(value: string): string[] {
 
 function patchDraft(patch: Partial<ApplicationScanFields>): void {
   Object.assign(draft, patch);
+  if (patch.scanProfileId !== undefined) {
+    const profile = activeScanProfiles.value.find(
+      (item) => item.id === patch.scanProfileId
+    );
+    if (profile) applyScanProfile(profile);
+  }
+}
+
+function applyScanProfile(profile: DecodedVibeControlApplicationScanProfile): void {
+  const authMode = resolveScanProfileAuthMode(profile);
+  draft.scanProfileId = profile.id;
+  draft.scanProfileName = profile.name;
+  draft.authMode = authMode;
+  draft.startUrl = authMode === "email_link_manual" ? "" : profile.entryUrl;
+  draft.loginUrl = profile.loginUrl ?? "";
+  draft.username = profile.username ?? "";
+  draft.password = "";
+  draft.authenticatedUrl = "";
+  draft.usernameSelector = profile.usernameSelector ?? "";
+  draft.passwordSelector = profile.passwordSelector ?? "";
+  draft.submitSelector = profile.submitSelector ?? "";
+  draft.includePatterns = [...profile.includePatterns];
+  draft.excludePatterns = [...profile.excludePatterns];
+  draft.maxPages = profile.maxPages;
+  draft.captureScreenshots = true;
+  draft.exploreVariants = profile.defaultExploreVariants;
+  draft.maxVariantsPerScreen = profile.maxVariantsPerScreen;
+  draft.maxStepsPerScreen = profile.maxStepsPerScreen;
+  draft.allowChatSend = false;
+  includePatternsText.value = profile.includePatterns.join("\n");
+  excludePatternsText.value = profile.excludePatterns.join("\n");
+}
+
+function resolveScanProfileAuthMode(
+  profile: DecodedVibeControlApplicationScanProfile
+): VibeControlScanAuthMode {
+  if (profile.authMode !== "none") return profile.authMode;
+  if (profile.loginUrl || profile.username || profile.passwordConfigured) {
+    return "credentials";
+  }
+  return "none";
 }
 
 function emitStart(): void {

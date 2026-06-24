@@ -53,6 +53,8 @@ from .byok_scope import (
     activate_byok,
     deactivate_byok,
     gemini_api_key_from_user,
+    resume_byok,
+    suspend_byok,
 )
 from .byok_auth import resolve_request_openai_api_key
 from .openai_byok_scope import (
@@ -286,7 +288,12 @@ async def _stream_invoke(
     # ADK の asyncio タスク跨ぎで contextvar が消えることがあるため、
     # SSE ストリーム全体で BYOK を再セット (research-agent と同じ env 注入).
     prev_gemini_env = os.environ.get("GEMINI_API_KEY")
-    byok_token = activate_byok(gemini_api_key)
+    suspended_byok: tuple[Any, str | None, str | None] | None = None
+    if agent_mode == "application_scan":
+        suspended_byok = suspend_byok()
+        byok_token = None
+    else:
+        byok_token = activate_byok(gemini_api_key)
     effective_openai_key = openai_api_key or _openai_api_key_for_user(user)
     openai_token = activate_openai_byok(effective_openai_key)
     global_prompt = resolve_global_prompt(
@@ -1302,7 +1309,15 @@ async def _stream_invoke(
         deactivate_invoke_image_workflow_phase(workflow_phase_token)
         deactivate_writing_action(writing_action_token)
         deactivate_global_prompt(global_prompt_token)
-        deactivate_byok(byok_token, previous_env=prev_gemini_env)
+        if suspended_byok is not None:
+            token, previous_gemini_env, previous_google_env = suspended_byok
+            resume_byok(
+                token,
+                previous_gemini_env=previous_gemini_env,
+                previous_google_env=previous_google_env,
+            )
+        else:
+            deactivate_byok(byok_token, previous_env=prev_gemini_env)
         deactivate_openai_byok(openai_token)
         reset_invoke_session_scope(scope_tokens)
 
