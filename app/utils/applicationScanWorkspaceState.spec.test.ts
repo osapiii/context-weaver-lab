@@ -19,6 +19,7 @@ describe("applicationScanWorkspaceState", () => {
     expect(fields.scanProfileName).toBe("Default");
     expect(fields.authMode).toBe("none");
     expect(fields.authenticatedUrl).toBe("");
+    expect(fields.emailLinkEmail).toBe("");
   });
 
   it("serializes Screen Atlas variant exploration settings", () => {
@@ -29,6 +30,7 @@ describe("applicationScanWorkspaceState", () => {
       scanProfileName: "Production",
       authMode: "email_link_manual",
       authenticatedUrl: "https://example.com/__/auth/action?mode=signIn&oobCode=abc",
+      emailLinkEmail: "scan-user@example.com",
       exploreVariants: true,
       maxVariantsPerScreen: 99,
       maxStepsPerScreen: 99,
@@ -45,6 +47,7 @@ describe("applicationScanWorkspaceState", () => {
       start_url: undefined,
       username: undefined,
       authenticated_url: "https://example.com/__/auth/action?mode=signIn&oobCode=abc",
+      email_hint: "scan-user@example.com",
       explore_variants: true,
       max_variants_per_screen: 10,
       max_steps_per_screen: 30,
@@ -84,7 +87,7 @@ describe("applicationScanWorkspaceState", () => {
     ).toBe("application_screen_variant");
   });
 
-  it("requires an authenticated URL for manual email link auth", () => {
+  it("requires an authenticated URL and recipient email for manual email link auth", () => {
     const fields = {
       ...emptyApplicationScanFields(),
       authMode: "email_link_manual" as const,
@@ -95,6 +98,13 @@ describe("applicationScanWorkspaceState", () => {
       applicationScanFieldsComplete({
         ...fields,
         authenticatedUrl: "https://example.com/__/auth/action?oobCode=abc",
+      })
+    ).toBe(false);
+    expect(
+      applicationScanFieldsComplete({
+        ...fields,
+        authenticatedUrl: "https://example.com/__/auth/action?oobCode=abc",
+        emailLinkEmail: "scan-user@example.com",
       })
     ).toBe(true);
   });

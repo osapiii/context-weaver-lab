@@ -81,6 +81,7 @@ def test_read_application_scan_setup_allows_email_link_without_start_url():
                     "setup": {
                         "auth_mode": "email_link_manual",
                         "authenticated_url": "https://example.com/__/auth/action?oobCode=secret-code",
+                        "email_hint": "scan-user@example.com",
                     },
                 }
             }
@@ -91,6 +92,24 @@ def test_read_application_scan_setup_allows_email_link_without_start_url():
     assert result["missing"] == []
     assert result["has_authenticated_url"] is True
     assert "oobCode" not in str(result)
+
+
+def test_read_application_scan_setup_requires_email_hint_for_email_link():
+    result = read_application_scan_setup(
+        FakeContext(
+            {
+                "application_scan": {
+                    "setup": {
+                        "auth_mode": "email_link_manual",
+                        "authenticated_url": "https://example.com/__/auth/action?oobCode=secret-code",
+                    },
+                }
+            }
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["missing"] == ["email_hint"]
 
 
 def test_normalize_url_ignores_query_and_fragment():

@@ -2606,6 +2606,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
           profile,
           overrides: {
             authenticatedUrl: params.fields.authenticatedUrl,
+            emailLinkEmail: params.fields.emailLinkEmail,
             captureScreenshots: params.fields.captureScreenshots,
             exploreVariants: params.fields.exploreVariants,
             variantOnly: params.fields.variantOnly,

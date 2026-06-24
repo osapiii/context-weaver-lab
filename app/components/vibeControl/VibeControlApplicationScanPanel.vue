@@ -275,6 +275,7 @@ watch(
     draft.username = "";
     draft.password = "";
     draft.authenticatedUrl = "";
+    draft.emailLinkEmail = "";
     draft.usernameSelector = "";
     draft.passwordSelector = "";
     draft.submitSelector = "";
@@ -340,6 +341,7 @@ function applyScanProfile(profile: DecodedVibeControlApplicationScanProfile): vo
   draft.username = profile.username ?? "";
   draft.password = "";
   draft.authenticatedUrl = "";
+  draft.emailLinkEmail = "";
   draft.usernameSelector = profile.usernameSelector ?? "";
   draft.passwordSelector = profile.passwordSelector ?? "";
   draft.submitSelector = profile.submitSelector ?? "";

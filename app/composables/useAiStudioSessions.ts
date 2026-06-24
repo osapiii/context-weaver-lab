@@ -432,6 +432,7 @@ export const buildSessionPatchContext = (
       ...record.applicationScanFields,
       password: record.applicationScanFields.password ? "***" : "",
       authenticatedUrl: record.applicationScanFields.authenticatedUrl ? "***" : "",
+      emailLinkEmail: record.applicationScanFields.emailLinkEmail ? "***" : "",
     };
   }
   return omitFirestoreUndefined(ui) as Record<string, unknown>;

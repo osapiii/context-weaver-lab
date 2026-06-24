@@ -168,7 +168,6 @@ def _build_invoke_body(
     if isinstance(mode_state, dict):
         mode_state = _with_application_scan_email_hint(
             mode_state=mode_state,
-            requested_email=(requested_by.get("email") or "").strip(),
         )
     return {
         "session_id": input_data.get("sessionId") or input_data.get("session_id"),
@@ -201,30 +200,11 @@ def _build_invoke_body(
 def _with_application_scan_email_hint(
     *,
     mode_state: dict[str, Any],
-    requested_email: str,
 ) -> dict[str, Any]:
-    if not requested_email:
-        return mode_state
-    application_scan = mode_state.get("application_scan")
-    if not isinstance(application_scan, dict):
-        return mode_state
-    setup = application_scan.get("setup")
-    if not isinstance(setup, dict):
-        return mode_state
-    if setup.get("auth_mode") != "email_link_manual":
-        return mode_state
-    if setup.get("email_hint") or setup.get("username"):
-        return mode_state
-    return {
-        **mode_state,
-        "application_scan": {
-            **application_scan,
-            "setup": {
-                **setup,
-                "email_hint": requested_email,
-            },
-        },
-    }
+    # Email-link sign-in requires the exact recipient address for the pasted
+    # Firebase link. The logged-in VibeControl user can differ from that
+    # recipient, so falling back to requestedBy.email causes auth/invalid-email.
+    return mode_state
 
 
 def _parse_json_document_body(body: Any) -> dict[str, Any] | None:

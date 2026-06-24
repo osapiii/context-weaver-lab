@@ -198,10 +198,13 @@ def read_application_scan_setup(tool_context: Any = None) -> dict[str, Any]:
     start_url = _as_str(setup.get("start_url"))
     auth_mode = _as_str(setup.get("auth_mode")) or "none"
     authenticated_url = _as_str(setup.get("authenticated_url"))
+    email_hint = _as_str(setup.get("email_hint")) or _as_str(setup.get("username"))
     missing: list[str] = []
     if auth_mode == "email_link_manual":
         if not authenticated_url:
             missing.append("authenticated_url")
+        if not email_hint:
+            missing.append("email_hint")
     elif not start_url:
         missing.append("start_url")
     return {
@@ -322,11 +325,16 @@ async def _maybe_complete_email_link_confirmation(
     except Exception:
         final_text = ""
     if _looks_like_email_signin_page(page.url, final_text):
+        final_lowered = final_text.lower() if isinstance(final_text, str) else ""
+        reason = "email_link_sign_in_not_completed"
+        if "invalid-email" in final_lowered or "does not match" in final_lowered:
+            reason = "email_hint_does_not_match_link_recipient"
         return {
             "attempted": True,
             "ok": False,
             "method": "email_link_confirmation",
-            "reason": "email_link_sign_in_not_completed",
+            "reason": reason,
+            "detail": final_text[:1000],
         }
     return {"attempted": True, "ok": True, "method": "email_link_confirmation"}
 

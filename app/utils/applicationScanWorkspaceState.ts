@@ -7,6 +7,7 @@ export interface ApplicationScanFields {
   username: string;
   password: string;
   authenticatedUrl: string;
+  emailLinkEmail: string;
   usernameSelector: string;
   passwordSelector: string;
   submitSelector: string;
@@ -34,6 +35,7 @@ export const emptyApplicationScanFields = (): ApplicationScanFields => ({
   username: "",
   password: "",
   authenticatedUrl: "",
+  emailLinkEmail: "",
   usernameSelector: "",
   passwordSelector: "",
   submitSelector: "",
@@ -98,6 +100,10 @@ export const applicationScanModeStateToApi = (
       fields.authMode === "email_link_manual"
         ? fields.authenticatedUrl.trim() || undefined
         : undefined,
+    email_hint:
+      fields.authMode === "email_link_manual"
+        ? fields.emailLinkEmail.trim() || undefined
+        : undefined,
     username_selector: fields.usernameSelector.trim() || undefined,
     password_selector: fields.passwordSelector.trim() || undefined,
     submit_selector: fields.submitSelector.trim() || undefined,
@@ -123,7 +129,8 @@ export const applicationScanFieldsComplete = (
   fields: ApplicationScanFields
 ): boolean =>
   fields.authMode === "email_link_manual"
-    ? fields.authenticatedUrl.trim().length > 0
+    ? fields.authenticatedUrl.trim().length > 0 &&
+      fields.emailLinkEmail.trim().length > 0
     : fields.startUrl.trim().length > 0;
 
 export const buildApplicationScanInitialPrompt = (
@@ -145,6 +152,9 @@ export const buildApplicationScanInitialPrompt = (
       : "",
     fields.authMode === "email_link_manual" && fields.authenticatedUrl.trim()
       ? "認証済みURL: 指定あり"
+      : "",
+    fields.authMode === "email_link_manual" && fields.emailLinkEmail.trim()
+      ? "リンク送信先メール: 指定あり"
       : "",
     `最大ページ数: ${boundedMaxPages(fields.maxPages)}`,
     `スクリーンショット: ${fields.captureScreenshots ? "取得する" : "取得しない"}`,
@@ -190,6 +200,8 @@ export const resolveApplicationScanFieldsFromRecord = (params: {
     password: typeof setup.password === "string" ? setup.password : "",
     authenticatedUrl:
       typeof setup.authenticated_url === "string" ? setup.authenticated_url : "",
+    emailLinkEmail:
+      typeof setup.email_hint === "string" ? setup.email_hint : "",
     usernameSelector:
       typeof setup.username_selector === "string" ? setup.username_selector : "",
     passwordSelector:

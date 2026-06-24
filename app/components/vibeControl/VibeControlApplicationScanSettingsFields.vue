@@ -178,8 +178,19 @@
 
     <div
       v-else-if="draft.authMode === 'email_link_manual'"
-      class="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)]"
+      class="mt-3 grid gap-3 lg:grid-cols-[minmax(14rem,20rem)_minmax(0,1fr)]"
     >
+      <label class="block min-w-0">
+        <span class="text-xs font-medium text-slate-600">リンク送信先メール</span>
+        <input
+          :value="draft.emailLinkEmail"
+          type="email"
+          autocomplete="email"
+          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+          placeholder="name@company.co.jp"
+          @input="patchDraft('emailLinkEmail', ($event.target as HTMLInputElement).value)"
+        >
+      </label>
       <label class="block min-w-0">
         <span class="text-xs font-medium text-slate-600">認証済みURL</span>
         <input
@@ -383,7 +394,7 @@ const authModeHelpText = computed(() => {
     return "Profileは静的解析とVariant探索で共通利用されます。保存済みpasswordは入力欄には再表示されません。変更する場合だけ再入力してください。";
   }
   if (props.draft.authMode === "email_link_manual") {
-    return "メールリンク送信はユーザー側で実行し、受信したログインリンクを認証済みURLに貼り付けてください。メールアドレスは保存せず、このURLも今回のScan実行にだけ使います。";
+    return "メールリンク送信はユーザー側で実行し、受信したログインリンクを認証済みURLに貼り付けてください。リンク送信先メールはFirebaseが別ブラウザで本人確認する時だけ使い、passwordとしては保存しません。";
   }
   return "公開画面やログイン不要の画面を解析します。必要になったら認証方式を切り替えてください。";
 });
@@ -410,6 +421,7 @@ function setAuthMode(authMode: VibeControlScanAuthMode): void {
   }
   if (authMode !== "email_link_manual") {
     patch.authenticatedUrl = "";
+    patch.emailLinkEmail = "";
   }
   emit("patchDraft", patch);
 }
