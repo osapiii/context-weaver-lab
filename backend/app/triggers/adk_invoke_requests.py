@@ -164,6 +164,12 @@ def _build_invoke_body(
         "mode": input_data.get("mode") or "",
         "is_llm_call": bool(operation_metadata.get("isLlmCall")),
     }
+    mode_state = input_data.get("modeState") or input_data.get("mode_state") or {}
+    if isinstance(mode_state, dict):
+        mode_state = _with_application_scan_email_hint(
+            mode_state=mode_state,
+            requested_email=(requested_by.get("email") or "").strip(),
+        )
     return {
         "session_id": input_data.get("sessionId") or input_data.get("session_id"),
         "user_id": user_id,
@@ -177,9 +183,7 @@ def _build_invoke_body(
         "prompt": input_data.get("prompt") or "",
         "model": input_data.get("model"),
         "history": input_data.get("history") or [],
-        "mode_state": input_data.get("modeState")
-        or input_data.get("mode_state")
-        or {},
+        "mode_state": mode_state if isinstance(mode_state, dict) else {},
         "system_prompt": input_data.get("systemPrompt")
         or input_data.get("system_prompt"),
         "response_id": input_data.get("responseId")
@@ -191,6 +195,35 @@ def _build_invoke_body(
         "reference_images": ref_images,
         "operation_metadata": operation_metadata,
         "usage_context": usage_context,
+    }
+
+
+def _with_application_scan_email_hint(
+    *,
+    mode_state: dict[str, Any],
+    requested_email: str,
+) -> dict[str, Any]:
+    if not requested_email:
+        return mode_state
+    application_scan = mode_state.get("application_scan")
+    if not isinstance(application_scan, dict):
+        return mode_state
+    setup = application_scan.get("setup")
+    if not isinstance(setup, dict):
+        return mode_state
+    if setup.get("auth_mode") != "email_link_manual":
+        return mode_state
+    if setup.get("email_hint") or setup.get("username"):
+        return mode_state
+    return {
+        **mode_state,
+        "application_scan": {
+            **application_scan,
+            "setup": {
+                **setup,
+                "email_hint": requested_email,
+            },
+        },
     }
 
 
@@ -207,6 +240,7 @@ def _parse_json_document_body(body: Any) -> dict[str, Any] | None:
 def _consume_sse(response: requests.Response) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "responseTextLength": 0,
+        "responseTextPreview": "",
         "artifactCount": 0,
         "sourceReferenceCount": 0,
         "sessionId": None,
@@ -231,7 +265,12 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
         except json.JSONDecodeError:
             continue
         if event_name == "text_delta" and isinstance(payload.get("text"), str):
-            summary["responseTextLength"] += len(payload["text"])
+            text_delta = payload["text"]
+            summary["responseTextLength"] += len(text_delta)
+            if len(summary["responseTextPreview"]) < 2000:
+                summary["responseTextPreview"] = (
+                    summary["responseTextPreview"] + text_delta
+                )[:2000]
         elif event_name == "artifact":
             summary["artifactCount"] += 1
             if payload.get("kind") == "json_document":
@@ -366,6 +405,21 @@ def on_adk_invoke_request_created(
 
         summary = _consume_sse(response)
         summary.setdefault("sessionId", body.get("session_id"))
+        response_preview = str(summary.get("responseTextPreview") or "").lower()
+        if mode == "application_scan" and any(
+            marker in response_preview
+            for marker in [
+                "application_scan login failed",
+                "application_scan.setup",
+                "スキャンが中断",
+                "ログインに失敗",
+            ]
+        ):
+            raise RuntimeError(
+                (summary.get("responseTextPreview") or "Application Scan failed")[
+                    :2000
+                ]
+            )
         _update_doc(
             collection_path,
             request_id,

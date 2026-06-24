@@ -13,10 +13,18 @@
       v-model:open="scanSettingsModalOpen"
       variant="modal"
       :applications="store.applications"
+      :scan-profiles="store.activeScanProfiles"
       :selected-application-id="store.selectedApplicationId"
       :is-starting-scan="store.isStartingApplicationScan"
       @select-application="store.selectApplication($event)"
       @start-scan="startApplicationScan"
+      @open-job-log="openJobLog"
+    />
+
+    <VibeControlApplicationScanProgressModal
+      v-model:open="applicationScanProgressModalOpen"
+      :application="selectedApplication"
+      :run="selectedApplication?.lastScan ?? null"
       @open-job-log="openJobLog"
     />
 
@@ -170,6 +178,7 @@
 
         <VibeControlApplicationScanPanel
           :applications="store.applications"
+          :scan-profiles="store.activeScanProfiles"
           :selected-application-id="store.selectedApplicationId"
           :is-starting-scan="store.isStartingApplicationScan"
           @select-application="store.selectApplication($event)"
@@ -190,6 +199,8 @@
         :run="selectedApplication?.lastScan ?? null"
         :is-starting-scan="store.isStartingApplicationScan"
         @rescan="rescanSelectedApplication"
+        @open-progress="applicationScanProgressModalOpen = true"
+        @explore-screen-variants="startScreenVariantExploration"
       />
 
       <template v-else-if="activeApplicationTab === 'knowledge-space'">
@@ -364,6 +375,7 @@ const applicationKnowledgeDocumentsByFileSpace = ref<Record<string, Document[]>>
 );
 const applicationModalOpen = ref(false);
 const scanSettingsModalOpen = ref(false);
+const applicationScanProgressModalOpen = ref(false);
 const deleteConfirmOpen = ref(false);
 const editingApplicationId = ref<string | null>(null);
 const initialApplicationRepository = ref<GitHubRepositorySummary | null>(null);
@@ -447,7 +459,7 @@ const applicationTabItems = computed(() => [
   },
   {
     value: "scan",
-    label: "Visual QA",
+    label: "Screen Atlas",
     icon: "material-symbols:preview-outline",
     count: selectedApplication.value?.lastScan?.artifactCount,
   },
@@ -524,7 +536,7 @@ const breadcrumbItems = computed(() => {
           : activeApplicationTab.value === "capabilities"
             ? "Capability"
           : activeApplicationTab.value === "scan"
-            ? "Visual QA"
+            ? "Screen Atlas"
           : activeApplicationTab.value === "knowledge-space"
             ? "ナレッジスペース"
           : activeApplicationTab.value === "operation-videos"
@@ -554,6 +566,7 @@ onMounted(() => {
   void store.fetchFromFirestore().then(() => {
     applyRouteView();
     applyRouteAction();
+    applyApplicationScanProgressRoute();
   });
 });
 
@@ -575,6 +588,17 @@ watch(
   () => route.query.action,
   () => {
     applyRouteAction();
+  }
+);
+
+watch(
+  () => [
+    route.query.openApplicationScanProgress,
+    route.query.applicationScanRequestId,
+    route.query.applicationId,
+  ],
+  () => {
+    applyApplicationScanProgressRoute();
   }
 );
 
@@ -811,6 +835,9 @@ async function startApplicationScan(fields: ApplicationScanFields): Promise<void
       fields,
     });
     scanSettingsModalOpen.value = false;
+    activeApplicationTab.value = "scan";
+    currentView.value = "application-detail";
+    applicationScanProgressModalOpen.value = true;
     toast.add({
       title: "Application Scanを開始しました",
       description: requestId,
@@ -819,6 +846,33 @@ async function startApplicationScan(fields: ApplicationScanFields): Promise<void
   } catch (err) {
     toast.add({
       title: "Application Scanの開始に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function startScreenVariantExploration(input: {
+  screenId: string;
+  screenUrl: string;
+  routeKey?: string;
+}): Promise<void> {
+  try {
+    const requestId = await store.startScreenVariantExploration({
+      applicationId: store.selectedApplicationId,
+      screenId: input.screenId,
+      screenUrl: input.screenUrl,
+      routeKey: input.routeKey,
+    });
+    applicationScanProgressModalOpen.value = true;
+    toast.add({
+      title: "Variant探索を開始しました",
+      description: requestId,
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "Variant探索の開始に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });
@@ -1041,6 +1095,18 @@ async function saveOperationVideo(
 
 function openJobLog(): void {
   void router.push({ name: "admin-workflow-executions" });
+}
+
+function applyApplicationScanProgressRoute(): void {
+  if (route.query.openApplicationScanProgress !== "1") return;
+  const applicationId =
+    typeof route.query.applicationId === "string" ? route.query.applicationId : "";
+  if (applicationId && store.selectedApplicationId !== applicationId) {
+    store.selectApplication(applicationId);
+  }
+  activeApplicationTab.value = "scan";
+  currentView.value = "application-detail";
+  applicationScanProgressModalOpen.value = true;
 }
 
 function openDeleteConfirm(): void {

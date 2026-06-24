@@ -29,6 +29,18 @@ DD_LLMOBS_ML_APP="${DD_LLMOBS_ML_APP:-vibe-control}"
 DD_ENV="${DD_ENV:-dev}"
 DD_SITE="${DD_SITE:-ap1.datadoghq.com}"
 
+if [[ -z "${ADK_INTERNAL_INVOKE_SECRET:-}" ]]; then
+  project_env_file="${BACKEND_ROOT}/app/.env.${PROJECT_ID}"
+  if [[ -f "${project_env_file}" ]]; then
+    loaded_internal_secret="$(
+      awk -F= '/^ADK_INTERNAL_INVOKE_SECRET=/{print substr($0, index($0, "=") + 1); exit}' "${project_env_file}"
+    )"
+    if [[ -n "${loaded_internal_secret}" ]]; then
+      ADK_INTERNAL_INVOKE_SECRET="${loaded_internal_secret}"
+    fi
+  fi
+fi
+
 deploy_one() {
   local mode="$1"
   local service_name

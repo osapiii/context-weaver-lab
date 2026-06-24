@@ -145,12 +145,12 @@ export const AI_STUDIO_HUB_JOB_META: Record<
   },
   application_scan: {
     kind: "application_scan",
-    label: "アプリスキャン",
-    shortLabel: "Scan",
+    label: "Screen Atlas",
+    shortLabel: "Atlas",
     icon: "material-symbols:travel-explore",
-    emptyHeading: "アプリスキャンのセッションはまだありません",
+    emptyHeading: "Screen Atlasのセッションはまだありません",
     emptyDescription:
-      "対象アプリのURL一覧・スクリーンショット・scan summaryをSSOTとして保存します。",
+      "対象アプリの画面一覧・スクリーンショット・状態VariantをSSOTとして保存します。",
   },
 };
 

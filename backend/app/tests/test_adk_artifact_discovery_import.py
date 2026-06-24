@@ -130,3 +130,65 @@ def test_upsert_vibe_control_source_asset_catalog_doc():
     assert payload["sourceType"] == "application_screenshot"
     assert payload["discoveryStatus"] == "queued"
     assert payload["metadata"]["screenshotFilename"] == "application_scan_001_screenshot.png"
+
+
+def test_upsert_vibe_control_source_asset_screen_variant_metadata():
+    writes = []
+
+    class Snap:
+        exists = False
+
+    class Ref:
+        def get(self):
+            return Snap()
+
+        def set(self, payload, merge):
+            writes.append((payload, merge))
+
+    class FakeDb:
+        def __init__(self):
+            self.path = ""
+
+        def document(self, path):
+            self.path = path
+            return Ref()
+
+    db = FakeDb()
+    upsert_vibe_control_source_asset(
+        db,
+        descriptor=_descriptor(),
+        metadata={
+            "agentSearchImport": "true",
+            "fileSpaceId": "fs1",
+            "source": "vibe-control-application-screen-variant-observation",
+            "scanId": "scan-1",
+            "phase": "screen_variant",
+            "screenUrl": "https://example.com/app",
+            "routeKey": "/app",
+            "title": "Application screen variant",
+            "applicationId": "app-1",
+            "applicationKey": "APP",
+            "applicationName": "Example App",
+            "repoFullName": "enostech/example",
+            "sourceAssetId": "source-asset-variant-001",
+            "screenId": "screen-001",
+            "variantId": "variant-001",
+            "captureKind": "screen_variant",
+            "captureMethod": "gemini_computer_use",
+            "variantKind": "menu_open",
+            "parentScreenAssetId": "source-asset-screen-001",
+            "interactionSteps": '[{"step":1,"action":"click_at"}]',
+            "screenshotFilename": "application_screen_001_variant_01_screenshot.png",
+        },
+        organization_id="org",
+        space_id="space",
+        discovery_import={"status": "queued", "documentId": "adk_abc123"},
+    )
+
+    assert db.path.endswith("/vibeControlSourceAssets/source-asset-variant-001")
+    payload, merge = writes[0]
+    assert merge is True
+    assert payload["sourceType"] == "application_screen_variant"
+    assert payload["metadata"]["variantKind"] == "menu_open"
+    assert payload["metadata"]["parentScreenAssetId"] == "source-asset-screen-001"
+    assert payload["metadata"]["interactionSteps"] == '[{"step":1,"action":"click_at"}]'

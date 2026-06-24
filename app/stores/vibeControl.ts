@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { getAuth } from "firebase/auth";
+import { doc, getDoc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
 import log from "@utils/logger";
 import createRandomDocId from "@utils/createRandomDocId";
 import { useFirestoreDocOperation } from "@composables/firestore-doc-operation";
@@ -34,6 +35,7 @@ import type { DecodedFileSpaceOperationRequest } from "@models/geminiFileSpaceRe
 import type {
   VibeControlApplicationFileSpaceProvisioningStatus,
   DecodedVibeControlApplication,
+  DecodedVibeControlApplicationScanProfile,
   DecodedVibeControlCapability,
   DecodedVibeControlDraftPatch,
   DecodedVibeControlGenerationSession,
@@ -46,9 +48,11 @@ import type {
   VibeControlDriftLevel,
   VibeControlOperationVideoDisplaySurface,
   VibeControlReviewState,
+  VibeControlScanAuthMode,
   VibeControlStoryStatus,
 } from "@models/vibeControl";
 import {
+  vibeControlApplicationScanProfileConverter,
   vibeControlApplicationConverter,
   vibeControlCapabilityConverter,
   vibeControlDraftPatchConverter,
@@ -95,6 +99,34 @@ export type VibeControlApplicationInput = {
   defaultBranch?: string;
 };
 
+export type VibeControlApplicationScanProfileInput = {
+  id?: string;
+  applicationId: string;
+  name: string;
+  authMode?: VibeControlScanAuthMode;
+  entryUrl: string;
+  loginUrl?: string;
+  username?: string;
+  password?: string;
+  usernameSelector?: string;
+  passwordSelector?: string;
+  submitSelector?: string;
+  includePatterns?: string[];
+  excludePatterns?: string[];
+  defaultExploreVariants?: boolean;
+  maxPages?: number;
+  maxVariantsPerScreen?: number;
+  maxStepsPerScreen?: number;
+};
+
+export type VibeControlScreenVariantExplorationInput = {
+  applicationId: string;
+  screenId: string;
+  screenUrl: string;
+  routeKey?: string;
+  scanProfileId?: string;
+};
+
 export type VibeControlOperationVideoSaveInput = {
   applicationId: string;
   title: string;
@@ -125,6 +157,9 @@ const toDocId = (value: string, fallback: string): string => {
     .replace(/^-+|-+$/g, "");
   return normalized || fallback;
 };
+
+const scanProfilePasswordSecretId = (profileId: string): string =>
+  `vibeControlScanProfilePassword-${profileId}`;
 
 const extractFileSpaceIdFromCreateRequest = (
   request: DecodedFileSpaceOperationRequest
@@ -523,6 +558,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
     stories: [] as DecodedVibeControlStory[],
     evidence: [] as DecodedVibeControlStoryEvidence[],
     sourceConnections: [] as DecodedVibeControlSourceConnection[],
+    scanProfiles: [] as DecodedVibeControlApplicationScanProfile[],
     sourceAssets: [] as DecodedVibeControlSourceAsset[],
     operationVideos: [] as DecodedVibeControlOperationVideo[],
     generationSessions: [] as DecodedVibeControlGenerationSession[],
@@ -583,6 +619,17 @@ export const useVibeControlStore = defineStore("vibeControl", {
       return state.sourceAssets.filter(
         (asset) => asset.applicationId === applicationId
       );
+    },
+    activeScanProfiles(state): DecodedVibeControlApplicationScanProfile[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      if (!applicationId) return state.scanProfiles;
+      return state.scanProfiles.filter(
+        (profile) => profile.applicationId === applicationId
+      );
+    },
+    defaultScanProfile(): DecodedVibeControlApplicationScanProfile | null {
+      return this.activeScanProfiles[0] ?? null;
     },
     activeGenerationSessions(state): DecodedVibeControlGenerationSession[] {
       const applicationId =
@@ -762,6 +809,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
     sourceConnectionCollectionPath(): string {
       return useContextStore().baseFirestorePath("vibeControlSourceConnections");
     },
+    scanProfileCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlScanProfiles");
+    },
     operationVideoCollectionPath(): string {
       return useContextStore().baseFirestorePath("vibeControlOperationVideos");
     },
@@ -789,6 +839,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
       this.stories = [...mockStories];
       this.evidence = [...mockEvidence];
       this.sourceConnections = [...mockConnections];
+      this.scanProfiles = [];
       this.capabilities = [];
       this.sourceAssets = [];
       this.operationVideos = [];
@@ -821,6 +872,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
           stories,
           evidence,
           sourceConnections,
+          scanProfiles,
           operationVideos,
           capabilities,
           sourceAssets,
@@ -848,6 +900,11 @@ export const useVibeControlStore = defineStore("vibeControl", {
             collectionName: this.sourceConnectionCollectionPath(),
             converter: vibeControlSourceConnectionConverter,
             limit: 50,
+          }),
+          firestoreOps.getDocumentsWithQueryAndConverter({
+            collectionName: this.scanProfileCollectionPath(),
+            converter: vibeControlApplicationScanProfileConverter,
+            limit: 200,
           }),
           firestoreOps.getDocumentsWithQueryAndConverter({
             collectionName: this.operationVideoCollectionPath(),
@@ -881,6 +938,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
         this.stories = stories;
         this.evidence = evidence;
         this.sourceConnections = sourceConnections;
+        this.scanProfiles = scanProfiles;
         this.operationVideos = operationVideos;
         this.capabilities = capabilities;
         this.sourceAssets = sourceAssets;
@@ -1087,6 +1145,177 @@ export const useVibeControlStore = defineStore("vibeControl", {
         scopes: ["contents:read", "pull_requests:read", "commits:read"],
       });
       return sources;
+    },
+    async saveApplicationScanProfile(
+      input: VibeControlApplicationScanProfileInput
+    ): Promise<DecodedVibeControlApplicationScanProfile> {
+      const application = this.applications.find(
+        (item) => item.id === input.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      const authMode = input.authMode ?? "none";
+      const entryUrl = input.entryUrl.trim();
+      if (!entryUrl && authMode !== "email_link_manual") {
+        throw new Error("Entry URLを入力してください");
+      }
+      const profileId =
+        input.id?.trim() ||
+        `scan-profile-${application.id}-${toDocId(input.name || "default", createRandomDocId())}`;
+      const current = this.scanProfiles.find((item) => item.id === profileId);
+      const password = input.password ?? "";
+      const passwordConfigured =
+        authMode === "credentials" &&
+        (Boolean(password) || current?.passwordConfigured || false);
+      const profile: DecodedVibeControlApplicationScanProfile = {
+        id: profileId,
+        applicationId: application.id,
+        applicationKey: application.applicationKey,
+        name: input.name.trim() || "Default",
+        authMode,
+        entryUrl,
+        loginUrl: input.loginUrl?.trim() || undefined,
+        username:
+          authMode === "credentials" ? input.username?.trim() || undefined : undefined,
+        passwordConfigured,
+        passwordUpdatedAt: password ? nowIso() : current?.passwordUpdatedAt,
+        usernameSelector: input.usernameSelector?.trim() || undefined,
+        passwordSelector: input.passwordSelector?.trim() || undefined,
+        submitSelector: input.submitSelector?.trim() || undefined,
+        includePatterns: input.includePatterns?.map((item) => item.trim()).filter(Boolean) ?? [],
+        excludePatterns: input.excludePatterns?.map((item) => item.trim()).filter(Boolean) ?? [],
+        defaultExploreVariants: Boolean(input.defaultExploreVariants),
+        maxPages: Math.max(1, Math.min(50, Math.round(input.maxPages ?? 12))),
+        maxVariantsPerScreen: Math.max(
+          0,
+          Math.min(10, Math.round(input.maxVariantsPerScreen ?? 5))
+        ),
+        maxStepsPerScreen: Math.max(
+          1,
+          Math.min(30, Math.round(input.maxStepsPerScreen ?? 12))
+        ),
+      };
+
+      if (authMode === "credentials" && password) {
+        await this.saveScanProfilePassword(profile.id, password);
+      }
+
+      const firestoreOps = useFirestoreDocOperation();
+      const saved = await firestoreOps.createDocument({
+        collectionName: this.scanProfileCollectionPath(),
+        docId: profile.id,
+        docData: profile,
+        converter: vibeControlApplicationScanProfileConverter,
+        merge: true,
+      });
+      const next = saved ?? profile;
+      this.scanProfiles = [
+        next,
+        ...this.scanProfiles.filter((item) => item.id !== next.id),
+      ];
+      return next;
+    },
+    async saveScanProfilePassword(profileId: string, password: string): Promise<void> {
+      const uid = getAuth().currentUser?.uid;
+      if (!uid) {
+        throw new Error("ログイン状態を確認してください");
+      }
+      await setDoc(
+        doc(
+          getFirestore(),
+          "users",
+          uid,
+          "secrets",
+          scanProfilePasswordSecretId(profileId)
+        ),
+        {
+          password,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    },
+    async loadScanProfilePassword(profileId: string): Promise<string> {
+      const uid = getAuth().currentUser?.uid;
+      if (!uid) return "";
+      const snap = await getDoc(
+        doc(
+          getFirestore(),
+          "users",
+          uid,
+          "secrets",
+          scanProfilePasswordSecretId(profileId)
+        )
+      );
+      const password = (snap.data() as { password?: string } | undefined)?.password;
+      return typeof password === "string" ? password : "";
+    },
+    async persistScanProfileFromFields(params: {
+      application: DecodedVibeControlApplication;
+      fields: ApplicationScanFields;
+    }): Promise<DecodedVibeControlApplicationScanProfile> {
+      return await this.saveApplicationScanProfile({
+        id: params.fields.scanProfileId || undefined,
+        applicationId: params.application.id,
+        name: params.fields.scanProfileName || "Default",
+        authMode: params.fields.authMode,
+        entryUrl:
+          params.fields.authMode === "email_link_manual" ? "" : params.fields.startUrl,
+        loginUrl: params.fields.loginUrl,
+        username:
+          params.fields.authMode === "credentials" ? params.fields.username : "",
+        password:
+          params.fields.authMode === "credentials" ? params.fields.password : "",
+        usernameSelector: params.fields.usernameSelector,
+        passwordSelector: params.fields.passwordSelector,
+        submitSelector: params.fields.submitSelector,
+        includePatterns: params.fields.includePatterns,
+        excludePatterns: params.fields.excludePatterns,
+        defaultExploreVariants: params.fields.exploreVariants,
+        maxPages: params.fields.maxPages,
+        maxVariantsPerScreen: params.fields.maxVariantsPerScreen,
+        maxStepsPerScreen: params.fields.maxStepsPerScreen,
+      });
+    },
+    async fieldsFromScanProfile(params: {
+      profile: DecodedVibeControlApplicationScanProfile;
+      overrides?: Partial<ApplicationScanFields>;
+    }): Promise<ApplicationScanFields> {
+      const authMode =
+        params.profile.authMode !== "none" ||
+        (!params.profile.loginUrl &&
+          !params.profile.username &&
+          !params.profile.passwordConfigured)
+          ? params.profile.authMode
+          : "credentials";
+      const password =
+        authMode === "credentials"
+          ? await this.loadScanProfilePassword(params.profile.id)
+          : "";
+      return {
+        ...emptyApplicationScanFields(),
+        scanProfileId: params.profile.id,
+        scanProfileName: params.profile.name,
+        authMode,
+        startUrl: authMode === "email_link_manual" ? "" : params.profile.entryUrl,
+        loginUrl: params.profile.loginUrl ?? "",
+        username: params.profile.username ?? "",
+        password,
+        authenticatedUrl: "",
+        usernameSelector: params.profile.usernameSelector ?? "",
+        passwordSelector: params.profile.passwordSelector ?? "",
+        submitSelector: params.profile.submitSelector ?? "",
+        includePatterns: params.profile.includePatterns,
+        excludePatterns: params.profile.excludePatterns,
+        maxPages: params.profile.maxPages,
+        captureScreenshots: true,
+        exploreVariants: params.profile.defaultExploreVariants,
+        maxVariantsPerScreen: params.profile.maxVariantsPerScreen,
+        maxStepsPerScreen: params.profile.maxStepsPerScreen,
+        allowChatSend: false,
+        ...params.overrides,
+      };
     },
     async persistApplicationAndSourceConnections(
       application: DecodedVibeControlApplication,
@@ -1730,7 +1959,10 @@ export const useVibeControlStore = defineStore("vibeControl", {
           repoFullName: application.repoFullName,
           defaultBranch: application.defaultBranch || "main",
           screenshotCount: sourceAssets.filter(
-            (asset) => asset.sourceType === "application_screenshot"
+            (asset) =>
+              asset.sourceType === "application_screenshot" ||
+              asset.sourceType === "application_screen" ||
+              asset.sourceType === "application_screen_variant"
           ).length,
           videoCount: sourceAssets.filter((asset) =>
             asset.sourceType.startsWith("operation_video")
@@ -2363,50 +2595,75 @@ export const useVibeControlStore = defineStore("vibeControl", {
 
       this.isStartingApplicationScan = true;
       this.error = null;
-      const now = nowIso();
-      const sessionId = `vibecontrol-appscan-${application.id}-${Date.now()}-${createRandomDocId()}`;
-      const responseId = `appscan-response-${createRandomDocId()}`;
-      const workspaceState = buildWorkspaceSessionState({
-        enAiStudioUi: {},
-        activeMode: "application_scan",
-        applicationScan: params.fields,
-      });
-      const modeState = buildInvokeModeStateFromWorkspaceState({
-        state: workspaceState,
-        activeMode: "application_scan",
-      });
-      const applicationScanState = modeState.application_scan;
-      if (
-        applicationScanState &&
-        typeof applicationScanState === "object" &&
-        !Array.isArray(applicationScanState)
-      ) {
-        const setup = (applicationScanState as Record<string, unknown>).setup;
-        if (setup && typeof setup === "object" && !Array.isArray(setup)) {
-          Object.assign(setup as Record<string, unknown>, {
-            application_id: application.id,
-            application_key: application.applicationKey,
-            application_name: application.name,
-            repo_full_name: application.repoFullName,
-            default_branch: application.defaultBranch || "main",
-          });
-        }
-      }
-
-      const pendingRun: VibeControlApplicationScanRun = {
-        requestId: "",
-        sessionId,
-        responseId,
-        status: "pending",
-        startUrl: params.fields.startUrl.trim(),
-        fileSpaceId: params.fields.fileSpaceId.trim() || undefined,
-        maxPages: params.fields.maxPages,
-        captureScreenshots: params.fields.captureScreenshots,
-        createdAt: now,
-        updatedAt: now,
-      };
+      let pendingRun: VibeControlApplicationScanRun | null = null;
 
       try {
+        const profile = await this.persistScanProfileFromFields({
+          application,
+          fields: params.fields,
+        });
+        const resolvedFields = await this.fieldsFromScanProfile({
+          profile,
+          overrides: {
+            authenticatedUrl: params.fields.authenticatedUrl,
+            captureScreenshots: params.fields.captureScreenshots,
+            exploreVariants: params.fields.exploreVariants,
+            variantOnly: params.fields.variantOnly,
+            targetScreenId: params.fields.targetScreenId,
+            targetScreenUrl: params.fields.targetScreenUrl,
+            targetRouteKey: params.fields.targetRouteKey,
+          },
+        });
+        const now = nowIso();
+        const sessionId = `vibecontrol-appscan-${application.id}-${Date.now()}-${createRandomDocId()}`;
+        const responseId = `appscan-response-${createRandomDocId()}`;
+        const workspaceState = buildWorkspaceSessionState({
+          enAiStudioUi: {},
+          activeMode: "application_scan",
+          applicationScan: resolvedFields,
+        });
+        const modeState = buildInvokeModeStateFromWorkspaceState({
+          state: workspaceState,
+          activeMode: "application_scan",
+        });
+        const applicationScanState = modeState.application_scan;
+        if (
+          applicationScanState &&
+          typeof applicationScanState === "object" &&
+          !Array.isArray(applicationScanState)
+        ) {
+          const setup = (applicationScanState as Record<string, unknown>).setup;
+          if (setup && typeof setup === "object" && !Array.isArray(setup)) {
+            Object.assign(setup as Record<string, unknown>, {
+              application_id: application.id,
+              application_key: application.applicationKey,
+              application_name: application.name,
+              repo_full_name: application.repoFullName,
+              default_branch: application.defaultBranch || "main",
+            });
+          }
+        }
+
+        pendingRun = {
+          requestId: "",
+          sessionId,
+          responseId,
+          status: "pending",
+          startUrl:
+            resolvedFields.authMode === "email_link_manual"
+              ? ""
+              : resolvedFields.startUrl.trim(),
+          fileSpaceId: resolvedFields.fileSpaceId.trim() || undefined,
+          maxPages: resolvedFields.maxPages,
+          captureScreenshots: resolvedFields.captureScreenshots,
+          exploreVariants: resolvedFields.exploreVariants,
+          maxVariantsPerScreen: resolvedFields.maxVariantsPerScreen,
+          maxStepsPerScreen: resolvedFields.maxStepsPerScreen,
+          allowChatSend: false,
+          createdAt: now,
+          updatedAt: now,
+        };
+
         await this.persistApplicationScanRun({
           application,
           run: pendingRun,
@@ -2421,10 +2678,10 @@ export const useVibeControlStore = defineStore("vibeControl", {
             organizationId: orgId,
             spaceId,
             userId: uid,
-            prompt: buildApplicationScanInitialPrompt(params.fields),
+            prompt: buildApplicationScanInitialPrompt(resolvedFields),
             responseId,
             model: defaultLlmModelSelectionForAdkMode("application_scan"),
-            fileSpaceId: params.fields.fileSpaceId.trim() || null,
+            fileSpaceId: resolvedFields.fileSpaceId.trim() || null,
             workspaceId: application.id,
             history: [],
             modeState,
@@ -2444,7 +2701,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
           run: startedRun,
         });
         this.lastRunLog.unshift(
-          `Application Scan: ${application.name} (${startedRun.startUrl}) のrequestDocを発行`
+          `Application Scan: ${application.name} (${startedRun.startUrl || "メールリンク認証"}) のrequestDocを発行`
         );
 
         const stopWatch = watchAdkInvokeRequest({
@@ -2469,6 +2726,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
         const message =
           err instanceof Error ? err.message : "Application Scanの開始に失敗しました";
         this.error = message;
+        if (!pendingRun) {
+          throw err;
+        }
         const failedRun: VibeControlApplicationScanRun = {
           ...pendingRun,
           status: "error",
@@ -2484,6 +2744,39 @@ export const useVibeControlStore = defineStore("vibeControl", {
       } finally {
         this.isStartingApplicationScan = false;
       }
+    },
+    async startScreenVariantExploration(
+      input: VibeControlScreenVariantExplorationInput
+    ): Promise<string> {
+      const application = this.applications.find(
+        (item) => item.id === input.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      const profile =
+        this.scanProfiles.find((item) => item.id === input.scanProfileId) ??
+        this.scanProfiles.find((item) => item.applicationId === application.id) ??
+        (await this.saveApplicationScanProfile({
+          applicationId: application.id,
+          name: "Default",
+          entryUrl: application.startUrl || input.screenUrl,
+          defaultExploreVariants: true,
+        }));
+      const fields = await this.fieldsFromScanProfile({
+        profile,
+        overrides: {
+          exploreVariants: true,
+          variantOnly: true,
+          targetScreenId: input.screenId,
+          targetScreenUrl: input.screenUrl,
+          targetRouteKey: input.routeKey ?? "",
+        },
+      });
+      return await this.startApplicationScan({
+        applicationId: application.id,
+        fields,
+      });
     },
     async updateApplicationScanStatus(params: {
       applicationId: string;
