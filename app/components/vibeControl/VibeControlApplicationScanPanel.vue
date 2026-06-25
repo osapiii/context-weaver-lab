@@ -245,9 +245,16 @@ const statusBadge = computed(() => {
   };
 });
 
-const canStart = computed(
-  () => Boolean(selectedApplication.value) && applicationScanFieldsComplete(draft)
-);
+const canStart = computed(() => {
+  if (!selectedApplication.value) return false;
+  if (applicationScanFieldsComplete(draft)) return true;
+  return (
+    draft.authMode === "assisted_session" &&
+    draft.startUrl.trim().length > 0 &&
+    Boolean(selectedScanProfile.value?.assistedSessionConfigured) &&
+    draft.assistedStorageStateJson.trim().length === 0
+  );
+});
 
 watch(
   selectedApplication,
@@ -276,6 +283,7 @@ watch(
     draft.password = "";
     draft.authenticatedUrl = "";
     draft.emailLinkEmail = "";
+    draft.assistedStorageStateJson = "";
     draft.usernameSelector = "";
     draft.passwordSelector = "";
     draft.submitSelector = "";
@@ -342,6 +350,7 @@ function applyScanProfile(profile: DecodedVibeControlApplicationScanProfile): vo
   draft.password = "";
   draft.authenticatedUrl = "";
   draft.emailLinkEmail = "";
+  draft.assistedStorageStateJson = "";
   draft.usernameSelector = profile.usernameSelector ?? "";
   draft.passwordSelector = profile.passwordSelector ?? "";
   draft.submitSelector = profile.submitSelector ?? "";
@@ -363,6 +372,9 @@ function resolveScanProfileAuthMode(
   if (profile.authMode !== "none") return profile.authMode;
   if (profile.loginUrl || profile.username || profile.passwordConfigured) {
     return "credentials";
+  }
+  if (profile.assistedSessionConfigured) {
+    return "assisted_session";
   }
   return "none";
 }

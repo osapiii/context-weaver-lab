@@ -108,6 +108,7 @@ export type VibeControlApplicationScanProfileInput = {
   loginUrl?: string;
   username?: string;
   password?: string;
+  assistedStorageStateJson?: string;
   usernameSelector?: string;
   passwordSelector?: string;
   submitSelector?: string;
@@ -160,6 +161,9 @@ const toDocId = (value: string, fallback: string): string => {
 
 const scanProfilePasswordSecretId = (profileId: string): string =>
   `vibeControlScanProfilePassword-${profileId}`;
+
+const scanProfileAssistedSessionSecretId = (profileId: string): string =>
+  `vibeControlScanProfileAssistedSession-${profileId}`;
 
 const extractFileSpaceIdFromCreateRequest = (
   request: DecodedFileSpaceOperationRequest
@@ -1168,6 +1172,12 @@ export const useVibeControlStore = defineStore("vibeControl", {
       const passwordConfigured =
         authMode === "credentials" &&
         (Boolean(password) || current?.passwordConfigured || false);
+      const assistedStorageStateJson = input.assistedStorageStateJson ?? "";
+      const assistedSessionConfigured =
+        authMode === "assisted_session" &&
+        (Boolean(assistedStorageStateJson.trim()) ||
+          current?.assistedSessionConfigured ||
+          false);
       const profile: DecodedVibeControlApplicationScanProfile = {
         id: profileId,
         applicationId: application.id,
@@ -1180,6 +1190,10 @@ export const useVibeControlStore = defineStore("vibeControl", {
           authMode === "credentials" ? input.username?.trim() || undefined : undefined,
         passwordConfigured,
         passwordUpdatedAt: password ? nowIso() : current?.passwordUpdatedAt,
+        assistedSessionConfigured,
+        assistedSessionUpdatedAt: assistedStorageStateJson.trim()
+          ? nowIso()
+          : current?.assistedSessionUpdatedAt,
         usernameSelector: input.usernameSelector?.trim() || undefined,
         passwordSelector: input.passwordSelector?.trim() || undefined,
         submitSelector: input.submitSelector?.trim() || undefined,
@@ -1199,6 +1213,12 @@ export const useVibeControlStore = defineStore("vibeControl", {
 
       if (authMode === "credentials" && password) {
         await this.saveScanProfilePassword(profile.id, password);
+      }
+      if (authMode === "assisted_session" && assistedStorageStateJson.trim()) {
+        await this.saveScanProfileAssistedSession(
+          profile.id,
+          assistedStorageStateJson
+        );
       }
 
       const firestoreOps = useFirestoreDocOperation();
@@ -1251,6 +1271,46 @@ export const useVibeControlStore = defineStore("vibeControl", {
       const password = (snap.data() as { password?: string } | undefined)?.password;
       return typeof password === "string" ? password : "";
     },
+    async saveScanProfileAssistedSession(
+      profileId: string,
+      storageStateJson: string
+    ): Promise<void> {
+      const uid = getAuth().currentUser?.uid;
+      if (!uid) {
+        throw new Error("ログイン状態を確認してください");
+      }
+      await setDoc(
+        doc(
+          getFirestore(),
+          "users",
+          uid,
+          "secrets",
+          scanProfileAssistedSessionSecretId(profileId)
+        ),
+        {
+          storageStateJson,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    },
+    async loadScanProfileAssistedSession(profileId: string): Promise<string> {
+      const uid = getAuth().currentUser?.uid;
+      if (!uid) return "";
+      const snap = await getDoc(
+        doc(
+          getFirestore(),
+          "users",
+          uid,
+          "secrets",
+          scanProfileAssistedSessionSecretId(profileId)
+        )
+      );
+      const storageStateJson = (
+        snap.data() as { storageStateJson?: string } | undefined
+      )?.storageStateJson;
+      return typeof storageStateJson === "string" ? storageStateJson : "";
+    },
     async persistScanProfileFromFields(params: {
       application: DecodedVibeControlApplication;
       fields: ApplicationScanFields;
@@ -1267,6 +1327,10 @@ export const useVibeControlStore = defineStore("vibeControl", {
           params.fields.authMode === "credentials" ? params.fields.username : "",
         password:
           params.fields.authMode === "credentials" ? params.fields.password : "",
+        assistedStorageStateJson:
+          params.fields.authMode === "assisted_session"
+            ? params.fields.assistedStorageStateJson
+            : "",
         usernameSelector: params.fields.usernameSelector,
         passwordSelector: params.fields.passwordSelector,
         submitSelector: params.fields.submitSelector,
@@ -1286,12 +1350,17 @@ export const useVibeControlStore = defineStore("vibeControl", {
         params.profile.authMode !== "none" ||
         (!params.profile.loginUrl &&
           !params.profile.username &&
-          !params.profile.passwordConfigured)
+          !params.profile.passwordConfigured &&
+          !params.profile.assistedSessionConfigured)
           ? params.profile.authMode
           : "credentials";
       const password =
         authMode === "credentials"
           ? await this.loadScanProfilePassword(params.profile.id)
+          : "";
+      const assistedStorageStateJson =
+        authMode === "assisted_session"
+          ? await this.loadScanProfileAssistedSession(params.profile.id)
           : "";
       return {
         ...emptyApplicationScanFields(),
@@ -1302,6 +1371,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
         loginUrl: params.profile.loginUrl ?? "",
         username: params.profile.username ?? "",
         password,
+        assistedStorageStateJson,
         authenticatedUrl: "",
         usernameSelector: params.profile.usernameSelector ?? "",
         passwordSelector: params.profile.passwordSelector ?? "",

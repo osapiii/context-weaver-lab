@@ -1,13 +1,14 @@
 export interface ApplicationScanFields {
   scanProfileId: string;
   scanProfileName: string;
-  authMode: "none" | "credentials" | "email_link_manual";
+  authMode: "none" | "credentials" | "email_link_manual" | "assisted_session";
   startUrl: string;
   loginUrl: string;
   username: string;
   password: string;
   authenticatedUrl: string;
   emailLinkEmail: string;
+  assistedStorageStateJson: string;
   usernameSelector: string;
   passwordSelector: string;
   submitSelector: string;
@@ -36,6 +37,7 @@ export const emptyApplicationScanFields = (): ApplicationScanFields => ({
   password: "",
   authenticatedUrl: "",
   emailLinkEmail: "",
+  assistedStorageStateJson: "",
   usernameSelector: "",
   passwordSelector: "",
   submitSelector: "",
@@ -104,6 +106,10 @@ export const applicationScanModeStateToApi = (
       fields.authMode === "email_link_manual"
         ? fields.emailLinkEmail.trim() || undefined
         : undefined,
+    assisted_storage_state:
+      fields.authMode === "assisted_session"
+        ? parseStorageStateJson(fields.assistedStorageStateJson)
+        : undefined,
     username_selector: fields.usernameSelector.trim() || undefined,
     password_selector: fields.passwordSelector.trim() || undefined,
     submit_selector: fields.submitSelector.trim() || undefined,
@@ -131,6 +137,9 @@ export const applicationScanFieldsComplete = (
   fields.authMode === "email_link_manual"
     ? fields.authenticatedUrl.trim().length > 0 &&
       fields.emailLinkEmail.trim().length > 0
+    : fields.authMode === "assisted_session"
+      ? fields.startUrl.trim().length > 0 &&
+        isValidStorageStateJson(fields.assistedStorageStateJson)
     : fields.startUrl.trim().length > 0;
 
 export const buildApplicationScanInitialPrompt = (
@@ -156,6 +165,9 @@ export const buildApplicationScanInitialPrompt = (
     fields.authMode === "email_link_manual" && fields.emailLinkEmail.trim()
       ? "リンク送信先メール: 指定あり"
       : "",
+    fields.authMode === "assisted_session"
+      ? `補助ログインセッション: ${isValidStorageStateJson(fields.assistedStorageStateJson) ? "指定あり" : "未指定"}`
+      : "",
     `最大ページ数: ${boundedMaxPages(fields.maxPages)}`,
     `スクリーンショット: ${fields.captureScreenshots ? "取得する" : "取得しない"}`,
     `探索モード: ${fields.variantOnly ? "対象ScreenのVariant探索のみ" : "Screen Atlas全体スキャン"}`,
@@ -178,6 +190,21 @@ export const buildApplicationScanInitialPrompt = (
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
+const parseStorageStateJson = (value: string): Record<string, unknown> | undefined => {
+  try {
+    const parsed = JSON.parse(value);
+    return isRecord(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export const isValidStorageStateJson = (value: string): boolean => {
+  const parsed = parseStorageStateJson(value);
+  if (!parsed) return false;
+  return Array.isArray(parsed.cookies) || Array.isArray(parsed.origins);
+};
+
 export const resolveApplicationScanFieldsFromRecord = (params: {
   state: Record<string, unknown>;
 }): ApplicationScanFields => {
@@ -191,7 +218,9 @@ export const resolveApplicationScanFieldsFromRecord = (params: {
         ? setup.scan_profile_name
         : "Default",
     authMode:
-      setup.auth_mode === "credentials" || setup.auth_mode === "email_link_manual"
+      setup.auth_mode === "credentials" ||
+      setup.auth_mode === "email_link_manual" ||
+      setup.auth_mode === "assisted_session"
         ? setup.auth_mode
         : "none",
     startUrl: typeof setup.start_url === "string" ? setup.start_url : "",
@@ -202,6 +231,9 @@ export const resolveApplicationScanFieldsFromRecord = (params: {
       typeof setup.authenticated_url === "string" ? setup.authenticated_url : "",
     emailLinkEmail:
       typeof setup.email_hint === "string" ? setup.email_hint : "",
+    assistedStorageStateJson: isRecord(setup.assisted_storage_state)
+      ? JSON.stringify(setup.assisted_storage_state, null, 2)
+      : "",
     usernameSelector:
       typeof setup.username_selector === "string" ? setup.username_selector : "",
     passwordSelector:

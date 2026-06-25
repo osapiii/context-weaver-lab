@@ -12,6 +12,7 @@
     "dev:generate": "yarn generate:hosting",
     "prod:generate": "yarn generate:hosting:prod",
     "dev:deploy": "yarn generate:hosting && firebase --config ../firebase.json deploy --only hosting --project vibe-control-dev",
+    "screen-atlas:capture-session": "node ./scripts/capture-screen-atlas-session.mjs",
     "test": "vitest",
     "test:run": "vitest run",
     "test:watch": "vitest watch",

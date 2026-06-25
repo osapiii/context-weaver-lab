@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5">
+  <div :class="pageShellClass">
     <VibeControlApplicationFormModal
       v-model:open="applicationModalOpen"
       :application="editingApplication"
@@ -64,7 +64,35 @@
       </template>
     </EnModal>
 
+    <div
+      v-if="currentView === 'application-detail'"
+      class="flex min-w-0 flex-wrap items-center justify-between gap-3"
+    >
+      <UBreadcrumb
+        :items="breadcrumbItems"
+        class="min-w-0 text-xs"
+        :ui="{
+          list: 'gap-1.5',
+          link: 'text-xs font-semibold',
+          linkLabel: 'truncate',
+          separatorIcon: 'h-3.5 w-3.5 text-slate-300',
+        }"
+      />
+
+      <EnButton
+        variant="outline"
+        color="neutral"
+        size="sm"
+        leading-icon="material-symbols:refresh"
+        :loading="store.isLoading"
+        @click="store.fetchFromFirestore()"
+      >
+        再読込
+      </EnButton>
+    </div>
+
     <UBreadcrumb
+      v-else
       :items="breadcrumbItems"
       class="text-xs"
       :ui="{
@@ -76,6 +104,7 @@
     />
 
     <EnAiPageHeader
+      v-if="showPageHeader"
       :title="pageTitle"
       :subtitle="pageSubtitle"
       :icon="pageIcon"
@@ -284,8 +313,8 @@
         @refresh="store.fetchFromFirestore()"
       />
 
-      <VibeControlApplicationGitPanel
-        v-else
+      <VibeControlExternalServicesPanel
+        v-else-if="activeApplicationTab === 'external-services'"
         :application="selectedApplication"
       />
     </template>
@@ -328,13 +357,13 @@ type VibeControlView =
   | "application-detail"
   | "story-detail";
 type ApplicationDetailTab =
+  | "basic"
+  | "knowledge-space"
   | "capabilities"
   | "stories"
-  | "basic"
   | "scan"
-  | "knowledge-space"
   | "operation-videos"
-  | "git";
+  | "external-services";
 type ApplicationKnowledgeMode = "upload" | "view";
 type RouteView =
   | "repositories"
@@ -343,6 +372,7 @@ type RouteView =
   | "application-scan"
   | "application-knowledge"
   | "application-videos"
+  | "application-external-services"
   | "stories";
 
 defineOptions({
@@ -380,6 +410,11 @@ const deleteConfirmOpen = ref(false);
 const editingApplicationId = ref<string | null>(null);
 const initialApplicationRepository = ref<GitHubRepositorySummary | null>(null);
 const isUploadingApplicationKnowledge = ref(false);
+
+const showPageHeader = computed(() => currentView.value !== "application-detail");
+const pageShellClass = computed(() =>
+  currentView.value === "application-detail" ? "space-y-3" : "space-y-5"
+);
 
 const selectedApplication = computed(() => store.selectedApplication);
 const selectedStory = computed(() => store.selectedStory);
@@ -441,6 +476,19 @@ const pageSubtitle = computed(() => {
 
 const applicationTabItems = computed(() => [
   {
+    value: "basic",
+    label: "基本情報",
+    icon: "material-symbols:settings-outline-rounded",
+  },
+  {
+    value: "knowledge-space",
+    label: "ナレッジスペース",
+    icon: "material-symbols:hub-outline",
+    count: applicationKnowledgeFileSpaceId.value
+      ? selectedApplicationKnowledgeDocuments.value.length
+      : undefined,
+  },
+  {
     value: "capabilities",
     label: "Capability",
     icon: "material-symbols:account-tree-outline",
@@ -453,23 +501,10 @@ const applicationTabItems = computed(() => [
     count: store.activeStories.length,
   },
   {
-    value: "basic",
-    label: "基本情報",
-    icon: "material-symbols:settings-outline-rounded",
-  },
-  {
     value: "scan",
     label: "Screen Atlas",
     icon: "material-symbols:preview-outline",
     count: selectedApplication.value?.lastScan?.artifactCount,
-  },
-  {
-    value: "knowledge-space",
-    label: "ナレッジスペース",
-    icon: "material-symbols:hub-outline",
-    count: applicationKnowledgeFileSpaceId.value
-      ? selectedApplicationKnowledgeDocuments.value.length
-      : undefined,
   },
   {
     value: "operation-videos",
@@ -478,9 +513,9 @@ const applicationTabItems = computed(() => [
     count: store.activeOperationVideos.length,
   },
   {
-    value: "git",
-    label: "Git",
-    icon: "i-simple-icons-github",
+    value: "external-services",
+    label: "外部サービス連携",
+    icon: "material-symbols:conversion-path",
   },
 ]);
 
@@ -541,8 +576,8 @@ const breadcrumbItems = computed(() => {
             ? "ナレッジスペース"
           : activeApplicationTab.value === "operation-videos"
             ? "操作動画"
-          : activeApplicationTab.value === "git"
-            ? "Git"
+          : activeApplicationTab.value === "external-services"
+            ? "外部サービス連携"
             : "ユーザーストーリー",
       disabled: true,
     });
@@ -605,13 +640,13 @@ watch(
 watch(activeApplicationTab, (tab) => {
   if (currentView.value !== "application-detail") return;
   const viewByTab: Record<ApplicationDetailTab, RouteView> = {
+    basic: "application-detail",
+    "knowledge-space": "application-knowledge",
     capabilities: "application-capabilities",
     stories: "stories",
-    basic: "application-detail",
     scan: "application-scan",
-    "knowledge-space": "application-knowledge",
     "operation-videos": "application-videos",
-    git: "application-detail",
+    "external-services": "application-external-services",
   };
   updateViewQuery(viewByTab[tab]);
 });
@@ -638,6 +673,12 @@ function routeView(): RouteView {
   if (route.query.view === "application-scan") return "application-scan";
   if (route.query.view === "application-knowledge") return "application-knowledge";
   if (route.query.view === "application-videos") return "application-videos";
+  if (
+    route.query.view === "application-external-services" ||
+    route.query.view === "application-git"
+  ) {
+    return "application-external-services";
+  }
   if (route.query.view === "application-detail") return "application-detail";
   return "stories";
 }
@@ -720,6 +761,16 @@ function applyRouteView(): void {
     }
     if (selectedApplication.value) {
       activeApplicationTab.value = "operation-videos";
+      currentView.value = "application-detail";
+    }
+    return;
+  }
+  if (routeView() === "application-external-services") {
+    if (!selectedApplication.value && store.applications[0]) {
+      store.selectApplication(store.applications[0].id);
+    }
+    if (selectedApplication.value) {
+      activeApplicationTab.value = "external-services";
       currentView.value = "application-detail";
     }
     return;

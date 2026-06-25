@@ -97,7 +97,7 @@
 
       <div class="block min-w-0">
         <span class="text-xs font-medium text-slate-600">認証方式</span>
-        <div class="mt-1 grid gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:grid-cols-3">
+        <div class="mt-1 grid gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 sm:grid-cols-4">
           <button
             v-for="option in authModeOptions"
             :key="option.value"
@@ -201,6 +201,52 @@
           @input="patchDraft('authenticatedUrl', ($event.target as HTMLInputElement).value)"
         >
       </label>
+    </div>
+
+    <div
+      v-else-if="draft.authMode === 'assisted_session'"
+      class="mt-3 grid gap-3 lg:grid-cols-[minmax(16rem,24rem)_minmax(0,1fr)]"
+    >
+      <label class="block min-w-0">
+        <span class="text-xs font-medium text-slate-600">Start URL</span>
+        <input
+          :value="draft.startUrl"
+          type="url"
+          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+          placeholder="https://example.com/app"
+          @input="patchDraft('startUrl', ($event.target as HTMLInputElement).value)"
+        >
+      </label>
+      <label class="block min-w-0">
+        <span class="text-xs font-medium text-slate-600">Playwright storageState JSON</span>
+        <textarea
+          :value="draft.assistedStorageStateJson"
+          rows="5"
+          class="mt-1 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+          placeholder="{ &quot;cookies&quot;: [], &quot;origins&quot;: [] }"
+          @input="patchDraft('assistedStorageStateJson', ($event.target as HTMLTextAreaElement).value)"
+        />
+      </label>
+      <div class="lg:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <p class="text-xs font-semibold text-slate-700">
+            セッション取得コマンド
+          </p>
+          <EnButton
+            variant="outline"
+            color="neutral"
+            size="xs"
+            :leading-icon="sessionCommandCopied ? 'i-heroicons-check' : 'material-symbols:content-copy-outline'"
+            :disabled="!assistedSessionCaptureCommand"
+            @click="copyAssistedSessionCommand"
+          >
+            {{ sessionCommandCopied ? "コピー済み" : "コピー" }}
+          </EnButton>
+        </div>
+        <code class="mt-2 block overflow-x-auto whitespace-nowrap rounded-md bg-white px-3 py-2 font-mono text-[11px] text-slate-600 ring-1 ring-slate-200">
+          {{ assistedSessionCaptureCommand || "Start URLを入力してください" }}
+        </code>
+      </div>
     </div>
 
     <div class="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
@@ -373,6 +419,7 @@ const authModeOptions: { value: VibeControlScanAuthMode; label: string }[] = [
   { value: "none", label: "認証なし" },
   { value: "credentials", label: "ID/PASS" },
   { value: "email_link_manual", label: "メールリンク" },
+  { value: "assisted_session", label: "補助ログイン" },
 ];
 
 const selectedProfileBadgeLabel = computed(() => {
@@ -386,6 +433,11 @@ const selectedProfileBadgeLabel = computed(() => {
   if (authMode === "email_link_manual") {
     return "メールリンク認証";
   }
+  if (authMode === "assisted_session") {
+    return selectedProfile.value.assistedSessionConfigured
+      ? "補助ログイン保存済み"
+      : "補助ログイン未保存";
+  }
   return "認証なし";
 });
 
@@ -396,10 +448,32 @@ const authModeHelpText = computed(() => {
   if (props.draft.authMode === "email_link_manual") {
     return "メールリンク送信はユーザー側で実行し、受信したログインリンクを認証済みURLに貼り付けてください。リンク送信先メールはFirebaseが別ブラウザで本人確認する時だけ使い、passwordとしては保存しません。";
   }
+  if (props.draft.authMode === "assisted_session") {
+    return "手動ログイン済みブラウザから書き出したPlaywright storageStateを使います。ローカルでは yarn screen-atlas:capture-session --url <Start URL> で取得できます。Cookie/LocalStorageを含むため、Profile保存後は再表示せずユーザーsecretとして扱います。";
+  }
   return "公開画面やログイン不要の画面を解析します。必要になったら認証方式を切り替えてください。";
 });
 
 const showAdvancedSettings = ref(false);
+const sessionCommandCopied = ref(false);
+
+const shellQuote = (value: string): string =>
+  `'${value.replace(/'/g, "'\\''")}'`;
+
+const assistedSessionCaptureCommand = computed(() => {
+  const url = props.draft.startUrl.trim();
+  if (!url) return "";
+  return `yarn screen-atlas:capture-session --url ${shellQuote(url)}`;
+});
+
+async function copyAssistedSessionCommand(): Promise<void> {
+  if (!assistedSessionCaptureCommand.value) return;
+  await navigator.clipboard.writeText(assistedSessionCaptureCommand.value);
+  sessionCommandCopied.value = true;
+  window.setTimeout(() => {
+    sessionCommandCopied.value = false;
+  }, 1500);
+}
 
 function patchDraft<K extends keyof ApplicationScanFields>(
   key: K,
@@ -414,7 +488,6 @@ function setAuthMode(authMode: VibeControlScanAuthMode): void {
   if (authMode !== "credentials") {
     patch.username = "";
     patch.password = "";
-    patch.startUrl = "";
     patch.usernameSelector = "";
     patch.passwordSelector = "";
     patch.submitSelector = "";
@@ -422,6 +495,9 @@ function setAuthMode(authMode: VibeControlScanAuthMode): void {
   if (authMode !== "email_link_manual") {
     patch.authenticatedUrl = "";
     patch.emailLinkEmail = "";
+  }
+  if (authMode !== "assisted_session") {
+    patch.assistedStorageStateJson = "";
   }
   emit("patchDraft", patch);
 }
