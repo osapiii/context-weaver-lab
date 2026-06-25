@@ -66,6 +66,25 @@ def _as_str_list(value: Any, *, limit: int = 20) -> list[str]:
     return out
 
 
+def _storage_state_from_setup(setup: dict[str, Any]) -> dict[str, Any] | None:
+    raw = setup.get("assisted_storage_state")
+    if isinstance(raw, str) and raw.strip():
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(raw, dict):
+        return None
+    cookies = raw.get("cookies")
+    origins = raw.get("origins")
+    if not isinstance(cookies, list) and not isinstance(origins, list):
+        return None
+    return {
+        "cookies": cookies if isinstance(cookies, list) else [],
+        "origins": origins if isinstance(origins, list) else [],
+    }
+
+
 def _application_scan_bucket(tool_context: Any) -> dict[str, Any]:
     state = read_tool_state(tool_context)
     return _as_dict(state.get("application_scan"))
@@ -205,6 +224,11 @@ def read_application_scan_setup(tool_context: Any = None) -> dict[str, Any]:
             missing.append("authenticated_url")
         if not email_hint:
             missing.append("email_hint")
+    elif auth_mode == "assisted_session":
+        if not start_url:
+            missing.append("start_url")
+        if not _storage_state_from_setup(setup):
+            missing.append("assisted_storage_state")
     elif not start_url:
         missing.append("start_url")
     return {
@@ -218,6 +242,7 @@ def read_application_scan_setup(tool_context: Any = None) -> dict[str, Any]:
         "has_password": bool(_as_str(setup.get("password"))),
         "has_email_hint": bool(_as_str(setup.get("email_hint"))),
         "has_authenticated_url": bool(_as_str(setup.get("authenticated_url"))),
+        "has_assisted_storage_state": bool(_storage_state_from_setup(setup)),
         "max_pages": _as_int(setup.get("max_pages"), 12, 1, 50),
         "capture_screenshots": _as_bool(setup.get("capture_screenshots"), True),
         "explore_variants": _as_bool(setup.get("explore_variants"), False),
@@ -342,6 +367,13 @@ async def _maybe_complete_email_link_confirmation(
 async def _maybe_login(page: Any, setup: dict[str, Any], start_url: str) -> dict[str, Any]:
     auth_mode = _as_str(setup.get("auth_mode")) or "none"
     authenticated_url = _as_str(setup.get("authenticated_url"))
+    if auth_mode == "assisted_session":
+        return {
+            "attempted": True,
+            "ok": True,
+            "method": "assisted_session",
+            "resolved_start_url": start_url,
+        }
     if auth_mode == "email_link_manual":
         if not authenticated_url:
             return {
@@ -638,12 +670,18 @@ async def run_application_scan(
     auth_mode = _as_str(setup.get("auth_mode")) or "none"
     authenticated_url_raw = _as_str(setup.get("authenticated_url"))
     authenticated_url_for_display = _normalize_url(authenticated_url_raw)
+    assisted_storage_state = _storage_state_from_setup(setup)
     if not start_url and auth_mode != "email_link_manual":
         return {"ok": False, "error": "application_scan.setup.start_url is required"}
     if auth_mode == "email_link_manual" and not authenticated_url_raw:
         return {
             "ok": False,
             "error": "application_scan.setup.authenticated_url is required",
+        }
+    if auth_mode == "assisted_session" and not assisted_storage_state:
+        return {
+            "ok": False,
+            "error": "application_scan.setup.assisted_storage_state is required",
         }
 
     page_limit = _as_int(max_pages, _as_int(setup.get("max_pages"), 12, 1, 50), 1, 50)
@@ -713,10 +751,13 @@ async def run_application_scan(
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            viewport={"width": 1440, "height": 1100},
-            ignore_https_errors=True,
-        )
+        context_options: dict[str, Any] = {
+            "viewport": {"width": 1440, "height": 1100},
+            "ignore_https_errors": True,
+        }
+        if assisted_storage_state:
+            context_options["storage_state"] = assisted_storage_state
+        context = await browser.new_context(**context_options)
         page = await context.new_page()
         login_result = await _maybe_login(page, setup, start_url)
         if login_result.get("attempted") and login_result.get("ok") is False:

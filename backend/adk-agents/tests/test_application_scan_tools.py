@@ -26,6 +26,10 @@ def test_read_application_scan_setup_redacts_credentials():
                     "password": "secret",
                     "email_hint": "demo@example.com",
                     "authenticated_url": "https://example.com/__/auth/action?oobCode=secret-code",
+                    "assisted_storage_state": {
+                        "cookies": [{"name": "sid", "value": "secret-cookie"}],
+                        "origins": [],
+                    },
                     "max_pages": 200,
                     "capture_screenshots": True,
                     "explore_variants": True,
@@ -52,6 +56,7 @@ def test_read_application_scan_setup_redacts_credentials():
     assert result["has_password"] is True
     assert result["has_email_hint"] is True
     assert result["has_authenticated_url"] is True
+    assert result["has_assisted_storage_state"] is True
     assert result["max_pages"] == 50
     assert result["explore_variants"] is True
     assert result["max_variants_per_screen"] == 10
@@ -64,6 +69,7 @@ def test_read_application_scan_setup_redacts_credentials():
     assert result["application_id"] == "app-1"
     assert result["repo_full_name"] == "enostech/example"
     assert "secret" not in str(result)
+    assert "secret-cookie" not in str(result)
     assert "oobCode" not in str(result)
 
 
@@ -110,6 +116,48 @@ def test_read_application_scan_setup_requires_email_hint_for_email_link():
 
     assert result["ok"] is False
     assert result["missing"] == ["email_hint"]
+
+
+def test_read_application_scan_setup_allows_assisted_session():
+    result = read_application_scan_setup(
+        FakeContext(
+            {
+                "application_scan": {
+                    "setup": {
+                        "auth_mode": "assisted_session",
+                        "start_url": "https://example.com/app",
+                        "assisted_storage_state": {
+                            "cookies": [{"name": "sid", "value": "secret-cookie"}],
+                            "origins": [],
+                        },
+                    },
+                }
+            }
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["missing"] == []
+    assert result["has_assisted_storage_state"] is True
+    assert "secret-cookie" not in str(result)
+
+
+def test_read_application_scan_setup_requires_assisted_session_state():
+    result = read_application_scan_setup(
+        FakeContext(
+            {
+                "application_scan": {
+                    "setup": {
+                        "auth_mode": "assisted_session",
+                        "start_url": "https://example.com/app",
+                    },
+                }
+            }
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["missing"] == ["assisted_storage_state"]
 
 
 def test_normalize_url_ignores_query_and_fragment():

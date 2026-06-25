@@ -105,6 +105,7 @@ export const VibeControlScanAuthModeSchema = z.enum([
   "none",
   "credentials",
   "email_link_manual",
+  "assisted_session",
 ]);
 
 export const VibeControlGenerationSessionPhaseSchema = z.enum([
@@ -380,6 +381,8 @@ export const VibeControlApplicationScanProfileSchema = z.object({
   username: z.string().optional(),
   passwordConfigured: z.boolean().default(false),
   passwordUpdatedAt: z.string().optional(),
+  assistedSessionConfigured: z.boolean().default(false),
+  assistedSessionUpdatedAt: z.string().optional(),
   usernameSelector: z.string().optional(),
   passwordSelector: z.string().optional(),
   submitSelector: z.string().optional(),

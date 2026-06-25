@@ -108,4 +108,26 @@ describe("applicationScanWorkspaceState", () => {
       })
     ).toBe(true);
   });
+
+  it("serializes assisted login storage state for Screen Atlas", () => {
+    const fields = {
+      ...emptyApplicationScanFields(),
+      authMode: "assisted_session" as const,
+      startUrl: "https://example.com/app",
+      assistedStorageStateJson: JSON.stringify({
+        cookies: [{ name: "sid", value: "secret", domain: "example.com" }],
+        origins: [],
+      }),
+    };
+
+    expect(applicationScanFieldsComplete(fields)).toBe(true);
+    expect(applicationScanModeStateToApi(fields).setup).toMatchObject({
+      auth_mode: "assisted_session",
+      start_url: "https://example.com/app",
+      assisted_storage_state: {
+        cookies: [{ name: "sid", value: "secret", domain: "example.com" }],
+        origins: [],
+      },
+    });
+  });
 });
