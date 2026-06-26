@@ -14,8 +14,12 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({
+  name: "AdminImagesRedirectPage",
+});
+
 definePageMeta({ layout: "admin" });
-useHead({ title: "生成済み画像一覧 | EN AIstudio" });
+useHead({ title: "生成済み画像一覧" });
 
 const router = useRouter();
 

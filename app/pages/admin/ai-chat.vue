@@ -53,6 +53,10 @@ definePageMeta({
   middleware: ["admin-logged-in-check"],
 });
 
+useHead({
+  title: "AI 部下",
+});
+
 const aiStudio = useAiStudioStore();
 const spaceStore = useSpaceStore();
 const userAuthStore = useAdminUserStore();

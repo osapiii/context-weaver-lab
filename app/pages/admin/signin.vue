@@ -16,6 +16,10 @@ defineOptions({
   name: "AdminSigninPage",
 });
 
+useHead({
+  title: "ログイン",
+});
+
 //#region Zod Schema
 const EMAIL_STORAGE_KEY = "aiStudioEmailForSignIn";
 

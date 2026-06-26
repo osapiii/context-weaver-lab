@@ -14,8 +14,12 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({
+  name: "AdminSheetsRedirectPage",
+});
+
 definePageMeta({ layout: "admin" });
-useHead({ title: "スプレッドシート一覧 | EN AIstudio" });
+useHead({ title: "スプレッドシート一覧" });
 
 const router = useRouter();
 
