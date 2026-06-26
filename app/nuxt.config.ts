@@ -4,6 +4,12 @@ import { existsSync } from "fs";
 import { config } from "dotenv";
 import checker from "vite-plugin-checker";
 import {
+  SITE_DESCRIPTION,
+  SITE_FAVICON_LINKS,
+  SITE_NAME,
+  SITE_URL,
+} from "./constants/siteSeo";
+import {
   DRIVE_TO_GCS_SYNC_SERVICE_URL,
   GOOGLE_DRIVE_WORKFLOW_KICKER_URL,
 } from "./constants/googleDriveServices";
@@ -99,17 +105,59 @@ export default defineNuxtConfig({
 
   app: {
     head: {
+      title: SITE_NAME,
+      htmlAttrs: {
+        lang: "ja",
+      },
       // タブレット (iPad 等) で正しいスケールで表示するための viewport 設定を明示。
       // ピンチズームは無効化しない (アクセシビリティ確保)。viewport-fit=cover で
       // ノッチ/ホームインジケータ領域も safe-area で扱えるようにする。
+      charset: "utf-8",
+      viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
       meta: [
         {
-          name: "viewport",
-          content:
-            "width=device-width, initial-scale=1, viewport-fit=cover",
+          name: "description",
+          content: SITE_DESCRIPTION,
+        },
+        {
+          name: "theme-color",
+          content: "#0F172A",
+        },
+        {
+          property: "og:site_name",
+          content: SITE_NAME,
+        },
+        {
+          property: "og:type",
+          content: "website",
+        },
+        {
+          property: "og:title",
+          content: SITE_NAME,
+        },
+        {
+          property: "og:description",
+          content: SITE_DESCRIPTION,
+        },
+        {
+          property: "og:url",
+          content: SITE_URL,
+        },
+        {
+          name: "twitter:card",
+          content: "summary",
+        },
+        {
+          name: "twitter:title",
+          content: SITE_NAME,
+        },
+        {
+          name: "twitter:description",
+          content: SITE_DESCRIPTION,
         },
       ],
       link: [
+        ...SITE_FAVICON_LINKS,
         {
           rel: "preconnect",
           href: "https://fonts.googleapis.com",

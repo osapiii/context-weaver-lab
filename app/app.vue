@@ -52,12 +52,37 @@
 
 <script lang="ts" setup>
 import type { ToasterProps } from "@nuxt/ui";
+import {
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_URL,
+} from "@constants/siteSeo";
 
 //#region store
 const globalErrorStore = useGlobalErrorStore();
 // For Nuxt 3
 definePageMeta({
   colorMode: "light",
+});
+
+useHead({
+  titleTemplate: (titleChunk) =>
+    titleChunk && titleChunk !== SITE_NAME
+      ? `${titleChunk} | ${SITE_NAME}`
+      : SITE_NAME,
+});
+
+useSeoMeta({
+  title: SITE_NAME,
+  description: SITE_DESCRIPTION,
+  ogSiteName: SITE_NAME,
+  ogTitle: SITE_NAME,
+  ogDescription: SITE_DESCRIPTION,
+  ogType: "website",
+  ogUrl: SITE_URL,
+  twitterCard: "summary",
+  twitterTitle: SITE_NAME,
+  twitterDescription: SITE_DESCRIPTION,
 });
 //#endregion store
 

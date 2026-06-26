@@ -177,6 +177,10 @@ import {
   ADMIN_PAGE_FILL_HEIGHT_KEY,
   type AdminPageContainerVariant,
 } from "@composables/useAdminViewport";
+import {
+  SITE_DESCRIPTION,
+  SITE_NAME,
+} from "@constants/siteSeo";
 
 const actionIcons = useActionIcons();
 const appearance = useAppAppearance();
@@ -189,6 +193,10 @@ const organization = useOrganizationStore();
 const globalLoading = useGlobalLoadingStore();
 const spaceStore = useSpaceStore();
 const vibeControl = useVibeControlStore();
+
+defineOptions({
+  name: "AdminLayout",
+});
 
 const isSpaceModalOpen = ref(false);
 const isApplicationManagerOpen = ref(false);
@@ -243,33 +251,20 @@ const currentMode = computed(() => {
 
 useHead({
   title: () => currentMode.value?.label ?? "アプリ",
-  link: [
-    {
-      rel: "icon",
-      href: "/favicon.ico",
-      type: "image/x-icon",
-    },
-    {
-      rel: "icon",
-      href: "/favicon.svg",
-      type: "image/svg+xml",
-    },
-    {
-      rel: "icon",
-      href: "/favicon-32x32.png",
-      type: "image/png",
-      sizes: "32x32",
-    },
-    {
-      rel: "apple-touch-icon",
-      href: "/apple-touch-icon.png",
-      sizes: "180x180",
-    },
-    {
-      rel: "manifest",
-      href: "/site.webmanifest",
-    },
-  ],
+});
+
+useSeoMeta({
+  description: () => currentMode.value?.subtitle ?? SITE_DESCRIPTION,
+  ogTitle: () =>
+    currentMode.value?.label
+      ? `${currentMode.value.label} | ${SITE_NAME}`
+      : SITE_NAME,
+  ogDescription: () => currentMode.value?.subtitle ?? SITE_DESCRIPTION,
+  twitterTitle: () =>
+    currentMode.value?.label
+      ? `${currentMode.value.label} | ${SITE_NAME}`
+      : SITE_NAME,
+  twitterDescription: () => currentMode.value?.subtitle ?? SITE_DESCRIPTION,
 });
 
 const currentModeKey = computed(() => currentMode.value?.key);
