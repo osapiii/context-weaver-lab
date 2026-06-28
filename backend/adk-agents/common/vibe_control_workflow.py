@@ -25,6 +25,13 @@ def vibe_capability_structuring_state_patch_from_mode_state(
     return _state_patch_from_mode_state(mode_state, "vibe_capability_structuring")
 
 
+def vibe_related_context_state_patch_from_mode_state(
+    mode_state: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build canonical session state patch for related context collection."""
+    return _state_patch_from_mode_state(mode_state, "vibe_related_context")
+
+
 def vibe_zapping_analysis_state_patch_from_mode_state(
     mode_state: dict[str, Any] | None,
 ) -> dict[str, Any]:

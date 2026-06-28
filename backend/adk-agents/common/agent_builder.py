@@ -251,6 +251,30 @@ def build_agent_for_mode(
             tools=tools,
         )
 
+    if mode == "vibe_related_context":
+        from vibe_related_context.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from vibe_related_context.schemas import RelatedContextResult  # type: ignore
+        from vibe_related_context.tools import (  # type: ignore
+            fetch_github_pull_request_candidates,
+            fetch_slack_message_candidates,
+            read_related_context_request,
+        )
+
+        tools = [
+            *base_tools,
+            FunctionTool(func=read_related_context_request),
+            FunctionTool(func=fetch_github_pull_request_candidates),
+            FunctionTool(func=fetch_slack_message_candidates),
+        ]
+        return LlmAgent(
+            name="vibe_related_context_agent",
+            model=model,
+            instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
+            tools=tools,
+            output_schema=RelatedContextResult,
+            output_key="vibe_related_context",
+        )
+
     if mode == "vibe_zapping_analysis":
         from vibe_zapping_analysis.prompts import SYSTEM_INSTRUCTION  # type: ignore
         from vibe_zapping_analysis.schemas import ZappingAnalysisResult  # type: ignore

@@ -18,6 +18,7 @@ def normalize_workspace_mode(value: Any) -> str | None:
         "web_page",
         "business_partner",
         "vibe_control",
+        "vibe_related_context",
         "vibe_zapping_analysis",
         "vibe_capability_structuring",
         "vibe_story_generation",

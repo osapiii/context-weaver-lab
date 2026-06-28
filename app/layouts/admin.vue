@@ -11,21 +11,14 @@
           <button
             type="button"
             class="flex min-w-0 items-center gap-2 rounded-md text-left transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-            aria-label="VibeControl ホームへ"
+            aria-label="StoryVault ホームへ"
             @click="navigateToVibeControl"
           >
-            <NuxtImg
-              v-if="appearance.hasCustomLogo.value"
-              :src="appearance.logoUrl.value"
-              alt="ロゴ"
-              class="h-7 max-w-[160px] object-contain"
-            />
-            <span
-              v-else
-              class="truncate font-mono text-lg font-bold tracking-tight text-slate-950"
+            <img
+              src="/storyvault-logo.svg"
+              alt="StoryVault"
+              class="h-8 w-[164px] object-contain"
             >
-              {{ currentMode?.label ?? "VibeControl" }}
-            </span>
           </button>
 
           <VibeControlApplicationHeader
@@ -214,7 +207,6 @@ import {
 } from "@constants/siteSeo";
 
 const actionIcons = useActionIcons();
-const appearance = useAppAppearance();
 const context = useContextStore();
 const router = useRouter();
 const route = useRoute();
@@ -296,13 +288,13 @@ const currentMode = computed(() => {
       "application-knowledge-space": "knowledge",
       "application-zapping": "operation-videos",
       "application-videos": "operation-videos",
-      "application-external-services": "external-services",
-      "application-git": "external-services",
-      "application-screen-catalog": "screen-catalog",
-      "application-scan": "screen-catalog",
-      "application-capabilities": "capabilities",
+      "application-external-services": "settings",
+      "application-git": "settings",
+      "application-screen-catalog": "stories",
+      "application-scan": "stories",
+      "application-capabilities": "stories",
       stories: "stories",
-      repositories: "external-services",
+      repositories: "settings",
       "application-detail": "settings",
     };
     return navModes.find((mode) => mode.key === (modeKeyByView[view] ?? "knowledge"));
@@ -399,7 +391,7 @@ function openRepositoryList(): void {
 }
 
 const groupedNavModes = computed(() => {
-  const groupOrder = ["input", "analysis", "admin"];
+  const groupOrder = ["input", "admin"];
   const groupMap = new Map<string, typeof navModes>();
   for (const mode of navModes) {
     const list = groupMap.get(mode.navGroup);

@@ -10,8 +10,8 @@
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
         <div class="flex items-center gap-2">
-          <span class="font-mono text-xs font-semibold text-slate-500">
-            {{ story.applicationKey }} / {{ story.storyKey }}
+          <span class="rounded-md border border-slate-200 bg-slate-950 px-2 py-0.5 font-mono text-xs font-bold text-white shadow-sm">
+            [{{ storyTicketKey(story) }}]
           </span>
           <EnBadge
             :color="driftBadge.color"
@@ -85,6 +85,7 @@
 <script setup lang="ts">
 import type { DecodedVibeControlStory } from "@models/vibeControl";
 import { VIBE_CONTROL_DRIFT_LABELS } from "@models/vibeControl";
+import { storyTicketKey } from "@utils/vibeControlStoryKeys";
 
 const props = defineProps<{
   story: DecodedVibeControlStory;

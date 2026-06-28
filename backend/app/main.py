@@ -12,6 +12,7 @@ from triggers import auth_email_link  # noqa: F401
 from triggers import google_workspace_oauth  # noqa: F401
 from triggers import google_drive_sync  # noqa: F401
 from triggers import github_oauth  # noqa: F401
+from triggers import slack_oauth  # noqa: F401
 from triggers import guide_assistant  # noqa: F401
 from triggers import context_store_requests  # noqa: F401
 from triggers import member_user_requests  # noqa: F401
@@ -38,6 +39,10 @@ from triggers.github_oauth import get_github_connection  # noqa: F401
 from triggers.github_oauth import get_github_repository  # noqa: F401
 from triggers.github_oauth import list_github_merged_pull_requests  # noqa: F401
 from triggers.github_oauth import list_github_repositories  # noqa: F401
+from triggers.slack_oauth import connect_slack  # noqa: F401
+from triggers.slack_oauth import disconnect_slack  # noqa: F401
+from triggers.slack_oauth import get_slack_connection  # noqa: F401
+from triggers.slack_oauth import test_slack_connection  # noqa: F401
 from triggers.guide_assistant import ask_en_aistudio_guide  # noqa: F401
 from triggers.context_store_requests import on_context_store_request_created  # noqa: F401
 from triggers.member_user_requests import on_member_user_create_request_created  # noqa: F401

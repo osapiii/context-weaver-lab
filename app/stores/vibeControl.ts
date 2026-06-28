@@ -54,6 +54,7 @@ import type {
   VibeControlOperationVideoQuickScan,
   VibeControlReviewState,
   VibeControlScanAuthMode,
+  VibeControlRelatedContextResult,
   VibeControlStoryStatus,
   VibeControlZappingAnalysisResult,
 } from "@models/vibeControl";
@@ -68,9 +69,14 @@ import {
   vibeControlSourceConnectionConverter,
   vibeControlStoryConverter,
   vibeControlStoryEvidenceConverter,
+  VibeControlRelatedContextResultSchema,
   VibeControlZappingAnalysisResultSchema,
 } from "@models/vibeControl";
 import { reportDatadogError } from "@utils/datadogObservability";
+import {
+  formatUserStoryKey,
+  nextUserStorySequenceForApplication,
+} from "@utils/vibeControlStoryKeys";
 
 export type VibeControlFilters = {
   query: string;
@@ -164,6 +170,13 @@ export type VibeControlZappingVideoAnalysisInput = {
   prompt?: string;
 };
 
+export type VibeControlRelatedContextAnalysisInput = {
+  applicationId: string;
+  videoId: string;
+  provider: "github" | "slack";
+  prompt?: string;
+};
+
 export type VibeControlSeparatedAdkMode =
   | "vibe_capability_structuring"
   | "vibe_story_generation";
@@ -243,6 +256,57 @@ const extractZappingAnalysisResultCandidate = (
     if (parsed) return parsed;
   }
   return undefined;
+};
+
+const extractRelatedContextResultCandidate = (
+  value: unknown
+): VibeControlRelatedContextResult | undefined => {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const direct = VibeControlRelatedContextResultSchema.safeParse(
+    normalizeAdkResultValue(value)
+  );
+  if (direct.success) return direct.data;
+
+  const candidates = [
+    record.related_context_result,
+    record.relatedContextResult,
+    record.vibe_related_context,
+    record.vibeRelatedContext,
+    record.state,
+    record.output,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate || candidate === value) continue;
+    const parsed = extractRelatedContextResultCandidate(candidate);
+    if (parsed) return parsed;
+  }
+  return undefined;
+};
+
+const assignStoryKeysToZappingAnalysisResult = (params: {
+  applicationId: string;
+  result: VibeControlZappingAnalysisResult;
+  stories: DecodedVibeControlStory[];
+  operationVideos: DecodedVibeControlOperationVideo[];
+}): VibeControlZappingAnalysisResult => {
+  let nextSequence = nextUserStorySequenceForApplication({
+    applicationId: params.applicationId,
+    stories: params.stories,
+    operationVideos: params.operationVideos,
+  });
+  return {
+    ...params.result,
+    storyCandidates: params.result.storyCandidates.map((candidate) => {
+      if (candidate.storyKey?.trim()) return candidate;
+      const storyKey = formatUserStoryKey(nextSequence);
+      nextSequence += 1;
+      return {
+        ...candidate,
+        storyKey,
+      };
+    }),
+  };
 };
 
 const normalizeAdkResultValue = (value: unknown): unknown => {
@@ -655,6 +719,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
     isProvisioningApplicationFileSpace: false,
     isSavingOperationVideo: false,
     isAnalyzingZappingVideos: false,
+    isFetchingRelatedContexts: false,
     error: null as string | null,
     lastRunLog: [] as string[],
     filters: {
@@ -2144,6 +2209,66 @@ export const useVibeControlStore = defineStore("vibeControl", {
         },
       };
     },
+    buildRelatedContextModeState(params: {
+      application: DecodedVibeControlApplication;
+      video: DecodedVibeControlOperationVideo;
+      sessionId: string;
+      organizationId: string;
+      spaceId: string;
+      userId: string;
+      provider: "github" | "slack";
+      prompt?: string;
+    }): Record<string, unknown> {
+      return {
+        active_mode: "vibe_related_context",
+        vibe_related_context: {
+          phase: "collecting",
+          setup: {
+            confirmed: true,
+            provider: params.provider,
+            related_context_session_id: params.sessionId,
+            organization_id: params.organizationId,
+            space_id: params.spaceId,
+            user_id: params.userId,
+            application_id: params.application.id,
+            application_key: params.application.applicationKey,
+            application_name: params.application.name,
+            repo_full_name: params.application.repoFullName,
+            default_branch: params.application.defaultBranch || "main",
+            operation_video_id: params.video.id,
+          },
+          payload: {
+            application: {
+              id: params.application.id,
+              applicationKey: params.application.applicationKey,
+              name: params.application.name,
+              summary: params.application.summary,
+              domain: params.application.domain,
+              repoFullName: params.application.repoFullName,
+              defaultBranch: params.application.defaultBranch || "main",
+            },
+            operation_video: {
+              id: params.video.id,
+              title: params.video.title,
+              description: params.video.description,
+              quickScan: params.video.quickScan,
+              transcriptSummary: params.video.transcriptSummary,
+              transcriptProvider: params.video.transcriptProvider,
+              frameCaptures: params.video.frameCaptures,
+              recordedAt: params.video.recordedAt,
+              sourceDisplaySurface: params.video.sourceDisplaySurface,
+            },
+            analysis_result: params.video.analysisResult,
+            existing_related_contexts: params.video.relatedContexts,
+            user_notes: params.prompt?.trim() || undefined,
+            expected_outputs:
+              params.provider === "slack"
+                ? ["slack_messages", "related_reasons"]
+                : ["github_pull_requests", "related_reasons"],
+          },
+        },
+      };
+    },
     buildVibeGenerationModeState(params: {
       mode: VibeControlSeparatedAdkMode;
       application: DecodedVibeControlApplication;
@@ -2381,6 +2506,155 @@ export const useVibeControlStore = defineStore("vibeControl", {
       }
       return requestIds;
     },
+    async startRelatedContextAnalysis(
+      input: VibeControlRelatedContextAnalysisInput
+    ): Promise<string> {
+      const application = this.applications.find(
+        (item) => item.id === input.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      const video = this.operationVideos.find(
+        (item) => item.id === input.videoId && item.applicationId === application.id
+      );
+      if (!video) {
+        throw new Error("対象ザッピング動画が見つかりません");
+      }
+      if (input.provider === "github" && !application.repoFullName?.trim()) {
+        throw new Error("GitHub repositoryを選択してください");
+      }
+
+      const orgId = useOrganizationStore().loggedInOrganizationInfo?.id ?? "";
+      const spaceId = useSpaceStore().selectedSpace?.id ?? "";
+      const uid = getAuth().currentUser?.uid;
+      if (!orgId || !spaceId || !uid) {
+        throw new Error("組織・スペース・ログイン状態を確認してください");
+      }
+
+      const sessionId = `vibecontrol-related-context-${application.id}-${video.id}-${Date.now()}-${createRandomDocId()}`;
+      const responseId = `related-context-response-${createRandomDocId()}`;
+      const modeState = this.buildRelatedContextModeState({
+        application,
+        video,
+        sessionId,
+        organizationId: orgId,
+        spaceId,
+        userId: uid,
+        provider: input.provider,
+        prompt: input.prompt,
+      });
+      const prompt =
+        input.prompt?.trim() ||
+        (input.provider === "slack"
+          ? [
+              `${application.name} の操作動画「${video.title}」に関連するSlack会話を探してください。`,
+              "動画解析結果、操作メモ、文字起こし要約、Story候補と、Slack投稿・スレッド・チャンネルを照合してください。",
+              "関連する理由を日本語で付け、関連度の高い会話だけを返してください。",
+            ]
+          : [
+              `${application.name} の操作動画「${video.title}」に関連するGitHub Pull Requestを探してください。`,
+              "動画解析結果、操作メモ、文字起こし要約、Story候補と、GitHub PRのタイトル・本文・ラベル・変更ファイルを照合してください。",
+              "関連する理由を日本語で付け、関連度の高いPRだけを返してください。",
+            ]).join("\n");
+
+      this.isFetchingRelatedContexts = true;
+      this.error = null;
+      try {
+        await this.persistOperationVideo({
+          ...video,
+          relatedContexts: {
+            ...video.relatedContexts,
+            generatedAt: nowIso(),
+            status: "running",
+            notes: [],
+            github:
+              input.provider === "github"
+                ? video.relatedContexts?.github ?? {
+                    repoFullName: application.repoFullName,
+                    checkedAt: nowIso(),
+                    pullRequests: [],
+                  }
+                : video.relatedContexts?.github,
+            slack:
+              input.provider === "slack"
+                ? video.relatedContexts?.slack ?? {
+                    checkedAt: nowIso(),
+                    messages: [],
+                  }
+                : video.relatedContexts?.slack,
+          },
+        });
+
+        const requestId = await createAdkInvokeRequest({
+          organizationId: orgId,
+          spaceId,
+          input: buildAdkInvokeInput({
+            mode: "vibe_related_context",
+            sessionId,
+            organizationId: orgId,
+            spaceId,
+            userId: uid,
+            prompt,
+            responseId,
+            model: defaultLlmModelSelectionForAdkMode("vibe_related_context"),
+            fileSpaceId: application.fileSpaceId ?? null,
+            workspaceId: application.id,
+            history: [],
+            modeState,
+          }),
+        });
+
+        this.lastRunLog.unshift(
+          `Related Context: ${application.name} / ${video.title} の${input.provider === "slack" ? "Slack会話" : "GitHub PR"}取得を開始`
+        );
+
+        const stopWatch = watchAdkInvokeRequest({
+          organizationId: orgId,
+          spaceId,
+          requestId,
+          onUpdate: (
+            status: RequestStatus,
+            errorMessage?: string,
+            output?: AdkInvokeOutput
+          ) => {
+            void this.updateRelatedContextAnalysisStatus({
+              videoId: video.id,
+              requestId,
+              sessionId,
+              organizationId: orgId,
+              spaceId,
+              status,
+              errorMessage,
+              output,
+            });
+            if (status === "completed" || status === "error") {
+              stopWatch();
+            }
+          },
+        });
+
+        return requestId;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "関連コンテキスト取得の開始に失敗しました";
+        await this.persistOperationVideo({
+          ...video,
+          relatedContexts: {
+            ...video.relatedContexts,
+            generatedAt: nowIso(),
+            status: "error",
+            notes: [message],
+            github: video.relatedContexts?.github,
+            slack: video.relatedContexts?.slack,
+          },
+        });
+        this.error = message;
+        throw err;
+      } finally {
+        this.isFetchingRelatedContexts = false;
+      }
+    },
     async fetchZappingAnalysisResultFromSession(params: {
       organizationId: string;
       spaceId: string;
@@ -2403,6 +2677,33 @@ export const useVibeControlStore = defineStore("vibeControl", {
         const data = snap.exists() ? snap.data() : null;
         const state = data?.state;
         const result = extractZappingAnalysisResultCandidate(state);
+        if (result) return result;
+        await sleep(750);
+      }
+      return undefined;
+    },
+    async fetchRelatedContextResultFromSession(params: {
+      organizationId: string;
+      spaceId: string;
+      sessionId: string;
+    }): Promise<VibeControlRelatedContextResult | undefined> {
+      if (!params.organizationId || !params.spaceId || !params.sessionId) {
+        return undefined;
+      }
+      const ref = doc(
+        getFirestore(),
+        "organizations",
+        params.organizationId,
+        "spaces",
+        params.spaceId,
+        "adkSessions",
+        params.sessionId
+      );
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const snap = await getDoc(ref);
+        const data = snap.exists() ? snap.data() : null;
+        const state = data?.state;
+        const result = extractRelatedContextResultCandidate(state);
         if (result) return result;
         await sleep(750);
       }
@@ -2632,6 +2933,16 @@ export const useVibeControlStore = defineStore("vibeControl", {
               sessionId: completedSessionId,
             })
           : undefined;
+      const keyedAnalysisResult = analysisResult
+        ? assignStoryKeysToZappingAnalysisResult({
+            applicationId: video.applicationId,
+            result: analysisResult,
+            stories: this.stories,
+            operationVideos: this.operationVideos.filter(
+              (item) => item.id !== video.id
+            ),
+          })
+        : undefined;
       await this.persistOperationVideo({
         ...video,
         analysisStatus: nextStatus,
@@ -2640,12 +2951,73 @@ export const useVibeControlStore = defineStore("vibeControl", {
         analysisSpaceId,
         analysisErrorMessage:
           params.status === "completed"
-            ? analysisResult
+            ? keyedAnalysisResult
               ? ""
               : "ADKは完了しましたが、解析結果をsession stateから取得できませんでした"
             : params.errorMessage || "",
         analyzedAt: params.status === "completed" ? nowIso() : video.analyzedAt,
-        analysisResult: analysisResult ?? video.analysisResult,
+        analysisResult: keyedAnalysisResult ?? video.analysisResult,
+      });
+    },
+    async updateRelatedContextAnalysisStatus(params: {
+      videoId: string;
+      requestId: string;
+      sessionId: string;
+      organizationId: string;
+      spaceId: string;
+      status: RequestStatus;
+      errorMessage?: string;
+      output?: AdkInvokeOutput;
+    }): Promise<void> {
+      const video = this.operationVideos.find((item) => item.id === params.videoId);
+      if (!video) return;
+      void params.requestId;
+      const completedSessionId =
+        (params.output && typeof params.output === "object" && "sessionId" in params.output
+          ? params.output.sessionId
+          : undefined) || params.sessionId;
+      const result =
+        params.status === "completed" && completedSessionId
+          ? await this.fetchRelatedContextResultFromSession({
+              organizationId: params.organizationId,
+              spaceId: params.spaceId,
+              sessionId: completedSessionId,
+            })
+          : undefined;
+      if (params.status !== "completed" && params.status !== "error") {
+        return;
+      }
+      const message =
+        params.status === "completed"
+          ? result
+            ? ""
+            : "ADKは完了しましたが、関連コンテキスト結果をsession stateから取得できませんでした"
+          : params.errorMessage || "関連コンテキスト取得に失敗しました";
+      const nextGithub =
+        result?.github && result.github.repoFullName.trim()
+          ? result.github
+          : result?.github
+            ? {
+                ...result.github,
+                repoFullName:
+                  video.relatedContexts?.github?.repoFullName ||
+                  this.applications.find(
+                    (application) => application.id === video.applicationId
+                  )?.repoFullName ||
+                  result.github.repoFullName,
+              }
+            : video.relatedContexts?.github;
+      const nextSlack = result?.slack ?? video.relatedContexts?.slack;
+      await this.persistOperationVideo({
+        ...video,
+        relatedContexts: {
+          ...video.relatedContexts,
+          generatedAt: result?.generatedAt ?? nowIso(),
+          status: params.status === "completed" && result ? result.status : "error",
+          notes: result?.notes ?? (message ? [message] : []),
+          github: nextGithub,
+          slack: nextSlack,
+        },
       });
     },
     async updateGenerationSessionStatus(params: {

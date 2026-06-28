@@ -42,11 +42,7 @@ export type NavMode = {
   key:
     | "knowledge"
     | "operation-videos"
-    | "external-services"
-    | "screen-catalog"
-    | "capabilities"
     | "stories"
-    | "worklog"
     | "settings";
   navGroup: NavGroupId;
   label: string;
@@ -90,44 +86,8 @@ export const useNavigationModeRegistry = () => {
       groups: [],
     },
     {
-      key: "external-services",
-      navGroup: "input",
-      label: "外部連携",
-      subtitle: "GitHub・Jira・Google Driveなど外部サービスを接続",
-      icon: navModeIcons.externalServices,
-      homeRouteName: "admin-vibe-control",
-      homeRouteQuery: { view: "application-external-services" },
-      accent: "purple",
-      ownedRouteNamePrefixes: ["admin-vibe-control"],
-      groups: [],
-    },
-    {
-      key: "screen-catalog",
-      navGroup: "analysis",
-      label: "画面カタログ",
-      subtitle: "投入情報から抽出された画面・URL・Variantを整理",
-      icon: navModeIcons.screenCatalog,
-      homeRouteName: "admin-vibe-control",
-      homeRouteQuery: { view: "application-screen-catalog" },
-      accent: "info",
-      ownedRouteNamePrefixes: ["admin-vibe-control"],
-      groups: [],
-    },
-    {
-      key: "capabilities",
-      navGroup: "analysis",
-      label: "機能候補",
-      subtitle: "画面・動画・ナレッジから抽出された機能候補を確認",
-      icon: navModeIcons.capabilities,
-      homeRouteName: "admin-vibe-control",
-      homeRouteQuery: { view: "application-capabilities" },
-      accent: "info",
-      ownedRouteNamePrefixes: ["admin-vibe-control"],
-      groups: [],
-    },
-    {
       key: "stories",
-      navGroup: "analysis",
+      navGroup: "input",
       label: "ユーザーストーリー",
       subtitle: "解析結果から生成されたユーザーストーリーをレビュー",
       icon: navModeIcons.stories,
@@ -135,17 +95,6 @@ export const useNavigationModeRegistry = () => {
       homeRouteQuery: { view: "stories" },
       accent: "info",
       ownedRouteNamePrefixes: ["admin-vibe-control"],
-      groups: [],
-    },
-    {
-      key: "worklog",
-      navGroup: "admin",
-      label: "仕事ログ",
-      subtitle: "実行中・完了したジョブを確認",
-      icon: navModeIcons.worklog,
-      homeRouteName: "admin-workflow-executions",
-      accent: "info",
-      ownedRouteNamePrefixes: ["admin-workflow-executions"],
       groups: [],
     },
     {

@@ -6,7 +6,7 @@
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
               <span class="rounded bg-white/10 px-2 py-1 font-mono text-xs font-bold text-emerald-200">
-                {{ story.applicationKey }} / {{ story.storyKey }}
+                [{{ storyTicketKey(story) }}]
               </span>
               <EnBadge
                 :color="story.reviewState === 'needs_review' ? 'warning' : 'success'"
@@ -251,6 +251,7 @@ import type {
   VibeControlEvidenceType,
 } from "@models/vibeControl";
 import { VIBE_CONTROL_DRIFT_LABELS } from "@models/vibeControl";
+import { storyTicketKey } from "@utils/vibeControlStoryKeys";
 
 const props = defineProps<{
   story: DecodedVibeControlStory | null;

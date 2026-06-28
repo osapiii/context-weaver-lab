@@ -37,6 +37,7 @@ export const ADK_TASK_LABELS: Record<EnAiStudioActiveTask, string> = {
   data_analysis: "データ分析",
   web_page: "WEBページ",
   application_scan: "画面カタログ",
+  vibe_related_context: "関連コンテキスト",
   vibe_zapping_analysis: "ザッピング解析",
   vibe_capability_structuring: "Capability解析",
   vibe_story_generation: "Story生成",
