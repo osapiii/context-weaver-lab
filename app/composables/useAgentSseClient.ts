@@ -33,6 +33,7 @@ export type AdkAgentMode =
   | "web_page"
   | "application_scan"
   | "business_partner"
+  | "vibe_related_context"
   | "vibe_zapping_analysis"
   | "vibe_capability_structuring"
   | "vibe_story_generation";
@@ -329,6 +330,7 @@ const parseWorkspaceMode = (value: unknown): AdkAgentMode | undefined => {
     value === "data_analysis" ||
     value === "web_page" ||
     value === "application_scan" ||
+    value === "vibe_related_context" ||
     value === "vibe_zapping_analysis" ||
     value === "vibe_capability_structuring" ||
     value === "vibe_story_generation"
@@ -358,6 +360,8 @@ const resolveEndpoint = (mode: AdkAgentMode): string => {
       return pick(pub.enAiStudioAdkImageUrl);
     case "consultation":
       return pick(pub.enAiStudioAdkConsultationUrl);
+    case "vibe_related_context":
+      return base;
     case "vibe_zapping_analysis":
       return pick(pub.enAiStudioAdkVibeZappingAnalysisUrl) || base;
     case "vibe_capability_structuring":

@@ -123,35 +123,8 @@
       </template>
     </EnModal>
 
-    <div
-      v-if="currentView === 'application-detail'"
-      class="flex min-w-0 flex-wrap items-center justify-between gap-3"
-    >
-      <UBreadcrumb
-        :items="breadcrumbItems"
-        class="min-w-0 text-xs"
-        :ui="{
-          list: 'gap-1.5',
-          link: 'text-xs font-semibold',
-          linkLabel: 'truncate',
-          separatorIcon: 'h-3.5 w-3.5 text-slate-300',
-        }"
-      />
-
-      <EnButton
-        variant="outline"
-        color="neutral"
-        size="sm"
-        leading-icon="material-symbols:refresh"
-        :loading="store.isLoading"
-        @click="store.fetchFromFirestore()"
-      >
-        再読込
-      </EnButton>
-    </div>
-
     <UBreadcrumb
-      v-else
+      v-if="currentView !== 'application-detail'"
       :items="breadcrumbItems"
       class="text-xs"
       :ui="{
@@ -347,10 +320,11 @@
         :videos="store.activeOperationVideos"
         :is-saving="store.isSavingOperationVideo"
         :is-analyzing="store.isAnalyzingZappingVideos"
+        :is-fetching-related-contexts="store.isFetchingRelatedContexts"
         :is-provisioning-file-space="store.isProvisioningApplicationFileSpace"
         @create-file-space="provisionSelectedApplicationFileSpace"
         @analyze="startZappingVideoAnalysis"
-        @analyze-all="startAllZappingVideoAnalysis"
+        @fetch-related-context="startRelatedContextAnalysis"
         @save="saveOperationVideo"
         @delete="deleteOperationVideo"
         @refresh="store.fetchFromFirestore()"
@@ -1164,27 +1138,20 @@ async function startZappingVideoAnalysis(videoId: string): Promise<void> {
   }
 }
 
-async function startAllZappingVideoAnalysis(applicationId: string): Promise<void> {
-  if (!applicationId) return;
+async function startRelatedContextAnalysis(
+  videoId: string,
+  provider: "github" | "slack"
+): Promise<void> {
+  if (!selectedApplication.value) return;
   try {
-    const requestIds = await store.startAllZappingVideoAnalysis(applicationId);
-    activeZappingAnalysisVideoId.value =
-      store.activeOperationVideos.find((video) =>
-        requestIds.includes(video.analysisRequestId ?? "")
-      )?.id ?? store.activeOperationVideos[0]?.id ?? "";
-    activeZappingAnalysisRequestId.value = requestIds[0] ?? "";
-    zappingAnalysisModalOpen.value = requestIds.length > 0;
-    toast.add({
-      title: `${requestIds.length}件のザッピング解析を開始しました`,
-      description:
-        requestIds.length > 0
-          ? "RequestDocを発行しました"
-          : "解析対象の動画はありません",
-      color: requestIds.length > 0 ? "success" : "neutral",
+    await store.startRelatedContextAnalysis({
+      applicationId: selectedApplication.value.id,
+      videoId,
+      provider,
     });
   } catch (err) {
     toast.add({
-      title: "一括解析の開始に失敗しました",
+      title: "関連コンテキスト取得に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });

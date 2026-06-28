@@ -57,6 +57,22 @@ def test_build_vibe_zapping_analysis_agent_has_tools(monkeypatch):
     assert agent.output_key == "vibe_zapping_analysis"
 
 
+def test_build_vibe_related_context_agent_has_tools(monkeypatch):
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "TRUE")
+    agent = build_agent_for_mode(
+        "vibe_related_context",
+        datastore_path=None,
+        model="gemini-2.5-flash",
+    )
+
+    tool_names = {tool.name for tool in agent.tools}
+    assert agent.name == "vibe_related_context_agent"
+    assert "read_related_context_request" in tool_names
+    assert "fetch_github_pull_request_candidates" in tool_names
+    assert "fetch_slack_message_candidates" in tool_names
+    assert agent.output_key == "vibe_related_context"
+
+
 def test_build_vibe_story_generation_agent_has_tools(monkeypatch):
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     agent = build_agent_for_mode(

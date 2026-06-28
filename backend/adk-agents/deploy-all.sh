@@ -12,6 +12,8 @@
 #   IMAGE_BUCKET — image agent の生成画像保存先 GCS バケット (未指定なら data URL fallback)
 #   ONLY         — "unified" / "writing" / "sheet" / "image" / "consultation" /
 #                  "vibe_capability_structuring" / "vibe_story_generation" / "all" (既定 unified)
+#   GITHUB_TOKEN_ENCRYPTION_KEY — GitHub OAuth token 復号キー
+#   SLACK_TOKEN_ENCRYPTION_KEY  — Slack OAuth token 復号キー
 #   DD_*         — Datadog LLM Observability non-secret env (API key は Secret Manager 推奨)
 
 set -euo pipefail
@@ -37,6 +39,30 @@ if [[ -z "${ADK_INTERNAL_INVOKE_SECRET:-}" ]]; then
     )"
     if [[ -n "${loaded_internal_secret}" ]]; then
       ADK_INTERNAL_INVOKE_SECRET="${loaded_internal_secret}"
+    fi
+  fi
+fi
+
+if [[ -z "${GITHUB_TOKEN_ENCRYPTION_KEY:-}" ]]; then
+  project_env_file="${BACKEND_ROOT}/app/.env.${PROJECT_ID}"
+  if [[ -f "${project_env_file}" ]]; then
+    loaded_github_token_encryption_key="$(
+      awk -F= '/^GITHUB_TOKEN_ENCRYPTION_KEY=/{print substr($0, index($0, "=") + 1); exit}' "${project_env_file}"
+    )"
+    if [[ -n "${loaded_github_token_encryption_key}" ]]; then
+      GITHUB_TOKEN_ENCRYPTION_KEY="${loaded_github_token_encryption_key}"
+    fi
+  fi
+fi
+
+if [[ -z "${SLACK_TOKEN_ENCRYPTION_KEY:-}" ]]; then
+  project_env_file="${BACKEND_ROOT}/app/.env.${PROJECT_ID}"
+  if [[ -f "${project_env_file}" ]]; then
+    loaded_slack_token_encryption_key="$(
+      awk -F= '/^SLACK_TOKEN_ENCRYPTION_KEY=/{print substr($0, index($0, "=") + 1); exit}' "${project_env_file}"
+    )"
+    if [[ -n "${loaded_slack_token_encryption_key}" ]]; then
+      SLACK_TOKEN_ENCRYPTION_KEY="${loaded_slack_token_encryption_key}"
     fi
   fi
 fi
@@ -124,6 +150,12 @@ deploy_unified() {
   fi
   if [[ -n "${ADK_INTERNAL_INVOKE_SECRET:-}" ]]; then
     sub="${sub},_ADK_INTERNAL_INVOKE_SECRET=${ADK_INTERNAL_INVOKE_SECRET}"
+  fi
+  if [[ -n "${GITHUB_TOKEN_ENCRYPTION_KEY:-}" ]]; then
+    sub="${sub},_GITHUB_TOKEN_ENCRYPTION_KEY=${GITHUB_TOKEN_ENCRYPTION_KEY}"
+  fi
+  if [[ -n "${SLACK_TOKEN_ENCRYPTION_KEY:-}" ]]; then
+    sub="${sub},_SLACK_TOKEN_ENCRYPTION_KEY=${SLACK_TOKEN_ENCRYPTION_KEY}"
   fi
   gcloud builds submit "${BACKEND_ROOT}" \
     --project="${PROJECT_ID}" \

@@ -15,6 +15,9 @@ from vibe_control.agent import build_root_agent as build_vibe_control_agent
 from vibe_capability_structuring.agent import (
     build_root_agent as build_vibe_capability_structuring_agent,
 )
+from vibe_related_context.agent import (
+    build_root_agent as build_vibe_related_context_agent,
+)
 from vibe_zapping_analysis.agent import (
     build_root_agent as build_vibe_zapping_analysis_agent,
 )
@@ -64,6 +67,10 @@ def build_agent_registry() -> dict[str, AgentBundle]:
         "vibe_capability_structuring": AgentBundle(
             app_name=UNIFIED_APP_NAME,
             root_agent=build_vibe_capability_structuring_agent(),
+        ),
+        "vibe_related_context": AgentBundle(
+            app_name=UNIFIED_APP_NAME,
+            root_agent=build_vibe_related_context_agent(),
         ),
         "vibe_zapping_analysis": AgentBundle(
             app_name=UNIFIED_APP_NAME,

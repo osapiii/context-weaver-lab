@@ -247,6 +247,12 @@ export default defineNuxtConfig({
       /** GitHub OAuth callback URL. Localhost is normalized in the client when omitted. */
       githubOAuthRedirectUri:
         process.env.NUXT_PUBLIC_GITHUB_OAUTH_REDIRECT_URI || "",
+      /** Slack OAuth client id. Secret and tokens are backend-only. */
+      slackOAuthClientId:
+        process.env.NUXT_PUBLIC_SLACK_OAUTH_CLIENT_ID || "",
+      /** Slack OAuth callback URL. Localhost is normalized in the client when omitted. */
+      slackOAuthRedirectUri:
+        process.env.NUXT_PUBLIC_SLACK_OAUTH_REDIRECT_URI || "",
       /** Gシート連携: ユーザーが「編集者」で招待する SA（ui-backend の .cred.json と一致） */
       gsheetServiceAccountEmail:
         process.env.NUXT_PUBLIC_GSHEET_SERVICE_ACCOUNT_EMAIL ||

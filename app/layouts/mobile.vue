@@ -11,9 +11,14 @@
       <div class="flex items-center justify-between px-4 h-12">
         <NuxtLink
           :to="{ name: 'admin-vibe-control' }"
-          class="text-base font-bold tracking-tight font-mono text-slate-900"
+          class="inline-flex items-center"
+          aria-label="StoryVault ホームへ"
         >
-          VibeControl
+          <img
+            src="/storyvault-logo.svg"
+            alt="StoryVault"
+            class="h-7 w-[144px] object-contain"
+          >
         </NuxtLink>
 
         <UDropdownMenu
@@ -44,6 +49,10 @@
 </template>
 
 <script lang="ts" setup>
+defineOptions({
+  name: "MobileLayout",
+});
+
 const actionIcons = useActionIcons();
 const auth = useAdminUserStore();
 const organization = useOrganizationStore();

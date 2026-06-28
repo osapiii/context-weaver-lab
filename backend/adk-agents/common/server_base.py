@@ -149,6 +149,7 @@ from .business_partner_workflow import (
 )
 from .vibe_control_workflow import (
     vibe_capability_structuring_state_patch_from_mode_state,
+    vibe_related_context_state_patch_from_mode_state,
     vibe_zapping_analysis_state_patch_from_mode_state,
     vibe_story_generation_state_patch_from_mode_state,
 )
@@ -184,6 +185,16 @@ _ZAPPING_ANALYSIS_RESULT_KEYS = (
 )
 
 
+_RELATED_CONTEXT_RESULT_KEYS = (
+    "schemaVersion",
+    "generatedAt",
+    "status",
+    "github",
+    "slack",
+    "notes",
+)
+
+
 def _zapping_analysis_result_from_bucket(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
@@ -203,8 +214,32 @@ def _zapping_analysis_result_from_bucket(value: Any) -> dict[str, Any] | None:
     return {key: value.get(key) for key in _ZAPPING_ANALYSIS_RESULT_KEYS if key in value}
 
 
+def _related_context_result_from_bucket(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    existing = value.get("related_context_result")
+    if isinstance(existing, dict):
+        nested = _related_context_result_from_bucket(existing)
+        if nested is not None:
+            return nested
+    if value.get("schemaVersion") != "vibe-control-related-context-v1":
+        return None
+    if not isinstance(value.get("generatedAt"), str):
+        return None
+    if value.get("status") not in ("completed", "error"):
+        return None
+    github = value.get("github")
+    if github is not None and not isinstance(github, dict):
+        return None
+    notes = value.get("notes")
+    if notes is not None and not isinstance(notes, list):
+        return None
+    return {key: value.get(key) for key in _RELATED_CONTEXT_RESULT_KEYS if key in value}
+
+
 VERTEX_AI_ONLY_MODES = frozenset(
     {
+        "vibe_related_context",
         "vibe_zapping_analysis",
         "vibe_capability_structuring",
         "vibe_story_generation",
@@ -571,6 +606,10 @@ async def _stream_invoke(
                 vibe_capability_structuring_state_patch_from_mode_state(
                     req.mode_state
                 )
+            )
+        if agent_mode == "vibe_related_context":
+            state_patch.update(
+                vibe_related_context_state_patch_from_mode_state(req.mode_state)
             )
         if agent_mode == "vibe_zapping_analysis":
             state_patch.update(
@@ -1376,6 +1415,48 @@ async def _stream_invoke(
                     "story_candidate_count": len(
                         analysis_result.get("storyCandidates") or []
                     ),
+                }
+        if agent_mode == "vibe_related_context":
+            raw_related = stored_state.get("vibe_related_context")
+            related_result = _related_context_result_from_bucket(raw_related)
+            if related_result is not None:
+                from .workspace_state_buckets import patch_task_bucket
+
+                related_patch: dict[str, Any] = {}
+                patch_task_bucket(
+                    related_patch,
+                    "vibe_related_context",
+                    {
+                        "phase": "completed",
+                        "related_context_result": related_result,
+                    },
+                    active_task="vibe_related_context",
+                )
+                await persist_session_state_patch(
+                    session_service,
+                    app_name=app_name,
+                    user_id=user_id,
+                    session_id=sid,
+                    state_patch=related_patch,
+                    organization_id=session_org_id,
+                    space_id=session_space_id,
+                )
+                github = related_result.get("github")
+                pull_requests = (
+                    github.get("pullRequests")
+                    if isinstance(github, dict)
+                    else []
+                )
+                slack = related_result.get("slack")
+                slack_messages = (
+                    slack.get("messages")
+                    if isinstance(slack, dict)
+                    else []
+                )
+                done_payload["vibe_related_context"] = {
+                    "related_context_result": related_result,
+                    "github_pull_request_count": len(pull_requests or []),
+                    "slack_message_count": len(slack_messages or []),
                 }
         if ui_sync is not None:
             await ui_sync.finalize_turn()

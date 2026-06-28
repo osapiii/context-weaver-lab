@@ -345,6 +345,7 @@ export const DecodedVibeControlSourceConnectionSchema =
 export const VibeControlZappingAnalysisStoryCandidateSchema = z.object({
   id: z.string(),
   epicId: z.string().optional(),
+  storyKey: z.string().optional(),
   title: z.string(),
   role: z
     .object({
@@ -391,6 +392,75 @@ export const VibeControlZappingAnalysisResultSchema = z.object({
   notes: z.array(z.string()).default([]),
 });
 
+export const VibeControlRelatedContextPullRequestSchema = z.object({
+  number: z.number().int().min(1),
+  title: z.string(),
+  htmlUrl: z.string(),
+  author: z.string().optional(),
+  state: z.string().optional(),
+  mergedAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  labels: z.array(z.string()).default([]),
+  changedFiles: z.number().nullable().optional(),
+  additions: z.number().nullable().optional(),
+  deletions: z.number().nullable().optional(),
+  relevanceScore: z.number().min(0).max(100).default(0),
+  reason: z.string().optional(),
+  matchedSignals: z.array(z.string()).default([]),
+});
+
+export const VibeControlRelatedContextSlackMessageSchema = z.object({
+  channelId: z.string().optional(),
+  channelName: z.string().optional(),
+  messageTs: z.string(),
+  threadTs: z.string().optional().nullable(),
+  permalink: z.string().optional(),
+  author: z.string().optional().nullable(),
+  text: z.string().optional(),
+  postedAt: z.string().optional().nullable(),
+  relevanceScore: z.number().min(0).max(100).default(0),
+  reason: z.string().optional(),
+  matchedSignals: z.array(z.string()).default([]),
+});
+
+export const VibeControlRelatedContextResultSchema = z.object({
+  schemaVersion: z
+    .literal("vibe-control-related-context-v1")
+    .default("vibe-control-related-context-v1"),
+  generatedAt: z.string(),
+  status: z.enum(["completed", "error"]).default("completed"),
+  github: z
+    .object({
+      repoFullName: z.string(),
+      checkedAt: z.string(),
+      pullRequests: z
+        .array(VibeControlRelatedContextPullRequestSchema)
+        .default([]),
+      errorMessage: z.string().optional(),
+    })
+    .optional(),
+  slack: z
+    .object({
+      teamId: z.string().optional(),
+      teamName: z.string().optional(),
+      checkedAt: z.string(),
+      messages: z
+        .array(VibeControlRelatedContextSlackMessageSchema)
+        .default([]),
+      errorMessage: z.string().optional(),
+    })
+    .optional(),
+  notes: z.array(z.string()).default([]),
+});
+
+export const VibeControlOperationVideoRelatedContextsSchema = z.object({
+  github: VibeControlRelatedContextResultSchema.shape.github.optional(),
+  slack: VibeControlRelatedContextResultSchema.shape.slack.optional(),
+  generatedAt: z.string().optional(),
+  status: z.enum(["running", "completed", "error"]).optional(),
+  notes: z.array(z.string()).default([]),
+});
+
 export const VibeControlOperationVideoSchema = z.object({
   id: z.string().optional(),
   applicationId: z.string().default("app-default"),
@@ -430,6 +500,7 @@ export const VibeControlOperationVideoSchema = z.object({
   analysisErrorMessage: z.string().optional(),
   analyzedAt: z.string().optional(),
   analysisResult: VibeControlZappingAnalysisResultSchema.optional(),
+  relatedContexts: VibeControlOperationVideoRelatedContextsSchema.optional(),
   sourceDisplaySurface: VibeControlOperationVideoDisplaySurfaceSchema.default(
     "unknown"
   ),
@@ -660,6 +731,21 @@ export type VibeControlZappingAnalysisStatus = z.infer<
 >;
 export type VibeControlZappingAnalysisResult = z.infer<
   typeof VibeControlZappingAnalysisResultSchema
+>;
+export type VibeControlZappingAnalysisStoryCandidate = z.infer<
+  typeof VibeControlZappingAnalysisStoryCandidateSchema
+>;
+export type VibeControlRelatedContextPullRequest = z.infer<
+  typeof VibeControlRelatedContextPullRequestSchema
+>;
+export type VibeControlRelatedContextSlackMessage = z.infer<
+  typeof VibeControlRelatedContextSlackMessageSchema
+>;
+export type VibeControlRelatedContextResult = z.infer<
+  typeof VibeControlRelatedContextResultSchema
+>;
+export type VibeControlOperationVideoRelatedContexts = z.infer<
+  typeof VibeControlOperationVideoRelatedContextsSchema
 >;
 export type VibeControlApplication = z.infer<
   typeof VibeControlApplicationSchema

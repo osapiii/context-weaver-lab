@@ -85,14 +85,14 @@ export const readTaskInvokeFromState = (params: {
         ? status
         : "idle",
     logs: logs as TaskInvokeState["logs"],
-    requestId:
-      typeof invoke.request_id === "string" ? invoke.request_id : null,
-    linkedResponseId:
+    request_id:
+      typeof invoke.request_id === "string" ? invoke.request_id : undefined,
+    linked_response_id:
       typeof invoke.linked_response_id === "string"
         ? invoke.linked_response_id
-        : null,
-    errorMessage:
-      typeof invoke.error_message === "string" ? invoke.error_message : null,
+        : undefined,
+    error_message:
+      typeof invoke.error_message === "string" ? invoke.error_message : undefined,
   };
 };
 

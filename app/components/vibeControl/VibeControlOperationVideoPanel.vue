@@ -1,16 +1,21 @@
 <template>
-  <section class="rounded-lg border border-slate-200 bg-white p-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
+  <section class="space-y-5">
+    <div
+      v-if="!detailVideo"
+      class="flex flex-wrap items-center justify-between gap-4"
+    >
       <div class="flex items-center gap-3">
-        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
+        <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
           <UIcon
             name="material-symbols:video-camera-back-outline"
-            class="h-5 w-5"
+            class="h-7 w-7"
           />
         </div>
         <div>
-          <h2 class="text-sm font-semibold text-slate-900">操作動画</h2>
-          <p class="mt-0.5 text-xs text-slate-500">
+          <h2 class="text-3xl font-bold tracking-normal text-slate-950">
+            操作動画
+          </h2>
+          <p class="mt-1 text-sm text-slate-500">
             {{ videos.length }}件
           </p>
         </div>
@@ -519,35 +524,33 @@
 
     <div
       v-if="detailVideo"
-      class="mt-5 border-t border-slate-100 pt-4"
+      class="pt-1"
     >
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex min-w-0 items-center gap-3">
+      <div class="mb-4 flex flex-wrap items-start justify-between gap-4">
+        <div class="flex min-w-0 items-start gap-3">
           <EnButton
             variant="ghost"
             color="neutral"
             size="xs"
             leading-icon="material-symbols:arrow-back"
+            class="mt-1"
             @click="detailVideoId = ''"
           >
             一覧へ戻る
           </EnButton>
           <div class="min-w-0">
-            <h3 class="truncate text-base font-semibold text-slate-950">
-              {{ displayVideoTitle(detailVideo) }}
-            </h3>
-            <p class="mt-1 text-xs text-slate-500">
-              {{ formatRecordedAt(detailVideo.recordedAt) }} / {{ formatDuration(detailVideo.durationMs) }}
-            </p>
+            <div class="flex min-w-0 flex-wrap items-center gap-3">
+              <span class="inline-flex shrink-0 items-center rounded-md bg-slate-950 px-2 py-1 text-xs font-semibold text-white">
+                {{ videoDisplayId(detailVideo) }}
+              </span>
+              <h3 class="min-w-0 text-3xl font-bold tracking-normal text-slate-950">
+                {{ displayVideoTitle(detailVideo) }}
+              </h3>
+              <VibeControlAnalysisStatusTip :status="detailVideo.analysisStatus" />
+            </div>
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <EnBadge
-            :color="analysisColor(detailVideo.analysisStatus)"
-            variant="soft"
-          >
-            {{ analysisLabel(detailVideo.analysisStatus) }}
-          </EnBadge>
           <EnButton
             variant="ai"
             size="xs"
@@ -562,34 +565,70 @@
       </div>
 
       <div class="mb-5 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
-        <div class="grid gap-1 sm:grid-cols-3">
-        <button
-          type="button"
-          class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
-          :class="detailTab === 'video' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
-          @click="detailTab = 'video'"
-        >
-          <UIcon name="material-symbols:play-circle-outline" class="h-4 w-4" />
-          動画
-        </button>
-        <button
-          type="button"
-          class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
-          :class="detailTab === 'videoAnalysis' ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500 hover:bg-primary-50 hover:text-primary-700'"
-          @click="detailTab = 'videoAnalysis'"
-        >
-          <UIcon name="material-symbols:auto-awesome-outline" class="h-4 w-4" />
-          動画解析
-        </button>
-        <button
-          type="button"
-          class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
-          :class="detailTab === 'storyAnalysis' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-500 hover:bg-amber-50 hover:text-amber-800'"
-          @click="detailTab = 'storyAnalysis'"
-        >
-          <UIcon name="material-symbols:sticky-note-2-outline" class="h-4 w-4" />
-          ストーリー解析
-        </button>
+        <div class="grid gap-1 sm:grid-cols-4">
+          <button
+            type="button"
+            class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
+            :class="detailTab === 'video' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
+            @click="detailTab = 'video'"
+          >
+            <UIcon name="material-symbols:play-circle-outline" class="h-4 w-4 shrink-0" />
+            <span>動画</span>
+            <span
+              class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              :class="detailTab === 'video' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'"
+            >
+              {{ videoDisplayId(detailVideo) }}
+            </span>
+          </button>
+          <button
+            type="button"
+            class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
+            :class="detailTab === 'videoAnalysis' ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500 hover:bg-primary-50 hover:text-primary-700'"
+            @click="detailTab = 'videoAnalysis'"
+          >
+            <UIcon
+              :name="isVideoAnalysisCompleted(detailVideo) ? 'material-symbols:check-circle-outline' : 'material-symbols:auto-awesome-outline'"
+              class="h-4 w-4 shrink-0"
+            />
+            <span>動画解析</span>
+            <span
+              class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              :class="detailTab === 'videoAnalysis' ? 'bg-white/15 text-white' : isVideoAnalysisCompleted(detailVideo) ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600'"
+            >
+              {{ videoAnalysisTabStatus(detailVideo) }}
+            </span>
+          </button>
+          <button
+            type="button"
+            class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
+            :class="detailTab === 'storyAnalysis' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-500 hover:bg-amber-50 hover:text-amber-800'"
+            @click="detailTab = 'storyAnalysis'"
+          >
+            <UIcon name="material-symbols:sticky-note-2-outline" class="h-4 w-4 shrink-0" />
+            <span>ストーリー解析</span>
+            <span
+              class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              :class="detailTab === 'storyAnalysis' ? 'bg-white/55 text-slate-950' : storyCandidateCount(detailVideo) > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"
+            >
+              {{ storyCandidateCount(detailVideo) }}件
+            </span>
+          </button>
+          <button
+            type="button"
+            class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
+            :class="detailTab === 'relatedContext' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
+            @click="detailTab = 'relatedContext'"
+          >
+            <UIcon name="material-symbols:hub-outline" class="h-4 w-4 shrink-0" />
+            <span>関連コンテキスト</span>
+            <span
+              class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              :class="detailTab === 'relatedContext' ? 'bg-white/15 text-white' : relatedContextCount(detailVideo) > 0 ? 'bg-slate-200 text-slate-800' : 'bg-slate-100 text-slate-600'"
+            >
+              PR {{ relatedGithubPullRequestCount(detailVideo) }} / Slack {{ relatedSlackMessageCount(detailVideo) }}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -805,7 +844,7 @@
       </div>
 
       <div
-        v-else
+        v-else-if="detailTab === 'storyAnalysis'"
         class="space-y-4"
       >
         <div class="relative overflow-hidden rounded-3xl border border-amber-100 bg-[#fffdf6] p-5 shadow-sm">
@@ -874,9 +913,14 @@
                     @click="selectedAnalysisStoryId = story.id"
                   >
                     <div class="flex items-start justify-between gap-2">
-                      <p class="line-clamp-2 text-sm font-semibold text-slate-900">
-                        {{ story.title }}
-                      </p>
+                      <div class="min-w-0">
+                        <p class="mb-1 inline-flex rounded-md border border-slate-200 bg-slate-950 px-2 py-0.5 font-mono text-[11px] font-bold text-white shadow-sm">
+                          [{{ analysisStoryTicketKey(story) }}]
+                        </p>
+                        <p class="line-clamp-2 text-sm font-semibold text-slate-900">
+                          {{ story.title }}
+                        </p>
+                      </div>
                       <EnBadge color="warning" variant="soft">
                         {{ story.confidence ?? story.confidenceScore ?? 0 }}
                       </EnBadge>
@@ -934,13 +978,18 @@
                 >
                   <div class="rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-primary-50 p-5">
                     <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div class="min-w-0">
+                      <div class="min-w-0">
                         <p class="mb-2 inline-flex rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
                           選択中のストーリー
                         </p>
-                        <h5 class="text-lg font-semibold text-slate-950">
-                        {{ selectedAnalysisStory.title }}
-                      </h5>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <span class="rounded-md border border-slate-200 bg-slate-950 px-2.5 py-1 font-mono text-xs font-bold text-white shadow-sm">
+                            [{{ analysisStoryTicketKey(selectedAnalysisStory) }}]
+                          </span>
+                          <h5 class="text-lg font-semibold text-slate-950">
+                            {{ selectedAnalysisStory.title }}
+                          </h5>
+                        </div>
                       <p
                         v-if="selectedAnalysisStory.summary"
                         class="mt-2 text-sm leading-relaxed text-slate-600"
@@ -1124,38 +1173,328 @@
           </div>
         </div>
       </div>
+
+      <div
+        v-else
+        class="space-y-4"
+      >
+        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                <UIcon name="i-simple-icons-github" class="h-4 w-4" />
+                GitHub PR
+              </h4>
+              <p class="mt-1 text-xs text-slate-500">
+                {{ application?.repoFullName || "Repository未設定" }}
+              </p>
+            </div>
+            <EnButton
+              variant="solid"
+              color="neutral"
+              custom-class="!border-slate-950 !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800 disabled:!bg-slate-400"
+              size="xs"
+              leading-icon="i-simple-icons-github"
+              :loading="isFetchingRelatedContexts"
+              :global-loading="false"
+              :disabled="!application?.repoFullName || isFetchingRelatedContexts"
+              @click="$emit('fetch-related-context', detailVideo.id, 'github')"
+            >
+              PR一覧を取得
+            </EnButton>
+          </div>
+
+          <EnAlert
+            v-if="detailVideo.relatedContexts?.status === 'error'"
+            class="mb-4"
+            color="warning"
+            :title="relatedContextErrorTitle(detailVideo)"
+          />
+
+          <div
+            v-if="isRelatedContextRunning(detailVideo)"
+            class="mb-4 overflow-hidden rounded-xl border border-slate-900 bg-slate-950 text-white shadow-sm"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+              <div class="flex items-center gap-3">
+                <span class="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                  <UIcon name="i-simple-icons-github" class="h-4 w-4" />
+                  <span class="absolute inset-0 animate-ping rounded-full border border-white/20" />
+                </span>
+                <div>
+                  <p class="text-sm font-semibold">
+                    GitHub PRを取得しています
+                  </p>
+                  <p class="mt-0.5 text-xs text-slate-300">
+                    動画メモ、Story候補、PR本文、ラベル、変更ファイルを照合中
+                  </p>
+                </div>
+              </div>
+              <EnBadge color="neutral" variant="soft">
+                analyzing
+              </EnBadge>
+            </div>
+            <div class="space-y-3 bg-white p-4">
+              <div
+                v-for="index in 3"
+                :key="`related-context-skeleton-${index}`"
+                class="rounded-lg border border-slate-100 p-3"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <div class="h-3 w-2/3 animate-pulse rounded-full bg-slate-200" />
+                  <div class="h-5 w-12 animate-pulse rounded-full bg-slate-100" />
+                </div>
+                <div class="mt-3 h-3 w-full animate-pulse rounded-full bg-slate-100" />
+                <div class="mt-2 h-3 w-4/5 animate-pulse rounded-full bg-slate-100" />
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="!isRelatedContextRunning(detailVideo) && !detailVideo.relatedContexts?.github"
+            class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
+          >
+            GitHub PRを取得すると、操作動画に関連するPRと理由がここに表示されます
+          </div>
+
+          <div v-else-if="detailVideo.relatedContexts?.github" class="space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <span>{{ detailVideo.relatedContexts.github.repoFullName }}</span>
+              <span>{{ formatRecordedAt(detailVideo.relatedContexts.github.checkedAt) }}</span>
+            </div>
+
+            <div
+              v-if="detailVideo.relatedContexts.github.pullRequests.length === 0"
+              class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
+            >
+              関連するPRは見つかりませんでした
+            </div>
+
+            <div v-else class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              <article
+                v-for="pr in detailVideo.relatedContexts.github.pullRequests"
+                :key="`${detailVideo.id}-related-pr-${pr.number}`"
+                class="flex min-h-[172px] flex-col rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 hover:shadow-md"
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <a
+                      :href="pr.htmlUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="line-clamp-2 text-xs font-semibold leading-snug text-slate-950 hover:text-primary-700"
+                    >
+                      #{{ pr.number }} {{ pr.title }}
+                    </a>
+                    <p class="mt-1 text-xs text-slate-500">
+                      {{ pr.author || "unknown" }} / {{ pr.state || "pr" }}
+                    </p>
+                  </div>
+                  <EnBadge color="primary" variant="soft" class="shrink-0">
+                    {{ pr.relevanceScore }}
+                  </EnBadge>
+                </div>
+                <p
+                  v-if="pr.reason"
+                  class="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-700"
+                >
+                  {{ pr.reason }}
+                </p>
+                <div class="mt-2 flex flex-wrap gap-1">
+                  <EnBadge
+                    v-for="signal in pr.matchedSignals.slice(0, 2)"
+                    :key="`${pr.number}-${signal}`"
+                    color="neutral"
+                    variant="soft"
+                  >
+                    {{ signal }}
+                  </EnBadge>
+                  <EnBadge
+                    v-for="label in pr.labels.slice(0, 2)"
+                    :key="`${pr.number}-label-${label}`"
+                    color="warning"
+                    variant="soft"
+                  >
+                    {{ label }}
+                  </EnBadge>
+                </div>
+                <div class="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3 text-[11px] text-slate-500">
+                  <span>{{ formatRecordedAt(pr.updatedAt || pr.mergedAt || "") }}</span>
+                  <span class="flex flex-wrap gap-2">
+                    <span v-if="pr.changedFiles != null">{{ pr.changedFiles }} files</span>
+                    <span v-if="pr.additions != null">+{{ pr.additions }}</span>
+                    <span v-if="pr.deletions != null">-{{ pr.deletions }}</span>
+                  </span>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                <UIcon name="i-simple-icons-slack" class="h-4 w-4" />
+                Slack 会話
+              </h4>
+              <p class="mt-1 text-xs text-slate-500">
+                関連する投稿・スレッドを理由付きで紐付けます
+              </p>
+            </div>
+            <EnButton
+              variant="solid"
+              color="purple"
+              size="xs"
+              leading-icon="i-simple-icons-slack"
+              :loading="isFetchingRelatedContexts"
+              :global-loading="false"
+              :disabled="isFetchingRelatedContexts"
+              @click="$emit('fetch-related-context', detailVideo.id, 'slack')"
+            >
+              会話を取得
+            </EnButton>
+          </div>
+
+          <div
+            v-if="isRelatedContextRunning(detailVideo)"
+            class="mb-4 overflow-hidden rounded-xl border border-slate-900 bg-slate-950 text-white shadow-sm"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+              <div class="flex items-center gap-3">
+                <span class="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                  <UIcon name="i-simple-icons-slack" class="h-4 w-4" />
+                  <span class="absolute inset-0 animate-ping rounded-full border border-white/20" />
+                </span>
+                <div>
+                  <p class="text-sm font-semibold">
+                    Slack会話を取得しています
+                  </p>
+                  <p class="mt-0.5 text-xs text-slate-300">
+                    動画メモ、Story候補、投稿本文、チャンネル、スレッドを照合中
+                  </p>
+                </div>
+              </div>
+              <EnBadge color="neutral" variant="soft">
+                analyzing
+              </EnBadge>
+            </div>
+            <div class="space-y-3 bg-white p-4">
+              <div
+                v-for="index in 3"
+                :key="`related-context-slack-skeleton-${index}`"
+                class="rounded-lg border border-slate-100 p-3"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <div class="h-3 w-2/3 animate-pulse rounded-full bg-slate-200" />
+                  <div class="h-5 w-12 animate-pulse rounded-full bg-slate-100" />
+                </div>
+                <div class="mt-3 h-3 w-full animate-pulse rounded-full bg-slate-100" />
+                <div class="mt-2 h-3 w-4/5 animate-pulse rounded-full bg-slate-100" />
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="!isRelatedContextRunning(detailVideo) && !detailVideo.relatedContexts?.slack"
+            class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
+          >
+            Slack会話を取得すると、操作動画に関連する投稿と理由がここに表示されます
+          </div>
+
+          <div v-else-if="detailVideo.relatedContexts?.slack" class="space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <span>{{ detailVideo.relatedContexts.slack.teamName || detailVideo.relatedContexts.slack.teamId || "Slack" }}</span>
+              <span>{{ formatRecordedAt(detailVideo.relatedContexts.slack.checkedAt) }}</span>
+            </div>
+
+            <div
+              v-if="detailVideo.relatedContexts.slack.messages.length === 0"
+              class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
+            >
+              関連するSlack会話は見つかりませんでした
+            </div>
+
+            <div v-else class="space-y-3">
+              <article
+                v-for="message in detailVideo.relatedContexts.slack.messages"
+                :key="`${detailVideo.id}-related-slack-${message.channelId}-${message.messageTs}`"
+                class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <a
+                      v-if="message.permalink"
+                      :href="message.permalink"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-sm font-semibold text-slate-950 hover:text-primary-700"
+                    >
+                      #{{ message.channelName || message.channelId || "slack" }}
+                    </a>
+                    <p v-else class="text-sm font-semibold text-slate-950">
+                      #{{ message.channelName || message.channelId || "slack" }}
+                    </p>
+                    <p class="mt-1 text-xs text-slate-500">
+                      {{ message.author || "unknown" }} / {{ message.postedAt || message.messageTs }}
+                    </p>
+                  </div>
+                  <EnBadge color="purple" variant="soft">
+                    {{ message.relevanceScore }}
+                  </EnBadge>
+                </div>
+                <p
+                  v-if="message.text"
+                  class="mt-3 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700"
+                >
+                  {{ message.text }}
+                </p>
+                <p
+                  v-if="message.reason"
+                  class="mt-3 text-sm leading-relaxed text-slate-700"
+                >
+                  {{ message.reason }}
+                </p>
+                <div class="mt-3 flex flex-wrap gap-1">
+                  <EnBadge
+                    v-for="signal in message.matchedSignals"
+                    :key="`${message.messageTs}-${signal}`"
+                    color="neutral"
+                    variant="soft"
+                  >
+                    {{ signal }}
+                  </EnBadge>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
 
     <div
       v-else
-      class="mt-5 border-t border-slate-100 pt-4"
+      class="space-y-4"
     >
-      <div class="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            ザッピング動画一覧
-          </h3>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <EnButton
-            variant="outline"
-            color="neutral"
-            size="xs"
-            leading-icon="material-symbols:refresh"
-            @click="$emit('refresh')"
+      <div class="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+        <UInput
+          v-model="videoSearchQuery"
+          icon="material-symbols:search"
+          size="sm"
+          placeholder="タイトル・説明・解析メモで検索"
+          class="min-w-0 md:w-[360px]"
+        />
+        <div class="flex flex-wrap gap-1">
+          <button
+            v-for="filter in videoStatusFilters"
+            :key="filter.value"
+            type="button"
+            class="rounded-md px-3 py-1.5 text-xs font-semibold transition"
+            :class="videoStatusFilter === filter.value ? 'bg-slate-950 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'"
+            @click="videoStatusFilter = filter.value"
           >
-            再読込
-          </EnButton>
-          <EnButton
-            variant="ai"
-            size="xs"
-            leading-icon="material-symbols:batch-prediction-outline"
-            :loading="isAnalyzing"
-            :disabled="videos.length === 0 || !application?.fileSpaceId"
-            @click="$emit('analyze-all', application?.id ?? '')"
-          >
-            一括解析
-          </EnButton>
+            {{ filter.label }}
+          </button>
         </div>
       </div>
 
@@ -1167,251 +1506,116 @@
       </div>
 
       <div
-        v-else
-        class="grid gap-4 xl:grid-cols-[minmax(320px,0.78fr)_minmax(520px,1.22fr)]"
+        v-else-if="filteredVideos.length === 0"
+        class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500"
       >
-        <div class="space-y-3">
-          <article
-            v-for="video in videos"
-            :key="video.id"
-            class="overflow-hidden rounded-lg border bg-white transition"
-            :class="selectedVideo?.id === video.id ? 'border-primary-300 ring-2 ring-primary-100' : 'border-slate-200'"
-          >
-            <div
-              class="grid w-full grid-cols-[96px_minmax(0,1fr)] text-left"
-              @click="selectedVideoId = video.id"
-            >
-              <video
-                v-if="videoUrls[video.id]"
-                :src="videoUrls[video.id]"
-                preload="metadata"
-                muted
-                class="aspect-video h-full w-full bg-slate-950 object-cover"
-              />
-              <div
-                v-else
-                class="flex aspect-video h-full items-center justify-center bg-slate-950 text-[11px] text-slate-300"
-              >
-                URL loading
-              </div>
-              <div class="min-w-0 space-y-2 p-3">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="min-w-0">
-                    <h4 class="truncate text-sm font-semibold text-slate-900">
-                      {{ displayVideoTitle(video) }}
-                    </h4>
-                    <p class="mt-1 text-xs text-slate-500">
-                      {{ formatRecordedAt(video.recordedAt) }}
-                    </p>
-                  </div>
-                  <EnBadge
-                    :color="analysisColor(video.analysisStatus)"
-                    variant="soft"
-                  >
-                    {{ analysisLabel(video.analysisStatus) }}
-                  </EnBadge>
-                </div>
-                <p
-                  v-if="displayVideoDescription(video)"
-                  class="line-clamp-2 text-xs leading-relaxed text-slate-600"
-                >
-                  {{ displayVideoDescription(video) }}
-                </p>
-                <div
-                  v-if="operationSteps(video).length > 0"
-                  class="rounded-md bg-slate-50 px-2 py-2"
-                >
-                  <ol class="space-y-1">
-                    <li
-	                      v-for="(step, index) in operationSteps(video).slice(0, 3)"
-                      :key="`${video.id}-memo-${index}`"
-                      class="flex gap-2 text-xs leading-relaxed text-slate-600"
-                    >
-                      <span class="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-[10px] font-semibold text-primary-700">
-                        {{ index + 1 }}
-                      </span>
-                      <span class="line-clamp-1">{{ step }}</span>
-                    </li>
-                  </ol>
-                </div>
-                <div
-                  v-if="video.frameCaptures.length > 0"
-                  class="grid grid-cols-4 gap-1"
-                >
-                  <img
-                    v-for="frame in video.frameCaptures.slice(0, 4)"
-                    :key="frame.id"
-                    :src="savedFrameUrl(video, frame.id)"
-                    class="aspect-video rounded bg-slate-100 object-cover"
-                    :alt="`${formatDuration(frame.timestampMs)} のスクリーンショット`"
-                  >
-                </div>
-                <div class="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                  <span>{{ formatDuration(video.durationMs) }}</span>
-                  <span>{{ formatBytes(video.sizeBytes) }}</span>
-                  <span>{{ displaySurfaceLabel(video.sourceDisplaySurface) }}</span>
-                  <span>{{ discoveryLabel(video.discoveryStatus) }}</span>
-                </div>
-                <div class="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-2">
-                  <EnButton
-                    variant="outline"
-                    color="neutral"
-                    size="xs"
-                    leading-icon="material-symbols:open-in-new"
-                    @click.stop="detailVideoId = video.id"
-                  >
-                    詳細を見る
-                  </EnButton>
-                  <EnButton
-                    variant="outline"
-                    color="error"
-                    size="xs"
-                    leading-icon="material-symbols:delete-outline"
-                    @click.stop="openDeleteVideoConfirm(video)"
-                  >
-                    削除
-                  </EnButton>
-                </div>
-              </div>
-            </div>
-          </article>
-        </div>
+        条件に合うザッピング動画はありません
+      </div>
 
-        <aside class="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <div
-            v-if="!selectedVideo"
-            class="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500"
-          >
-            ザッピング動画を選択してください
-          </div>
-          <div
-            v-else
-            class="space-y-4"
-          >
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <h3 class="text-sm font-semibold text-slate-900">
-                  選択中の操作動画
-                </h3>
-                <p class="mt-1 text-xs text-slate-500">
-                  {{ displayVideoTitle(selectedVideo) }}
-                </p>
-              </div>
+      <div
+        v-else
+        class="grid gap-4 md:grid-cols-2 2xl:grid-cols-3"
+      >
+        <article
+          v-for="video in filteredVideos"
+          :key="video.id"
+          class="group cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md focus-within:border-primary-300 focus-within:ring-2 focus-within:ring-primary-100"
+          tabindex="0"
+          role="button"
+          @click="openVideoDetail(video)"
+          @keydown.enter.prevent="openVideoDetail(video)"
+          @keydown.space.prevent="openVideoDetail(video)"
+        >
+          <div class="relative bg-slate-950">
+            <video
+              v-if="videoUrls[video.id]"
+              :src="videoUrls[video.id]"
+              preload="metadata"
+              muted
+              playsinline
+              class="aspect-video w-full bg-slate-950 object-contain"
+            />
+            <div
+              v-else
+              class="flex aspect-video w-full items-center justify-center bg-slate-950 text-xs text-slate-300"
+            >
+              URL loading
+            </div>
+            <div class="absolute left-3 top-3 flex flex-wrap gap-1">
+              <span class="inline-flex items-center rounded-md bg-slate-950/90 px-2 py-1 text-[11px] font-semibold text-white shadow-sm">
+                {{ videoDisplayId(video) }}
+              </span>
               <EnBadge
-                :color="analysisColor(selectedVideo.analysisStatus)"
+                :color="analysisColor(video.analysisStatus)"
                 variant="soft"
               >
-                {{ analysisLabel(selectedVideo.analysisStatus) }}
+                {{ analysisLabel(video.analysisStatus) }}
               </EnBadge>
             </div>
+          </div>
 
-            <video
-              v-if="videoUrls[selectedVideo.id]"
-              :src="videoUrls[selectedVideo.id]"
-              controls
-              preload="metadata"
-              class="aspect-video w-full rounded-lg bg-slate-950"
-            />
+          <div class="space-y-3 p-4">
+            <div class="min-w-0">
+              <h4 class="line-clamp-2 text-sm font-semibold text-slate-950 group-hover:text-primary-700">
+                {{ displayVideoTitle(video) }}
+              </h4>
+              <p class="mt-1 text-xs text-slate-500">
+                {{ formatRecordedAt(video.recordedAt) }}
+              </p>
+            </div>
 
-            <div
-              v-if="hasQuickScanSummary(selectedVideo)"
-              class="rounded-lg border border-slate-200 bg-white p-3"
+            <p
+              v-if="displayVideoDescription(video)"
+              class="line-clamp-2 text-xs leading-relaxed text-slate-600"
             >
-              <div class="mb-2 flex items-center justify-between gap-2">
-                <h4 class="text-xs font-semibold text-slate-700">
-                  動画解析メモ
-                </h4>
-                <div class="flex items-center gap-2">
-                  <EnBadge color="neutral" variant="soft">
-                    {{ quickScanProviderLabel(selectedVideo) }}
-                  </EnBadge>
-                  <EnButton
-                    variant="outline"
-                    color="neutral"
-                    size="xs"
-                    leading-icon="material-symbols:open-in-new"
-                    @click="openQuickScanPreview(selectedVideo)"
-                  >
-                    詳細表示
-                  </EnButton>
-                </div>
-              </div>
-              <div class="space-y-2">
-                <p
-                  v-if="selectedVideo.quickScan?.description"
-                  class="text-xs leading-relaxed text-slate-600"
-                >
-                  {{ selectedVideo.quickScan.description }}
+              {{ displayVideoDescription(video) }}
+            </p>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div class="rounded-md bg-slate-50 px-3 py-2">
+                <p class="text-[11px] font-semibold text-slate-500">
+                  User Story
                 </p>
-	                <p
-	                  v-if="operationSteps(selectedVideo).length > 0"
-	                  class="text-xs leading-relaxed text-slate-600"
-	                >
-	                  {{ operationSteps(selectedVideo).slice(0, 4).join(" / ") }}
-	                </p>
-                <div
-                  v-if="richTranscriptSummarySections(selectedVideo).length > 0"
-                  class="space-y-2"
-                >
-                  <div
-                    v-for="section in richTranscriptSummarySections(selectedVideo).slice(0, 3)"
-                    :key="`${selectedVideo.id}-side-summary-${section.title}`"
-                    class="rounded-md border border-primary-100 bg-primary-50/60 p-2"
-                  >
-                    <p class="text-[11px] font-semibold text-primary-900">
-                      {{ section.title }}
-                    </p>
-                    <p class="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-600">
-                      {{ section.body }}
-                    </p>
-                  </div>
-                </div>
+                <p class="mt-1 text-sm font-semibold text-slate-900">
+                  {{ storyCandidateCount(video) }}
+                </p>
+              </div>
+              <div class="rounded-md bg-slate-50 px-3 py-2">
+                <p class="text-[11px] font-semibold text-slate-500">
+                  Context
+                </p>
+                <p class="mt-1 text-sm font-semibold text-slate-900">
+                  {{ relatedContextCount(video) }}
+                </p>
               </div>
             </div>
 
             <div
-              v-if="selectedVideo.frameCaptures.length > 0"
-              class="rounded-lg border border-slate-200 bg-white p-3"
+              v-if="operationSteps(video).length > 0"
+              class="rounded-md bg-slate-50 px-3 py-2"
             >
-              <div class="mb-2 flex items-center justify-between gap-2">
-                <h4 class="text-xs font-semibold text-slate-700">
-                  操作スクリーンショット
-                </h4>
-                <EnBadge color="neutral" variant="soft">
-                  {{ selectedVideo.frameCaptures.length }}
-                </EnBadge>
-              </div>
-              <div class="grid grid-cols-4 gap-2">
-                <img
-                  v-for="frame in selectedVideo.frameCaptures.slice(0, 8)"
-                  :key="frame.id"
-                  :src="savedFrameUrl(selectedVideo, frame.id)"
-                  class="aspect-video rounded-md bg-slate-100 object-cover"
-                  :alt="`${formatDuration(frame.timestampMs)} のスクリーンショット`"
+              <ol class="space-y-1">
+                <li
+                  v-for="(step, index) in operationSteps(video).slice(0, 3)"
+                  :key="`${video.id}-memo-${index}`"
+                  class="flex gap-2 text-xs leading-relaxed text-slate-600"
                 >
-              </div>
+                  <span class="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-[10px] font-semibold text-primary-700">
+                    {{ index + 1 }}
+                  </span>
+                  <span class="line-clamp-1">{{ step }}</span>
+                </li>
+              </ol>
             </div>
 
-            <EnAlert
-              v-if="selectedVideo.analysisErrorMessage"
-              color="error"
-              :title="selectedVideo.analysisErrorMessage"
-            />
-
-            <div class="flex flex-wrap justify-end gap-2">
-              <EnButton
-                variant="ai"
-                size="xs"
-                leading-icon="material-symbols:psychology-outline"
-                :loading="isAnalyzing && selectedVideo.analysisStatus === 'running'"
-                :disabled="!application?.fileSpaceId || selectedVideo.analysisStatus === 'queued' || selectedVideo.analysisStatus === 'running'"
-                @click="$emit('analyze', selectedVideo.id)"
-              >
-                個別解析
-              </EnButton>
+            <div class="flex flex-wrap gap-2 text-[11px] text-slate-500">
+              <span>{{ formatDuration(video.durationMs) }}</span>
+              <span>{{ formatBytes(video.sizeBytes) }}</span>
+              <span>{{ displaySurfaceLabel(video.sourceDisplaySurface) }}</span>
+              <span>{{ discoveryLabel(video.discoveryStatus) }}</span>
             </div>
           </div>
-        </aside>
+        </article>
       </div>
     </div>
   </section>
@@ -1422,6 +1626,7 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { getDownloadURL } from "firebase/storage";
 import { storageRefForBucketPath } from "@composables/firebase-storage-operations";
 import { reportDatadogError } from "@utils/datadogObservability";
+import { formatUserStoryKey } from "@utils/vibeControlStoryKeys";
 import type {
   DecodedVibeControlApplication,
   DecodedVibeControlOperationVideo,
@@ -1484,6 +1689,7 @@ const props = defineProps<{
   videos: DecodedVibeControlOperationVideo[];
   isSaving: boolean;
   isAnalyzing?: boolean;
+  isFetchingRelatedContexts?: boolean;
   isProvisioningFileSpace?: boolean;
 }>();
 
@@ -1493,7 +1699,7 @@ const emit = defineEmits<{
     callbacks?: OperationVideoSaveCallbacks,
   ];
   analyze: [videoId: string];
-  "analyze-all": [applicationId: string];
+  "fetch-related-context": [videoId: string, provider: "github" | "slack"];
   "create-file-space": [];
   delete: [videoId: string];
   refresh: [];
@@ -1524,8 +1730,10 @@ const saveProgressOpen = ref(false);
 const saveProgressPhase = ref<SaveProgressPhase>("idle");
 const selectedVideoId = ref("");
 const detailVideoId = ref("");
-const detailTab = ref<"video" | "videoAnalysis" | "storyAnalysis">("video");
+const detailTab = ref<"video" | "videoAnalysis" | "storyAnalysis" | "relatedContext">("video");
 const selectedAnalysisStoryId = ref("");
+const videoSearchQuery = ref("");
+const videoStatusFilter = ref<"all" | VibeControlZappingAnalysisStatus>("all");
 const quickScanPreviewVideoId = ref("");
 const deleteTargetVideoId = ref("");
 const deleteVideoConfirmOpen = ref(false);
@@ -1563,12 +1771,38 @@ const elapsedLabel = computed(() => formatDuration(elapsedMs.value));
 const sourceDisplaySurfaceLabel = computed(() =>
   displaySurfaceLabel(sourceDisplaySurface.value)
 );
-const selectedVideo = computed(
-  () =>
-    props.videos.find((video) => video.id === selectedVideoId.value) ??
-    props.videos[0] ??
-    null
-);
+const videoStatusFilters = computed<
+  { value: "all" | VibeControlZappingAnalysisStatus; label: string }[]
+>(() => [
+  { value: "all", label: "すべて" },
+  { value: "not_analyzed", label: "未解析" },
+  { value: "running", label: "解析中" },
+  { value: "completed", label: "解析済み" },
+  { value: "error", label: "エラー" },
+]);
+const filteredVideos = computed(() => {
+  const query = videoSearchQuery.value.trim().toLowerCase();
+  return props.videos.filter((video) => {
+    if (
+      videoStatusFilter.value !== "all" &&
+      video.analysisStatus !== videoStatusFilter.value
+    ) {
+      return false;
+    }
+    if (!query) return true;
+    return [
+      displayVideoTitle(video),
+      displayVideoDescription(video),
+      video.quickScan?.operationMemo,
+      video.transcriptSummary,
+      video.analysisResult?.operationIntent,
+    ]
+      .filter(Boolean)
+      .join("\n")
+      .toLowerCase()
+      .includes(query);
+  });
+});
 const detailVideo = computed(
   () => props.videos.find((video) => video.id === detailVideoId.value) ?? null
 );
@@ -2038,6 +2272,16 @@ function displayVideoTitle(video: DecodedVibeControlOperationVideo): string {
   return video.quickScan?.title?.trim() || video.title;
 }
 
+function videoDisplayId(video: DecodedVibeControlOperationVideo): string {
+  const index = props.videos.findIndex((item) => item.id === video.id);
+  return `VID${index >= 0 ? index + 1 : 1}`;
+}
+
+function openVideoDetail(video: DecodedVibeControlOperationVideo): void {
+  detailVideoId.value = video.id;
+  detailTab.value = "video";
+}
+
 function buildFallbackRecordingTitle(): string {
   const appName = props.application?.name?.trim() || "ザッピング";
   const recordedAt = new Date();
@@ -2104,8 +2348,8 @@ function richTranscriptSummarySections(
     /\*\*([^*\n：:]{1,32})[：:]\*\*\s*([\s\S]*?)(?=\n?\s*\*\*[^*\n：:]{1,32}[：:]\*\*|$)/g;
 
   for (const match of normalized.matchAll(labelRegex)) {
-    const title = stripTranscriptSummaryMarkdown(match[1]);
-    const body = stripTranscriptSummaryMarkdown(match[2]);
+    const title = stripTranscriptSummaryMarkdown(match[1] ?? "");
+    const body = stripTranscriptSummaryMarkdown(match[2] ?? "");
     if (title && body) sections.push({ title, body });
   }
 
@@ -2141,11 +2385,6 @@ function operationSteps(video: DecodedVibeControlOperationVideo): string[] {
     .filter(Boolean);
 }
 
-function openDeleteVideoConfirm(video: DecodedVibeControlOperationVideo): void {
-  deleteTargetVideoId.value = video.id;
-  deleteVideoConfirmOpen.value = true;
-}
-
 function deleteConfirmedVideo(): void {
   const videoId = deleteTargetVideoId.value;
   if (!videoId) return;
@@ -2157,6 +2396,69 @@ function deleteConfirmedVideo(): void {
 function analysisResultCount(video: DecodedVibeControlOperationVideo): string {
   const stories = video.analysisResult?.storyCandidates.length ?? 0;
   return `${stories} stories`;
+}
+
+function analysisStoryTicketKey(
+  story: VibeControlZappingAnalysisStoryCandidate
+): string {
+  if (story.storyKey?.trim()) return story.storyKey.trim();
+  const index = detailStories.value.findIndex((item) => item.id === story.id);
+  return formatUserStoryKey(index + 1);
+}
+
+function storyCandidateCount(video: DecodedVibeControlOperationVideo): number {
+  return video.analysisResult?.storyCandidates.length ?? 0;
+}
+
+function isVideoAnalysisCompleted(video: DecodedVibeControlOperationVideo): boolean {
+  return video.analysisStatus === "completed" || Boolean(video.analysisResult);
+}
+
+function videoAnalysisTabStatus(video: DecodedVibeControlOperationVideo): string {
+  if (isVideoAnalysisCompleted(video)) return "完了";
+  if (video.analysisStatus === "queued") return "待機";
+  if (video.analysisStatus === "running") return "実行中";
+  if (video.analysisStatus === "error") return "失敗";
+  return "未解析";
+}
+
+function relatedGithubPullRequestCount(
+  video: DecodedVibeControlOperationVideo
+): number {
+  return video.relatedContexts?.github?.pullRequests.length ?? 0;
+}
+
+function relatedSlackMessageCount(
+  video: DecodedVibeControlOperationVideo
+): number {
+  return video.relatedContexts?.slack?.messages.length ?? 0;
+}
+
+function relatedContextCount(video: DecodedVibeControlOperationVideo): number {
+  return (
+    relatedGithubPullRequestCount(video) + relatedSlackMessageCount(video)
+  );
+}
+
+function isRelatedContextRunning(video: DecodedVibeControlOperationVideo): boolean {
+  return Boolean(
+    props.isFetchingRelatedContexts || video.relatedContexts?.status === "running"
+  );
+}
+
+function relatedContextErrorTitle(video: DecodedVibeControlOperationVideo): string {
+  const message =
+    video.relatedContexts?.notes?.[0] ||
+    video.relatedContexts?.github?.errorMessage ||
+    video.relatedContexts?.slack?.errorMessage ||
+    "";
+  if (
+    message.includes("Unknown agent mode: vibe_related_context") ||
+    message.includes("ADK invoke HTTP 404")
+  ) {
+    return "関連コンテキスト用ADKがまだデプロイに反映されていません。unified ADKを再デプロイしてください。";
+  }
+  return message || "関連コンテキストの取得に失敗しました";
 }
 
 function formatEvidenceRange(range: number[]): string {
