@@ -7,6 +7,7 @@ requesting user's credentials from Firestore.
 """
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
@@ -273,38 +274,88 @@ def _drive_service_for_user(organization_id: str, user_id: str):
 
 def _drive_permission_error(exc: HttpError) -> str:
     status = exc.resp.status if hasattr(exc, "resp") else "?"
+    reason = ""
+    try:
+        payload = json.loads(exc.content.decode("utf-8"))
+        reason = str(
+            (payload.get("error", {}).get("errors") or [{}])[0].get("reason")
+            or payload.get("error", {}).get("status")
+            or ""
+        )
+    except Exception:
+        reason = ""
+    if reason == "accessNotConfigured":
+        return (
+            "Google Drive API がこの Firebase/GCP プロジェクトで有効化されていません。"
+            " drive.googleapis.com を有効化してから再実行してください。"
+        )
+    if reason == "notFound":
+        return (
+            "指定されたDriveフォルダが見つかりません。"
+            "接続アカウントの閲覧権限に加えて、フォルダURL/IDが正しいか確認してください。"
+            "特に I（大文字アイ）と l（小文字エル）は見間違いやすいため、Drive画面からURLを再コピーしてください。"
+        )
     if status in (403, 404):
         return (
             "接続した Google アカウントでこのDriveフォルダを閲覧できません。"
             "フォルダID、共有先アカウント、共有ドライブの権限を確認してください。"
         )
-    return f"Drive API エラー (HTTP {status})"
+    suffix = f" / reason={reason}" if reason else ""
+    return f"Drive API エラー (HTTP {status}{suffix})"
 
 
 def _drive_file_fields() -> str:
     return (
         "nextPageToken, files(id, name, mimeType, modifiedTime, parents, size, "
-        "webViewLink, thumbnailLink)"
+        "webViewLink, thumbnailLink, resourceKey)"
     )
 
 
-def _list_drive_files(service: Any, folder_id: str, recursive: bool) -> list[dict[str, Any]]:
+def _resource_key_header(resource_keys: dict[str, str | None] | None) -> str | None:
+    pairs = [
+        f"{file_id}/{resource_key}"
+        for file_id, resource_key in (resource_keys or {}).items()
+        if file_id and resource_key
+    ]
+    return ",".join(pairs) if pairs else None
+
+
+def _apply_resource_key_header(
+    request: object,
+    resource_keys: dict[str, str | None] | None,
+) -> None:
+    header = _resource_key_header(resource_keys)
+    if not header:
+        return
+    headers = getattr(request, "headers", None)
+    if isinstance(headers, dict):
+        headers["X-Goog-Drive-Resource-Keys"] = header
+
+
+def _list_drive_files(
+    service: Any,
+    folder_id: str,
+    recursive: bool,
+    resource_keys: dict[str, str | None] | None = None,
+) -> list[dict[str, Any]]:
     files: list[dict[str, Any]] = []
     page_token: str | None = None
+    known_resource_keys = dict(resource_keys or {})
     while True:
-        response = (
-            service.files()
-            .list(
-                q=f"'{folder_id}' in parents and trashed = false",
-                fields=_drive_file_fields(),
-                pageToken=page_token,
-                pageSize=200,
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-            )
-            .execute()
+        request = service.files().list(
+            q=f"'{folder_id}' in parents and trashed = false",
+            fields=_drive_file_fields(),
+            pageToken=page_token,
+            pageSize=200,
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
         )
+        _apply_resource_key_header(request, known_resource_keys)
+        response = request.execute()
         current = response.get("files", []) or []
+        for item in current:
+            if item.get("id") and item.get("resourceKey"):
+                known_resource_keys[item["id"]] = item["resourceKey"]
         files.extend(current)
         page_token = response.get("nextPageToken")
         if not page_token:
@@ -317,7 +368,14 @@ def _list_drive_files(service: Any, folder_id: str, recursive: bool) -> list[dic
     for item in files:
         expanded.append(item)
         if item.get("mimeType") == DRIVE_FOLDER_MIME_TYPE and item.get("id"):
-            expanded.extend(_list_drive_files(service, item["id"], recursive=True))
+            expanded.extend(
+                _list_drive_files(
+                    service,
+                    item["id"],
+                    recursive=True,
+                    resource_keys=known_resource_keys,
+                )
+            )
     return expanded
 
 
@@ -327,6 +385,12 @@ def test_google_drive_folder(req: https_fn.CallableRequest) -> dict[str, Any]:
     data = req.data if isinstance(req.data, dict) else {}
     organization_id = _require_org(data)
     folder_id = str(data.get("folderId") or data.get("rootFolderId") or "").strip()
+    folder_resource_key = str(
+        data.get("resourceKey")
+        or data.get("rootFolderResourceKey")
+        or data.get("root_folder_resource_key")
+        or ""
+    ).strip() or None
     if not folder_id:
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
@@ -335,15 +399,13 @@ def test_google_drive_folder(req: https_fn.CallableRequest) -> dict[str, Any]:
 
     try:
         service = _drive_service_for_user(organization_id, user_id)
-        folder = (
-            service.files()
-            .get(
-                fileId=folder_id,
-                fields="id, name, mimeType, webViewLink",
-                supportsAllDrives=True,
-            )
-            .execute()
+        request = service.files().get(
+            fileId=folder_id,
+            fields="id, name, mimeType, webViewLink, resourceKey",
+            supportsAllDrives=True,
         )
+        _apply_resource_key_header(request, {folder_id: folder_resource_key})
+        folder = request.execute()
     except HttpError as exc:
         return {"ok": False, "error": _drive_permission_error(exc)}
     except Exception as exc:
@@ -370,6 +432,17 @@ def list_google_drive_folder(req: https_fn.CallableRequest) -> dict[str, Any]:
         or data.get("rootFolderId")
         or ""
     ).strip()
+    root_folder_id = str(data.get("rootFolderId") or "").strip() or folder_id
+    root_folder_resource_key = str(
+        data.get("rootFolderResourceKey")
+        or data.get("resourceKey")
+        or ""
+    ).strip() or None
+    target_folder_resource_key = str(
+        data.get("targetFolderResourceKey")
+        or data.get("resourceKey")
+        or ""
+    ).strip() or None
     recursive = bool(data.get("recursive", True))
     if not folder_id:
         raise https_fn.HttpsError(
@@ -379,7 +452,15 @@ def list_google_drive_folder(req: https_fn.CallableRequest) -> dict[str, Any]:
 
     try:
         service = _drive_service_for_user(organization_id, user_id)
-        items = _list_drive_files(service, folder_id, recursive)
+        items = _list_drive_files(
+            service,
+            folder_id,
+            recursive,
+            resource_keys={
+                root_folder_id: root_folder_resource_key,
+                folder_id: target_folder_resource_key,
+            },
+        )
     except HttpError as exc:
         return {"status": "error", "error": {"message": _drive_permission_error(exc)}}
     except Exception as exc:
@@ -392,6 +473,6 @@ def list_google_drive_folder(req: https_fn.CallableRequest) -> dict[str, Any]:
         "status": "ok",
         "files": files_only,
         "fileCount": len(files_only),
-        "rootFolderId": data.get("rootFolderId") or folder_id,
+        "rootFolderId": root_folder_id,
         "targetFolderId": data.get("targetFolderId") or folder_id,
     }

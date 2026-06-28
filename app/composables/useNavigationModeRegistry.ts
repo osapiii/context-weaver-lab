@@ -36,10 +36,18 @@ export type GlobalRoute = {
   path: string;
 };
 
-export type NavGroupId = "home" | "ai" | "data";
+export type NavGroupId = "input" | "analysis" | "admin";
 
 export type NavMode = {
-  key: "applications" | "stories" | "worklog" | "settings";
+  key:
+    | "knowledge"
+    | "operation-videos"
+    | "external-services"
+    | "screen-catalog"
+    | "capabilities"
+    | "stories"
+    | "worklog"
+    | "settings";
   navGroup: NavGroupId;
   label: string;
   subtitle: string;
@@ -55,36 +63,83 @@ export type NavMode = {
 
 export const useNavigationModeRegistry = () => {
   const navModeIcons = useNavModeIcons();
-  const navCardIcons = useNavCardIcons();
 
   const modes: NavMode[] = [
     {
-      key: "applications",
-      navGroup: "home",
-      label: "アプリ",
-      subtitle: "ユーザーストーリーを束ねるアプリ単位を管理",
-      icon: navModeIcons.applications,
+      key: "knowledge",
+      navGroup: "input",
+      label: "AIに教える",
+      subtitle: "仕様書・URL・Google Driveを投入してAIの理解を育てる",
+      icon: navModeIcons.grow,
       homeRouteName: "admin-vibe-control",
-      homeRouteQuery: { view: "applications" },
-      accent: "neutral",
+      homeRouteQuery: { view: "application-knowledge" },
+      accent: "purple",
+      ownedRouteNamePrefixes: ["admin-vibe-control"],
+      groups: [],
+    },
+    {
+      key: "operation-videos",
+      navGroup: "input",
+      label: "操作動画",
+      subtitle: "音声付きの操作動画を録画し、解析の材料として蓄積",
+      icon: navModeIcons.operationVideos,
+      homeRouteName: "admin-vibe-control",
+      homeRouteQuery: { view: "application-zapping" },
+      accent: "purple",
+      ownedRouteNamePrefixes: ["admin-vibe-control"],
+      groups: [],
+    },
+    {
+      key: "external-services",
+      navGroup: "input",
+      label: "外部連携",
+      subtitle: "GitHub・Jira・Google Driveなど外部サービスを接続",
+      icon: navModeIcons.externalServices,
+      homeRouteName: "admin-vibe-control",
+      homeRouteQuery: { view: "application-external-services" },
+      accent: "purple",
+      ownedRouteNamePrefixes: ["admin-vibe-control"],
+      groups: [],
+    },
+    {
+      key: "screen-catalog",
+      navGroup: "analysis",
+      label: "画面カタログ",
+      subtitle: "投入情報から抽出された画面・URL・Variantを整理",
+      icon: navModeIcons.screenCatalog,
+      homeRouteName: "admin-vibe-control",
+      homeRouteQuery: { view: "application-screen-catalog" },
+      accent: "info",
+      ownedRouteNamePrefixes: ["admin-vibe-control"],
+      groups: [],
+    },
+    {
+      key: "capabilities",
+      navGroup: "analysis",
+      label: "機能候補",
+      subtitle: "画面・動画・ナレッジから抽出された機能候補を確認",
+      icon: navModeIcons.capabilities,
+      homeRouteName: "admin-vibe-control",
+      homeRouteQuery: { view: "application-capabilities" },
+      accent: "info",
       ownedRouteNamePrefixes: ["admin-vibe-control"],
       groups: [],
     },
     {
       key: "stories",
-      navGroup: "home",
+      navGroup: "analysis",
       label: "ユーザーストーリー",
-      subtitle: "仕様・根拠・コード状態をストーリー単位で確認",
+      subtitle: "解析結果から生成されたユーザーストーリーをレビュー",
       icon: navModeIcons.stories,
       homeRouteName: "admin-vibe-control",
       homeRouteQuery: { view: "stories" },
-      accent: "neutral",
+      accent: "info",
       ownedRouteNamePrefixes: ["admin-vibe-control"],
       groups: [],
     },
     {
       key: "worklog",
-      navGroup: "ai",
+      navGroup: "admin",
       label: "仕事ログ",
       subtitle: "実行中・完了したジョブを確認",
       icon: navModeIcons.worklog,
@@ -95,7 +150,7 @@ export const useNavigationModeRegistry = () => {
     },
     {
       key: "settings",
-      navGroup: "data",
+      navGroup: "admin",
       label: "設定",
       subtitle: "アプリの外観・メンバー・API キーを管理",
       icon: "material-symbols:tune",

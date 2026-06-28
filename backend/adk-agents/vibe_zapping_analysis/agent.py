@@ -1,7 +1,17 @@
-"""Application scan agent — sitemap and screenshot SSOT builder."""
+"""VibeControl Zapping Analysis agent."""
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+
+    _AGENT_DIR = Path(__file__).resolve().parent
+    load_dotenv(_AGENT_DIR / ".env", override=True)
+    load_dotenv(_AGENT_DIR.parent / ".env", override=False)
+except ImportError:  # pragma: no cover
+    pass
 
 from google.adk.agents import LlmAgent
 
@@ -16,7 +26,7 @@ MODEL_ID = os.environ.get("MODEL_ID", "gemini-2.5-flash")
 def build_root_agent() -> LlmAgent:
     default_fs = os.environ.get("DEFAULT_FILE_SPACE_ID", "").strip() or None
     return build_agent_for_mode(
-        "application_scan",
+        "vibe_zapping_analysis",
         datastore_path=agent_search_datastore_path(default_fs),
         model=MODEL_ID,
     )

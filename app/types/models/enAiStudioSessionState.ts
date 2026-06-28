@@ -11,6 +11,7 @@ export type EnAiStudioActiveTask =
   | "web_page"
   | "application_scan"
   | "business_partner"
+  | "vibe_zapping_analysis"
   | "vibe_capability_structuring"
   | "vibe_story_generation"
   | "guide"
@@ -109,6 +110,12 @@ export type VibeCapabilityStructuringTaskBucket = TaskBucketBase<
   unknown
 >;
 
+export type VibeZappingAnalysisTaskBucket = TaskBucketBase<
+  Record<string, unknown>,
+  Record<string, unknown>,
+  unknown
+>;
+
 export type VibeStoryGenerationTaskBucket = TaskBucketBase<
   Record<string, unknown>,
   Record<string, unknown>,
@@ -142,6 +149,7 @@ export interface EnAiStudioSessionState {
   web_page?: WebPageTaskBucket;
   application_scan?: ApplicationScanTaskBucket;
   business_partner?: BusinessPartnerTaskBucket;
+  vibe_zapping_analysis?: VibeZappingAnalysisTaskBucket;
   vibe_capability_structuring?: VibeCapabilityStructuringTaskBucket;
   vibe_story_generation?: VibeStoryGenerationTaskBucket;
   guide?: GuideTaskBucket;
@@ -164,6 +172,7 @@ const EN_AISTUDIO_ACTIVE_TASKS = new Set<EnAiStudioActiveTask>([
   "web_page",
   "application_scan",
   "business_partner",
+  "vibe_zapping_analysis",
   "vibe_capability_structuring",
   "vibe_story_generation",
   "guide",

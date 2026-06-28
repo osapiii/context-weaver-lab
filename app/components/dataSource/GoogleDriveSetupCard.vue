@@ -164,32 +164,69 @@
       class="space-y-4 rounded-xl bg-purple-50/60 p-3 ring-1 ring-purple-200/80 dark:bg-purple-950/20 dark:ring-purple-800/40"
     >
       <p class="text-[11px] leading-relaxed text-gray-600 dark:text-gray-300">
-        Web 取り込み用の Drive フォルダを1つ指定します。共有フォルダに資料を置くと、ここから一括で AI に教えられます。
+        Google アカウントでDriveを認証し、取り込み対象のフォルダを1つ指定します。共有フォルダに資料を置くと、ここから一括で AI に教えられます。
       </p>
 
       <div class="rounded-xl bg-white p-3 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
         <div class="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">
-          STEP 1 · Service Account を共有
+          STEP 1 · Google OAuth 認証
         </div>
-        <div class="flex items-center gap-2">
-          <code
-            class="flex-1 truncate rounded bg-gray-100 px-2 py-1.5 font-mono text-[11px] dark:bg-gray-800"
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="flex min-w-0 items-center gap-2">
+              <span
+                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-gray-200"
+                aria-hidden="true"
+              >
+                <UIcon name="logos:google-icon" class="h-4 w-4" />
+              </span>
+              <div class="min-w-0">
+                <p class="truncate text-xs font-semibold text-gray-900 dark:text-white">
+                  {{ workspaceConnection.connected ? workspaceConnection.email || "Google Workspace" : "未接続" }}
+                </p>
+                <p class="text-[10px] text-gray-500">
+                  {{ workspaceConnection.connected ? "このアカウントのDrive権限で同期します" : "Driveフォルダを読むために接続してください" }}
+                </p>
+              </div>
+            </div>
+          </div>
+          <EnBadge
+            v-if="workspaceConnection.connected"
+            color="success"
+            variant="soft"
+            size="xs"
           >
-            {{ serviceAccountEmail }}
-          </code>
+            接続済み
+          </EnBadge>
           <EnButton
+            v-else
+            variant="hero"
+            color="primary"
+            size="xs"
+            leading-icon="i-simple-icons-google"
+            :loading="workspaceOAuthLoading"
+            @click="connectGoogleWorkspace"
+          >
+            Googleで接続
+          </EnButton>
+          <EnButton
+            v-if="workspaceConnection.connected"
             variant="outline"
             color="neutral"
             size="xs"
-            :leading-icon="copiedSA ? 'i-heroicons-check' : 'i-heroicons-clipboard'"
-            @click="copySA"
+            :loading="workspaceOAuthLoading"
+            @click="connectGoogleWorkspace"
           >
-            {{ copiedSA ? "済" : "コピー" }}
+            再接続
           </EnButton>
         </div>
-        <p class="mt-2 text-[10px] leading-relaxed text-gray-500">
-          Drive でフォルダを作成し、このメールを<strong>編集者</strong>で共有してください
-        </p>
+        <EnAlert
+          v-if="!workspaceConnection.connected"
+          class="mt-3"
+          color="warning"
+          title="Drive同期にはGoogle認証が必要です"
+          description="接続後、あなたが閲覧できるGoogle Driveフォルダを取り込めます。"
+        />
       </div>
 
       <div class="rounded-xl bg-white p-3 ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
@@ -241,7 +278,7 @@
           variant="outline"
           color="neutral"
           size="sm"
-          :disabled="!extractedFolderId || isTesting"
+          :disabled="!extractedFolderId || isTesting || workspaceOAuthLoading"
           :loading="isTesting"
           @click="onTestConnection"
         >
@@ -252,7 +289,7 @@
           color="primary"
           size="sm"
           :leading-icon="isSaving ? 'i-heroicons-arrow-path' : 'i-heroicons-check'"
-          :disabled="!extractedFolderId || !testResult?.ok || isSaving"
+          :disabled="!workspaceConnection.connected || !extractedFolderId || !testResult?.ok || isSaving"
           @click="onSave"
         >
           {{ isConfigured ? "更新" : "連携を有効化" }}
@@ -263,8 +300,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-import { useToast } from "#imports";
+import { computed, onMounted, ref, watch } from "vue";
 import type { Timestamp } from "firebase/firestore";
 import log from "@utils/logger";
 import EnAlert from "@components/EnAlert.vue";
@@ -272,7 +308,7 @@ import EnBadge from "@components/EnBadge.vue";
 import EnButton from "@components/EnButton.vue";
 import {
   useGoogleDriveConfig,
-  extractDriveFolderId,
+  extractDriveFolderLink,
 } from "@composables/useGoogleDriveConfig";
 import { useGoogleDriveSyncStore } from "@stores/googleDriveSync";
 import { useGeminiFileSpaceOperatorStore } from "@stores/geminiFileSpaceOperator";
@@ -319,7 +355,6 @@ const effectiveFileSpaceId = computed(
 
 const showEditor = ref(false);
 const folderInput = ref("");
-const copiedSA = ref(false);
 const copiedFileSpaceId = ref(false);
 const isTesting = ref(false);
 const isSaving = ref(false);
@@ -329,6 +364,8 @@ const testResult = ref<{
   error?: string;
 } | null>(null);
 const isStartingImport = ref(false);
+const workspaceConnection = computed(() => googleWorkspace.connection.value);
+const workspaceOAuthLoading = computed(() => googleWorkspace.isLoading.value);
 
 const canStartImport = computed(
   () =>
@@ -337,7 +374,11 @@ const canStartImport = computed(
     (hasPendingImports.value || pendingScan.value.updatedCount > 0)
 );
 
-const extractedFolderId = computed(() => extractDriveFolderId(folderInput.value));
+const extractedFolderLink = computed(() => extractDriveFolderLink(folderInput.value));
+const extractedFolderId = computed(() => extractedFolderLink.value?.folderId ?? null);
+const extractedFolderResourceKey = computed(
+  () => extractedFolderLink.value?.resourceKey ?? null
+);
 const folderInputError = computed(() => {
   if (!folderInput.value) return null;
   if (!extractedFolderId.value) {
@@ -399,17 +440,6 @@ watch(folderInput, () => {
   testResult.value = null;
 });
 
-const copySA = async () => {
-  try {
-    await navigator.clipboard.writeText(serviceAccountEmail);
-    copiedSA.value = true;
-    setTimeout(() => (copiedSA.value = false), 2000);
-  } catch (e) {
-    log("ERROR", "copy SA failed", e);
-    toast.add({ title: "コピーに失敗しました", color: "error" });
-  }
-};
-
 const copyFileSpaceId = async () => {
   const id = effectiveFileSpaceId.value;
   if (!id) return;
@@ -423,9 +453,22 @@ const copyFileSpaceId = async () => {
   }
 };
 
+const connectGoogleWorkspace = async (): Promise<boolean> => {
+  const ok = await googleWorkspace.connect();
+  if (ok) {
+    await googleWorkspace.refreshConnection();
+  }
+  return ok;
+};
+
 const enterEditor = () => {
   showEditor.value = true;
-  folderInput.value = config.value?.rootFolderId ?? "";
+  const folderId = config.value?.rootFolderId ?? "";
+  const resourceKey = config.value?.rootFolderResourceKey;
+  folderInput.value =
+    folderId && resourceKey
+      ? `https://drive.google.com/drive/folders/${folderId}?resourcekey=${resourceKey}`
+      : folderId;
   testResult.value = null;
 };
 
@@ -453,8 +496,9 @@ const resolveSyncContext = () => {
   const spaceId = spaceStore.selectedSpace?.id;
   const fileSpaceId = effectiveFileSpaceId.value;
   const rootFolderId = config.value?.rootFolderId;
+  const rootFolderResourceKey = config.value?.rootFolderResourceKey ?? null;
   if (!organizationId || !spaceId || !fileSpaceId || !rootFolderId) return null;
-  return { organizationId, spaceId, fileSpaceId, rootFolderId };
+  return { organizationId, spaceId, fileSpaceId, rootFolderId, rootFolderResourceKey };
 };
 
 const runPendingDriveScan = async (): Promise<boolean> => {
@@ -552,15 +596,23 @@ const onTestConnection = async () => {
   isTesting.value = true;
   testResult.value = null;
   try {
-    const connection = await googleWorkspace.refreshConnection();
+    let connection = await googleWorkspace.refreshConnection();
     if (!connection.connected) {
-      testResult.value = {
-        ok: false,
-        error: "Google Workspace を接続してからDriveフォルダを確認してください",
-      };
-      return;
+      const connected = await connectGoogleWorkspace();
+      if (!connected) {
+        testResult.value = {
+          ok: false,
+          error: "Google Workspace を接続してからDriveフォルダを確認してください",
+        };
+        return;
+      }
+      connection = await googleWorkspace.refreshConnection();
     }
-    const res = await googleWorkspace.testDriveFolder(extractedFolderId.value);
+    if (!connection.connected) return;
+    const res = await googleWorkspace.testDriveFolder({
+      folderId: extractedFolderId.value,
+      resourceKey: extractedFolderResourceKey.value,
+    });
     if (res?.ok) {
       testResult.value = {
         ok: true,
@@ -590,7 +642,9 @@ const onSave = async () => {
   try {
     await driveStore.upsertConfig({
       rootFolderId: extractedFolderId.value,
+      rootFolderResourceKey: extractedFolderResourceKey.value,
       rootFolderName: testResult.value.rootFolderName || null,
+      authMode: "oauth",
       serviceAccountEmail,
       linkedFileSpaceId: effectiveFileSpaceId.value,
     });
@@ -627,4 +681,8 @@ const relativeTime = (ts: Timestamp | null | undefined): string => {
   const d = new Date(ms);
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
+
+onMounted(() => {
+  void googleWorkspace.refreshConnection();
+});
 </script>

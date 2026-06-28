@@ -73,61 +73,81 @@
 
     <div
       v-else
-      class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,1.1fr)]"
+      class="mt-4 grid gap-4 xl:grid-cols-[minmax(260px,0.7fr)_minmax(0,1.3fr)]"
     >
-      <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <dl class="space-y-3 text-sm">
-          <div>
-            <dt class="text-xs font-medium text-slate-500">FileSpace ID</dt>
-            <dd class="mt-1 break-all font-semibold text-slate-900">
-              {{ application.fileSpaceId }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium text-slate-500">Repository</dt>
-            <dd class="mt-1 break-all font-semibold text-slate-900">
-              {{ application.repoFullName }}
-            </dd>
-          </div>
-          <div v-if="application.startUrl">
-            <dt class="text-xs font-medium text-slate-500">Start URL</dt>
-            <dd class="mt-1 break-all font-semibold text-slate-900">
-              {{ application.startUrl }}
-            </dd>
-          </div>
-        </dl>
+      <div class="space-y-4">
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <dl class="space-y-3 text-sm">
+            <div>
+              <dt class="text-xs font-medium text-slate-500">FileSpace ID</dt>
+              <dd class="mt-1 break-all font-semibold text-slate-900">
+                {{ application.fileSpaceId }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs font-medium text-slate-500">Repository</dt>
+              <dd class="mt-1 break-all font-semibold text-slate-900">
+                {{ application.repoFullName }}
+              </dd>
+            </div>
+            <div v-if="application.startUrl">
+              <dt class="text-xs font-medium text-slate-500">Start URL</dt>
+              <dd class="mt-1 break-all font-semibold text-slate-900">
+                {{ application.startUrl }}
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        <label
+          class="flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-5 text-center transition"
+          :class="
+            isDragging
+              ? 'border-primary-400 bg-primary-50'
+              : 'border-slate-300 bg-white hover:border-primary-300 hover:bg-slate-50'
+          "
+          @dragenter.prevent="isDragging = true"
+          @dragover.prevent="isDragging = true"
+          @dragleave.prevent="isDragging = false"
+          @drop.prevent="onDrop"
+        >
+          <input
+            type="file"
+            class="hidden"
+            multiple
+            :disabled="isUploading"
+            @change="onFilePicked"
+          >
+          <UIcon
+            name="material-symbols:upload-file-outline"
+            class="h-8 w-8 text-slate-400"
+          />
+          <span class="mt-3 text-sm font-semibold text-slate-900">
+            {{ isUploading ? "投入中" : "ファイルを投入" }}
+          </span>
+          <span class="mt-1 text-xs text-slate-500">
+            仕様書、QAメモ、議事録、操作ログ
+          </span>
+        </label>
       </div>
 
-      <label
-        class="flex min-h-40 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-5 text-center transition"
-        :class="
-          isDragging
-            ? 'border-primary-400 bg-primary-50'
-            : 'border-slate-300 bg-white hover:border-primary-300 hover:bg-slate-50'
-        "
-        @dragenter.prevent="isDragging = true"
-        @dragover.prevent="isDragging = true"
-        @dragleave.prevent="isDragging = false"
-        @drop.prevent="onDrop"
-      >
-        <input
-          type="file"
-          class="hidden"
-          multiple
-          :disabled="isUploading"
-          @change="onFilePicked"
-        >
-        <UIcon
-          name="material-symbols:upload-file-outline"
-          class="h-8 w-8 text-slate-400"
-        />
-        <span class="mt-3 text-sm font-semibold text-slate-900">
-          {{ isUploading ? "投入中" : "ファイルを投入" }}
-        </span>
-        <span class="mt-1 text-xs text-slate-500">
-          仕様書、QAメモ、議事録、操作ログ
-        </span>
-      </label>
+      <div class="rounded-lg border border-slate-200 bg-white p-4">
+        <div class="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-slate-900">
+              Google Drive から同期
+            </h3>
+            <p class="mt-1 text-xs text-slate-500">
+              OAuth認証したアカウントでフォルダを読み込み、このアプリのナレッジに取り込みます。
+            </p>
+          </div>
+          <UIcon
+            name="logos:google-drive"
+            class="h-6 w-6 shrink-0"
+          />
+        </div>
+        <GoogleDriveSetupCard :file-space-id="application.fileSpaceId" />
+      </div>
     </div>
   </section>
 </template>

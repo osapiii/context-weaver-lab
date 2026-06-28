@@ -1,10 +1,10 @@
 <template>
-  <section class="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50/70">
+  <section class="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
       <div>
-        <h2 class="text-sm font-bold text-slate-900">Story SSOT Pipeline</h2>
+        <h2 class="text-sm font-bold text-slate-900">Storyボード</h2>
         <p class="text-xs text-slate-500">
-          ライフサイクル別に、仕様・進行・コード・QA根拠を確認
+          状態ごとにStoryを確認します
         </p>
       </div>
       <div class="flex items-center gap-2 text-xs text-slate-500">
@@ -12,11 +12,29 @@
       </div>
     </div>
 
-    <div class="grid gap-3 p-3 2xl:grid-cols-4">
+    <div
+      v-if="stories.length === 0"
+      class="flex min-h-48 flex-col items-center justify-center bg-slate-50 px-4 py-10 text-center"
+    >
+      <span class="flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-300 ring-1 ring-slate-200">
+        <UIcon name="material-symbols:article-outline" class="h-6 w-6" />
+      </span>
+      <p class="mt-3 text-sm font-bold text-slate-800">
+        まだユーザーストーリーがありません
+      </p>
+      <p class="mt-1 max-w-md text-xs leading-relaxed text-slate-500">
+        Capabilityと根拠がそろったら、上の「Story候補を生成」から一覧を作成できます。
+      </p>
+    </div>
+
+    <div
+      v-else
+      class="grid gap-3 bg-slate-50/70 p-3 xl:grid-cols-2 2xl:grid-cols-4"
+    >
       <div
         v-for="column in columns"
         :key="column.status"
-        class="flex min-h-[28rem] min-w-0 flex-col rounded-lg border border-slate-200 bg-white"
+        class="flex min-h-[18rem] min-w-0 flex-col rounded-lg border border-slate-200 bg-white"
       >
         <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5">
           <div class="min-w-0">
@@ -45,9 +63,9 @@
           />
           <div
             v-if="column.items.length === 0"
-            class="flex min-h-32 flex-1 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-400"
+            class="flex min-h-24 flex-1 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 text-center text-xs text-slate-400"
           >
-            条件に一致するストーリーはありません
+            この状態のStoryはありません
           </div>
         </div>
       </div>

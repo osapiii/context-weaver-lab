@@ -70,6 +70,36 @@ export const VibeControlOperationVideoDisplaySurfaceSchema = z.enum([
   "unknown",
 ]);
 
+export const VibeControlOperationVideoFrameSchema = z.object({
+  id: z.string(),
+  timestampMs: z.number().min(0),
+  fileName: z.string(),
+  bucketName: z.string().optional(),
+  storagePath: z.string().optional(),
+  contentType: z.string().default("image/jpeg"),
+  width: z.number().min(0).optional(),
+  height: z.number().min(0).optional(),
+});
+
+export const VibeControlOperationVideoQuickScanSchema = z.object({
+  title: z.string().optional(),
+  description: z.string().optional(),
+  operationMemo: z.string().optional(),
+  operationSteps: z.array(z.string()).default([]),
+  transcriptSummary: z.string().optional(),
+  provider: z.string().optional(),
+  generatedAt: z.string().optional(),
+  errorMessage: z.string().optional(),
+});
+
+export const VibeControlZappingAnalysisStatusSchema = z.enum([
+  "not_analyzed",
+  "queued",
+  "running",
+  "completed",
+  "error",
+]);
+
 export const VibeControlCapabilityStatusSchema = z.enum([
   "draft",
   "active",
@@ -88,6 +118,8 @@ export const VibeControlSourceAssetTypeSchema = z.enum([
   "operation_video_transcript",
   "operation_video_scene_summary",
   "operation_video_journey",
+  "zapping_video_analysis",
+  "zapping_video_screen",
   "github_repository",
   "github_file",
   "github_pull_request",
@@ -310,6 +342,55 @@ export const DecodedVibeControlSourceConnectionSchema =
     id: z.string(),
   });
 
+export const VibeControlZappingAnalysisStoryCandidateSchema = z.object({
+  id: z.string(),
+  epicId: z.string().optional(),
+  title: z.string(),
+  role: z
+    .object({
+      value: z.string(),
+      grounding: z.enum(["explicit", "inferred"]).default("inferred"),
+    })
+    .optional(),
+  goal: z.string().optional(),
+  benefit: z.string().optional(),
+  acceptanceCriteria: z.array(z.string()).default([]),
+  summary: z.string().optional(),
+  userStory: z.string().optional(),
+  asA: z.string().optional(),
+  iWant: z.string().optional(),
+  soThat: z.string().optional(),
+  evidence: z
+    .array(
+      z.object({
+        videoId: z.string(),
+        title: z.string().optional(),
+        summary: z.string().optional(),
+        tRange: z.array(z.number().min(0)).length(2),
+        representativeScreenshotId: z.string().optional(),
+        screenshotIds: z.array(z.string()).default([]),
+      })
+    )
+    .min(1),
+  unverified: z.boolean().default(false),
+  confidenceScore: z.number().min(0).max(100).optional(),
+  confidence: z.number().min(0).max(100).optional(),
+});
+
+export const VibeControlZappingAnalysisResultSchema = z.object({
+  schemaVersion: z
+    .literal("vibe-control-zapping-analysis-v2")
+    .default("vibe-control-zapping-analysis-v2"),
+  generatedAt: z.string(),
+  transcriptSummary: z.string().optional(),
+  productContextSummary: z.string().optional(),
+  operationIntent: z.string().optional(),
+  storyCandidates: z
+    .array(VibeControlZappingAnalysisStoryCandidateSchema)
+    .default([]),
+  notes: z.array(z.string()).default([]),
+});
+
 export const VibeControlOperationVideoSchema = z.object({
   id: z.string().optional(),
   applicationId: z.string().default("app-default"),
@@ -322,6 +403,12 @@ export const VibeControlOperationVideoSchema = z.object({
   contentType: z.string().default("video/webm"),
   sizeBytes: z.number().min(0).default(0),
   durationMs: z.number().min(0).optional(),
+  transcriptText: z.string().optional(),
+  transcriptProvider: z.string().optional(),
+  transcriptSummary: z.string().optional(),
+  quickScan: VibeControlOperationVideoQuickScanSchema.optional(),
+  frameCaptures: z.array(VibeControlOperationVideoFrameSchema).default([]),
+  tags: z.array(z.string()).default([]),
   fileSpaceId: z.string().optional(),
   fileSpaceRequestId: z.string().optional(),
   metadataFileName: z.string().optional(),
@@ -335,6 +422,14 @@ export const VibeControlOperationVideoSchema = z.object({
     "not_registered"
   ),
   discoveryErrorMessage: z.string().optional(),
+  analysisStatus: VibeControlZappingAnalysisStatusSchema.default("not_analyzed"),
+  analysisRequestId: z.string().optional(),
+  analysisSessionId: z.string().optional(),
+  analysisOrganizationId: z.string().optional(),
+  analysisSpaceId: z.string().optional(),
+  analysisErrorMessage: z.string().optional(),
+  analyzedAt: z.string().optional(),
+  analysisResult: VibeControlZappingAnalysisResultSchema.optional(),
   sourceDisplaySurface: VibeControlOperationVideoDisplaySurfaceSchema.default(
     "unknown"
   ),
@@ -486,11 +581,17 @@ export const VibeControlGenerationSessionSchema = z.object({
       defaultBranch: z.string().optional(),
       screenshotCount: z.number().min(0).default(0),
       videoCount: z.number().min(0).default(0),
+      zappingSearchDocumentCount: z.number().min(0).default(0),
+      zappingFrameCount: z.number().min(0).default(0),
+      transcriptCount: z.number().min(0).default(0),
       evidenceCount: z.number().min(0).default(0),
     })
     .default({
       screenshotCount: 0,
       videoCount: 0,
+      zappingSearchDocumentCount: 0,
+      zappingFrameCount: 0,
+      transcriptCount: 0,
       evidenceCount: 0,
     }),
   createdAt: z.instanceof(Timestamp).optional(),
@@ -547,6 +648,18 @@ export type VibeControlOperationVideoDiscoveryStatus = z.infer<
 >;
 export type VibeControlOperationVideoDisplaySurface = z.infer<
   typeof VibeControlOperationVideoDisplaySurfaceSchema
+>;
+export type VibeControlOperationVideoFrame = z.infer<
+  typeof VibeControlOperationVideoFrameSchema
+>;
+export type VibeControlOperationVideoQuickScan = z.infer<
+  typeof VibeControlOperationVideoQuickScanSchema
+>;
+export type VibeControlZappingAnalysisStatus = z.infer<
+  typeof VibeControlZappingAnalysisStatusSchema
+>;
+export type VibeControlZappingAnalysisResult = z.infer<
+  typeof VibeControlZappingAnalysisResultSchema
 >;
 export type VibeControlApplication = z.infer<
   typeof VibeControlApplicationSchema

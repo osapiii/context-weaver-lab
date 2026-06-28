@@ -49,9 +49,8 @@ def _resolve_cors_origins() -> list[str]:
     if not raw:
         return [
             "http://localhost:3000",
-            "https://en-aistudio.app",
-            "https://en-aistudio-development.web.app",
-            "https://en-aistudio-development.firebaseapp.com",
+            "https://vibe-control-dev.web.app",
+            "https://vibe-control-dev.firebaseapp.com",
         ]
     if raw == "*":
         return ["*"]
@@ -64,7 +63,7 @@ app.add_middleware(
     allow_origins=_resolve_cors_origins(),
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["*"],
     max_age=600,
 )
 
@@ -202,9 +201,12 @@ def _kick(body: dict[str, Any]) -> dict[str, Any]:
     remove_ids = list(input_data.get("removeIds") or [])
 
     # Step 1: input artifact PUT
+    connection_id = (input_data.get("connectionId") or "default").strip() or "default"
     artifact_payload = {
         "operationType": operation_type,
+        "connectionId": connection_id,
         "rootFolderId": input_data.get("rootFolderId"),
+        "rootFolderResourceKey": input_data.get("rootFolderResourceKey"),
         "targetFolderId": input_data.get("targetFolderId"),
         "fileSpaceId": input_data.get("fileSpaceId"),
         "description": input_data.get("description"),
@@ -472,5 +474,5 @@ async def health_check():
         "project": PROJECT_ID,
         "workflowName": WORKFLOW_NAME,
         "workflowLocation": WORKFLOW_LOCATION,
-        "inputsBucket": INPUTS_BUCKET,
+        "inputsBucket": STORAGE_BUCKET,
     }

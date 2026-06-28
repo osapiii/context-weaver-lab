@@ -14,7 +14,6 @@
     :hide-welcome-quick-actions="
       store.activeAgent === 'sheet' ||
         showConsultationStartGate ||
-        showApplicationScanGate ||
         store.activeAgent === 'image' ||
         store.activeAgent === 'writing'
     "
@@ -106,13 +105,13 @@
         </a>
       </template>
       <AiStudioWorkspaceModePicker
-        v-if="workspaceMode"
+        v-if="workspaceMode && !compactHeaderControls"
         :model-value="workspaceMode"
         :disabled="store.isStreaming"
         @update:model-value="onWorkspaceModeChange"
       />
       <AdkSessionStateDebugPanel
-        v-if="store.sessionId"
+        v-if="store.sessionId && !compactHeaderControls"
         :session-id="store.sessionId"
         :refresh-token="sessionDebugRefreshToken"
       />
@@ -126,8 +125,7 @@
         showWritingKioskGate ||
         showWritingWorkflowCenter ||
         showDataAnalysisStartGate ||
-        showWebPageBuilderGate ||
-        showApplicationScanGate
+        showWebPageBuilderGate
       "
       #welcome-replace
     >
@@ -273,12 +271,6 @@
         :fields="store.webPageFields"
         :disabled="store.isStreaming"
         @submit="onWebPageBuilderSubmit"
-      />
-      <ApplicationScanKioskPanel
-        v-else-if="showApplicationScanGate"
-        :fields="store.applicationScanFields"
-        :disabled="store.isStreaming"
-        @submit="onApplicationScanSubmit"
       />
     </template>
 
@@ -502,7 +494,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, toRefs, watch } from "vue";
 import EnBadge from "@components/EnBadge.vue";
 import EnAIRevisionAssistantPanel, {
   type AIRevisionAssistantMessage,
@@ -520,9 +512,7 @@ import WritingFormKioskPanel from "@components/AgentWorkspace/WritingFormKioskPa
 import WritingStudioWorkflowCenter from "@components/AgentWorkspace/WritingStudioWorkflowCenter.vue";
 import DataAnalysisStartKioskPanel from "@components/AgentWorkspace/DataAnalysisStartKioskPanel.vue";
 import WebPageBuilderKioskPanel from "@components/AgentWorkspace/WebPageBuilderKioskPanel.vue";
-import ApplicationScanKioskPanel from "@components/AgentWorkspace/ApplicationScanKioskPanel.vue";
 import type { WebPageBuilderFields } from "@utils/webPageWorkspaceState";
-import type { ApplicationScanFields } from "@utils/applicationScanWorkspaceState";
 import { useWritingReferenceSources } from "@composables/useWritingReferenceSources";
 import { coalesceWritingReferenceState } from "@utils/writingWorkspaceState";
 import type { WritingFormField } from "@models/writingForm";
@@ -563,9 +553,30 @@ const props = withDefaults(
   defineProps<{
     /** AIスタジオ共通 TOP（セッション一覧ハブ）へ戻る */
     showHubBackButton?: boolean;
+    /** 埋め込み用途で session id / mode picker / debug 等のヘッダー操作を隠す */
+    compactHeaderControls?: boolean;
+    /** 埋め込み用途で見た目だけ別テーマに寄せる */
+    assistantThemeOverride?:
+      | "revision"
+      | "analysis"
+      | "filter"
+      | "sheet"
+      | "writing";
+    /** 埋め込み用途でパネルタイトルを差し替える */
+    panelTitleOverride?: string;
   }>(),
-  { showHubBackButton: false }
+  {
+    showHubBackButton: false,
+    compactHeaderControls: false,
+    assistantThemeOverride: undefined,
+    panelTitleOverride: undefined,
+  }
 );
+
+const {
+  showHubBackButton,
+  compactHeaderControls,
+} = toRefs(props);
 
 const emit = defineEmits<{
   (e: "back-to-hub"): void;
@@ -584,10 +595,6 @@ const showDataAnalysisStartGate = computed(
 
 const showWebPageBuilderGate = computed(
   () => store.activeAgent === "web_page" && store.messages.length === 0
-);
-
-const showApplicationScanGate = computed(
-  () => store.activeAgent === "application_scan" && store.messages.length === 0
 );
 
 const consultationKnowledgeSummary = computed(() =>
@@ -672,8 +679,6 @@ const showWritingFormatReviewGate = computed(
     store.writingForm.fields.length > 0
 );
 
-const showWritingFillingGate = computed(() => false);
-
 const showWritingDoneGate = computed(
   () =>
     store.activeAgent === "writing" &&
@@ -757,7 +762,6 @@ const writingCenterWelcomeReplace = computed(
 const workspaceHideMessageThread = computed(
   () =>
     showConsultationStartGate.value ||
-    showApplicationScanGate.value ||
     imageHideMessageThread.value ||
     writingHideMessageThread.value
 );
@@ -765,7 +769,6 @@ const workspaceHideMessageThread = computed(
 const centerWelcomeReplace = computed(
   () =>
     showConsultationStartGate.value ||
-    showApplicationScanGate.value ||
     imageCenterWelcomeReplace.value ||
     writingCenterWelcomeReplace.value
 );
@@ -860,7 +863,7 @@ const showImageKioskGate = computed(
 
 /** お手本＋プロンプトの2カラムはやや広め、書類キオスクはフル幅 */
 const welcomeReplaceMaxWidthClass = computed(() => {
-  if (showConsultationStartGate.value || showApplicationScanGate.value) {
+  if (showConsultationStartGate.value) {
     return "max-w-none";
   }
   if (showWritingKioskGate.value) {
@@ -882,7 +885,7 @@ const welcomeReplaceMaxWidthClass = computed(() => {
 });
 
 const welcomeReplaceContainerClass = computed(() => {
-  if (showWritingKioskGate.value || showApplicationScanGate.value) {
+  if (showWritingKioskGate.value) {
     return "items-start justify-stretch px-3 py-4 sm:px-5 sm:py-5";
   }
   return "items-center justify-center";
@@ -911,7 +914,6 @@ const hideImageComposer = computed(
 const hideWorkspaceComposer = computed(
   () =>
     showConsultationStartGate.value ||
-    showApplicationScanGate.value ||
     hideImageComposer.value ||
     store.activeAgent === "writing"
 );
@@ -1194,10 +1196,6 @@ const onWebPageBuilderSubmit = (fields: WebPageBuilderFields): void => {
   void store.startWebPageBuilder(fields);
 };
 
-const onApplicationScanSubmit = (fields: ApplicationScanFields): void => {
-  void store.startApplicationScan(fields);
-};
-
 const onChangeImageCreationMode = (): void => {
   store.resetImageCreationMode();
   scrollToFormContext();
@@ -1353,6 +1351,9 @@ const panelMessages = computed((): AIRevisionAssistantMessage[] =>
 );
 
 const panelTitle = computed((): string => {
+  if (props.panelTitleOverride?.trim()) {
+    return props.panelTitleOverride.trim();
+  }
   if (store.isStreaming && store.activeAgent === "writing") {
     return writingWorkflowAction.value === "extract_schema"
       ? "フォーマット抽出中…"
@@ -1397,6 +1398,7 @@ const assistantTheme = computed(():
   | "filter"
   | "sheet"
   | "writing" => {
+  if (props.assistantThemeOverride) return props.assistantThemeOverride;
   switch (store.activeAgent) {
     case "consultation":
       return "analysis";

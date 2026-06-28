@@ -36,6 +36,7 @@ export type GoogleDriveListFile = {
   size?: string;
   webViewLink?: string;
   thumbnailLink?: string;
+  resourceKey?: string;
 };
 
 export type GoogleDriveFolderListResult = {
@@ -218,23 +219,32 @@ export function useGoogleWorkspaceOAuth() {
   };
 
   const testDriveFolder = async (
-    folderId: string
+    params: string | { folderId: string; resourceKey?: string | null }
   ): Promise<GoogleDriveFolderTestResult> => {
     if (!organizationId.value) {
       return { ok: false, error: "組織情報が未取得です" };
     }
+    const folderId = typeof params === "string" ? params : params.folderId;
+    const resourceKey =
+      typeof params === "string" ? null : params.resourceKey ?? null;
     const callable = httpsCallable<
-      { organizationId: string; folderId: string },
+      { organizationId: string; folderId: string; resourceKey?: string | null },
       GoogleDriveFolderTestResult
     >(functions(), "test_google_drive_folder");
-    const res = await callable({ organizationId: organizationId.value, folderId });
+    const res = await callable({
+      organizationId: organizationId.value,
+      folderId,
+      resourceKey,
+    });
     return res.data;
   };
 
   const listDriveFolder = async (params: {
     folderId: string;
     rootFolderId?: string;
+    rootFolderResourceKey?: string | null;
     targetFolderId?: string | null;
+    targetFolderResourceKey?: string | null;
     recursive?: boolean;
   }): Promise<GoogleDriveFolderListResult> => {
     if (!organizationId.value) {
@@ -248,7 +258,9 @@ export function useGoogleWorkspaceOAuth() {
         organizationId: string;
         folderId: string;
         rootFolderId?: string;
+        rootFolderResourceKey?: string | null;
         targetFolderId?: string | null;
+        targetFolderResourceKey?: string | null;
         recursive?: boolean;
       },
       GoogleDriveFolderListResult
@@ -257,7 +269,9 @@ export function useGoogleWorkspaceOAuth() {
       organizationId: organizationId.value,
       folderId: params.folderId,
       rootFolderId: params.rootFolderId,
+      rootFolderResourceKey: params.rootFolderResourceKey ?? null,
       targetFolderId: params.targetFolderId,
+      targetFolderResourceKey: params.targetFolderResourceKey ?? null,
       recursive: params.recursive ?? true,
     });
     return res.data;

@@ -9,25 +9,6 @@
       @save="saveApplication"
     />
 
-    <VibeControlApplicationScanPanel
-      v-model:open="scanSettingsModalOpen"
-      variant="modal"
-      :applications="store.applications"
-      :scan-profiles="store.activeScanProfiles"
-      :selected-application-id="store.selectedApplicationId"
-      :is-starting-scan="store.isStartingApplicationScan"
-      @select-application="store.selectApplication($event)"
-      @start-scan="startApplicationScan"
-      @open-job-log="openJobLog"
-    />
-
-    <VibeControlApplicationScanProgressModal
-      v-model:open="applicationScanProgressModalOpen"
-      :application="selectedApplication"
-      :run="selectedApplication?.lastScan ?? null"
-      @open-job-log="openJobLog"
-    />
-
     <EnModal
       v-model:open="deleteConfirmOpen"
       title="アプリケーションを削除しますか?"
@@ -60,6 +41,84 @@
           @click="deleteSelectedApplication"
         >
           削除
+        </EnButton>
+      </template>
+    </EnModal>
+
+    <EnModal
+      v-model:open="zappingAnalysisModalOpen"
+      title="ザッピング動画を解析中"
+      subtitle="動画・文字起こし・アプリ専用ナレッジを照合しています"
+      title-icon="material-symbols:psychology-outline"
+      size="xl"
+      :hide-close="activeZappingAnalysisVideo?.analysisStatus === 'queued' || activeZappingAnalysisVideo?.analysisStatus === 'running'"
+      :close-on-backdrop="activeZappingAnalysisVideo?.analysisStatus !== 'queued' && activeZappingAnalysisVideo?.analysisStatus !== 'running'"
+    >
+      <div class="space-y-4">
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-semibold text-slate-900">
+                {{ activeZappingAnalysisVideo?.title || "ザッピング動画" }}
+              </p>
+              <p class="mt-1 text-xs text-slate-500">
+                {{ activeZappingAnalysisRequestId || activeZappingAnalysisVideo?.analysisRequestId || "RequestDocを準備中" }}
+              </p>
+            </div>
+            <EnBadge
+              :color="activeZappingAnalysisVideo?.analysisStatus === 'completed' ? 'success' : activeZappingAnalysisVideo?.analysisStatus === 'error' ? 'error' : 'warning'"
+              variant="soft"
+            >
+              {{ zappingAnalysisProgressLabel }}
+            </EnBadge>
+          </div>
+          <UProgress
+            class="mt-4"
+            :model-value="zappingAnalysisProgressPercent"
+            :color="activeZappingAnalysisVideo?.analysisStatus === 'error' ? 'error' : activeZappingAnalysisVideo?.analysisStatus === 'completed' ? 'success' : 'primary'"
+          />
+        </div>
+
+        <div class="grid gap-3 text-sm sm:grid-cols-3">
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <p class="text-xs font-semibold text-slate-500">1. 受付</p>
+            <p class="mt-2 text-slate-700">RequestDocを作成し、仕事ログへ連携します。</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <p class="text-xs font-semibold text-slate-500">2. 解析</p>
+            <p class="mt-2 text-slate-700">動画メタデータとFileSpaceナレッジを照合します。</p>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-3">
+            <p class="text-xs font-semibold text-slate-500">3. 結果</p>
+            <p class="mt-2 text-slate-700">画面、機能、Story候補を動画詳細に反映します。</p>
+          </div>
+        </div>
+
+        <EnAlert
+          v-if="activeZappingAnalysisVideo?.analysisErrorMessage"
+          color="error"
+          :title="activeZappingAnalysisVideo.analysisErrorMessage"
+        />
+      </div>
+
+      <template #footer>
+        <EnButton
+          variant="outline"
+          color="neutral"
+          size="sm"
+          :disabled="activeZappingAnalysisVideo?.analysisStatus === 'queued' || activeZappingAnalysisVideo?.analysisStatus === 'running'"
+          @click="zappingAnalysisModalOpen = false"
+        >
+          閉じる
+        </EnButton>
+        <EnButton
+          v-if="activeZappingAnalysisVideo?.analysisStatus === 'completed'"
+          variant="ai"
+          size="sm"
+          leading-icon="material-symbols:visibility-outline"
+          @click="openAnalyzedZappingVideo"
+        >
+          詳細を見る
         </EnButton>
       </template>
     </EnModal>
@@ -141,12 +200,6 @@
     />
 
     <template v-else-if="currentView === 'application-detail'">
-      <EnToggle
-        v-model="activeApplicationTab"
-        :items="applicationTabItems"
-        custom-class="max-w-full overflow-x-auto"
-      />
-
       <template v-if="activeApplicationTab === 'stories'">
         <div class="space-y-4">
           <VibeControlStoryGenerationPanel
@@ -205,16 +258,6 @@
           @delete="openDeleteConfirm"
         />
 
-        <VibeControlApplicationScanPanel
-          :applications="store.applications"
-          :scan-profiles="store.activeScanProfiles"
-          :selected-application-id="store.selectedApplicationId"
-          :is-starting-scan="store.isStartingApplicationScan"
-          @select-application="store.selectApplication($event)"
-          @start-scan="startApplicationScan"
-          @open-job-log="openJobLog"
-        />
-
         <VibeControlSourceSetup
           :selected-application="selectedApplication"
           :source-connections="store.activeSourceConnections"
@@ -223,13 +266,9 @@
       </template>
 
       <VibeControlApplicationScanResultsPanel
-        v-else-if="activeApplicationTab === 'scan'"
+        v-else-if="activeApplicationTab === 'screen-catalog'"
         :application="selectedApplication"
         :run="selectedApplication?.lastScan ?? null"
-        :is-starting-scan="store.isStartingApplicationScan"
-        @rescan="rescanSelectedApplication"
-        @open-progress="applicationScanProgressModalOpen = true"
-        @explore-screen-variants="startScreenVariantExploration"
       />
 
       <template v-else-if="activeApplicationTab === 'knowledge-space'">
@@ -303,13 +342,17 @@
       </template>
 
       <VibeControlOperationVideoPanel
-        v-else-if="activeApplicationTab === 'operation-videos'"
+        v-else-if="activeApplicationTab === 'zapping'"
         :application="selectedApplication"
         :videos="store.activeOperationVideos"
         :is-saving="store.isSavingOperationVideo"
+        :is-analyzing="store.isAnalyzingZappingVideos"
         :is-provisioning-file-space="store.isProvisioningApplicationFileSpace"
         @create-file-space="provisionSelectedApplicationFileSpace"
+        @analyze="startZappingVideoAnalysis"
+        @analyze-all="startAllZappingVideoAnalysis"
         @save="saveOperationVideo"
+        @delete="deleteOperationVideo"
         @refresh="store.fetchFromFirestore()"
       />
 
@@ -341,8 +384,10 @@ import { useGoogleDriveFolderSync } from "@composables/useGoogleDriveFolderSync"
 import DataSourceUploadMode from "@components/dataSource/DataSourceUploadMode.vue";
 import DataSourceViewMode from "@components/dataSource/DataSourceViewMode.vue";
 import VibeControlApplicationKnowledgeSpacePanel from "@components/vibeControl/VibeControlApplicationKnowledgeSpacePanel.vue";
-import type { ApplicationScanFields } from "@utils/applicationScanWorkspaceState";
-import type { DecodedVibeControlApplication } from "@models/vibeControl";
+import type {
+  DecodedVibeControlApplication,
+  DecodedVibeControlOperationVideo,
+} from "@models/vibeControl";
 import type { Document } from "@models/geminiFileSpaceRequest";
 import type {
   VibeControlApplicationInput,
@@ -359,19 +404,19 @@ type VibeControlView =
 type ApplicationDetailTab =
   | "basic"
   | "knowledge-space"
+  | "zapping"
+  | "screen-catalog"
   | "capabilities"
   | "stories"
-  | "scan"
-  | "operation-videos"
   | "external-services";
 type ApplicationKnowledgeMode = "upload" | "view";
 type RouteView =
   | "repositories"
   | "application-detail"
   | "application-capabilities"
-  | "application-scan"
+  | "application-screen-catalog"
   | "application-knowledge"
-  | "application-videos"
+  | "application-zapping"
   | "application-external-services"
   | "stories";
 
@@ -404,9 +449,10 @@ const applicationKnowledgeDocumentsByFileSpace = ref<Record<string, Document[]>>
   {}
 );
 const applicationModalOpen = ref(false);
-const scanSettingsModalOpen = ref(false);
-const applicationScanProgressModalOpen = ref(false);
 const deleteConfirmOpen = ref(false);
+const zappingAnalysisModalOpen = ref(false);
+const activeZappingAnalysisVideoId = ref("");
+const activeZappingAnalysisRequestId = ref("");
 const editingApplicationId = ref<string | null>(null);
 const initialApplicationRepository = ref<GitHubRepositorySummary | null>(null);
 const isUploadingApplicationKnowledge = ref(false);
@@ -434,6 +480,28 @@ const editingApplication = computed(() =>
       ) ?? null
     : null
 );
+const activeZappingAnalysisVideo = computed(
+  () =>
+    store.operationVideos.find(
+      (video) => video.id === activeZappingAnalysisVideoId.value
+    ) ?? null
+);
+const zappingAnalysisProgressPercent = computed(() => {
+  const status = activeZappingAnalysisVideo.value?.analysisStatus;
+  if (status === "completed") return 100;
+  if (status === "running") return 68;
+  if (status === "queued") return 28;
+  if (status === "error") return 100;
+  return 0;
+});
+const zappingAnalysisProgressLabel = computed(() => {
+  const status = activeZappingAnalysisVideo.value?.analysisStatus;
+  if (status === "completed") return "解析が完了しました";
+  if (status === "running") return "動画とナレッジを照合して解析しています";
+  if (status === "queued") return "解析リクエストを投入しました";
+  if (status === "error") return "解析に失敗しました";
+  return "解析を準備しています";
+});
 
 const pageTitle = computed(() => {
   if (currentView.value === "repositories") {
@@ -473,51 +541,6 @@ const pageSubtitle = computed(() => {
     `${selectedApplication.value.applicationKey} のアプリケーション情報`
   );
 });
-
-const applicationTabItems = computed(() => [
-  {
-    value: "basic",
-    label: "基本情報",
-    icon: "material-symbols:settings-outline-rounded",
-  },
-  {
-    value: "knowledge-space",
-    label: "ナレッジスペース",
-    icon: "material-symbols:hub-outline",
-    count: applicationKnowledgeFileSpaceId.value
-      ? selectedApplicationKnowledgeDocuments.value.length
-      : undefined,
-  },
-  {
-    value: "capabilities",
-    label: "Capability",
-    icon: "material-symbols:account-tree-outline",
-    count: store.activeCapabilities.length,
-  },
-  {
-    value: "stories",
-    label: "ユーザーストーリー",
-    icon: "material-symbols:article-outline",
-    count: store.activeStories.length,
-  },
-  {
-    value: "scan",
-    label: "Screen Atlas",
-    icon: "material-symbols:preview-outline",
-    count: selectedApplication.value?.lastScan?.artifactCount,
-  },
-  {
-    value: "operation-videos",
-    label: "操作動画",
-    icon: "material-symbols:video-camera-back-outline",
-    count: store.activeOperationVideos.length,
-  },
-  {
-    value: "external-services",
-    label: "外部サービス連携",
-    icon: "material-symbols:conversion-path",
-  },
-]);
 
 const applicationKnowledgeModeItems = computed(() => [
   {
@@ -570,12 +593,12 @@ const breadcrumbItems = computed(() => {
           ? "基本情報"
           : activeApplicationTab.value === "capabilities"
             ? "Capability"
-          : activeApplicationTab.value === "scan"
-            ? "Screen Atlas"
+          : activeApplicationTab.value === "screen-catalog"
+            ? "画面カタログ"
           : activeApplicationTab.value === "knowledge-space"
             ? "ナレッジスペース"
-          : activeApplicationTab.value === "operation-videos"
-            ? "操作動画"
+          : activeApplicationTab.value === "zapping"
+            ? "ザッピング"
           : activeApplicationTab.value === "external-services"
             ? "外部サービス連携"
             : "ユーザーストーリー",
@@ -601,7 +624,6 @@ onMounted(() => {
   void store.fetchFromFirestore().then(() => {
     applyRouteView();
     applyRouteAction();
-    applyApplicationScanProgressRoute();
   });
 });
 
@@ -626,26 +648,15 @@ watch(
   }
 );
 
-watch(
-  () => [
-    route.query.openApplicationScanProgress,
-    route.query.applicationScanRequestId,
-    route.query.applicationId,
-  ],
-  () => {
-    applyApplicationScanProgressRoute();
-  }
-);
-
 watch(activeApplicationTab, (tab) => {
   if (currentView.value !== "application-detail") return;
   const viewByTab: Record<ApplicationDetailTab, RouteView> = {
     basic: "application-detail",
     "knowledge-space": "application-knowledge",
+    zapping: "application-zapping",
+    "screen-catalog": "application-screen-catalog",
     capabilities: "application-capabilities",
     stories: "stories",
-    scan: "application-scan",
-    "operation-videos": "application-videos",
     "external-services": "application-external-services",
   };
   updateViewQuery(viewByTab[tab]);
@@ -670,9 +681,19 @@ function routeView(): RouteView {
   if (route.query.view === "application-capabilities") {
     return "application-capabilities";
   }
-  if (route.query.view === "application-scan") return "application-scan";
+  if (
+    route.query.view === "application-screen-catalog" ||
+    route.query.view === "application-scan"
+  ) {
+    return "application-screen-catalog";
+  }
   if (route.query.view === "application-knowledge") return "application-knowledge";
-  if (route.query.view === "application-videos") return "application-videos";
+  if (
+    route.query.view === "application-zapping" ||
+    route.query.view === "application-videos"
+  ) {
+    return "application-zapping";
+  }
   if (
     route.query.view === "application-external-services" ||
     route.query.view === "application-git"
@@ -735,12 +756,12 @@ function applyRouteView(): void {
     }
     return;
   }
-  if (routeView() === "application-scan") {
+  if (routeView() === "application-screen-catalog") {
     if (!selectedApplication.value && store.applications[0]) {
       store.selectApplication(store.applications[0].id);
     }
     if (selectedApplication.value) {
-      activeApplicationTab.value = "scan";
+      activeApplicationTab.value = "screen-catalog";
       currentView.value = "application-detail";
     }
     return;
@@ -755,12 +776,12 @@ function applyRouteView(): void {
     }
     return;
   }
-  if (routeView() === "application-videos") {
+  if (routeView() === "application-zapping") {
     if (!selectedApplication.value && store.applications[0]) {
       store.selectApplication(store.applications[0].id);
     }
     if (selectedApplication.value) {
-      activeApplicationTab.value = "operation-videos";
+      activeApplicationTab.value = "zapping";
       currentView.value = "application-detail";
     }
     return;
@@ -879,57 +900,6 @@ async function saveApplication(input: VibeControlApplicationInput): Promise<void
   });
 }
 
-async function startApplicationScan(fields: ApplicationScanFields): Promise<void> {
-  try {
-    const requestId = await store.startApplicationScan({
-      applicationId: store.selectedApplicationId,
-      fields,
-    });
-    scanSettingsModalOpen.value = false;
-    activeApplicationTab.value = "scan";
-    currentView.value = "application-detail";
-    applicationScanProgressModalOpen.value = true;
-    toast.add({
-      title: "Application Scanを開始しました",
-      description: requestId,
-      color: "success",
-    });
-  } catch (err) {
-    toast.add({
-      title: "Application Scanの開始に失敗しました",
-      description: err instanceof Error ? err.message : String(err),
-      color: "error",
-    });
-  }
-}
-
-async function startScreenVariantExploration(input: {
-  screenId: string;
-  screenUrl: string;
-  routeKey?: string;
-}): Promise<void> {
-  try {
-    const requestId = await store.startScreenVariantExploration({
-      applicationId: store.selectedApplicationId,
-      screenId: input.screenId,
-      screenUrl: input.screenUrl,
-      routeKey: input.routeKey,
-    });
-    applicationScanProgressModalOpen.value = true;
-    toast.add({
-      title: "Variant探索を開始しました",
-      description: requestId,
-      color: "success",
-    });
-  } catch (err) {
-    toast.add({
-      title: "Variant探索の開始に失敗しました",
-      description: err instanceof Error ? err.message : String(err),
-      color: "error",
-    });
-  }
-}
-
 async function startCapabilityStructuring(
   input: VibeControlGenerationInput
 ): Promise<void> {
@@ -977,12 +947,6 @@ async function startStoryGeneration(
       color: "error",
     });
   }
-}
-
-async function rescanSelectedApplication(): Promise<void> {
-  const application = selectedApplication.value;
-  if (!application) return;
-  scanSettingsModalOpen.value = true;
 }
 
 async function provisionSelectedApplicationFileSpace(): Promise<void> {
@@ -1123,41 +1087,114 @@ async function uploadApplicationKnowledgeFiles(files: File[]): Promise<void> {
 }
 
 async function saveOperationVideo(
-  input: VibeControlOperationVideoSaveInput
+  input: VibeControlOperationVideoSaveInput,
+  callbacks?: {
+    onSuccess?: (video: DecodedVibeControlOperationVideo) => void;
+    onError?: (message: string) => void;
+  }
 ): Promise<void> {
   try {
     const video = await store.saveOperationVideoCapture(input);
+    callbacks?.onSuccess?.(video);
     toast.add({
-      title: "操作動画を保存しました",
+      title: "ザッピング動画を保存しました",
       description:
         video.discoveryStatus === "queued"
           ? "DiscoveryEngine登録を開始しました"
-          : "動画は保存されましたが、検索登録を確認してください",
-      color: video.discoveryStatus === "queued" ? "success" : "warning",
+          : video.discoveryStatus === "not_registered"
+            ? "動画を保存しました。解析にはアプリ専用FileSpaceが必要です"
+            : "動画は保存されましたが、検索登録を確認してください",
+      color:
+        video.discoveryStatus === "queued" ||
+        video.discoveryStatus === "not_registered"
+          ? "success"
+          : "warning",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    callbacks?.onError?.(message);
+    toast.add({
+      title: "ザッピング動画の保存に失敗しました",
+      description: message,
+      color: "error",
+    });
+  }
+}
+
+async function deleteOperationVideo(videoId: string): Promise<void> {
+  try {
+    await store.deleteOperationVideo(videoId);
+    toast.add({
+      title: "ザッピング動画を削除しました",
+      color: "success",
     });
   } catch (err) {
     toast.add({
-      title: "操作動画の保存に失敗しました",
+      title: "ザッピング動画の削除に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });
   }
 }
 
-function openJobLog(): void {
-  void router.push({ name: "admin-workflow-executions" });
+async function startZappingVideoAnalysis(videoId: string): Promise<void> {
+  const application = selectedApplication.value;
+  if (!application) return;
+  activeZappingAnalysisVideoId.value = videoId;
+  activeZappingAnalysisRequestId.value = "";
+  zappingAnalysisModalOpen.value = true;
+  try {
+    const requestId = await store.startZappingVideoAnalysis({
+      applicationId: application.id,
+      videoId,
+    });
+    activeZappingAnalysisRequestId.value = requestId;
+    toast.add({
+      title: "ザッピング解析を開始しました",
+      description: requestId,
+      color: "success",
+    });
+  } catch (err) {
+    zappingAnalysisModalOpen.value = false;
+    toast.add({
+      title: "ザッピング解析の開始に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
 }
 
-function applyApplicationScanProgressRoute(): void {
-  if (route.query.openApplicationScanProgress !== "1") return;
-  const applicationId =
-    typeof route.query.applicationId === "string" ? route.query.applicationId : "";
-  if (applicationId && store.selectedApplicationId !== applicationId) {
-    store.selectApplication(applicationId);
+async function startAllZappingVideoAnalysis(applicationId: string): Promise<void> {
+  if (!applicationId) return;
+  try {
+    const requestIds = await store.startAllZappingVideoAnalysis(applicationId);
+    activeZappingAnalysisVideoId.value =
+      store.activeOperationVideos.find((video) =>
+        requestIds.includes(video.analysisRequestId ?? "")
+      )?.id ?? store.activeOperationVideos[0]?.id ?? "";
+    activeZappingAnalysisRequestId.value = requestIds[0] ?? "";
+    zappingAnalysisModalOpen.value = requestIds.length > 0;
+    toast.add({
+      title: `${requestIds.length}件のザッピング解析を開始しました`,
+      description:
+        requestIds.length > 0
+          ? "RequestDocを発行しました"
+          : "解析対象の動画はありません",
+      color: requestIds.length > 0 ? "success" : "neutral",
+    });
+  } catch (err) {
+    toast.add({
+      title: "一括解析の開始に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
   }
-  activeApplicationTab.value = "scan";
+}
+
+function openAnalyzedZappingVideo(): void {
+  activeApplicationTab.value = "zapping";
   currentView.value = "application-detail";
-  applicationScanProgressModalOpen.value = true;
+  zappingAnalysisModalOpen.value = false;
 }
 
 function openDeleteConfirm(): void {

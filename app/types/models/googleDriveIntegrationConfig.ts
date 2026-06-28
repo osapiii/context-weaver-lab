@@ -14,10 +14,14 @@ import { firestoreTypeConverter } from "./firestoreTypeConverter";
 export const googleDriveIntegrationConfigSchema = z.object({
   // ユーザーが Service Account に共有した Drive フォルダの ID
   rootFolderId: z.string(),
+  // リンク共有フォルダで Drive API アクセスに必要になることがある resource key
+  rootFolderResourceKey: z.string().nullable().optional(),
   // 表示用の (作成時に Drive API から取得した) フォルダ名
   rootFolderName: z.string().nullable().optional(),
-  // 表示用 + コピー対象の SA メールアドレス
-  serviceAccountEmail: z.string(),
+  // OAuth 接続済みユーザーの Google アカウントで Drive API を実行する
+  authMode: z.literal("oauth").optional(),
+  // 旧 Service Account 連携からの後方互換。新規保存では空文字を許容する。
+  serviceAccountEmail: z.string().optional().default(""),
   // 同期先 FileSpace の Gemini storeId (= default FileSpace)
   linkedFileSpaceId: z.string().nullable().optional(),
   // 最後にオンデマンド同期した時刻 (UI 表示用)
@@ -43,3 +47,14 @@ export const googleDriveIntegrationConfigConverter = firestoreTypeConverter(
 
 // configId は organization 内で 1 つに固定する
 export const DEFAULT_DRIVE_CONFIG_ID = "default";
+
+// 複数接続スコープを持つ実装との互換名。現行は 1 organization 1 default config。
+export const DEFAULT_DRIVE_CONNECTION_ID = DEFAULT_DRIVE_CONFIG_ID;
+
+export type DecodedGoogleDriveConnection =
+  DecodedGoogleDriveIntegrationConfig & {
+    displayName?: string | null;
+    serviceAccountEmail?: string | null;
+    isDefault?: boolean;
+    status?: "active" | "disabled";
+  };

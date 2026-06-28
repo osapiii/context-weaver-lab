@@ -1,23 +1,19 @@
 """
-Google Drive API client (drive-to-gcs-sync local copy).
+Google Drive API client for drive-to-gcs-sync.
 
-Cloud Run の build context は単一 directory なので、共通 `backend/microservice/common/drive_client.py`
-を deploy.sh で COPY する。ここでは re-export だけ持つ (実体は同名ファイル).
-
-ローカルテスト時 (deploy.sh を経由しない場合) は repo root の `backend/microservice/common/drive_client.py`
-の symlink もしくはコピーが置かれている前提。
+OAuth credentials are built by the caller. This module owns Drive API retry
+behavior, Google Workspace exports, recursive listing, and resource-key support
+for link-shared folders/files.
 """
 
 from __future__ import annotations
 
 import io
-import os
 import ssl
 import time
 from typing import Callable, Optional, TypeVar
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build, Resource
+from googleapiclient.discovery import Resource, build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
 
@@ -35,7 +31,7 @@ _MAX_DRIVE_API_ATTEMPTS = 4
 
 
 def _execute_with_retry(execute_fn: Callable[[], T]) -> T:
-    """Google OAuth / Drive API 呼び出しの一時的な SSL / 接続断をリトライする。"""
+    """Retry transient SSL / network failures around Google API calls."""
     last_exc: BaseException | None = None
     for attempt in range(_MAX_DRIVE_API_ATTEMPTS):
         try:
@@ -52,46 +48,47 @@ def _execute_with_retry(execute_fn: Callable[[], T]) -> T:
     raise RuntimeError("_execute_with_retry: unreachable")
 
 
-DEFAULT_SA_KEY_PATH = "/etc/sa/drive-agent-key.json"
-DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
 
 
-def _resolve_sa_key_path() -> str:
-    return os.getenv("GOOGLE_DRIVE_SA_KEY_PATH", DEFAULT_SA_KEY_PATH)
-
-
-def _build_drive_service() -> Resource:
-    key_path = _resolve_sa_key_path()
-    if not os.path.exists(key_path):
-        raise FileNotFoundError(
-            f"Service Account key not found at {key_path}. "
-            "Set GOOGLE_DRIVE_SA_KEY_PATH or mount the secret via --set-secrets."
-        )
-    credentials = service_account.Credentials.from_service_account_file(
-        key_path, scopes=DRIVE_SCOPES
-    )
+def build_drive_service(credentials) -> Resource:
     return build("drive", "v3", credentials=credentials, cache_discovery=False)
 
 
-_drive_service_singleton: Optional[Resource] = None
+def _resource_key_header(resource_keys: dict[str, str | None] | None) -> str | None:
+    pairs = [
+        f"{file_id}/{resource_key}"
+        for file_id, resource_key in (resource_keys or {}).items()
+        if file_id and resource_key
+    ]
+    return ",".join(pairs) if pairs else None
 
 
-def get_drive_service() -> Resource:
-    global _drive_service_singleton
-    if _drive_service_singleton is None:
-        _drive_service_singleton = _build_drive_service()
-    return _drive_service_singleton
+def _apply_resource_key_header(
+    request: object,
+    resource_keys: dict[str, str | None] | None,
+) -> None:
+    header = _resource_key_header(resource_keys)
+    if not header:
+        return
+    headers = getattr(request, "headers", None)
+    if isinstance(headers, dict):
+        headers["X-Goog-Drive-Resource-Keys"] = header
 
 
-def list_files(folder_id: str, recursive: bool = False) -> list[dict]:
-    service = get_drive_service()
+def list_files(
+    service: Resource,
+    folder_id: str,
+    recursive: bool = False,
+    resource_keys: dict[str, str | None] | None = None,
+) -> list[dict]:
     all_files: list[dict] = []
     page_token: Optional[str] = None
     fields = (
         "nextPageToken, files(id, name, mimeType, modifiedTime, parents, size, "
-        "webViewLink, thumbnailLink)"
+        "webViewLink, thumbnailLink, resourceKey)"
     )
+    known_resource_keys = dict(resource_keys or {})
     while True:
         request = service.files().list(
             q=f"'{folder_id}' in parents and trashed = false",
@@ -101,8 +98,13 @@ def list_files(folder_id: str, recursive: bool = False) -> list[dict]:
             supportsAllDrives=True,
             includeItemsFromAllDrives=True,
         )
+        _apply_resource_key_header(request, known_resource_keys)
         response = _execute_with_retry(request.execute)
-        all_files.extend(response.get("files", []))
+        files = response.get("files", [])
+        for file in files:
+            if file.get("id") and file.get("resourceKey"):
+                known_resource_keys[file["id"]] = file["resourceKey"]
+        all_files.extend(files)
         page_token = response.get("nextPageToken")
         if not page_token:
             break
@@ -111,10 +113,17 @@ def list_files(folder_id: str, recursive: bool = False) -> list[dict]:
         return all_files
 
     result: list[dict] = []
-    for f in all_files:
-        result.append(f)
-        if f.get("mimeType") == DRIVE_FOLDER_MIME_TYPE:
-            result.extend(list_files(f["id"], recursive=True))
+    for item in all_files:
+        result.append(item)
+        if item.get("mimeType") == DRIVE_FOLDER_MIME_TYPE:
+            result.extend(
+                list_files(
+                    service,
+                    item["id"],
+                    recursive=True,
+                    resource_keys=known_resource_keys,
+                )
+            )
     return result
 
 
@@ -126,8 +135,12 @@ _GOOGLE_WORKSPACE_EXPORT = {
 }
 
 
-def download_file(file_id: str, mime_type: str | None = None) -> tuple[bytes, str]:
-    service = get_drive_service()
+def download_file(
+    service: Resource,
+    file_id: str,
+    mime_type: str | None = None,
+    resource_key: str | None = None,
+) -> tuple[bytes, str]:
     export_mime = _GOOGLE_WORKSPACE_EXPORT.get(mime_type or "")
     if export_mime:
         request = service.files().export_media(fileId=file_id, mimeType=export_mime)
@@ -135,6 +148,7 @@ def download_file(file_id: str, mime_type: str | None = None) -> tuple[bytes, st
     else:
         request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
         effective_mime = mime_type or "application/octet-stream"
+    _apply_resource_key_header(request, {file_id: resource_key})
 
     buf = io.BytesIO()
     downloader = MediaIoBaseDownload(buf, request)
@@ -146,18 +160,19 @@ def download_file(file_id: str, mime_type: str | None = None) -> tuple[bytes, st
     return buf.getvalue(), effective_mime
 
 
-def test_connection(root_folder_id: str) -> dict:
+def test_connection(
+    service: Resource,
+    root_folder_id: str,
+    root_folder_resource_key: str | None = None,
+) -> dict:
     try:
-        service = get_drive_service()
-        folder = _execute_with_retry(
-            lambda: service.files()
-            .get(
-                fileId=root_folder_id,
-                fields="id, name, mimeType",
-                supportsAllDrives=True,
-            )
-            .execute()
+        request = service.files().get(
+            fileId=root_folder_id,
+            fields="id, name, mimeType, resourceKey",
+            supportsAllDrives=True,
         )
+        _apply_resource_key_header(request, {root_folder_id: root_folder_resource_key})
+        folder = _execute_with_retry(request.execute)
         if folder.get("mimeType") != DRIVE_FOLDER_MIME_TYPE:
             return {"ok": False, "error": "指定された ID はフォルダではありません"}
         return {"ok": True, "rootFolderName": folder.get("name", "(no name)")}
@@ -171,7 +186,7 @@ def test_connection(root_folder_id: str) -> dict:
         if status == 403:
             return {
                 "ok": False,
-                "error": "アクセス権がありません。Service Account に共有されているか確認してください",
+                "error": "アクセス権がありません。接続した Google アカウントのフォルダ権限を確認してください",
             }
         return {"ok": False, "error": f"Drive API error: {e}"}
     except Exception as e:

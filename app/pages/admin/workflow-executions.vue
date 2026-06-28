@@ -135,8 +135,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useWorkflowExecutionsStore } from "@stores/workflowExecutions";
 import type { WorkflowItem } from "@models/workflowItem";
 import EnAiPageHeader from "@components/ai/EnAiPageHeader.vue";
@@ -145,6 +145,7 @@ import WorkflowExecutionDetailModal from "@components/workflow/WorkflowExecution
 
 const navModeIcons = useNavModeIcons();
 const router = useRouter();
+const route = useRoute();
 const store = useWorkflowExecutionsStore();
 
 definePageMeta({
@@ -233,6 +234,14 @@ const onOpenDetail = (item: WorkflowItem): void => {
   detailOpen.value = true;
 };
 
+const openDetailByJobId = (jobId: unknown): void => {
+  if (typeof jobId !== "string" || !jobId) return;
+  const item = store.items.find((candidate) => candidate.id === jobId);
+  if (!item) return;
+  selectedItem.value = item;
+  detailOpen.value = true;
+};
+
 const resetFilters = (): void => {
   sourceFilter.value = "all";
   statusFilter.value = "all";
@@ -242,4 +251,12 @@ const resetFilters = (): void => {
 onMounted(() => {
   store.subscribe();
 });
+
+watch(
+  () => [route.query.jobId, store.items] as const,
+  ([jobId]) => {
+    openDetailByJobId(jobId);
+  },
+  { immediate: true }
+);
 </script>

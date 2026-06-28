@@ -9,7 +9,6 @@ export const AI_STUDIO_HUB_JOB_KINDS = [
   "research",
   "data_analysis",
   "web_page",
-  "application_scan",
 ] as const satisfies readonly Exclude<AiStudioJobKind, null>[];
 
 export type AiStudioHubJobKind = (typeof AI_STUDIO_HUB_JOB_KINDS)[number];
@@ -20,7 +19,6 @@ export const AI_STUDIO_HUB_VISIBLE_JOB_KINDS = [
   "writing",
   "image",
   "web_page",
-  "application_scan",
   "research",
   "data_analysis",
 ] as const satisfies readonly AiStudioHubJobKind[];
@@ -142,15 +140,6 @@ export const AI_STUDIO_HUB_JOB_META: Record<
     emptyHeading: "WEBページのセッションはまだありません",
     emptyDescription:
       "目的・ページタイプ・参考URLから、シングルページLPのHTMLと素材を生成します。",
-  },
-  application_scan: {
-    kind: "application_scan",
-    label: "Screen Atlas",
-    shortLabel: "Atlas",
-    icon: "material-symbols:travel-explore",
-    emptyHeading: "Screen Atlasのセッションはまだありません",
-    emptyDescription:
-      "対象アプリの画面一覧・スクリーンショット・状態VariantをSSOTとして保存します。",
   },
 };
 

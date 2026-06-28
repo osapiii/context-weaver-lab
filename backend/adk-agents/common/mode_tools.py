@@ -11,8 +11,8 @@ WorkspaceMode = Literal[
     "research",
     "data_analysis",
     "web_page",
-    "application_scan",
     "vibe_control",
+    "vibe_zapping_analysis",
     "vibe_capability_structuring",
     "vibe_story_generation",
 ]
@@ -26,8 +26,8 @@ _VALID_MODES = frozenset(
         "research",
         "data_analysis",
         "web_page",
-        "application_scan",
         "vibe_control",
+        "vibe_zapping_analysis",
         "vibe_capability_structuring",
         "vibe_story_generation",
     }
@@ -45,7 +45,7 @@ def convert_mode(
     サーバーは同一 HTTP リクエスト内で切替先エージェントへハンドオフする.
 
     Args:
-        mode: 切り替え先 ("writing" | "sheet" | "image" | "consultation" | "research" | "data_analysis" | "web_page" | "application_scan" | "vibe_control" | "vibe_capability_structuring" | "vibe_story_generation")
+        mode: 切り替え先 ("writing" | "sheet" | "image" | "consultation" | "research" | "data_analysis" | "web_page" | "vibe_control" | "vibe_zapping_analysis" | "vibe_capability_structuring" | "vibe_story_generation")
         reason: 切替理由 (1 行、UI 表示用)
 
     Returns:

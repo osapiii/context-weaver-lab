@@ -3,6 +3,10 @@
 </template>
 
 <script lang="ts" setup>
+defineOptions({
+  name: "AdminWorkPage",
+});
+
 /**
  * 「仕事をこなす」モード TOP。
  * AI に依頼するカード (経営相談 / 書類記入 / 調査レポート / 画像生成) を
@@ -15,5 +19,5 @@ definePageMeta({
 });
 
 const { modes } = useNavigationModeRegistry();
-const mode = computed(() => modes.find((m) => m.key === "work"));
+const mode = computed(() => modes.find((m) => m.key === "worklog"));
 </script>

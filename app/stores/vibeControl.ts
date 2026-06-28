@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
+import { deleteObject } from "firebase/storage";
 import log from "@utils/logger";
 import createRandomDocId from "@utils/createRandomDocId";
 import { useFirestoreDocOperation } from "@composables/firestore-doc-operation";
@@ -11,7 +12,10 @@ import {
 import { useContextStore } from "./context";
 import { useOrganizationStore } from "./organization";
 import { useSpaceStore } from "./space";
-import { useFirebaseStorageOperations } from "@composables/firebase-storage-operations";
+import {
+  storageRefForBucketPath,
+  useFirebaseStorageOperations,
+} from "@composables/firebase-storage-operations";
 import { buildAdkInvokeInput } from "@utils/adkInvokeInputBuilder";
 import {
   buildApplicationScanInitialPrompt,
@@ -47,9 +51,11 @@ import type {
   VibeControlApplicationScanRun,
   VibeControlDriftLevel,
   VibeControlOperationVideoDisplaySurface,
+  VibeControlOperationVideoQuickScan,
   VibeControlReviewState,
   VibeControlScanAuthMode,
   VibeControlStoryStatus,
+  VibeControlZappingAnalysisResult,
 } from "@models/vibeControl";
 import {
   vibeControlApplicationScanProfileConverter,
@@ -62,7 +68,9 @@ import {
   vibeControlSourceConnectionConverter,
   vibeControlStoryConverter,
   vibeControlStoryEvidenceConverter,
+  VibeControlZappingAnalysisResultSchema,
 } from "@models/vibeControl";
+import { reportDatadogError } from "@utils/datadogObservability";
 
 export type VibeControlFilters = {
   query: string;
@@ -132,10 +140,28 @@ export type VibeControlOperationVideoSaveInput = {
   applicationId: string;
   title: string;
   description?: string;
+  tags?: string[];
+  transcriptText?: string;
+  transcriptProvider?: string;
+  transcriptSummary?: string;
+  quickScan?: VibeControlOperationVideoQuickScan;
+  frameCaptures?: Array<{
+    timestampMs: number;
+    blob: Blob;
+    contentType?: string;
+    width?: number;
+    height?: number;
+  }>;
   blob: Blob;
   durationMs?: number;
   contentType?: string;
   sourceDisplaySurface?: VibeControlOperationVideoDisplaySurface;
+};
+
+export type VibeControlZappingVideoAnalysisInput = {
+  applicationId: string;
+  videoId: string;
+  prompt?: string;
 };
 
 export type VibeControlSeparatedAdkMode =
@@ -149,6 +175,8 @@ export type VibeControlGenerationAgentInput = {
 };
 
 const nowIso = () => new Date().toISOString();
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const toDocId = (value: string, fallback: string): string => {
   const normalized = value
@@ -175,6 +203,58 @@ const extractFileSpaceIdFromCreateRequest = (
   const name = output.name;
   if (typeof name !== "string" || !name.trim()) return "";
   return name.split("/").filter(Boolean).at(-1) ?? "";
+};
+
+const extractZappingAnalysisResultCandidate = (
+  value: unknown
+): VibeControlZappingAnalysisResult | undefined => {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const direct = VibeControlZappingAnalysisResultSchema.safeParse(
+    normalizeAdkResultValue(value)
+  );
+  if (direct.success) return direct.data;
+
+  const resultShape = {
+    schemaVersion: record.schemaVersion,
+    generatedAt: record.generatedAt,
+    transcriptSummary: record.transcriptSummary,
+    productContextSummary: record.productContextSummary,
+    operationIntent: record.operationIntent,
+    storyCandidates: record.storyCandidates,
+    notes: record.notes,
+  };
+  const shaped = VibeControlZappingAnalysisResultSchema.safeParse(
+    normalizeAdkResultValue(resultShape)
+  );
+  if (shaped.success) return shaped.data;
+
+  const candidates = [
+    record.analysis_result,
+    record.analysisResult,
+    record.vibe_zapping_analysis,
+    record.vibeZappingAnalysis,
+    record.state,
+    record.output,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate || candidate === value) continue;
+    const parsed = extractZappingAnalysisResultCandidate(candidate);
+    if (parsed) return parsed;
+  }
+  return undefined;
+};
+
+const normalizeAdkResultValue = (value: unknown): unknown => {
+  if (value === null) return undefined;
+  if (Array.isArray(value)) return value.map((item) => normalizeAdkResultValue(item));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      normalizeAdkResultValue(item),
+    ])
+  );
 };
 
 const mockApplications: DecodedVibeControlApplication[] = [
@@ -574,6 +654,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
     isStartingApplicationScan: false,
     isProvisioningApplicationFileSpace: false,
     isSavingOperationVideo: false,
+    isAnalyzingZappingVideos: false,
     error: null as string | null,
     lastRunLog: [] as string[],
     filters: {
@@ -1889,6 +1970,71 @@ export const useVibeControlStore = defineStore("vibeControl", {
           metadata: asset.metadata,
         }));
     },
+    zappingKnowledgePipelineForApplication(applicationId: string): Record<string, unknown> {
+      const videos = this.operationVideos.filter(
+        (video) => video.applicationId === applicationId
+      );
+      const zappingAssets = this.sourceAssets.filter(
+        (asset) =>
+          asset.applicationId === applicationId &&
+          asset.sourceType.startsWith("operation_video")
+      );
+      const searchReadyStatuses = new Set(["queued", "completed"]);
+      const searchDocuments = zappingAssets.filter((asset) =>
+        searchReadyStatuses.has(asset.discoveryStatus)
+      );
+      const frameCount = videos.reduce(
+        (sum, video) => sum + (video.frameCaptures?.length ?? 0),
+        0
+      );
+      const transcriptCount = videos.filter(
+        (video) =>
+          Boolean(video.transcriptText?.trim()) ||
+          Boolean(video.transcriptSummary?.trim()) ||
+          Boolean(video.quickScan?.transcriptSummary?.trim())
+      ).length;
+      const analyzedCount = videos.filter(
+        (video) => video.analysisStatus === "completed"
+      ).length;
+
+      return {
+        enabled: true,
+        retrieval_strategy: "vertex_ai_search",
+        file_space_id:
+          this.applications.find((item) => item.id === applicationId)?.fileSpaceId ??
+          null,
+        source_of_truth:
+          "操作動画から抽出したスクリーンショット、Aqua Voice全文文字起こし、Gemini要約、操作ステップをFileSpace/Vertex AI Searchへ登録し、Capability/Story ADKが検索参照します。",
+        included_evidence: [
+          "operation_video_metadata",
+          "operation_video_journey",
+          "frame_captures",
+          "aqua_voice_transcript",
+          "transcript_summary",
+          "operation_steps",
+          "zapping_analysis_result",
+        ],
+        operation_video_count: videos.length,
+        search_document_count: searchDocuments.length,
+        zapping_asset_count: zappingAssets.length,
+        frame_capture_count: frameCount,
+        transcript_count: transcriptCount,
+        analyzed_video_count: analyzedCount,
+        latest_videos: videos.slice(0, 10).map((video) => ({
+          id: video.id,
+          title: video.title,
+          discoveryStatus: video.discoveryStatus,
+          analysisStatus: video.analysisStatus,
+          fileSpaceRequestId: video.fileSpaceRequestId,
+          journeyFileSpaceRequestId: video.journeyFileSpaceRequestId,
+          frameCount: video.frameCaptures?.length ?? 0,
+          hasTranscript:
+            Boolean(video.transcriptText?.trim()) ||
+            Boolean(video.transcriptSummary?.trim()) ||
+            Boolean(video.quickScan?.transcriptSummary?.trim()),
+        })),
+      };
+    },
     async persistGenerationSession(
       session: DecodedVibeControlGenerationSession
     ): Promise<void> {
@@ -1903,6 +2049,100 @@ export const useVibeControlStore = defineStore("vibeControl", {
         converter: vibeControlGenerationSessionConverter,
         merge: true,
       });
+    },
+    async persistOperationVideo(
+      video: DecodedVibeControlOperationVideo
+    ): Promise<void> {
+      this.operationVideos = [
+        video,
+        ...this.operationVideos.filter((item) => item.id !== video.id),
+      ];
+      await useFirestoreDocOperation().createDocument({
+        collectionName: this.operationVideoCollectionPath(),
+        docId: video.id,
+        docData: video,
+        converter: vibeControlOperationVideoConverter,
+        merge: true,
+      });
+    },
+    buildZappingAnalysisModeState(params: {
+      application: DecodedVibeControlApplication;
+      video: DecodedVibeControlOperationVideo;
+      analysisSessionId: string;
+      prompt?: string;
+    }): Record<string, unknown> {
+      const sourceAssets = this.sourceAssetPayloadForApplication(
+        params.application.id
+      );
+      return {
+        active_mode: "vibe_zapping_analysis",
+        vibe_zapping_analysis: {
+          phase: "zapping_analysis",
+          setup: {
+            confirmed: true,
+            analysis_session_id: params.analysisSessionId,
+            application_id: params.application.id,
+            application_key: params.application.applicationKey,
+            application_name: params.application.name,
+            file_space_id: params.application.fileSpaceId,
+            repo_full_name: params.application.repoFullName,
+            default_branch: params.application.defaultBranch || "main",
+            operation_video_id: params.video.id,
+            video_storage_path: params.video.storagePath,
+            video_bucket_name: params.video.bucketName,
+            video_content_type: params.video.contentType,
+            video_duration_ms: params.video.durationMs,
+          },
+          payload: {
+            operation_video: {
+              id: params.video.id,
+              title: params.video.title,
+              description: params.video.description,
+              quickScan: params.video.quickScan,
+              transcriptText: params.video.transcriptText,
+              transcriptProvider: params.video.transcriptProvider,
+              transcriptSummary: params.video.transcriptSummary,
+              fileName: params.video.fileName,
+              bucketName: params.video.bucketName,
+              storagePath: params.video.storagePath,
+              contentType: params.video.contentType,
+              sizeBytes: params.video.sizeBytes,
+              durationMs: params.video.durationMs,
+              frameCaptures: params.video.frameCaptures,
+              recordedAt: params.video.recordedAt,
+              sourceDisplaySurface: params.video.sourceDisplaySurface,
+              sourceAssetId: params.video.sourceAssetId,
+              journeySourceAssetId: params.video.journeySourceAssetId,
+            },
+            source_assets: sourceAssets,
+            existing_capabilities: this.capabilities.filter(
+              (capability) =>
+                capability.applicationId === params.application.id
+            ),
+            existing_stories: this.stories.filter(
+              (story) => story.applicationId === params.application.id
+            ),
+            existing_evidence: this.evidence.filter(
+              (item) => item.applicationId === params.application.id
+            ),
+            user_notes: params.prompt?.trim() || undefined,
+            expected_outputs: [
+              "story_candidates",
+              "story_evidence_video_segments",
+              "story_evidence_screenshots",
+              "operation_intent",
+            ],
+          },
+          tools: {
+            vertex_ai_search: {
+              enabled: true,
+              file_space_id: params.application.fileSpaceId,
+              purpose:
+                "動画の操作意図を、事業・プロダクト背景を含むFileSpace文脈で解釈する",
+            },
+          },
+        },
+      };
     },
     buildVibeGenerationModeState(params: {
       mode: VibeControlSeparatedAdkMode;
@@ -1929,6 +2169,8 @@ export const useVibeControlStore = defineStore("vibeControl", {
 
       const payload: Record<string, unknown> = {
         source_assets: this.sourceAssetPayloadForApplication(applicationId),
+        knowledge_pipeline:
+          this.zappingKnowledgePipelineForApplication(applicationId),
         existing_capabilities: this.capabilities.filter(
           (capability) => capability.applicationId === applicationId
         ),
@@ -1950,6 +2192,23 @@ export const useVibeControlStore = defineStore("vibeControl", {
           phase: "drafting",
           setup,
           payload,
+          tools: {
+            vertex_ai_search: {
+              enabled: Boolean(params.application.fileSpaceId?.trim()),
+              file_space_id: params.application.fileSpaceId,
+              primary_sources: [
+                "operation_video_metadata",
+                "operation_video_journey",
+                "aqua_voice_transcript",
+                "transcript_summary",
+                "operation_steps",
+                "frame_captures",
+                "zapping_analysis_result",
+              ],
+              purpose:
+                "ザッピング動画由来のリッチ証跡をFileSpace/Vertex AI Searchから検索し、Capability/Story候補の一次根拠として使う",
+            },
+          },
         },
       };
     },
@@ -1968,6 +2227,186 @@ export const useVibeControlStore = defineStore("vibeControl", {
         ...input,
         mode: "vibe_story_generation",
       });
+    },
+    async startZappingVideoAnalysis(
+      input: VibeControlZappingVideoAnalysisInput
+    ): Promise<string> {
+      const application = this.applications.find(
+        (item) => item.id === input.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      const video = this.operationVideos.find(
+        (item) => item.id === input.videoId && item.applicationId === application.id
+      );
+      if (!video) {
+        throw new Error("対象ザッピング動画が見つかりません");
+      }
+      const fileSpaceId = application.fileSpaceId?.trim();
+      if (!fileSpaceId) {
+        throw new Error("ザッピング解析に使うアプリ専用FileSpace IDを設定してください");
+      }
+
+      const orgId = useOrganizationStore().loggedInOrganizationInfo?.id ?? "";
+      const spaceId = useSpaceStore().selectedSpace?.id ?? "";
+      const uid = getAuth().currentUser?.uid;
+      if (!orgId || !spaceId || !uid) {
+        throw new Error("組織・スペース・ログイン状態を確認してください");
+      }
+
+      const analysisSessionId = `vibecontrol-zapping-analysis-${application.id}-${video.id}-${Date.now()}-${createRandomDocId()}`;
+      const responseId = `zapping-analysis-response-${createRandomDocId()}`;
+      const modeState = this.buildZappingAnalysisModeState({
+        application,
+        video,
+        analysisSessionId,
+        prompt: input.prompt,
+      });
+      const prompt =
+        input.prompt?.trim() ||
+        [
+          `${application.name} のザッピング動画「${video.title}」を解析してください。`,
+          "このRequestDocにはザッピング動画ファイルを添付しています。動画内の画面遷移と音声を第一情報源として扱ってください。",
+          "アプリ専用FileSpaceのVertex AI Searchを参照し、事業背景・プロダクト背景・既存ナレッジを踏まえて動画の操作意図を解釈してください。",
+          "動画からUser Story候補を抽出し、各Storyに根拠となる動画タイムレンジ、代表スクリーンショット、関連スクリーンショットを紐付けてください。",
+          "5秒ごとのスクリーンショットと簡易スキャンメモも補助情報として参照してください。",
+        ].join("\n");
+
+      this.isAnalyzingZappingVideos = true;
+      this.error = null;
+      try {
+        const queuedVideo: DecodedVibeControlOperationVideo = {
+          ...video,
+          analysisStatus: "queued",
+          analysisSessionId,
+          analysisOrganizationId: orgId,
+          analysisSpaceId: spaceId,
+          analysisErrorMessage: undefined,
+        };
+        await this.persistOperationVideo(queuedVideo);
+
+        const requestId = await createAdkInvokeRequest({
+          organizationId: orgId,
+          spaceId,
+          input: buildAdkInvokeInput({
+            mode: "vibe_zapping_analysis",
+            sessionId: analysisSessionId,
+            organizationId: orgId,
+            spaceId,
+            userId: uid,
+            prompt,
+            responseId,
+            model: defaultLlmModelSelectionForAdkMode(
+              "vibe_zapping_analysis"
+            ),
+            fileSpaceId,
+            workspaceId: application.id,
+            history: [],
+            modeState,
+            attachments: [
+              {
+                gcsPath: `gs://${video.bucketName}/${video.storagePath}`,
+                mimeType: video.contentType || "video/webm",
+                fileName: video.fileName,
+              },
+            ],
+          }),
+        });
+
+        await this.persistOperationVideo({
+          ...queuedVideo,
+          analysisRequestId: requestId,
+          analysisStatus: "running",
+        });
+        this.lastRunLog.unshift(
+          `Zapping Analysis: ${application.name} / ${video.title} の解析を開始`
+        );
+
+        const stopWatch = watchAdkInvokeRequest({
+          organizationId: orgId,
+          spaceId,
+          requestId,
+          onUpdate: (
+            status: RequestStatus,
+            errorMessage?: string,
+            output?: AdkInvokeOutput
+          ) => {
+            void this.updateZappingVideoAnalysisStatus({
+              videoId: video.id,
+              requestId,
+              status,
+              errorMessage,
+              output,
+            });
+            if (status === "completed" || status === "error") {
+              stopWatch();
+            }
+          },
+        });
+
+        return requestId;
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "ザッピング解析の開始に失敗しました";
+        await this.persistOperationVideo({
+          ...video,
+          analysisStatus: "error",
+          analysisSessionId,
+          analysisOrganizationId: orgId,
+          analysisSpaceId: spaceId,
+          analysisErrorMessage: message,
+        });
+        this.error = message;
+        throw err;
+      } finally {
+        this.isAnalyzingZappingVideos = false;
+      }
+    },
+    async startAllZappingVideoAnalysis(applicationId: string): Promise<string[]> {
+      const targets = this.operationVideos.filter(
+        (video) =>
+          video.applicationId === applicationId &&
+          video.analysisStatus !== "queued" &&
+          video.analysisStatus !== "running"
+      );
+      const requestIds: string[] = [];
+      for (const video of targets) {
+        requestIds.push(
+          await this.startZappingVideoAnalysis({
+            applicationId,
+            videoId: video.id,
+          })
+        );
+      }
+      return requestIds;
+    },
+    async fetchZappingAnalysisResultFromSession(params: {
+      organizationId: string;
+      spaceId: string;
+      sessionId: string;
+    }): Promise<VibeControlZappingAnalysisResult | undefined> {
+      if (!params.organizationId || !params.spaceId || !params.sessionId) {
+        return undefined;
+      }
+      const ref = doc(
+        getFirestore(),
+        "organizations",
+        params.organizationId,
+        "spaces",
+        params.spaceId,
+        "adkSessions",
+        params.sessionId
+      );
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const snap = await getDoc(ref);
+        const data = snap.exists() ? snap.data() : null;
+        const state = data?.state;
+        const result = extractZappingAnalysisResultCandidate(state);
+        if (result) return result;
+        await sleep(750);
+      }
+      return undefined;
     },
     async startSeparatedGenerationAgent(
       input: VibeControlGenerationAgentInput & {
@@ -2004,6 +2443,8 @@ export const useVibeControlStore = defineStore("vibeControl", {
       const sourceAssets = this.sourceAssets.filter(
         (asset) => asset.applicationId === application.id
       );
+      const zappingKnowledgePipeline =
+        this.zappingKnowledgePipelineForApplication(application.id);
       const generationSession: DecodedVibeControlGenerationSession = {
         id: generationSessionId,
         applicationId: application.id,
@@ -2037,6 +2478,18 @@ export const useVibeControlStore = defineStore("vibeControl", {
           videoCount: sourceAssets.filter((asset) =>
             asset.sourceType.startsWith("operation_video")
           ).length,
+          zappingSearchDocumentCount:
+            typeof zappingKnowledgePipeline.search_document_count === "number"
+              ? zappingKnowledgePipeline.search_document_count
+              : 0,
+          zappingFrameCount:
+            typeof zappingKnowledgePipeline.frame_capture_count === "number"
+              ? zappingKnowledgePipeline.frame_capture_count
+              : 0,
+          transcriptCount:
+            typeof zappingKnowledgePipeline.transcript_count === "number"
+              ? zappingKnowledgePipeline.transcript_count
+              : 0,
           evidenceCount: this.evidence.filter(
             (item) => item.applicationId === application.id
           ).length,
@@ -2057,10 +2510,23 @@ export const useVibeControlStore = defineStore("vibeControl", {
         const prompt =
           input.prompt?.trim() ||
           (input.mode === "vibe_capability_structuring"
-            ? `${application.name} のSourceAssetからCapability構造案を作成してください。`
+            ? [
+                `${application.name} のCapability構造案を作成してください。`,
+                "操作動画から抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
+                "参照対象は動画メタデータ、操作Journey、5秒ごとのスクリーンショット、Aqua Voice全文文字起こし、文字起こし要約、操作ステップです。",
+                "SourceAssetの生データだけで完結させず、Search Store上の文脈を検索して業務能力の境界を決めてください。",
+              ].join("\n")
             : capability
-              ? `${application.name} の ${capability.name} 配下に置くユーザーストーリー案を生成してください。`
-              : `${application.name} の既存Capability群に紐づくユーザーストーリー案を生成してください。`);
+              ? [
+                  `${application.name} の ${capability.name} 配下に置くユーザーストーリー案を生成してください。`,
+                  "操作動画から抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
+                  "動画の全文文字起こし、要約、操作ステップ、スクリーンショット群を検索し、ユーザーの意図と業務文脈が分かるStory/Acceptance Criteriaにしてください。",
+                ].join("\n")
+              : [
+                  `${application.name} の既存Capability群に紐づくユーザーストーリー案を生成してください。`,
+                  "操作動画から抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
+                  "動画の全文文字起こし、要約、操作ステップ、スクリーンショット群を検索し、Capabilityごとのユーザー目的に落とし込んでください。",
+                ].join("\n"));
 
         const requestId = await createAdkInvokeRequest({
           organizationId: orgId,
@@ -2131,6 +2597,56 @@ export const useVibeControlStore = defineStore("vibeControl", {
       } finally {
         this.isGenerating = false;
       }
+    },
+    async updateZappingVideoAnalysisStatus(params: {
+      videoId: string;
+      requestId: string;
+      status: RequestStatus;
+      errorMessage?: string;
+      output?: AdkInvokeOutput;
+    }): Promise<void> {
+      const video = this.operationVideos.find((item) => item.id === params.videoId);
+      if (!video || video.analysisRequestId !== params.requestId) return;
+      const nextStatus: DecodedVibeControlOperationVideo["analysisStatus"] =
+        params.status === "completed"
+          ? "completed"
+          : params.status === "error"
+            ? "error"
+            : "running";
+      void params.output;
+      const completedSessionId =
+        (params.output && typeof params.output === "object" && "sessionId" in params.output
+          ? params.output.sessionId
+          : undefined) || video.analysisSessionId;
+      const analysisOrganizationId =
+        video.analysisOrganizationId ||
+        useOrganizationStore().loggedInOrganizationInfo?.id ||
+        "";
+      const analysisSpaceId =
+        video.analysisSpaceId || useSpaceStore().selectedSpace?.id || "";
+      const analysisResult =
+        params.status === "completed" && completedSessionId
+          ? await this.fetchZappingAnalysisResultFromSession({
+              organizationId: analysisOrganizationId,
+              spaceId: analysisSpaceId,
+              sessionId: completedSessionId,
+            })
+          : undefined;
+      await this.persistOperationVideo({
+        ...video,
+        analysisStatus: nextStatus,
+        analysisSessionId: completedSessionId || video.analysisSessionId,
+        analysisOrganizationId,
+        analysisSpaceId,
+        analysisErrorMessage:
+          params.status === "completed"
+            ? analysisResult
+              ? ""
+              : "ADKは完了しましたが、解析結果をsession stateから取得できませんでした"
+            : params.errorMessage || "",
+        analyzedAt: params.status === "completed" ? nowIso() : video.analyzedAt,
+        analysisResult: analysisResult ?? video.analysisResult,
+      });
     },
     async updateGenerationSessionStatus(params: {
       generationSessionId: string;
@@ -2284,6 +2800,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
       durationMs?: number;
       recordedAt: string;
       sourceDisplaySurface?: VibeControlOperationVideoDisplaySurface;
+      tags?: string[];
+      transcriptText?: string;
+      transcriptProvider?: string;
+      transcriptSummary?: string;
+      quickScan?: VibeControlOperationVideoSaveInput["quickScan"];
+      frameCaptures?: NonNullable<
+        DecodedVibeControlOperationVideo["frameCaptures"]
+      >;
     }): string {
       return buildOperationVideoMetadataMarkdown(params);
     },
@@ -2297,9 +2821,6 @@ export const useVibeControlStore = defineStore("vibeControl", {
         throw new Error("対象アプリが見つかりません");
       }
       const fileSpaceId = application.fileSpaceId?.trim();
-      if (!fileSpaceId) {
-        throw new Error("操作動画をDiscoveryEngineへ登録するFileSpace IDを設定してください");
-      }
 
       const organizationStore = useOrganizationStore();
       const spaceStore = useSpaceStore();
@@ -2332,6 +2853,15 @@ export const useVibeControlStore = defineStore("vibeControl", {
         const safeTitle = toDocId(title, "operation-video");
         const timestamp = now.replace(/[:.]/g, "-");
         const contentType = input.contentType || input.blob.type || "video/webm";
+        const tags =
+          input.tags
+            ?.map((tag) => tag.trim())
+            .filter((tag, index, arr) => tag && arr.indexOf(tag) === index) ?? [];
+        const transcriptText = input.transcriptText?.trim() || undefined;
+        const transcriptProvider = input.transcriptProvider?.trim() || undefined;
+        const transcriptSummary = input.transcriptSummary?.trim() || undefined;
+        const quickScan = input.quickScan;
+        const requestErrors: string[] = [];
         const extension = contentType.includes("mp4") ? "mp4" : "webm";
         const fileName = `${safeTitle}-${timestamp}.${extension}`;
         const storagePath = contextStore.baseGcsPath(
@@ -2345,16 +2875,43 @@ export const useVibeControlStore = defineStore("vibeControl", {
           mimeType: contentType,
         });
         if (!uploaded) {
-          throw new Error("操作動画のFirebase Storage保存に失敗しました");
+          throw new Error("ザッピング動画のFirebase Storage保存に失敗しました");
+        }
+
+        const frameCaptures: NonNullable<
+          DecodedVibeControlOperationVideo["frameCaptures"]
+        > = [];
+        for (const [index, frame] of (input.frameCaptures ?? []).entries()) {
+          if (frame.blob.size <= 0) continue;
+          const frameId = `frame-${String(index + 1).padStart(3, "0")}`;
+          const frameContentType = frame.contentType || frame.blob.type || "image/jpeg";
+          const frameFileName = `${safeTitle}-${timestamp}-${frameId}.jpg`;
+          const frameStoragePath = contextStore.baseGcsPath(
+            `vibeControl/applications/${application.id}/operationVideos/${videoId}/frames/${frameFileName}`
+          );
+          const frameUploaded = await storageOps.uploadPdfFile({
+            bucketName,
+            filePath: frameStoragePath,
+            rawData: frame.blob,
+            mimeType: frameContentType,
+          });
+          if (!frameUploaded) {
+            requestErrors.push(`${frameId} のスクリーンショット保存に失敗しました`);
+            continue;
+          }
+          frameCaptures.push({
+            id: frameId,
+            timestampMs: Math.max(0, Math.round(frame.timestampMs)),
+            fileName: frameFileName,
+            bucketName,
+            storagePath: frameStoragePath,
+            contentType: frameContentType,
+            width: frame.width,
+            height: frame.height,
+          });
         }
 
         const metadataFileName = `${safeTitle}-${timestamp}.md`;
-        const metadataStoragePath = contextStore.baseGcsPath(
-          manualUploadRelativePath({
-            fileSpaceId,
-            fileName: metadataFileName,
-          })
-        );
         const metadataMarkdown = this.buildOperationVideoMarkdown({
           application,
           videoId,
@@ -2367,14 +2924,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
           durationMs: input.durationMs,
           recordedAt: now,
           sourceDisplaySurface: input.sourceDisplaySurface,
+          tags,
+          transcriptText,
+          transcriptProvider,
+          transcriptSummary,
+          quickScan,
+          frameCaptures,
         });
         const journeyFileName = `${safeTitle}-${timestamp}-journey.md`;
-        const journeyStoragePath = contextStore.baseGcsPath(
-          manualUploadRelativePath({
-            fileSpaceId,
-            fileName: journeyFileName,
-          })
-        );
         const journeyMarkdown = buildOperationVideoJourneyMarkdown({
           application,
           videoId,
@@ -2387,106 +2944,135 @@ export const useVibeControlStore = defineStore("vibeControl", {
           durationMs: input.durationMs,
           recordedAt: now,
           sourceDisplaySurface: input.sourceDisplaySurface,
+          tags,
+          transcriptText,
+          transcriptProvider,
+          transcriptSummary,
+          quickScan,
+          frameCaptures,
         });
 
         let fileSpaceRequestId: string | undefined;
         let journeyFileSpaceRequestId: string | undefined;
+        let metadataStoragePath: string | undefined;
+        let journeyStoragePath: string | undefined;
         let discoveryStatus: DecodedVibeControlOperationVideo["discoveryStatus"] =
           "not_registered";
         const sourceAssetId = `source-asset-${videoId}`;
         const journeySourceAssetId = `source-asset-${videoId}-journey`;
-        const requestErrors: string[] = [];
 
-        const metadataUploaded = await storageOps.uploadPdfFile({
-          bucketName,
-          filePath: metadataStoragePath,
-          rawData: new Blob([metadataMarkdown], { type: "text/markdown" }),
-          mimeType: "text/markdown",
-        });
+        if (fileSpaceId) {
+          metadataStoragePath = contextStore.baseGcsPath(
+            manualUploadRelativePath({
+              fileSpaceId,
+              fileName: metadataFileName,
+            })
+          );
+          journeyStoragePath = contextStore.baseGcsPath(
+            manualUploadRelativePath({
+              fileSpaceId,
+              fileName: journeyFileName,
+            })
+          );
 
-        if (metadataUploaded) {
-          const requestDoc =
-            await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
-              operationType: "fileSpaceUpload",
-              storeId: fileSpaceId,
-              bucketName,
-              filePath: metadataStoragePath,
-              mimeType: "text/markdown",
-              documentId: `vibecontrol-operation-video-${videoId}`,
-              description: `VibeControl operation video metadata: ${title}`,
-              customMetadata: [
-                { key: "source", value: "vibe-control-operation-video" },
-                { key: "applicationId", value: application.id },
-                { key: "applicationKey", value: application.applicationKey },
-                { key: "operationVideoId", value: videoId },
-                { key: "sourceAssetId", value: sourceAssetId },
-                { key: "videoStoragePath", value: storagePath },
-                { key: "documentKind", value: "operation_video_metadata" },
-              ],
-              originalFileInfo: {
-                fileName: metadataFileName,
-                bytes: new Blob([metadataMarkdown]).size,
-              },
-              organizationId,
-              spaceId,
-            });
-          if (requestDoc?.id) {
-            fileSpaceRequestId = requestDoc.id;
+          const metadataUploaded = await storageOps.uploadPdfFile({
+            bucketName,
+            filePath: metadataStoragePath,
+            rawData: new Blob([metadataMarkdown], { type: "text/markdown" }),
+            mimeType: "text/markdown",
+          });
+
+          if (metadataUploaded) {
+            const requestDoc =
+              await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
+                operationType: "fileSpaceUpload",
+                storeId: fileSpaceId,
+                bucketName,
+                filePath: metadataStoragePath,
+                mimeType: "text/markdown",
+                documentId: `vibecontrol-operation-video-${videoId}`,
+                description: `VibeControl operation video metadata: ${title}`,
+                customMetadata: [
+                  { key: "source", value: "vibe-control-operation-video" },
+                  { key: "applicationId", value: application.id },
+                  { key: "applicationKey", value: application.applicationKey },
+                  { key: "operationVideoId", value: videoId },
+                  { key: "sourceAssetId", value: sourceAssetId },
+                  { key: "videoStoragePath", value: storagePath },
+                  { key: "documentKind", value: "operation_video_metadata" },
+                ],
+                originalFileInfo: {
+                  fileName: metadataFileName,
+                  bytes: new Blob([metadataMarkdown]).size,
+                },
+                organizationId,
+                spaceId,
+              });
+            if (requestDoc?.id) {
+              fileSpaceRequestId = requestDoc.id;
+            } else {
+              requestErrors.push("動画メタデータのFileSpace upload RequestDoc作成に失敗しました");
+            }
           } else {
-            requestErrors.push("動画メタデータのFileSpace upload RequestDoc作成に失敗しました");
+            requestErrors.push("検索用メタデータMarkdownの保存に失敗しました");
           }
-        } else {
-          requestErrors.push("検索用メタデータMarkdownの保存に失敗しました");
+
+          const journeyUploaded = await storageOps.uploadPdfFile({
+            bucketName,
+            filePath: journeyStoragePath,
+            rawData: new Blob([journeyMarkdown], { type: "text/markdown" }),
+            mimeType: "text/markdown",
+          });
+
+          if (journeyUploaded) {
+            const requestDoc =
+              await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
+                operationType: "fileSpaceUpload",
+                storeId: fileSpaceId,
+                bucketName,
+                filePath: journeyStoragePath,
+                mimeType: "text/markdown",
+                documentId: `vibecontrol-operation-video-journey-${videoId}`,
+                description: `VibeControl operation journey evidence: ${title}`,
+                customMetadata: [
+                  { key: "source", value: "vibe-control-operation-video-journey" },
+                  { key: "applicationId", value: application.id },
+                  { key: "applicationKey", value: application.applicationKey },
+                  { key: "applicationName", value: application.name },
+                  { key: "repoFullName", value: application.repoFullName },
+                  { key: "operationVideoId", value: videoId },
+                  { key: "sourceAssetId", value: journeySourceAssetId },
+                  { key: "videoStoragePath", value: storagePath },
+                  { key: "documentKind", value: "operation_video_journey" },
+                ],
+                originalFileInfo: {
+                  fileName: journeyFileName,
+                  bytes: new Blob([journeyMarkdown]).size,
+                },
+                organizationId,
+                spaceId,
+              });
+            if (requestDoc?.id) {
+              journeyFileSpaceRequestId = requestDoc.id;
+            } else {
+              requestErrors.push("操作JourneyのFileSpace upload RequestDoc作成に失敗しました");
+            }
+          } else {
+            requestErrors.push("操作Journey Markdownの保存に失敗しました");
+          }
         }
 
-        const journeyUploaded = await storageOps.uploadPdfFile({
-          bucketName,
-          filePath: journeyStoragePath,
-          rawData: new Blob([journeyMarkdown], { type: "text/markdown" }),
-          mimeType: "text/markdown",
-        });
-
-        if (journeyUploaded) {
-          const requestDoc =
-            await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
-              operationType: "fileSpaceUpload",
-              storeId: fileSpaceId,
-              bucketName,
-              filePath: journeyStoragePath,
-              mimeType: "text/markdown",
-              documentId: `vibecontrol-operation-video-journey-${videoId}`,
-              description: `VibeControl operation journey evidence: ${title}`,
-              customMetadata: [
-                { key: "source", value: "vibe-control-operation-video-journey" },
-                { key: "applicationId", value: application.id },
-                { key: "applicationKey", value: application.applicationKey },
-                { key: "applicationName", value: application.name },
-                { key: "repoFullName", value: application.repoFullName },
-                { key: "operationVideoId", value: videoId },
-                { key: "sourceAssetId", value: journeySourceAssetId },
-                { key: "videoStoragePath", value: storagePath },
-                { key: "documentKind", value: "operation_video_journey" },
-              ],
-              originalFileInfo: {
-                fileName: journeyFileName,
-                bytes: new Blob([journeyMarkdown]).size,
-              },
-              organizationId,
-              spaceId,
-            });
-          if (requestDoc?.id) {
-            journeyFileSpaceRequestId = requestDoc.id;
-          } else {
-            requestErrors.push("操作JourneyのFileSpace upload RequestDoc作成に失敗しました");
-          }
-        } else {
-          requestErrors.push("操作Journey Markdownの保存に失敗しました");
-        }
-
-        discoveryStatus =
-          fileSpaceRequestId || journeyFileSpaceRequestId ? "queued" : "error";
+        discoveryStatus = fileSpaceId
+          ? fileSpaceRequestId || journeyFileSpaceRequestId
+            ? "queued"
+            : "error"
+          : "not_registered";
         const discoveryErrorMessage =
-          requestErrors.length > 0 ? requestErrors.join(" / ") : undefined;
+          requestErrors.length > 0
+            ? requestErrors.join(" / ")
+            : fileSpaceId
+              ? undefined
+              : "アプリ専用FileSpaceが未設定のため、動画のみ保存しました";
 
         const video: DecodedVibeControlOperationVideo = {
           id: videoId,
@@ -2500,6 +3086,12 @@ export const useVibeControlStore = defineStore("vibeControl", {
           contentType,
           sizeBytes: input.blob.size,
           durationMs: input.durationMs,
+          transcriptText,
+          transcriptProvider,
+          transcriptSummary,
+          quickScan,
+          frameCaptures,
+          tags,
           fileSpaceId,
           fileSpaceRequestId,
           metadataFileName,
@@ -2511,6 +3103,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
           journeySourceAssetId,
           discoveryStatus,
           discoveryErrorMessage,
+          analysisStatus: "not_analyzed",
           sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
           recordedAt: now,
         };
@@ -2526,23 +3119,38 @@ export const useVibeControlStore = defineStore("vibeControl", {
             uri: `gs://${bucketName}/${storagePath}`,
             gcsPath: `gs://${bucketName}/${storagePath}`,
             storagePath,
-            fileSpaceId,
+            fileSpaceId: fileSpaceId || undefined,
             fileSpaceRequestId,
-            discoveryStatus: fileSpaceRequestId ? "queued" : "error",
+            discoveryStatus: fileSpaceId
+              ? fileSpaceRequestId
+                ? "queued"
+                : "error"
+              : "not_registered",
             discoveryDocumentId: `vibecontrol-operation-video-${videoId}`,
-            discoveryErrorMessage: fileSpaceRequestId
-              ? undefined
-              : "動画メタデータのDiscovery Engine登録に失敗しました",
+            discoveryErrorMessage: !fileSpaceId
+              ? "アプリ専用FileSpaceが未設定のため、Discovery Engine登録は未実行です"
+              : fileSpaceRequestId
+                ? undefined
+                : "動画メタデータのDiscovery Engine登録に失敗しました",
             metadata: {
               operationVideoId: videoId,
               contentType,
               sizeBytes: input.blob.size,
               durationMs: input.durationMs,
+              transcriptProvider,
+              transcriptText,
+              transcriptSummary,
+              quickScan,
+              frameCaptures,
+              tags,
               metadataStoragePath,
               sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
             },
           },
-          {
+        ];
+
+        if (journeyStoragePath) {
+          sourceAssets.push({
             id: journeySourceAssetId,
             applicationId: application.id,
             applicationKey: application.applicationKey,
@@ -2550,11 +3158,11 @@ export const useVibeControlStore = defineStore("vibeControl", {
             title: `Operation Journey: ${title}`,
             summary:
               input.description?.trim() ||
-              "操作動画から生成したユーザージャーニー検索用証跡",
+              "ザッピング動画から生成したユーザージャーニー検索用証跡",
             uri: `gs://${bucketName}/${journeyStoragePath}`,
             gcsPath: `gs://${bucketName}/${journeyStoragePath}`,
             storagePath: journeyStoragePath,
-            fileSpaceId,
+            fileSpaceId: fileSpaceId || undefined,
             fileSpaceRequestId: journeyFileSpaceRequestId,
             discoveryStatus: journeyFileSpaceRequestId ? "queued" : "error",
             discoveryDocumentId: `vibecontrol-operation-video-journey-${videoId}`,
@@ -2564,10 +3172,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
             metadata: {
               operationVideoId: videoId,
               videoStoragePath: storagePath,
+              transcriptProvider,
+              transcriptText,
+              transcriptSummary,
+              tags,
               sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
             },
-          },
-        ];
+          });
+        }
 
         const firestoreOps = useFirestoreDocOperation();
         await Promise.all([
@@ -2605,11 +3217,125 @@ export const useVibeControlStore = defineStore("vibeControl", {
         return video;
       } catch (err) {
         log("ERROR", "VibeControl operation video save failed", err);
+        reportDatadogError(err, {
+          feature: "vibe_control_zapping_video_save",
+          applicationId: input.applicationId,
+          blobSize: input.blob.size,
+          contentType: input.contentType || input.blob.type || "video/webm",
+        });
         this.error =
-          err instanceof Error ? err.message : "操作動画の保存に失敗しました";
+          err instanceof Error ? err.message : "ザッピング動画の保存に失敗しました";
         throw err;
       } finally {
         this.isSavingOperationVideo = false;
+      }
+    },
+    async deleteOperationVideo(videoId: string): Promise<void> {
+      const video = this.operationVideos.find((item) => item.id === videoId);
+      if (!video) {
+        throw new Error("削除対象のザッピング動画が見つかりません");
+      }
+      this.isLoading = true;
+      this.error = null;
+      try {
+        const firestoreOps = useFirestoreDocOperation();
+        const sourceAssetIds = [
+          video.sourceAssetId,
+          video.journeySourceAssetId,
+          `source-asset-${video.id}`,
+          `source-asset-${video.id}-journey`,
+        ].filter((id, index, arr): id is string =>
+          Boolean(id) && arr.indexOf(id) === index
+        );
+
+        const storageTargets = [
+          {
+            bucketName: video.bucketName,
+            storagePath: video.storagePath,
+          },
+          ...video.frameCaptures.map((frame) => ({
+            bucketName: frame.bucketName,
+            storagePath: frame.storagePath,
+          })),
+          video.metadataStoragePath
+            ? {
+                bucketName: video.bucketName,
+                storagePath: video.metadataStoragePath,
+              }
+            : undefined,
+          video.journeyStoragePath
+            ? {
+                bucketName: video.bucketName,
+                storagePath: video.journeyStoragePath,
+              }
+            : undefined,
+        ].filter(
+          (
+            target
+          ): target is { bucketName: string; storagePath: string } =>
+            Boolean(target?.bucketName && target.storagePath)
+        );
+
+        await Promise.all(
+          storageTargets.map(async (target) => {
+            try {
+              await deleteObject(
+                storageRefForBucketPath({
+                  bucketName: target.bucketName,
+                  filePath: target.storagePath,
+                })
+              );
+            } catch (err) {
+              const code =
+                typeof err === "object" && err !== null && "code" in err
+                  ? String((err as { code?: unknown }).code)
+                  : "";
+              if (code !== "storage/object-not-found") {
+                log("WARN", "Operation video storage delete skipped", {
+                  videoId,
+                  storagePath: target.storagePath,
+                  err,
+                });
+              }
+            }
+          })
+        );
+
+        const deleteResults = await Promise.all([
+          firestoreOps.deleteDocument({
+            collectionName: this.operationVideoCollectionPath(),
+            docId: video.id,
+          }),
+          ...sourceAssetIds.map((assetId) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.sourceAssetCollectionPath(),
+              docId: assetId,
+            })
+          ),
+        ]);
+        if (deleteResults.some((deleted) => !deleted)) {
+          throw new Error("Firestore上のザッピング動画または関連素材を削除できませんでした");
+        }
+
+        this.operationVideos = this.operationVideos.filter(
+          (item) => item.id !== video.id
+        );
+        this.sourceAssets = this.sourceAssets.filter(
+          (asset) => !sourceAssetIds.includes(asset.id)
+        );
+        this.lastRunLog.unshift(`Operation Video: ${video.title} を削除`);
+      } catch (err) {
+        log("ERROR", "VibeControl operation video delete failed", err);
+        reportDatadogError(err, {
+          feature: "vibe_control_zapping_video_delete",
+          videoId,
+          applicationId: video.applicationId,
+        });
+        this.error =
+          err instanceof Error ? err.message : "ザッピング動画の削除に失敗しました";
+        throw err;
+      } finally {
+        this.isLoading = false;
       }
     },
     async persistApplicationScanRun(params: {

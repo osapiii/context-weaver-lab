@@ -336,6 +336,7 @@ def read_story_generation_context(tool_context: Any = None) -> dict[str, Any]:
     bucket = _task_bucket(tool_context)
     setup = _setup_from_bucket(bucket)
     payload = _payload_from_bucket(bucket)
+    tools = _as_dict(bucket.get("tools"))
     application = _application_from_setup(setup)
     capability = _capability_from_setup(setup, payload)
     return {
@@ -345,6 +346,8 @@ def read_story_generation_context(tool_context: Any = None) -> dict[str, Any]:
         "capability": capability,
         "generation_session_id": _clean_text(setup.get("generation_session_id")),
         "source_assets": _as_list(payload.get("source_assets")),
+        "knowledge_pipeline": _as_dict(payload.get("knowledge_pipeline")),
+        "vertex_ai_search": _as_dict(tools.get("vertex_ai_search")),
         "existing_capabilities": _as_list(payload.get("existing_capabilities")),
         "existing_stories": _as_list(payload.get("existing_stories")),
         "existing_evidence": _as_list(payload.get("existing_evidence")),

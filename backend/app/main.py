@@ -7,8 +7,10 @@ init_datadog_llmobs()
 from triggers import adk_artifact_signed_url  # noqa: F401
 from triggers import adk_artifact_storage  # noqa: F401
 from triggers import adk_invoke_requests  # noqa: F401
+from triggers import aqua_voice_transcription  # noqa: F401
 from triggers import auth_email_link  # noqa: F401
 from triggers import google_workspace_oauth  # noqa: F401
+from triggers import google_drive_sync  # noqa: F401
 from triggers import github_oauth  # noqa: F401
 from triggers import guide_assistant  # noqa: F401
 from triggers import context_store_requests  # noqa: F401
@@ -21,6 +23,7 @@ from triggers import web_crawl_requests  # noqa: F401
 from triggers.adk_artifact_signed_url import get_artifact_signed_url  # noqa: F401
 from triggers.adk_artifact_storage import on_adk_artifact_object_finalized  # noqa: F401
 from triggers.adk_invoke_requests import on_adk_invoke_request_created  # noqa: F401
+from triggers.aqua_voice_transcription import transcribe_zapping_video_with_aqua  # noqa: F401
 from triggers.auth_email_link import dev_admin_sign_in  # noqa: F401
 from triggers.auth_email_link import send_admin_sign_in_link  # noqa: F401
 from triggers.google_workspace_oauth import connect_google_workspace  # noqa: F401
@@ -28,6 +31,7 @@ from triggers.google_workspace_oauth import disconnect_google_workspace  # noqa:
 from triggers.google_workspace_oauth import get_google_workspace_connection  # noqa: F401
 from triggers.google_workspace_oauth import list_google_drive_folder  # noqa: F401
 from triggers.google_workspace_oauth import test_google_drive_folder  # noqa: F401
+from triggers.google_drive_sync import google_drive_sync_request_handler  # noqa: F401
 from triggers.github_oauth import connect_github  # noqa: F401
 from triggers.github_oauth import disconnect_github  # noqa: F401
 from triggers.github_oauth import get_github_connection  # noqa: F401

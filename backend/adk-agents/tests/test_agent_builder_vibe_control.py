@@ -42,6 +42,21 @@ def test_build_vibe_capability_structuring_agent_has_tools(monkeypatch):
     assert "save_capability_structure" in joined
 
 
+def test_build_vibe_zapping_analysis_agent_has_tools(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    agent = build_agent_for_mode(
+        "vibe_zapping_analysis",
+        datastore_path=None,
+        model="gemini-2.5-flash",
+    )
+    assert agent.name == "vibe_zapping_analysis_agent"
+    joined = " ".join(_tool_names(agent)).lower()
+    assert "read_zapping_analysis_context" in joined
+    assert "save_zapping_analysis" not in joined
+    assert agent.output_schema is not None
+    assert agent.output_key == "vibe_zapping_analysis"
+
+
 def test_build_vibe_story_generation_agent_has_tools(monkeypatch):
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     agent = build_agent_for_mode(

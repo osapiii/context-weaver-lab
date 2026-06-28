@@ -28,6 +28,15 @@ SA_EMAIL="${SA_EMAIL:-drive-to-gcs-sync@${PROJECT_ID}.iam.gserviceaccount.com}"
 DRIVE_SECRET_NAME="${DRIVE_SECRET_NAME:-en-aistudio-drive-agent-key}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+WORKSPACE_ENV_FILE="${GOOGLE_WORKSPACE_ENV_FILE:-${ROOT_DIR}/backend/app/.env.vibe-control-dev}"
+
+if [ -f "${WORKSPACE_ENV_FILE}" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${WORKSPACE_ENV_FILE}"
+  set +a
+fi
 
 echo "=== drive-to-gcs-sync deploy ==="
 echo "  Project       : ${PROJECT_ID}"
@@ -37,6 +46,13 @@ echo "  Mirror Bucket : ${DRIVE_MIRROR_BUCKET}"
 echo "  SA            : ${SA_EMAIL}"
 
 cd "${SCRIPT_DIR}"
+
+declare -a SECRET_ARGS=()
+if gcloud secrets describe "${DRIVE_SECRET_NAME}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
+  SECRET_ARGS=(--update-secrets=/etc/sa/drive-agent-key.json="${DRIVE_SECRET_NAME}:latest")
+else
+  echo "  Drive SA key   : not mounted (OAuth mode)"
+fi
 
 gcloud run deploy "${SERVICE_NAME}" \
   --source . \
@@ -52,8 +68,8 @@ gcloud run deploy "${SERVICE_NAME}" \
   --max-instances 10 \
   --concurrency 4 \
   --port 8080 \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID},DRIVE_MIRROR_BUCKET=${DRIVE_MIRROR_BUCKET},FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}" \
-  --update-secrets=/etc/sa/drive-agent-key.json="${DRIVE_SECRET_NAME}:latest"
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT_ID},DRIVE_MIRROR_BUCKET=${DRIVE_MIRROR_BUCKET},FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET},GOOGLE_WORKSPACE_OAUTH_CLIENT_ID=${GOOGLE_WORKSPACE_OAUTH_CLIENT_ID:-},GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET=${GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET:-},GOOGLE_WORKSPACE_TOKEN_ENCRYPTION_KEY=${GOOGLE_WORKSPACE_TOKEN_ENCRYPTION_KEY:-}" \
+  ${SECRET_ARGS+"${SECRET_ARGS[@]}"}
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
   --platform managed --region "${REGION}" --project "${PROJECT_ID}" \

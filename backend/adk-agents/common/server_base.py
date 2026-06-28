@@ -51,9 +51,9 @@ from .auth import require_user
 from .invoke_internal_auth import require_user_or_internal_invoke
 from .byok_scope import (
     activate_byok,
+    clear_suspended_byok,
     deactivate_byok,
     gemini_api_key_from_user,
-    resume_byok,
     suspend_byok,
 )
 from .byok_auth import resolve_request_openai_api_key
@@ -147,9 +147,9 @@ from .business_partner_workflow import (
     patch_business_partner_bucket,
     validate_business_partner_invoke,
 )
-from .application_scan_workflow import application_scan_state_patch_from_mode_state
 from .vibe_control_workflow import (
     vibe_capability_structuring_state_patch_from_mode_state,
+    vibe_zapping_analysis_state_patch_from_mode_state,
     vibe_story_generation_state_patch_from_mode_state,
 )
 from .writing_action_scope import activate_writing_action, deactivate_writing_action
@@ -172,6 +172,44 @@ from .session_state import (
 )
 
 logger = logging.getLogger(__name__)
+
+_ZAPPING_ANALYSIS_RESULT_KEYS = (
+    "schemaVersion",
+    "generatedAt",
+    "transcriptSummary",
+    "productContextSummary",
+    "operationIntent",
+    "storyCandidates",
+    "notes",
+)
+
+
+def _zapping_analysis_result_from_bucket(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    existing = value.get("analysis_result")
+    if isinstance(existing, dict):
+        nested = _zapping_analysis_result_from_bucket(existing)
+        if nested is not None:
+            return nested
+    if value.get("schemaVersion") != "vibe-control-zapping-analysis-v2":
+        return None
+    if not isinstance(value.get("generatedAt"), str):
+        return None
+    if not isinstance(value.get("storyCandidates"), list):
+        return None
+    if not isinstance(value.get("notes"), list):
+        return None
+    return {key: value.get(key) for key in _ZAPPING_ANALYSIS_RESULT_KEYS if key in value}
+
+
+VERTEX_AI_ONLY_MODES = frozenset(
+    {
+        "vibe_zapping_analysis",
+        "vibe_capability_structuring",
+        "vibe_story_generation",
+    }
+)
 
 _SSE_HEADERS = {
     "Cache-Control": "no-cache, no-transform",
@@ -288,12 +326,19 @@ async def _stream_invoke(
     # ADK の asyncio タスク跨ぎで contextvar が消えることがあるため、
     # SSE ストリーム全体で BYOK を再セット (research-agent と同じ env 注入).
     prev_gemini_env = os.environ.get("GEMINI_API_KEY")
+    force_vertex_ai = agent_mode in VERTEX_AI_ONLY_MODES
+    byok_token = None if force_vertex_ai else activate_byok(gemini_api_key)
     suspended_byok: tuple[Any, str | None, str | None] | None = None
-    if agent_mode == "application_scan":
+    if force_vertex_ai:
         suspended_byok = suspend_byok()
-        byok_token = None
-    else:
-        byok_token = activate_byok(gemini_api_key)
+        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
+        gcp_project = os.environ.get("GCP_PROJECT")
+        if not os.environ.get("GOOGLE_CLOUD_PROJECT") and gcp_project:
+            os.environ["GOOGLE_CLOUD_PROJECT"] = gcp_project
+        logger.info(
+            "Vertex AI only mode: cleared Gemini API key env for mode=%s",
+            agent_mode,
+        )
     effective_openai_key = openai_api_key or _openai_api_key_for_user(user)
     openai_token = activate_openai_byok(effective_openai_key)
     global_prompt = resolve_global_prompt(
@@ -521,15 +566,15 @@ async def _stream_invoke(
                 business_partner_state_patch_from_mode_state(req.mode_state)
             )
             patch_business_partner_bucket(state_patch, req.mode_state)
-        if agent_mode == "application_scan":
-            state_patch.update(
-                application_scan_state_patch_from_mode_state(req.mode_state)
-            )
         if agent_mode == "vibe_capability_structuring":
             state_patch.update(
                 vibe_capability_structuring_state_patch_from_mode_state(
                     req.mode_state
                 )
+            )
+        if agent_mode == "vibe_zapping_analysis":
+            state_patch.update(
+                vibe_zapping_analysis_state_patch_from_mode_state(req.mode_state)
             )
         if agent_mode == "vibe_story_generation":
             state_patch.update(
@@ -1062,6 +1107,36 @@ async def _stream_invoke(
                                     organization_id=session_org_id,
                                     space_id=session_space_id,
                                 )
+                        if (
+                            tool_name == "save_zapping_analysis"
+                            and isinstance(response, dict)
+                            and response.get("ok") is True
+                        ):
+                            from .workspace_state_buckets import patch_task_bucket
+
+                            zapping_bucket: dict[str, Any] = {}
+                            nested = response.get("vibe_zapping_analysis")
+                            if isinstance(nested, dict):
+                                zapping_bucket = dict(nested)
+                            analysis_result = zapping_bucket.get("analysis_result")
+                            if isinstance(analysis_result, dict):
+                                zapping_bucket["phase"] = "completed"
+                            if zapping_bucket:
+                                zapping_patch: dict[str, Any] = {}
+                                patch_task_bucket(
+                                    zapping_patch,
+                                    "vibe_zapping_analysis",
+                                    zapping_bucket,
+                                )
+                                await persist_session_state_patch(
+                                    session_service,
+                                    app_name=app_name,
+                                    user_id=user_id,
+                                    session_id=sid,
+                                    state_patch=zapping_patch,
+                                    organization_id=session_org_id,
+                                    space_id=session_space_id,
+                                )
                         if response.get("ok") is False:
                             err = response.get("error")
                             if isinstance(err, str) and err.strip():
@@ -1271,6 +1346,37 @@ async def _stream_invoke(
                             },
                         )
                 done_payload["business_partner"] = finalized_bp
+        if agent_mode == "vibe_zapping_analysis":
+            raw_zapping = stored_state.get("vibe_zapping_analysis")
+            analysis_result = _zapping_analysis_result_from_bucket(raw_zapping)
+            if analysis_result is not None:
+                from .workspace_state_buckets import patch_task_bucket
+
+                zapping_patch: dict[str, Any] = {}
+                patch_task_bucket(
+                    zapping_patch,
+                    "vibe_zapping_analysis",
+                    {
+                        "phase": "completed",
+                        "analysis_result": analysis_result,
+                    },
+                    active_task="vibe_zapping_analysis",
+                )
+                await persist_session_state_patch(
+                    session_service,
+                    app_name=app_name,
+                    user_id=user_id,
+                    session_id=sid,
+                    state_patch=zapping_patch,
+                    organization_id=session_org_id,
+                    space_id=session_space_id,
+                )
+                done_payload["vibe_zapping_analysis"] = {
+                    "analysis_result": analysis_result,
+                    "story_candidate_count": len(
+                        analysis_result.get("storyCandidates") or []
+                    ),
+                }
         if ui_sync is not None:
             await ui_sync.finalize_turn()
         await finalize_task_invoke(
@@ -1310,14 +1416,8 @@ async def _stream_invoke(
         deactivate_writing_action(writing_action_token)
         deactivate_global_prompt(global_prompt_token)
         if suspended_byok is not None:
-            token, previous_gemini_env, previous_google_env = suspended_byok
-            resume_byok(
-                token,
-                previous_gemini_env=previous_gemini_env,
-                previous_google_env=previous_google_env,
-            )
-        else:
-            deactivate_byok(byok_token, previous_env=prev_gemini_env)
+            clear_suspended_byok(suspended_byok[0])
+        deactivate_byok(byok_token, previous_env=prev_gemini_env)
         deactivate_openai_byok(openai_token)
         reset_invoke_session_scope(scope_tokens)
 
@@ -1464,7 +1564,7 @@ def create_unified_app(*, agents: dict[str, AgentBundle]) -> FastAPI:
         bundle = agents[mode]
         gemini_api_key = gemini_api_key_from_user(user)
         if (
-            mode != "application_scan"
+            mode not in VERTEX_AI_ONLY_MODES
             and not gemini_api_key
             and not user.get("auth_disabled")
         ):
@@ -1546,7 +1646,11 @@ def create_app(*, mode: str, app_name: str, root_agent: Any) -> FastAPI:
         runner: Runner = app.state.runner
         session_service = app.state.session_service
         gemini_api_key = gemini_api_key_from_user(user)
-        if not gemini_api_key and not user.get("auth_disabled"):
+        if (
+            mode not in VERTEX_AI_ONLY_MODES
+            and not gemini_api_key
+            and not user.get("auth_disabled")
+        ):
             raise HTTPException(
                 status_code=400,
                 detail="GEMINI_API_KEY_NOT_REGISTERED",

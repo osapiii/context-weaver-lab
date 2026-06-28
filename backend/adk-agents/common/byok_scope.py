@@ -47,6 +47,13 @@ def resume_byok(
         os.environ["GOOGLE_API_KEY"] = previous_google_env
 
 
+def clear_suspended_byok(token: contextvars.Token[str | None]) -> None:
+    """Reset contextvar after suspend, but keep process env free of user keys."""
+    current_user_api_key.reset(token)
+    os.environ.pop("GEMINI_API_KEY", None)
+    os.environ.pop("GOOGLE_API_KEY", None)
+
+
 def deactivate_byok(
     token: contextvars.Token[str | None] | None,
     *,

@@ -28,10 +28,15 @@ import ssl
 import traceback
 from typing import Any
 
+from cryptography.fernet import Fernet, InvalidToken
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from google.auth.transport.requests import Request as GoogleAuthRequest
+from google.cloud import firestore
 from googleapiclient.errors import HttpError
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 
 from drive_client import (
     DRIVE_FOLDER_MIME_TYPE,
@@ -52,6 +57,8 @@ from gcs_mirror import (
 
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "en-aistudio-development")
 MIRROR_BUCKET = resolve_knowledge_storage_bucket(PROJECT_ID)
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+DRIVE_READONLY_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 
 def _resolve_cors_origins() -> list[str]:
@@ -59,6 +66,8 @@ def _resolve_cors_origins() -> list[str]:
     if not raw:
         return [
             "http://localhost:3000",
+            "https://vibe-control-dev.web.app",
+            "https://vibe-control-dev.firebaseapp.com",
             "https://en-aistudio.app",
             "https://en-aistudio-development.web.app",
             "https://en-aistudio-development.firebaseapp.com",
@@ -77,6 +86,119 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
     max_age=600,
 )
+
+_db_client: firestore.Client | None = None
+
+
+def _get_db() -> firestore.Client:
+    global _db_client
+    if _db_client is None:
+        _db_client = firestore.Client(project=PROJECT_ID)
+    return _db_client
+
+
+def _oauth_client_id() -> str:
+    return os.getenv("GOOGLE_WORKSPACE_OAUTH_CLIENT_ID", "").strip()
+
+
+def _oauth_client_secret() -> str:
+    return os.getenv("GOOGLE_WORKSPACE_OAUTH_CLIENT_SECRET", "").strip()
+
+
+def _fernet() -> Fernet | None:
+    raw = os.getenv("GOOGLE_WORKSPACE_TOKEN_ENCRYPTION_KEY", "").strip()
+    if not raw:
+        return None
+    try:
+        return Fernet(raw.encode("utf-8"))
+    except Exception:
+        return None
+
+
+def _unprotect_token(payload: Any) -> str:
+    if isinstance(payload, str):
+        return payload
+    if not isinstance(payload, dict):
+        return ""
+    value = str(payload.get("value") or "")
+    if payload.get("mode") != "fernet":
+        return value
+    f = _fernet()
+    if not f:
+        raise RuntimeError("GOOGLE_WORKSPACE_TOKEN_ENCRYPTION_KEY is required")
+    try:
+        return f.decrypt(value.encode("utf-8")).decode("utf-8")
+    except InvalidToken as exc:
+        raise RuntimeError("Stored Google Workspace token cannot be decrypted") from exc
+
+
+def _connection_ref(organization_id: str, user_id: str) -> firestore.DocumentReference:
+    return (
+        _get_db()
+        .collection("organizations")
+        .document(organization_id)
+        .collection("externalServiceConfigs")
+        .document("googleWorkspaceOAuth")
+        .collection("users")
+        .document(user_id)
+    )
+
+
+def _operation_metadata_from_body(body: dict[str, Any]) -> dict[str, Any]:
+    metadata = body.get("operationMetadata") or {}
+    if isinstance(metadata, dict):
+        return metadata
+    items = body.get("items") or []
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict) and isinstance(item.get("operationMetadata"), dict):
+                return item["operationMetadata"]
+    return {}
+
+
+def _drive_service_from_operation_metadata(operation_metadata: dict[str, Any]):
+    organization_id = str(operation_metadata.get("organizationId") or "").strip()
+    requested_by = operation_metadata.get("requestedBy") or {}
+    user_id = str(requested_by.get("userId") or "").strip()
+    if not organization_id or not user_id:
+        raise RuntimeError(
+            "operationMetadata.organizationId and requestedBy.userId are required"
+        )
+
+    client_id = _oauth_client_id()
+    client_secret = _oauth_client_secret()
+    if not client_id or not client_secret:
+        raise RuntimeError(
+            "Google Workspace OAuth client is not configured for drive-to-gcs-sync"
+        )
+
+    snap = _connection_ref(organization_id, user_id).get()
+    if not snap.exists:
+        raise RuntimeError(
+            "Google Workspace が未接続です。Google アカウントを接続してください。"
+        )
+    doc = snap.to_dict() or {}
+    refresh_token = _unprotect_token(doc.get("refreshToken"))
+    if not refresh_token:
+        raise RuntimeError("Google Workspace refresh token is missing")
+
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri=TOKEN_URL,
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=DRIVE_READONLY_SCOPES,
+    )
+    creds.refresh(GoogleAuthRequest())
+    return build("drive", "v3", credentials=creds, cache_discovery=False)
+
+
+def _drive_service_from_body(body: dict[str, Any]):
+    metadata = _operation_metadata_from_body(body)
+    if not metadata:
+        raise RuntimeError("operationMetadata is required for Google Drive OAuth")
+    return _drive_service_from_operation_metadata(metadata)
 
 
 def _ok(payload: dict[str, Any]) -> JSONResponse:
@@ -101,7 +223,7 @@ def _drive_list_error_response(exc: BaseException) -> JSONResponse:
         if status == 403:
             return _err(
                 403,
-                "Drive フォルダへのアクセス権がありません。Service Account に共有されているか確認してください",
+                "Drive フォルダへのアクセス権がありません。接続した Google アカウントの権限を確認してください",
             )
         return _err(502, f"Drive API error ({status}): {exc}")
     if isinstance(exc, FileNotFoundError):
@@ -158,9 +280,15 @@ async def list_folder_endpoint(request: Request) -> JSONResponse:
     root_folder_id = (body or {}).get("rootFolderId") or (body or {}).get(
         "root_folder_id"
     )
+    root_folder_resource_key = (body or {}).get("rootFolderResourceKey") or (
+        body or {}
+    ).get("root_folder_resource_key")
     target_folder_id = (body or {}).get("targetFolderId") or (body or {}).get(
         "target_folder_id"
     )
+    target_folder_resource_key = (body or {}).get("targetFolderResourceKey") or (
+        body or {}
+    ).get("target_folder_resource_key")
     recursive = bool((body or {}).get("recursive", True))
 
     if not root_folder_id and not target_folder_id:
@@ -169,7 +297,16 @@ async def list_folder_endpoint(request: Request) -> JSONResponse:
     folder_to_list = target_folder_id or root_folder_id
 
     try:
-        all_items = list_files(folder_to_list, recursive=recursive)
+        drive_service = _drive_service_from_body(body or {})
+        all_items = list_files(
+            drive_service,
+            folder_to_list,
+            recursive=recursive,
+            resource_keys={
+                root_folder_id: root_folder_resource_key,
+                target_folder_id: target_folder_resource_key,
+            },
+        )
     except Exception as exc:
         traceback.print_exc()
         return _drive_list_error_response(exc)
@@ -197,9 +334,16 @@ async def test_connection_endpoint(request: Request) -> JSONResponse:
     root_folder_id = (body or {}).get("rootFolderId") or (body or {}).get(
         "root_folder_id"
     )
+    root_folder_resource_key = (body or {}).get("rootFolderResourceKey") or (
+        body or {}
+    ).get("root_folder_resource_key")
     if not root_folder_id:
         return _err(400, "rootFolderId is required")
-    result = test_connection(root_folder_id)
+    try:
+        drive_service = _drive_service_from_body(body or {})
+    except Exception as exc:
+        return _err(403, str(exc))
+    result = test_connection(drive_service, root_folder_id, root_folder_resource_key)
     return _ok(result)
 
 
@@ -227,6 +371,7 @@ def _drive_files_to_inventory(
     organization_id: str,
     space_id: str,
     file_space_id: str,
+    operation_metadata: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """drive list → { driveFileId: {expectedMirrorPath, driveModifiedTime, name, mime} }"""
     out: dict[str, dict[str, Any]] = {}
@@ -251,9 +396,12 @@ def _drive_files_to_inventory(
             "mimeType": f.get("mimeType"),
             "size": f.get("size"),
             "webViewLink": f.get("webViewLink"),
+            "resourceKey": f.get("resourceKey"),
             "expectedMirrorPath": object_path,
             "mirrorExt": ext,
         }
+        if operation_metadata:
+            out[drive_id]["operationMetadata"] = operation_metadata
     return out
 
 
@@ -291,6 +439,7 @@ async def mirror_diff_endpoint(request: Request) -> JSONResponse:
     file_space_id = (body or {}).get("fileSpaceId") or ""
     drive_files: list[dict[str, Any]] = (body or {}).get("driveFiles") or []
     operation_type = (body or {}).get("operationType") or "syncFolder"
+    operation_metadata = _operation_metadata_from_body(body or {})
 
     if not organization_id or not space_id or not file_space_id:
         return _err(
@@ -303,6 +452,7 @@ async def mirror_diff_endpoint(request: Request) -> JSONResponse:
         organization_id=organization_id,
         space_id=space_id,
         file_space_id=file_space_id,
+        operation_metadata=operation_metadata,
     )
 
     try:
@@ -379,13 +529,20 @@ def _download_and_upload(
     drive_file_id: str,
     drive_mime_type: str | None,
     drive_name: str | None,
+    drive_resource_key: str | None = None,
     object_path: str,
+    drive_service: Any | None = None,
 ) -> dict[str, Any]:
     """Drive から download して GCS mirror に upload。
     Returns: {ok, gsUri, size, md5, effectiveMime, error?}
     """
     try:
-        content, effective_mime = download_file(drive_file_id, drive_mime_type)
+        content, effective_mime = download_file(
+            drive_service,
+            drive_file_id,
+            drive_mime_type,
+            drive_resource_key,
+        )
         md5 = hashlib.md5(content).hexdigest()
         size = len(content)
         gs_uri = apply_batch.upload_bytes_to_mirror(
@@ -451,6 +608,11 @@ async def mirror_apply_batch_endpoint(request: Request) -> JSONResponse:
     if len(items) > 10:
         return _err(400, f"items must be <= 10, got {len(items)}")
     delete_stale = bool((body or {}).get("deleteStaleVersions", True))
+    try:
+        drive_service = _drive_service_from_body(body or {})
+    except Exception as exc:
+        traceback.print_exc()
+        return _err(500, f"Drive OAuth credential resolution failed: {exc}")
 
     results: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
@@ -473,7 +635,9 @@ async def mirror_apply_batch_endpoint(request: Request) -> JSONResponse:
             drive_file_id=drive_id,
             drive_mime_type=it.get("mimeType"),
             drive_name=it.get("name"),
+            drive_resource_key=it.get("resourceKey"),
             object_path=object_path,
+            drive_service=drive_service,
         )
         results.append(res)
         if res.get("ok"):

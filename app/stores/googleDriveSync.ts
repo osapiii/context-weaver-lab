@@ -354,8 +354,10 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
       input: Pick<
         DecodedGoogleDriveIntegrationConfig,
         | "rootFolderId"
+        | "rootFolderResourceKey"
         | "rootFolderName"
         | "serviceAccountEmail"
+        | "authMode"
         | "linkedFileSpaceId"
       >
     ): Promise<DecodedGoogleDriveIntegrationConfig | null> {
@@ -380,8 +382,11 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
             docId: DEFAULT_DRIVE_CONFIG_ID,
             docData: {
               rootFolderId: input.rootFolderId,
+              rootFolderResourceKey:
+                input.rootFolderResourceKey ?? existing.rootFolderResourceKey ?? null,
               rootFolderName: input.rootFolderName ?? existing.rootFolderName ?? null,
-              serviceAccountEmail: input.serviceAccountEmail,
+              authMode: input.authMode ?? existing.authMode ?? "oauth",
+              serviceAccountEmail: input.serviceAccountEmail ?? "",
               linkedFileSpaceId:
                 input.linkedFileSpaceId ?? existing.linkedFileSpaceId ?? null,
               lastSyncedAt: existing.lastSyncedAt ?? null,
@@ -396,7 +401,12 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
           await firestoreOps.createDocument({
             collectionName: collectionPath,
             docId: DEFAULT_DRIVE_CONFIG_ID,
-            docData: input,
+            docData: {
+              ...input,
+              rootFolderResourceKey: input.rootFolderResourceKey ?? null,
+              authMode: input.authMode ?? "oauth",
+              serviceAccountEmail: input.serviceAccountEmail ?? "",
+            },
             converter: googleDriveIntegrationConfigConverter,
           });
         }
@@ -429,8 +439,10 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
           docId: DEFAULT_DRIVE_CONFIG_ID,
           docData: {
             rootFolderId: current.rootFolderId,
+            rootFolderResourceKey: current.rootFolderResourceKey ?? null,
             rootFolderName: current.rootFolderName ?? null,
-            serviceAccountEmail: current.serviceAccountEmail,
+            authMode: current.authMode ?? "oauth",
+            serviceAccountEmail: current.serviceAccountEmail ?? "",
             linkedFileSpaceId: current.linkedFileSpaceId ?? null,
             lastSyncedAt: Timestamp.now(),
             lastSyncStatus: params.status,
@@ -548,6 +560,7 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
       spaceId: string;
       fileSpaceId: string;
       rootFolderId: string;
+      rootFolderResourceKey?: string | null;
       importIds: string[];
       removeIds: string[];
       fileItems?: DriveImportFileItemSource[];
@@ -560,6 +573,7 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
       const created = await this.createSyncRequest({
         operationType: "syncFolder",
         rootFolderId: params.rootFolderId,
+        rootFolderResourceKey: params.rootFolderResourceKey ?? null,
         targetFolderId: null,
         fileSpaceId: params.fileSpaceId,
         description: "手動取り込み (ナレッジ素材)",
@@ -600,6 +614,7 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
       spaceId: string;
       fileSpaceId: string;
       rootFolderId: string;
+      rootFolderResourceKey?: string | null;
     }): Promise<boolean> {
       const importIds = [...this.pendingScan.importFileIds];
       const removeIds = [...this.pendingScan.removeFileIds];
@@ -636,6 +651,7 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
       spaceId: string;
       fileSpaceId: string;
       rootFolderId: string;
+      rootFolderResourceKey?: string | null;
       description: string;
     }): Promise<DecodedGoogleDriveSyncRequest | null> {
       if (this.isSyncInProgress) {
@@ -646,6 +662,7 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
       const created = await this.createSyncRequest({
         operationType: "syncFolder",
         rootFolderId: params.rootFolderId,
+        rootFolderResourceKey: params.rootFolderResourceKey ?? null,
         targetFolderId: null,
         fileSpaceId: params.fileSpaceId,
         description: params.description,
@@ -672,8 +689,10 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
       }
       await this.upsertConfig({
         rootFolderId: current.rootFolderId,
+        rootFolderResourceKey: current.rootFolderResourceKey ?? null,
         rootFolderName: current.rootFolderName ?? null,
-        serviceAccountEmail: current.serviceAccountEmail,
+        authMode: current.authMode ?? "oauth",
+        serviceAccountEmail: current.serviceAccountEmail ?? "",
         linkedFileSpaceId: fileSpaceId,
       });
     },
@@ -711,12 +730,14 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
       spaceId: string;
       fileSpaceId: string;
       rootFolderId: string;
+      rootFolderResourceKey?: string | null;
       requestId: string;
     }) {
       // drive-to-gcs-sync /scan/list-folder のリクエスト形式
       // (Workflows と FE 双方で同じ shape を投げる)
       return {
         rootFolderId: params.rootFolderId,
+        rootFolderResourceKey: params.rootFolderResourceKey ?? null,
         targetFolderId: params.rootFolderId,
         recursive: true,
       };
@@ -811,7 +832,9 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
             const listRes = (await googleWorkspace.listDriveFolder({
               folderId: body.targetFolderId || body.rootFolderId,
               rootFolderId: body.rootFolderId,
+              rootFolderResourceKey: body.rootFolderResourceKey,
               targetFolderId: body.targetFolderId,
+              targetFolderResourceKey: body.rootFolderResourceKey,
               recursive: body.recursive,
             })) as ScanApiResponse;
             if (listRes?.status === "error" || listRes?.error) {
@@ -924,7 +947,8 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
      * 渡し、kicker が importIds/removeIds を GCS YAML 化して Workflow を起動する。
      */
     async createSyncRequest(
-      params: GoogleDriveSyncInput & {
+      params: Omit<GoogleDriveSyncInput, "connectionId"> & {
+        connectionId?: string;
         organizationId: string;
         spaceId: string;
         importIds?: string[];
@@ -973,7 +997,9 @@ export const useGoogleDriveSyncStore = defineStore("googleDriveSync", {
         const requestData: Record<string, unknown> = {
           input: {
             operationType: params.operationType,
+            connectionId: params.connectionId ?? "default",
             rootFolderId: params.rootFolderId,
+            rootFolderResourceKey: params.rootFolderResourceKey ?? null,
             targetFolderId: params.targetFolderId ?? null,
             fileSpaceId: params.fileSpaceId,
             description: params.description ?? null,

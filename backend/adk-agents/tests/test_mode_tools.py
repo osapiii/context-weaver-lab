@@ -30,10 +30,10 @@ def test_set_workspace_mode_accepts_vibe_control():
     assert result["workspace_mode"] == "vibe_control"
 
 
-def test_set_workspace_mode_accepts_application_scan():
-    result = set_workspace_mode("application_scan", "アプリスキャン")
+def test_set_workspace_mode_accepts_zapping_analysis():
+    result = set_workspace_mode("vibe_zapping_analysis", "ザッピング解析")
     assert result["ok"] is True
-    assert result["workspace_mode"] == "application_scan"
+    assert result["workspace_mode"] == "vibe_zapping_analysis"
 
 
 def test_set_workspace_mode_rejects_invalid():

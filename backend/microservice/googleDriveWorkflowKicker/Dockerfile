@@ -5,8 +5,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py workflow_input_inspect.py .
-COPY knowledge_storage_paths.py .
+COPY main.py workflow_input_inspect.py ./
+COPY knowledge_storage_paths.py ./
 
 EXPOSE 8080
 

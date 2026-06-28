@@ -1,4 +1,4 @@
-"""Application scan ADK agent."""
+"""VibeControl zapping analysis ADK agent."""
 
 from .agent import root_agent
 

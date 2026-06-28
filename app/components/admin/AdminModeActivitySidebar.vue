@@ -55,6 +55,27 @@
           class="my-0.5 h-px bg-slate-200"
           aria-hidden="true"
         />
+        <div
+          class="px-1.5 pb-0.5 pt-1"
+          :class="collapsed ? 'flex justify-center px-0' : ''"
+        >
+          <p
+            class="font-bold text-slate-400"
+            :class="
+              collapsed
+                ? 'rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] tracking-normal'
+                : 'text-[10px] tracking-[0.12em]'
+            "
+          >
+            {{ collapsed ? groupShortLabel(group.id) : groupLabel(group.id) }}
+          </p>
+          <p
+            v-if="!collapsed && groupDescription(group.id)"
+            class="mt-0.5 text-[9px] leading-snug text-slate-400"
+          >
+            {{ groupDescription(group.id) }}
+          </p>
+        </div>
         <button
           v-for="entry in group.modes"
           :key="entry.mode.key"
@@ -144,6 +165,7 @@ const props = withDefaults(
     sidebarId?: string;
   }>(),
   {
+    currentModeKey: "",
     sidebarId: "admin-nav-sidebar",
     collapsed: false,
     focusHidden: false,
@@ -192,5 +214,40 @@ function navIconClass(entry: AdminNavModeEntry): string[] {
   }
   const active = props.currentModeKey === entry.mode.key;
   return [active ? "text-current" : "text-slate-500"];
+}
+
+function groupLabel(id: string): string {
+  switch (id) {
+    case "input":
+      return "入力";
+    case "analysis":
+      return "解析結果";
+    case "admin":
+      return "管理";
+    default:
+      return id;
+  }
+}
+
+function groupShortLabel(id: string): string {
+  switch (id) {
+    case "input":
+      return "入力";
+    case "analysis":
+      return "解析";
+    case "admin":
+      return "管理";
+    default:
+      return id;
+  }
+}
+
+function groupDescription(id: string): string {
+  switch (id) {
+    case "analysis":
+      return "入力からAIが整理";
+    default:
+      return "";
+  }
 }
 </script>

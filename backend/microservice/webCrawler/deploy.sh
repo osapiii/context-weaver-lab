@@ -37,15 +37,14 @@ cleanup() {
 trap cleanup EXIT
 
 CONTEXT_STORE_SERVICE_URL="${CONTEXT_STORE_SERVICE_URL:-https://context-store-781544707153.us-central1.run.app}"
+VIBE_CONTROL_GCS_BUCKET="${VIBE_CONTROL_GCS_BUCKET:-${PROJECT_ID}.firebasestorage.app}"
 
 # ✅ Step 3: Cloud Run にデプロイ
 echo -e "${YELLOW}Deploying directly from source using gcloud run deploy...${NC}"
 echo -e "${YELLOW}Note: Using Dockerfile-based deployment with Crawl4AI${NC}"
 echo -e "${YELLOW}Context Store URL: ${CONTEXT_STORE_SERVICE_URL}${NC}"
+echo -e "${YELLOW}Vibe Control GCS bucket: ${VIBE_CONTROL_GCS_BUCKET}${NC}"
 
-# Phase R-1b: Drive 連携で Service Account 鍵を Secret Manager からマウントする
-# Secret Manager に `en-aistudio-drive-agent-key` がある前提
-# (gcloud secrets create en-aistudio-drive-agent-key --data-file=key.json で作成)
 DEPLOY_CMD="gcloud run deploy ${SERVICE_NAME} \
     --source . \
     --platform managed \
@@ -55,10 +54,10 @@ DEPLOY_CMD="gcloud run deploy ${SERVICE_NAME} \
     --cpu 2 \
     --memory 8Gi \
     --timeout 3600 \
+    --concurrency 1 \
     --max-instances 10 \
     --port 8080 \
-    --set-env-vars CONTEXT_STORE_SERVICE_URL=${CONTEXT_STORE_SERVICE_URL} \
-    --update-secrets=/etc/sa/drive-agent-key.json=en-aistudio-drive-agent-key:latest"
+    --set-env-vars CONTEXT_STORE_SERVICE_URL=${CONTEXT_STORE_SERVICE_URL},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},VIBE_CONTROL_GCS_BUCKET=${VIBE_CONTROL_GCS_BUCKET},EN_AISTUDIO_GCS_BUCKET=${VIBE_CONTROL_GCS_BUCKET}"
 
 eval ${DEPLOY_CMD} || {
     echo -e "${RED}Error: Cloud Run deployment failed${NC}"
@@ -81,4 +80,3 @@ echo "curl ${SERVICE_URL}/health"
 echo "curl -X POST ${SERVICE_URL}/workflow/run-step \\"
 echo "  -H 'Content-Type: application/json' \\"
 echo "  -d '{\"requestId\": \"test_123\", \"requestPath\": \"organizations/org/requests/webCrawlRequests/logs/test_123\", \"step\": \"crawl\", \"input\": {\"url\": \"https://example.com\", \"bucket_name\": \"my-bucket\", \"folder_path\": \"crawled\", \"max_depth\": 2, \"max_urls\": 10, \"file_space_id\": \"fs1\"}, \"operationMetadata\": {\"organizationId\": \"org\", \"spaceId\": \"space\", \"requestedBy\": {\"email\": \"test@example.com\", \"role\": 1}}}'"
-

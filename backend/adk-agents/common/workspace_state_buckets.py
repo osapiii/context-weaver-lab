@@ -13,6 +13,7 @@ TASK_KEYS = (
     "web_page",
     "business_partner",
     "vibe_control",
+    "vibe_zapping_analysis",
     "vibe_capability_structuring",
     "vibe_story_generation",
     "guide",

@@ -21,7 +21,7 @@
  * このサービスから直接叩く。`/mirror/*` 系は Workflows のみが叩く。
  */
 export const DRIVE_TO_GCS_SYNC_SERVICE_URL =
-  "https://drive-to-gcs-sync-wsqdguu4pq-uc.a.run.app";
+  "https://drive-to-gcs-sync-q2uwnmd3yq-uc.a.run.app";
 
 /**
  * Google Drive Workflow Kicker. 通常は Firebase Functions trigger からのみ叩く

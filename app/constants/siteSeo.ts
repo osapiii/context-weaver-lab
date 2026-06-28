@@ -1,6 +1,6 @@
 export const SITE_NAME = "VibeControl";
 export const SITE_DESCRIPTION =
-  "VibeControlは、アプリケーションの仕様、ユーザーストーリー、Screen Atlas、外部連携を管理する運用画面です。";
+  "VibeControlは、アプリケーションの仕様、ザッピング動画、画面カタログ、ユーザーストーリー、外部連携を管理する運用画面です。";
 export const SITE_URL = "https://vibe-control-dev.web.app";
 
 export const SITE_FAVICON_LINKS = [

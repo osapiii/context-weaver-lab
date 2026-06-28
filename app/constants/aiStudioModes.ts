@@ -65,9 +65,9 @@ export const AI_STUDIO_MODE_META: Record<
       "bg-cyan-50 text-cyan-800 ring-1 ring-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-200 dark:ring-cyan-800/50",
   },
   application_scan: {
-    label: AI_STUDIO_HUB_JOB_META.application_scan.label,
-    shortLabel: AI_STUDIO_HUB_JOB_META.application_scan.shortLabel,
-    icon: AI_STUDIO_HUB_JOB_META.application_scan.icon,
+    label: "画面カタログ",
+    shortLabel: "画面",
+    icon: "material-symbols:preview-outline",
     badgeClass:
       "bg-amber-50 text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-800/50",
   },
@@ -104,7 +104,7 @@ export const AI_STUDIO_MODE_PANEL_TITLE: Record<AiStudioWorkspaceMode, string> =
   research: "調査レポートモード",
   data_analysis: "データ分析モード",
   web_page: "WEBページモード",
-  application_scan: "Screen Atlasモード",
+  application_scan: "画面カタログモード",
 };
 
 export const AI_STUDIO_CONCIERGE_PANEL_TITLE = "コンシェルジュモード";

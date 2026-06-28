@@ -48,11 +48,16 @@
         @switch-to-view="mode = 'view'"
       />
       <DataSourceViewMode
-        v-else
+        v-else-if="mode === 'view'"
         :file-space-id="fileSpaceId"
         :documents="documents"
         :is-loading-documents="isLoadingDocuments"
         @refresh="onRefreshDocuments"
+      />
+      <DataSourceTestConversationMode
+        v-else
+        :file-space-id="fileSpaceId"
+        :documents="documents"
       />
     </Transition>
   </div>
@@ -64,6 +69,7 @@ import { storeToRefs } from "pinia";
 import EnAiPageHeader from "@components/ai/EnAiPageHeader.vue";
 import { useNavModeIcons } from "@composables/useNavModeIcons";
 import DataSourceUploadMode from "@components/dataSource/DataSourceUploadMode.vue";
+import DataSourceTestConversationMode from "@components/dataSource/DataSourceTestConversationMode.vue";
 import DataSourceViewMode from "@components/dataSource/DataSourceViewMode.vue";
 import { useGeminiFileSpaceOperatorStore } from "@stores/geminiFileSpaceOperator";
 import { useDefaultFileSpace } from "@composables/useDefaultFileSpace";
@@ -75,7 +81,7 @@ defineOptions({
 
 const navModeIcons = useNavModeIcons();
 
-type DataSourceMode = "upload" | "view";
+type DataSourceMode = "upload" | "view" | "test";
 
 const modeTabs = [
   {
@@ -88,6 +94,11 @@ const modeTabs = [
     label: "知識を確認",
     icon: "i-heroicons-magnifying-glass",
   },
+  {
+    value: "test",
+    label: "テスト会話",
+    icon: "i-heroicons-chat-bubble-left-right",
+  },
 ];
 
 definePageMeta({
@@ -96,7 +107,10 @@ definePageMeta({
 });
 
 const route = useRoute();
-const mode = ref<DataSourceMode>(route.query.mode === "view" ? "view" : "upload");
+const resolveModeFromQuery = (value: unknown): DataSourceMode => {
+  return value === "view" || value === "test" ? value : "upload";
+};
+const mode = ref<DataSourceMode>(resolveModeFromQuery(route.query.mode));
 
 const fileSpaceStore = useGeminiFileSpaceOperatorStore();
 const { documents, isLoadingDocuments } = storeToRefs(fileSpaceStore);
@@ -133,9 +147,7 @@ watch(syncCompletedTick, () => {
 watch(
   () => route.query.mode,
   (nextMode) => {
-    if (nextMode === "view" || nextMode === "upload") {
-      mode.value = nextMode;
-    }
+    mode.value = resolveModeFromQuery(nextMode);
   }
 );
 </script>

@@ -49,6 +49,7 @@ export type WorkspaceTaskKey =
   | "data_analysis"
   | "web_page"
   | "application_scan"
+  | "vibe_zapping_analysis"
   | "vibe_capability_structuring"
   | "vibe_story_generation"
   | "guide";
@@ -140,6 +141,7 @@ export const buildInvokeModeStateFromWorkspaceState = (params: {
     "data_analysis",
     "web_page",
     "application_scan",
+    "vibe_zapping_analysis",
     "vibe_capability_structuring",
     "vibe_story_generation",
   ] as const) {

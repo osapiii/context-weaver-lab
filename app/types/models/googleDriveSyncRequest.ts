@@ -74,7 +74,11 @@ export type GoogleDriveSyncWorkflowState = z.infer<
 
 export const GoogleDriveSyncInputSchema = z.object({
   operationType: GoogleDriveSyncOperationTypeEnum,
+  /** Drive 接続 ID (現行は default 固定) */
+  connectionId: z.string().min(1).optional().default("default"),
   rootFolderId: z.string(),
+  /** リンク共有フォルダの resource key。無い場合は null */
+  rootFolderResourceKey: z.string().nullable().optional(),
   /** syncSingleFolder の場合: 同期したいサブフォルダ (root の子孫). syncFolder の場合は null */
   targetFolderId: z.string().nullable().optional(),
   /** 同期先 FileSpace (= default FileSpace の Gemini storeId) */
@@ -363,4 +367,4 @@ export {
   manualUploadGcsPath,
   driveSyncWorkflowInputGcsPath,
   gcsBrowserUrlFromGsUri,
-} from "~/utils/knowledgeStoragePaths";
+} from "@utils/knowledgeStoragePaths";

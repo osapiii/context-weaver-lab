@@ -170,6 +170,9 @@ async function openNotification(item: NotificationItem): Promise<void> {
     });
     return;
   }
-  await router.push({ name: "admin-workflow-executions" });
+  await router.push({
+    name: "admin-workflow-executions",
+    query: { jobId: item.sourceWorkflowItem.id },
+  });
 }
 </script>

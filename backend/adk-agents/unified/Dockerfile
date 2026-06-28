@@ -27,8 +27,8 @@ COPY adk-agents/research /app/research
 COPY adk-agents/business_partner /app/business_partner
 COPY adk-agents/data_analysis /app/data_analysis
 COPY adk-agents/web_page /app/web_page
-COPY adk-agents/application_scan /app/application_scan
 COPY adk-agents/vibe_control /app/vibe_control
+COPY adk-agents/vibe_zapping_analysis /app/vibe_zapping_analysis
 COPY adk-agents/vibe_capability_structuring /app/vibe_capability_structuring
 COPY adk-agents/vibe_story_generation /app/vibe_story_generation
 COPY adk-agents/unified /app/unified

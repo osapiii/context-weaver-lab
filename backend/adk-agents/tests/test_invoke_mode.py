@@ -40,16 +40,21 @@ def test_resolve_accepts_vibe_control_mode():
     assert mode == "vibe_control"
 
 
-def test_resolve_accepts_application_scan_mode():
+def test_resolve_rejects_removed_application_scan_mode():
     mode = resolve_invoke_agent_mode(
         url_mode="application_scan",
         mode_state={"active_mode": "application_scan"},
         session_state={},
     )
-    assert mode == "application_scan"
+    assert mode == "consultation"
 
 
 def test_resolve_accepts_separated_vibe_modes():
+    zapping_mode = resolve_invoke_agent_mode(
+        url_mode="vibe_zapping_analysis",
+        mode_state={"active_mode": "vibe_zapping_analysis"},
+        session_state={},
+    )
     capability_mode = resolve_invoke_agent_mode(
         url_mode="vibe_capability_structuring",
         mode_state={"active_mode": "vibe_capability_structuring"},
@@ -60,5 +65,6 @@ def test_resolve_accepts_separated_vibe_modes():
         mode_state={"active_mode": "vibe_story_generation"},
         session_state={},
     )
+    assert zapping_mode == "vibe_zapping_analysis"
     assert capability_mode == "vibe_capability_structuring"
     assert story_mode == "vibe_story_generation"

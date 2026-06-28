@@ -24,6 +24,7 @@ import os
 import re
 import time
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin, urlparse
@@ -39,6 +40,7 @@ from endpoints.crawl.workflow_step_state import persist_context_keys, restore_co
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5MB
 IMAGE_FETCH_TIMEOUT = 15.0  # seconds
 IMAGE_CONCURRENCY = 8
+MARKDOWN_UPLOAD_CONCURRENCY = 8
 # 安全な GCS prefix 名にするための regex (Drive 用と同等、念のため流用)
 _INVALID_NAME_CHARS = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
 # WordPress 等の CMS が生成するサムネ variant suffix を検出する regex.
@@ -559,9 +561,11 @@ def execute(context: ExecutionContext) -> None:
                     emoji="🧹",
                 )
 
-        # ③ markdown を 1 つずつ upload
-        markdown_paths: List[Dict[str, Any]] = []
-        for page_idx, body in enumerate(rewritten_markdowns):
+        # ③ markdown を upload
+        #
+        # 各ページの Markdown は独立しているため並列化する。100 ページ級の crawl で
+        # GCS round-trip を逐次に待つと workflow 全体の実行時間が伸びる。
+        def _upload_markdown_page(page_idx: int, body: str) -> Dict[str, Any]:
             md_filename = f"page-{page_idx+1:03d}.md"
             md_path = f"{gcs_prefix}/{md_filename}"
             upload_string_to_gcs(
@@ -571,23 +575,50 @@ def execute(context: ExecutionContext) -> None:
                 content_type="text/markdown",
             )
             page_meta = pages[page_idx]
-            markdown_paths.append(
-                {
-                    "filename": md_filename,
-                    "gcsPath": md_path,
-                    "url": page_meta.get("url"),
-                    "title": (page_meta.get("metadata") or {}).get("title"),
-                    # OGP / Twitter Card メタ (step1 抽出済). Firestore Document に
-                    # 保存して UI 側でサムネ表示・本文要約に使う.
-                    "ogImage": page_meta.get("ogImage"),
-                    "ogTitle": page_meta.get("ogTitle"),
-                    "ogDescription": page_meta.get("ogDescription"),
-                    # ページのサムネ画像の GCS パス. og:image があればそれ、
-                    # 無ければページで最初に upload された画像 (or dedup 結果).
-                    # フロントの page list view で thumbnail として使う.
-                    "thumbnailGcsPath": page_thumbnails.get(page_idx),
-                }
-            )
+            return {
+                "index": page_idx,
+                "filename": md_filename,
+                "gcsPath": md_path,
+                "url": page_meta.get("url"),
+                "title": (page_meta.get("metadata") or {}).get("title"),
+                # OGP / Twitter Card メタ (step1 抽出済). Firestore Document に
+                # 保存して UI 側でサムネ表示・本文要約に使う.
+                "ogImage": page_meta.get("ogImage"),
+                "ogTitle": page_meta.get("ogTitle"),
+                "ogDescription": page_meta.get("ogDescription"),
+                # ページのサムネ画像の GCS パス. og:image があればそれ、
+                # 無ければページで最初に upload された画像 (or dedup 結果).
+                # フロントの page list view で thumbnail として使う.
+                "thumbnailGcsPath": page_thumbnails.get(page_idx),
+            }
+
+        markdown_paths_by_idx: Dict[int, Dict[str, Any]] = {}
+        max_workers = min(MARKDOWN_UPLOAD_CONCURRENCY, max(1, len(rewritten_markdowns)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(_upload_markdown_page, page_idx, body): page_idx
+                for page_idx, body in enumerate(rewritten_markdowns)
+            }
+            for future in as_completed(futures):
+                page_idx = futures[future]
+                try:
+                    uploaded = future.result()
+                except Exception as md_err:
+                    raise FatalStepError(
+                        step_name="step2_upload_to_gcs",
+                        message=(
+                            f"failed to upload markdown page {page_idx + 1}: "
+                            f"{md_err}"
+                        ),
+                        error_code="MARKDOWN_UPLOAD_FAILED",
+                    ) from md_err
+                markdown_paths_by_idx[page_idx] = uploaded
+
+        markdown_paths: List[Dict[str, Any]] = []
+        for page_idx in range(len(rewritten_markdowns)):
+            entry = markdown_paths_by_idx[page_idx]
+            entry.pop("index", None)
+            markdown_paths.append(entry)
 
         # ④ manifest.json
         manifest = _build_manifest(

@@ -192,12 +192,15 @@ def read_capability_structuring_context(tool_context: Any = None) -> dict[str, A
     setup = _setup_from_bucket(bucket)
     payload = _payload_from_bucket(bucket)
     application = _application_from_setup(setup)
+    tools = _as_dict(bucket.get("tools"))
     return {
         "ok": True,
         "phase": bucket.get("phase") or "drafting",
         "application": application,
         "generation_session_id": _clean_text(setup.get("generation_session_id")),
         "source_assets": _as_list(payload.get("source_assets")),
+        "knowledge_pipeline": _as_dict(payload.get("knowledge_pipeline")),
+        "vertex_ai_search": _as_dict(tools.get("vertex_ai_search")),
         "existing_capabilities": _as_list(payload.get("existing_capabilities")),
         "existing_stories": _as_list(payload.get("existing_stories")),
         "user_notes": _clean_text(payload.get("user_notes")) or None,

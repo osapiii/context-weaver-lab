@@ -11,6 +11,14 @@ export const useNavModeIcons = () => {
     applications: "flat-color-icons:deployment",
     /** ユーザーストーリー */
     stories: "flat-color-icons:flow-chart",
+    /** 操作動画 */
+    operationVideos: "material-symbols:video-camera-back-outline",
+    /** 外部サービス連携 */
+    externalServices: "material-symbols:conversion-path",
+    /** 画面カタログ */
+    screenCatalog: "material-symbols:preview-outline",
+    /** 機能候補 */
+    capabilities: "material-symbols:account-tree-outline",
     /** マスタ・実績・取引先の整備 */
     prepare: "flat-color-icons:survey",
     /** ナレッジ投入・AI 育成 */

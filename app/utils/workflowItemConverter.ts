@@ -71,7 +71,9 @@ function buildVibeControlApplicationNavigateTarget(
   return {
     routeName: "admin-vibe-control",
     query: {
-      view: applicationScanRequestId ? "application-scan" : "application-detail",
+      view: applicationScanRequestId
+        ? "application-screen-catalog"
+        : "application-detail",
       ...(applicationId ? { applicationId } : {}),
       ...(applicationScanRequestId
         ? { applicationScanRequestId, openApplicationScanProgress: "1" }

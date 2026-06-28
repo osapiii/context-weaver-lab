@@ -81,6 +81,9 @@ service_name_for_mode() {
     vibe_capability_structuring)
       echo "vibe-capability-structuring-agent"
       ;;
+    vibe_zapping_analysis)
+      echo "vibe-zapping-analysis-agent"
+      ;;
     vibe_story_generation)
       echo "vibe-story-generation-agent"
       ;;
@@ -94,6 +97,9 @@ dd_service_for_mode() {
   case "$1" in
     vibe_capability_structuring)
       echo "vibe-control-capability-structuring-agent"
+      ;;
+    vibe_zapping_analysis)
+      echo "vibe-control-zapping-analysis-agent"
       ;;
     vibe_story_generation)
       echo "vibe-control-story-generation-agent"
@@ -135,14 +141,15 @@ case "${ONLY}" in
     deploy_one sheet
     deploy_one image
     deploy_one consultation
+    deploy_one vibe_zapping_analysis
     deploy_one vibe_capability_structuring
     deploy_one vibe_story_generation
     ;;
-  writing|sheet|image|consultation|vibe_capability_structuring|vibe_story_generation)
+  writing|sheet|image|consultation|vibe_zapping_analysis|vibe_capability_structuring|vibe_story_generation)
     deploy_one "${ONLY}"
     ;;
   *)
-    echo "ONLY must be one of: unified | writing | sheet | image | consultation | vibe_capability_structuring | vibe_story_generation | all" >&2
+    echo "ONLY must be one of: unified | writing | sheet | image | consultation | vibe_zapping_analysis | vibe_capability_structuring | vibe_story_generation | all" >&2
     exit 1
     ;;
 esac
@@ -154,7 +161,7 @@ url=$(gcloud run services describe "en-aistudio-adk-agent" \
 if [[ -n "${url}" ]]; then
   echo "NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL=${url}"
 fi
-for mode in writing sheet image consultation vibe_capability_structuring vibe_story_generation; do
+for mode in writing sheet image consultation vibe_zapping_analysis vibe_capability_structuring vibe_story_generation; do
   service_name="$(service_name_for_mode "${mode}")"
   url=$(gcloud run services describe "${service_name}" \
     --project="${PROJECT_ID}" --region="${REGION}" \

@@ -4,7 +4,7 @@
       <div class="min-w-0">
         <h2 class="text-sm font-bold text-slate-900">Capability Workbench</h2>
         <p class="mt-1 text-xs leading-relaxed text-slate-500">
-          Evidence と SourceAsset を見ながら Capability 構造を解析します
+          Vertex AI Search に入ったザッピング証跡と SourceAsset を参照して Capability 構造を解析します
         </p>
       </div>
       <div class="grid grid-cols-4 gap-2 text-right">
@@ -122,6 +122,32 @@
             </p>
           </div>
           <div class="space-y-3 p-3">
+            <div class="rounded-md border border-violet-200 bg-violet-50/70 px-3 py-3">
+              <div class="flex items-start gap-3">
+                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-violet-700 ring-1 ring-violet-100">
+                  <UIcon name="material-symbols:database-search-outline-rounded" class="h-4 w-4" />
+                </span>
+                <div class="min-w-0">
+                  <p class="text-xs font-bold text-slate-900">
+                    ザッピング証跡を Search Store から参照
+                  </p>
+                  <p class="mt-1 text-xs leading-relaxed text-slate-600">
+                    動画から抽出したスクリーンショット、Aqua Voice全文文字起こし、要約、操作ステップをFileSpaceへ取り込み、Capability境界の根拠にします。
+                  </p>
+                  <div class="mt-2 flex flex-wrap gap-1.5">
+                    <EnBadge variant="tag" size="xs">
+                      Search {{ zappingSearchAssetCount }}
+                    </EnBadge>
+                    <EnBadge variant="tag" size="xs">
+                      Video {{ zappingVideoAssetCount }}
+                    </EnBadge>
+                    <EnBadge variant="tag" size="xs">
+                      Transcript {{ zappingTranscriptAssetCount }}
+                    </EnBadge>
+                  </div>
+                </div>
+              </div>
+            </div>
             <p
               v-if="!canRunCapabilityStructuring"
               class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700"
@@ -248,6 +274,30 @@ const evidenceCountByCapability = computed<Record<string, number>>(() => {
 
 const visibleSourceAssets = computed(() => props.sourceAssets.slice(0, 8));
 const visibleSessions = computed(() => props.generationSessions.slice(0, 8));
+const zappingAssets = computed(() =>
+  props.sourceAssets.filter((asset) =>
+    asset.sourceType.startsWith("operation_video")
+  )
+);
+const zappingSearchAssetCount = computed(
+  () =>
+    zappingAssets.value.filter(
+      (asset) =>
+        asset.discoveryStatus === "queued" ||
+        asset.discoveryStatus === "completed"
+    ).length
+);
+const zappingVideoAssetCount = computed(
+  () => zappingAssets.value.filter((asset) => asset.sourceType === "operation_video").length
+);
+const zappingTranscriptAssetCount = computed(
+  () =>
+    zappingAssets.value.filter(
+      (asset) =>
+        Boolean(asset.metadata?.transcriptText) ||
+        Boolean(asset.metadata?.transcriptSummary)
+    ).length
+);
 const canRunCapabilityStructuring = computed(
   () =>
     Boolean(props.application) &&

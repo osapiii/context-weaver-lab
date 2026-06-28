@@ -16,6 +16,7 @@ export const AdkInvokeModeEnum = z.enum([
   "web_page",
   "application_scan",
   "business_partner",
+  "vibe_zapping_analysis",
   "vibe_capability_structuring",
   "vibe_story_generation",
 ]);

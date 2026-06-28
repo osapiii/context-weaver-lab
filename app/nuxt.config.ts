@@ -316,6 +316,10 @@ export default defineNuxtConfig({
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_CONSULTATION_URL ||
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
         "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+      enAiStudioAdkVibeZappingAnalysisUrl:
+        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_VIBE_ZAPPING_ANALYSIS_URL ||
+        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
+        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
       enAiStudioAdkVibeCapabilityStructuringUrl:
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_VIBE_CAPABILITY_STRUCTURING_URL ||
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||

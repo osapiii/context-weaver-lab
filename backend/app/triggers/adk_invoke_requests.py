@@ -21,7 +21,9 @@ db = firestore.Client()
 def _adk_base_url(mode: str | None = None) -> str:
     normalized = (mode or "").strip().lower()
     mode_env = ""
-    if normalized == "vibe_capability_structuring":
+    if normalized == "vibe_zapping_analysis":
+        mode_env = os.getenv("EN_AISTUDIO_ADK_VIBE_ZAPPING_ANALYSIS_URL", "")
+    elif normalized == "vibe_capability_structuring":
         mode_env = os.getenv("EN_AISTUDIO_ADK_VIBE_CAPABILITY_STRUCTURING_URL", "")
     elif normalized == "vibe_story_generation":
         mode_env = os.getenv("EN_AISTUDIO_ADK_VIBE_STORY_GENERATION_URL", "")
@@ -36,6 +38,8 @@ def _adk_base_url(mode: str | None = None) -> str:
 
 def _adk_service_name(mode: str) -> str:
     normalized = (mode or "").strip().lower()
+    if normalized == "vibe_zapping_analysis":
+        return "vibe-zapping-analysis-agent"
     if normalized == "vibe_capability_structuring":
         return "vibe-capability-structuring-agent"
     if normalized == "vibe_story_generation":

@@ -11,7 +11,7 @@
           <button
             type="button"
             class="flex min-w-0 items-center gap-2 rounded-md text-left transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-            aria-label="アプリ一覧へ"
+            aria-label="VibeControl ホームへ"
             @click="navigateToVibeControl"
           >
             <NuxtImg
@@ -24,7 +24,7 @@
               v-else
               class="truncate font-mono text-lg font-bold tracking-tight text-slate-950"
             >
-              {{ currentMode?.label ?? "アプリ" }}
+              {{ currentMode?.label ?? "VibeControl" }}
             </span>
           </button>
 
@@ -40,6 +40,10 @@
         </div>
 
         <div class="flex min-w-0 shrink-0 items-center gap-2">
+          <GoogleWorkspaceConnectionHeaderChip />
+          <GoogleDriveSyncGlobalIndicator />
+          <WorkflowExecutionGlobalIndicator />
+
           <button
             type="button"
             class="hidden h-8 max-w-[14rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 sm:flex"
@@ -124,10 +128,30 @@
 
         <NuxtLink
           :to="{ name: 'admin-workflow-executions' }"
-          class="flex h-5 items-center gap-1 rounded px-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100"
+          class="flex h-5 items-center gap-1 rounded px-2 transition-colors"
+          :class="
+            isWorkflowExecutionsPage || hasRunningWorkflowExecutions
+              ? 'bg-slate-800 text-slate-100'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+          "
+          title="実行中・完了した AI / Workflow ジョブを確認"
         >
-          <UIcon name="material-symbols:flowchart-rounded" class="h-3.5 w-3.5" />
+          <UIcon
+            :name="
+              hasRunningWorkflowExecutions
+                ? 'material-symbols:autorenew'
+                : 'material-symbols:flowchart-rounded'
+            "
+            class="h-3.5 w-3.5"
+            :class="hasRunningWorkflowExecutions ? 'animate-spin text-orange-400' : ''"
+          />
           <span>仕事ログ</span>
+          <span
+            v-if="hasRunningWorkflowExecutions"
+            class="ml-0.5 rounded bg-orange-500 px-1 text-[10px] font-bold leading-4 text-white"
+          >
+            {{ workflowExecutions.runningCount }}
+          </span>
         </NuxtLink>
 
         <div class="ml-auto flex min-w-0 items-center gap-2">
@@ -159,13 +183,20 @@
     </EnModal>
 
     <SpaceSelectModal v-model="isSpaceModalOpen" />
-    <NotificationSlideover />
-    <WorkflowNotificationPet v-show="!context.focusModeIsActive" />
+    <LazyNotificationSlideover v-if="notifications.isPanelOpen" />
+    <GoogleDriveImportProgressModal />
+    <LazyWorkflowNotificationPet
+      v-if="mountWorkflowNotificationPet"
+      v-show="!context.focusModeIsActive"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import AdminModeActivitySidebar from "@components/admin/AdminModeActivitySidebar.vue";
+import GoogleDriveImportProgressModal from "@components/dataSource/GoogleDriveImportProgressModal.vue";
+import GoogleDriveSyncGlobalIndicator from "@components/GoogleDriveSyncGlobalIndicator.vue";
+import GoogleWorkspaceConnectionHeaderChip from "@components/GoogleWorkspaceConnectionHeaderChip.vue";
 import AdminPageContainer from "@components/layout/AdminPageContainer.vue";
 import { ADMIN_NAV_SIDEBAR_STORAGE_KEY } from "@constants/adminLayout";
 import {
@@ -193,6 +224,8 @@ const organization = useOrganizationStore();
 const globalLoading = useGlobalLoadingStore();
 const spaceStore = useSpaceStore();
 const vibeControl = useVibeControlStore();
+const workflowExecutions = useWorkflowExecutionsStore();
+const notifications = useWorkflowNotificationsStore();
 
 defineOptions({
   name: "AdminLayout",
@@ -201,15 +234,29 @@ defineOptions({
 const isSpaceModalOpen = ref(false);
 const isApplicationManagerOpen = ref(false);
 const adminNavSidebarCollapsed = ref(false);
+const mountWorkflowNotificationPet = ref(false);
 
 function navigateToVibeControl(): void {
+  const query: Record<string, string> = { view: "application-knowledge" };
+  if (vibeControl.selectedApplicationId) {
+    query.applicationId = vibeControl.selectedApplicationId;
+  }
   void router.push({
     name: "admin-vibe-control",
-    query: { view: "stories" },
+    query,
   });
 }
 
 onMounted(() => {
+  const mountNotificationUi = () => {
+    mountWorkflowNotificationPet.value = true;
+  };
+  const requestIdle = window.requestIdleCallback;
+  if (requestIdle) {
+    requestIdle(mountNotificationUi, { timeout: 1200 });
+  } else {
+    window.setTimeout(mountNotificationUi, 0);
+  }
   try {
     const stored = localStorage.getItem(ADMIN_NAV_SIDEBAR_STORAGE_KEY);
     adminNavSidebarCollapsed.value = stored === "true";
@@ -237,20 +284,34 @@ const routeName = computed(() => {
   return typeof name === "string" ? name : "";
 });
 
+const isVibeControlRoute = computed(() =>
+  routeName.value.startsWith("admin-vibe-control")
+);
+
 const currentMode = computed(() => {
-  if (routeName.value === "admin-vibe-control") {
+  if (isVibeControlRoute.value) {
     const view = typeof route.query.view === "string" ? route.query.view : "";
-    return navModes.find((mode) =>
-      view === "repositories" || view === "application-detail"
-        ? mode.key === "applications"
-        : mode.key === "stories"
-    );
+    const modeKeyByView: Record<string, (typeof navModes)[number]["key"]> = {
+      "application-knowledge": "knowledge",
+      "application-knowledge-space": "knowledge",
+      "application-zapping": "operation-videos",
+      "application-videos": "operation-videos",
+      "application-external-services": "external-services",
+      "application-git": "external-services",
+      "application-screen-catalog": "screen-catalog",
+      "application-scan": "screen-catalog",
+      "application-capabilities": "capabilities",
+      stories: "stories",
+      repositories: "external-services",
+      "application-detail": "settings",
+    };
+    return navModes.find((mode) => mode.key === (modeKeyByView[view] ?? "knowledge"));
   }
   return findModeByRouteName(routeName.value);
 });
 
 useHead({
-  title: () => currentMode.value?.label ?? "アプリ",
+  title: () => currentMode.value?.label ?? "VibeControl",
 });
 
 useSeoMeta({
@@ -268,15 +329,21 @@ useSeoMeta({
 });
 
 const currentModeKey = computed(() => currentMode.value?.key);
-const showVibeControlSwitcher = computed(
-  () => routeName.value === "admin-vibe-control"
+const showVibeControlSwitcher = computed(() => isVibeControlRoute.value);
+const isWorkflowExecutionsPage = computed(
+  () => routeName.value === "admin-workflow-executions"
+);
+const hasRunningWorkflowExecutions = computed(
+  () => workflowExecutions.runningCount > 0
 );
 
 function selectVibeControlApplication(applicationId: string): void {
   vibeControl.selectApplication(applicationId);
+  const currentView =
+    typeof route.query.view === "string" ? route.query.view : "stories";
   void router.push({
     name: "admin-vibe-control",
-    query: { view: "stories" },
+    query: { view: currentView },
   });
 }
 
@@ -319,7 +386,7 @@ function openCreateApplication(): void {
   isApplicationManagerOpen.value = false;
   void router.push({
     name: "admin-vibe-control",
-    query: { view: "stories", action: "create-app" },
+    query: { view: "application-knowledge", action: "create-app" },
   });
 }
 
@@ -332,6 +399,7 @@ function openRepositoryList(): void {
 }
 
 const groupedNavModes = computed(() => {
+  const groupOrder = ["input", "analysis", "admin"];
   const groupMap = new Map<string, typeof navModes>();
   for (const mode of navModes) {
     const list = groupMap.get(mode.navGroup);
@@ -342,9 +410,11 @@ const groupedNavModes = computed(() => {
     }
   }
   let runningIdx = 0;
-  return Array.from(groupMap.entries()).map(([id, modes]) => ({
+  return groupOrder
+    .filter((id) => groupMap.has(id))
+    .map((id) => ({
     id,
-    modes: modes.map((mode) => ({
+    modes: (groupMap.get(id) ?? []).map((mode) => ({
       mode,
       shortcutKey: String(++runningIdx),
     })),
@@ -352,9 +422,13 @@ const groupedNavModes = computed(() => {
 });
 
 function navigateToMode(mode: (typeof navModes)[number]): void {
+  const query: Record<string, string> = { ...(mode.homeRouteQuery ?? {}) };
+  if (mode.homeRouteName === "admin-vibe-control" && vibeControl.selectedApplicationId) {
+    query.applicationId = vibeControl.selectedApplicationId;
+  }
   void router.push({
     name: mode.homeRouteName,
-    query: mode.homeRouteQuery,
+    query,
   });
 }
 
