@@ -174,35 +174,10 @@
 
     <template v-else-if="currentView === 'application-detail'">
       <template v-if="activeApplicationTab === 'stories'">
-        <div class="space-y-4">
-          <VibeControlStoryGenerationPanel
-            :application="selectedApplication"
-            :capabilities="store.activeCapabilities"
-            :stories="store.activeStories"
-            :evidence="store.activeEvidence"
-            :source-assets="store.activeSourceAssets"
-            :is-generating="store.isGenerating"
-            @generate-stories="startStoryGeneration"
-          />
-
-          <VibeControlGovernanceHud
-            :application="selectedApplication"
-            :stories="store.activeStories"
-            :filtered-count="store.filteredStories.length"
-            :filters="store.filters"
-            :domains="store.domains"
-            :milestones="store.milestones"
-            @update-filter="updateStoryFilter"
-            @clear-filters="store.clearFilters()"
-          />
-
-          <VibeControlStoryBoard
-            :stories="store.filteredStories"
-            :evidence-count-by-story="store.evidenceCountByStory"
-            :selected-story-id="store.selectedStoryId"
-            @select-story="openStoryDetail"
-          />
-        </div>
+        <VibeControlVideoStoryCurationList
+          :application-id="selectedApplication?.id"
+          :videos="store.activeOperationVideos"
+        />
       </template>
 
       <template v-else-if="activeApplicationTab === 'capabilities'">
@@ -365,7 +340,6 @@ import type {
 import type { Document } from "@models/geminiFileSpaceRequest";
 import type {
   VibeControlApplicationInput,
-  VibeControlFilters,
   VibeControlGenerationInput,
   VibeControlOperationVideoSaveInput,
 } from "@stores/vibeControl";
@@ -823,19 +797,6 @@ function openApplicationDetail(applicationId: string): void {
   updateViewQuery("stories");
 }
 
-function openStoryDetail(storyId: string): void {
-  store.selectStory(storyId);
-  currentView.value = "story-detail";
-  updateViewQuery("stories");
-}
-
-function updateStoryFilter<K extends keyof VibeControlFilters>(
-  key: K,
-  value: VibeControlFilters[K]
-): void {
-  store.setFilter(key, value);
-}
-
 function openCreateApplicationModal(): void {
   editingApplicationId.value = null;
   initialApplicationRepository.value = null;
@@ -892,31 +853,6 @@ async function startCapabilityStructuring(
   } catch (err) {
     toast.add({
       title: "Capability解析ADKの開始に失敗しました",
-      description: err instanceof Error ? err.message : String(err),
-      color: "error",
-    });
-  }
-}
-
-async function startStoryGeneration(
-  input: VibeControlGenerationInput
-): Promise<void> {
-  try {
-    const requestId = await store.startStoryGeneration({
-      applicationId: input.applicationId || store.selectedApplicationId,
-      capabilityId: input.capabilityId,
-      prompt:
-        input.prompt ||
-        `${input.applicationName} のCapability配下に置くユーザーストーリーを生成してください。`,
-    });
-    toast.add({
-      title: "Story生成ADKを開始しました",
-      description: requestId,
-      color: "success",
-    });
-  } catch (err) {
-    toast.add({
-      title: "Story生成ADKの開始に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });

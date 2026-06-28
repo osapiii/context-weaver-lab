@@ -1669,6 +1669,7 @@ type SaveProgressStep = {
   description: string;
   status: "pending" | "active" | "done" | "error";
 };
+type DetailTab = "video" | "videoAnalysis" | "storyAnalysis" | "relatedContext";
 
 type RichTranscriptSummarySection = {
   title: string;
@@ -1730,7 +1731,7 @@ const saveProgressOpen = ref(false);
 const saveProgressPhase = ref<SaveProgressPhase>("idle");
 const selectedVideoId = ref("");
 const detailVideoId = ref("");
-const detailTab = ref<"video" | "videoAnalysis" | "storyAnalysis" | "relatedContext">("video");
+const detailTab = ref<DetailTab>("video");
 const selectedAnalysisStoryId = ref("");
 const videoSearchQuery = ref("");
 const videoStatusFilter = ref<"all" | VibeControlZappingAnalysisStatus>("all");
@@ -1740,6 +1741,7 @@ const deleteVideoConfirmOpen = ref(false);
 const videoUrls = reactive<Record<string, string>>({});
 const frameUrls = reactive<Record<string, string>>({});
 const AQUA_AUDIO_MAX_BYTES = 8 * 1024 * 1024;
+const route = useRoute();
 
 let mediaRecorder: MediaRecorder | null = null;
 let audioRecorder: MediaRecorder | null = null;
@@ -1989,9 +1991,17 @@ watch(
       deleteTargetVideoId.value = "";
       deleteVideoConfirmOpen.value = false;
     }
+    applyRouteDetailTarget(videos);
     void resolveVideoUrls(videos);
   },
   { immediate: true, deep: true }
+);
+
+watch(
+  [() => route.query.operationVideoId, () => route.query.operationVideoTab],
+  () => {
+    applyRouteDetailTarget(props.videos);
+  }
 );
 
 watch(
@@ -2280,6 +2290,33 @@ function videoDisplayId(video: DecodedVibeControlOperationVideo): string {
 function openVideoDetail(video: DecodedVibeControlOperationVideo): void {
   detailVideoId.value = video.id;
   detailTab.value = "video";
+}
+
+function applyRouteDetailTarget(
+  videos: DecodedVibeControlOperationVideo[]
+): void {
+  const videoId =
+    typeof route.query.operationVideoId === "string"
+      ? route.query.operationVideoId
+      : "";
+  if (!videoId) return;
+  if (!videos.some((video) => video.id === videoId)) return;
+  selectedVideoId.value = videoId;
+  detailVideoId.value = videoId;
+  detailTab.value = routeDetailTab();
+}
+
+function routeDetailTab(): DetailTab {
+  const tab = route.query.operationVideoTab;
+  if (
+    tab === "video" ||
+    tab === "videoAnalysis" ||
+    tab === "storyAnalysis" ||
+    tab === "relatedContext"
+  ) {
+    return tab;
+  }
+  return "video";
 }
 
 function buildFallbackRecordingTitle(): string {
