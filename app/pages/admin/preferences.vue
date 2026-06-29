@@ -3,7 +3,7 @@
     <AdminModePageNav current-page-label="設定" />
     <header class="space-y-1">
       <h1 class="text-2xl font-semibold tracking-tight flex items-center gap-2">
-        <UIcon name="material-symbols:tune" class="text-purple-500 w-6 h-6" />
+        <UIcon name="material-symbols:tune" class="text-primary-500 w-6 h-6" />
         設定
       </h1>
       <p class="text-sm text-neutral-500">
@@ -29,7 +29,7 @@
         <div class="space-y-6">
           <section class="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
             <div class="mb-4 flex items-center gap-2">
-              <UIcon name="material-symbols:image" class="text-purple-500 w-5 h-5" />
+              <UIcon name="material-symbols:image" class="text-primary-500 w-5 h-5" />
               <h2 class="text-lg font-semibold">ヘッダーロゴ</h2>
             </div>
             <p class="mb-4 text-sm leading-relaxed text-neutral-600">
@@ -147,7 +147,7 @@
 
           <section class="rounded-lg border border-neutral-200 bg-white p-6 shadow-sm">
             <div class="mb-4 flex items-center gap-2">
-              <UIcon name="material-symbols:smart-toy" class="text-purple-500 w-5 h-5" />
+              <UIcon name="material-symbols:smart-toy" class="text-primary-500 w-5 h-5" />
               <h2 class="text-lg font-semibold">AI アシスタントのアバター</h2>
             </div>
             <p class="mb-4 text-sm leading-relaxed text-neutral-600">
@@ -158,7 +158,7 @@
 
             <div class="flex flex-col items-start gap-6 sm:flex-row">
               <div
-                class="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-violet-50 to-purple-50 ring-1 ring-violet-100"
+                class="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-100"
               >
                 <NuxtImg
                   :src="appearance.aiAvatarUrl.value"
@@ -212,7 +212,7 @@
           <EnCard variant="kpi" padding="spacious">
             <template #header>
               <div class="flex items-center gap-2">
-                <UIcon name="material-symbols:key" class="h-5 w-5 text-purple-500" />
+                <UIcon name="material-symbols:key" class="h-5 w-5 text-primary-500" />
                 <h2 class="text-lg font-semibold text-neutral-900">
                   Gemini API キー
                 </h2>
@@ -223,7 +223,7 @@
                   href="https://aistudio.google.com/apikey"
                   target="_blank"
                   rel="noopener"
-                  class="text-purple-600 underline hover:text-purple-700"
+                  class="text-primary-600 underline hover:text-primary-700"
                 >aistudio.google.com/apikey</a>
                 ) で発行したキーを登録します。ADK エージェントの推論に使用されます。
                 <span class="mt-1 block text-xs text-neutral-500">
@@ -249,7 +249,7 @@
               </div>
               <div
                 v-else
-                class="rounded-md bg-purple-50 px-3 py-2 text-sm text-purple-800"
+                class="rounded-md bg-primary-50 px-3 py-2 text-sm text-primary-800"
               >
                 ⚠️ まだ登録されていません。AI 機能を使う前に登録してください。
               </div>
@@ -342,7 +342,7 @@
               </div>
               <div
                 v-else
-                class="rounded-md bg-purple-50 px-3 py-2 text-sm text-purple-800"
+                class="rounded-md bg-primary-50 px-3 py-2 text-sm text-primary-800"
               >
                 ⚠️ 画像生成を使う前に OpenAI API キーを登録してください。
               </div>
@@ -398,7 +398,7 @@
           <EnCard variant="kpi" padding="spacious">
             <template #header>
               <div class="flex items-center gap-2">
-                <UIcon name="material-symbols:psychology" class="h-5 w-5 text-purple-500" />
+                <UIcon name="material-symbols:psychology" class="h-5 w-5 text-primary-500" />
                 <h2 class="text-lg font-semibold text-neutral-900">
                   グローバルシステムプロンプト
                 </h2>
@@ -459,7 +459,7 @@
           <EnCard variant="kpi" padding="spacious">
             <template #header>
               <div class="flex items-center gap-2">
-                <UIcon name="material-symbols:push-pin" class="h-5 w-5 text-purple-500" />
+                <UIcon name="material-symbols:push-pin" class="h-5 w-5 text-primary-500" />
                 <h2 class="text-lg font-semibold text-neutral-900">
                   ピン留め参照知識（常時）
                 </h2>
@@ -501,30 +501,30 @@
             </template>
 
             <div class="grid gap-3 md:grid-cols-3">
-              <div class="rounded-lg border border-violet-100 bg-violet-50/60 p-4">
-                <div class="flex items-center gap-2 text-sm font-bold text-violet-900">
+              <div class="rounded-lg border border-primary-100 bg-primary-50/60 p-4">
+                <div class="flex items-center gap-2 text-sm font-bold text-primary-900">
                   <UIcon name="logos:google-drive" class="h-5 w-5" />
                   Drive 読み取り
                 </div>
-                <p class="mt-2 text-xs leading-relaxed text-violet-900/70">
+                <p class="mt-2 text-xs leading-relaxed text-primary-900/70">
                   共有フォルダの資料を素材プールへ同期し、AI に教える対象として扱います。
                 </p>
               </div>
-              <div class="rounded-lg border border-purple-100 bg-purple-50/60 p-4">
-                <div class="flex items-center gap-2 text-sm font-bold text-purple-900">
+              <div class="rounded-lg border border-primary-100 bg-primary-50/60 p-4">
+                <div class="flex items-center gap-2 text-sm font-bold text-primary-900">
                   <UIcon name="material-symbols:table-chart-outline" class="h-5 w-5" />
                   Sheets 読み書き
                 </div>
-                <p class="mt-2 text-xs leading-relaxed text-purple-900/70">
+                <p class="mt-2 text-xs leading-relaxed text-primary-900/70">
                   シート確認、表の整形、分析結果の反映などを本人権限で実行します。
                 </p>
               </div>
-              <div class="rounded-lg border border-fuchsia-100 bg-fuchsia-50/60 p-4">
-                <div class="flex items-center gap-2 text-sm font-bold text-fuchsia-900">
+              <div class="rounded-lg border border-emerald-100 bg-emerald-50/60 p-4">
+                <div class="flex items-center gap-2 text-sm font-bold text-emerald-900">
                   <UIcon name="material-symbols:shield-lock-outline" class="h-5 w-5" />
                   個人別 OAuth
                 </div>
-                <p class="mt-2 text-xs leading-relaxed text-fuchsia-900/70">
+                <p class="mt-2 text-xs leading-relaxed text-emerald-900/70">
                   接続トークンはユーザーごとに保存され、組織の他メンバーとは共有されません。
                 </p>
               </div>
@@ -593,14 +593,14 @@
             <li>
               <NuxtLink
                 to="/admin/settings"
-                class="inline-flex items-center gap-2 text-purple-600 underline hover:text-purple-700"
+                class="inline-flex items-center gap-2 text-primary-600 underline hover:text-primary-700"
               >
                 <UIcon name="material-symbols:settings" class="w-4 h-4" />
                 サービス連携設定 (Slack / BigQuery 等)
               </NuxtLink>
             </li>
             <li v-if="showGodMode">
-              <span class="inline-flex items-center gap-2 text-violet-600">
+              <span class="inline-flex items-center gap-2 text-primary-600">
                 <UIcon name="material-symbols:admin-panel-settings" class="w-4 h-4" />
                 Godモードは上部タブ「Godモード」から利用できます
               </span>

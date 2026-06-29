@@ -105,9 +105,24 @@ def _tool_definitions() -> list[dict[str, Any]]:
                 "required": ["applicationId"],
                 "properties": {
                     "applicationId": {"type": "string"},
+                    "operationVideoGroupId": {"type": "string"},
                     "query": {"type": "string"},
                     "discoveryStatus": {"type": "string"},
                     "analysisStatus": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "list_operation_video_groups",
+            "description": "List operation video groups for an application. Use this before list_operation_videos when the user wants to browse videos by group.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["applicationId"],
+                "properties": {
+                    "applicationId": {"type": "string"},
+                    "query": {"type": "string"},
                     "limit": {"type": "integer", "minimum": 1, "maximum": 100},
                 },
                 "additionalProperties": False,
@@ -658,10 +673,19 @@ def _call_tool(principal: McpPrincipal, name: str, arguments: dict[str, Any]) ->
         return _text_content(
             store.list_operation_videos(
                 application_id=str(arguments.get("applicationId") or ""),
+                operation_video_group_id=str(arguments.get("operationVideoGroupId") or ""),
                 query=str(arguments.get("query") or ""),
                 discovery_status=str(arguments.get("discoveryStatus") or ""),
                 analysis_status=str(arguments.get("analysisStatus") or ""),
                 limit=_bounded_int(arguments.get("limit"), default=20, minimum=1, maximum=100),
+            )
+        )
+    if name == "list_operation_video_groups":
+        return _text_content(
+            store.list_operation_video_groups(
+                application_id=str(arguments.get("applicationId") or ""),
+                query=str(arguments.get("query") or ""),
+                limit=_bounded_int(arguments.get("limit"), default=100, minimum=1, maximum=100),
             )
         )
     if name == "get_operation_video_context":

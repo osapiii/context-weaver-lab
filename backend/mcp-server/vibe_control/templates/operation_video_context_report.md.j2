@@ -4,6 +4,8 @@
 - Application: {{ application.name|text(application.id|text("n/a")) }}
 - Application ID: {{ application.id|text("n/a") }}
 - Operation video ID: {{ operation_video_id }}
+- Video group: {{ video_group.name|text("n/a") }}
+- Video group description: {{ video_group.description|text("n/a") }}
 - Generated at: {{ manifest.generatedAt|text("n/a") }}
 - Signed URL expires at: {{ manifest.signedUrlExpiresAt|text("n/a") }}
 - Linked stories: {{ linked_stories|length }}
@@ -18,6 +20,7 @@
 - Description: {{ video.description|text("n/a") }}
 - Recorded at: {{ video.recordedAt|text("n/a") }}
 - Duration: {{ video.durationMs|format_ms }}
+- Group: {{ video.videoGroup.name|text(video_group.name|text("n/a")) }}
 - GCS path: {{ video.gcsPath|text("n/a") }}
 - Download URL: {{ video.downloadUrl|text("n/a") }}
 - Transcript summary: {{ video.transcriptSummary|text("n/a") }}

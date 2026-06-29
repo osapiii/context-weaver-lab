@@ -5,7 +5,7 @@
       <Transition name="bubble" mode="out-in">
         <div
           :key="currentLine"
-          class="speech-bubble relative bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 ring-1 ring-purple-100 dark:ring-purple-900/40 shadow-[0_4px_16px_-4px_rgba(139,92,246,0.18)]"
+          class="speech-bubble relative bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 ring-1 ring-emerald-100 dark:ring-emerald-900/40 shadow-[0_4px_16px_-4px_rgba(16,185,129,0.16)]"
         >
           <p class="text-[13px] leading-relaxed text-gray-800 dark:text-gray-100 text-center">
             {{ currentLine }}
@@ -21,16 +21,17 @@
       <!-- 影 (地面に落ちる楕円) -->
       <div class="penguin-shadow" aria-hidden="true" />
       <NuxtImg
-        :src="appearance.aiAvatarUrl.value"
-        :alt="appearance.hasCustomAiAvatar.value ? 'AI アシスタント' : 'EN AIstudio AI バディ'"
+        :src="companionImageSrc"
+        alt="StoryVault コンパニオン"
         class="penguin-img w-32 h-32 object-contain relative z-10"
         :class="{ 'penguin-bobbing': !isUploading, 'penguin-eating': isUploading }"
       />
     </div>
 
-    <!-- 会話スタート CTA — AI 部下なので variant="ai" で purple 強制 -->
+    <!-- 会話スタート CTA -->
     <EnButton
-      variant="ai"
+      variant="hero"
+      color="primary"
       size="md"
       leading-icon="i-heroicons-chat-bubble-left-right"
       @click="$emit('start-conversation')"
@@ -43,8 +44,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import EnButton from "@components/EnButton.vue";
-
-const appearance = useAppAppearance();
 
 const props = withDefaults(
   defineProps<{
@@ -67,6 +66,10 @@ defineEmits<{
 // 「覚えた」のソースは indexedCount を優先 (画像など対象外を含まない)
 const masteredCount = computed(() =>
   props.indexedCount != null ? props.indexedCount : props.documentCount
+);
+
+const companionImageSrc = computed(() =>
+  props.isUploading ? "/storyvault-hamster-running.gif" : "/storyvault-hamster-idle.png"
 );
 
 const idleLines = computed<string[]>(() => {
@@ -195,7 +198,7 @@ watch(
   height: 12px;
   background: radial-gradient(
     ellipse,
-    rgba(139,92,246, 0.18) 0%,
+    rgba(16,185,129, 0.16) 0%,
     transparent 70%
   );
   border-radius: 50%;

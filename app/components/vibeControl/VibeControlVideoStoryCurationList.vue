@@ -1,5 +1,23 @@
 <template>
   <section :class="rootClass">
+    <EnModal
+      v-model:open="mcpTestChatOpen"
+      :title="mcpTestTitle"
+      subtitle="現在の一覧スコープをMCP JSONとして渡して会話します。"
+      title-icon="material-symbols:terminal"
+      size="xl"
+      fullscreen
+    >
+      <VibeControlMcpTestChat
+        :application="null"
+        :video="mcpTargetVideoGroup?.video ?? null"
+        :context-json="mcpTestContextJson"
+        :title="mcpTestTitle"
+        :description="mcpTestDescription"
+        :context-label="mcpTestContextLabel"
+      />
+    </EnModal>
+
     <div :class="toolbarClass">
       <div class="flex min-w-0 flex-1 flex-col gap-3 xl:flex-row xl:items-center">
         <div class="flex min-w-0 items-center gap-2 xl:w-[18rem]">
@@ -11,7 +29,7 @@
               動画別ユーザーストーリー
             </h2>
             <p class="truncate text-xs font-medium text-slate-500">
-              操作動画をEpic、抽出USをIssueとして確認します
+              操作動画ごとに抽出されたストーリー候補を確認します
             </p>
           </div>
         </div>
@@ -25,7 +43,7 @@
             v-model="query"
             type="search"
             class="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-100"
-            placeholder="動画タイトル・概要・US候補で検索"
+            placeholder="動画タイトル・概要・ストーリー候補で検索"
           >
         </label>
       </div>
@@ -33,13 +51,13 @@
       <div class="flex shrink-0 flex-wrap items-center gap-2">
         <div class="hidden items-center gap-1.5 text-xs lg:flex">
           <span class="rounded-md bg-slate-50 px-2.5 py-1 font-bold text-slate-500">
-            Video <b class="ml-1 tabular-nums text-slate-950">{{ displayedVideoGroups.length }}</b>
+            動画 <b class="ml-1 tabular-nums text-slate-950">{{ displayedVideoGroups.length }}</b>
           </span>
           <span class="rounded-md bg-slate-50 px-2.5 py-1 font-bold text-slate-500">
-            US <b class="ml-1 tabular-nums text-slate-950">{{ visibleStoryCount }}</b>
+            ストーリー <b class="ml-1 tabular-nums text-slate-950">{{ visibleStoryCount }}</b>
           </span>
           <span class="rounded-md bg-slate-50 px-2.5 py-1 font-bold text-slate-500">
-            Analyzed <b class="ml-1 tabular-nums text-slate-950">{{ analyzedVideoCount }}</b>
+            解析済み <b class="ml-1 tabular-nums text-slate-950">{{ analyzedVideoCount }}</b>
           </span>
         </div>
 
@@ -79,7 +97,7 @@
         操作動画がまだありません
       </p>
       <p class="mt-1 max-w-md text-xs leading-relaxed text-slate-500">
-        ザッピングで操作動画を録画すると、動画ごとのUS候補をここで確認できます。
+        ザッピングで操作動画を録画すると、動画ごとのストーリー候補をここで確認できます。
       </p>
     </div>
 
@@ -103,7 +121,7 @@
       <aside class="border-b border-slate-200 bg-slate-50 lg:border-b-0 lg:border-r">
         <div class="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
           <div class="min-w-0">
-            <p class="text-xs font-bold uppercase text-slate-500">Epics</p>
+            <p class="text-xs font-bold text-slate-500">動画グループ</p>
             <p class="text-sm font-bold text-slate-900">操作動画</p>
           </div>
           <EnBadge variant="tag" size="xs">{{ filteredVideoGroups.length }}</EnBadge>
@@ -116,7 +134,7 @@
             :class="selectedVideoId === '' ? 'bg-violet-100 text-violet-900' : 'text-slate-600 hover:bg-white'"
             @click="selectedVideoId = ''"
           >
-            <span>All issues</span>
+            <span>すべてのストーリー</span>
             <span class="rounded-full bg-white px-2 py-0.5 text-xs tabular-nums text-slate-600">
               {{ filteredStoryCount }}
             </span>
@@ -144,7 +162,7 @@
                 {{ group.displayId }}
               </span>
               <span class="text-xs font-bold tabular-nums text-slate-500">
-                {{ group.storyCount }} US
+                {{ group.storyCount }}件
               </span>
             </div>
             <div class="ml-6 h-1 overflow-hidden rounded-full bg-slate-200">
@@ -161,13 +179,21 @@
         <div class="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
           <div class="min-w-0">
             <p class="text-xs font-semibold text-slate-500">
-              Backlog / {{ selectedVideoId ? "Selected Epic" : "All issues" }}
+              {{ selectedVideoId ? "選択中の操作動画" : "すべてのストーリー候補" }}
             </p>
             <h3 class="mt-1 truncate text-lg font-bold text-slate-950">
               {{ selectedVideoTitle }}
             </h3>
           </div>
           <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              class="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              @click="mcpTestChatOpen = true"
+            >
+              <UIcon name="material-symbols:terminal" class="h-4 w-4" />
+              テスト会話
+            </button>
             <button
               v-if="selectedVideoGroup"
               type="button"
@@ -178,23 +204,23 @@
               詳細を見る
             </button>
             <EnBadge variant="tag" size="xs">
-              {{ visibleStoryCount }} issues
+              {{ visibleStoryCount }}件
             </EnBadge>
             <EnBadge color="success" variant="soft" size="xs">
-              {{ displayedAnalyzedCount }} analyzed
+              解析済み {{ displayedAnalyzedCount }}件
             </EnBadge>
           </div>
         </div>
 
         <div class="overflow-x-auto">
           <table class="min-w-[58rem] w-full border-collapse text-left text-sm">
-            <thead class="bg-slate-50 text-[11px] font-bold uppercase tracking-normal text-slate-500">
+            <thead class="bg-slate-50 text-[11px] font-bold tracking-normal text-slate-500">
               <tr>
-                <th class="w-28 border-b border-slate-200 px-4 py-2">Key</th>
-                <th class="border-b border-slate-200 px-4 py-2">Story</th>
-                <th class="w-40 border-b border-slate-200 px-4 py-2">Capture</th>
-                <th class="w-36 border-b border-slate-200 px-4 py-2">Evidence</th>
-                <th class="w-24 border-b border-slate-200 px-4 py-2">Score</th>
+                <th class="w-28 border-b border-slate-200 px-4 py-3">キー</th>
+                <th class="border-b border-slate-200 px-4 py-3">ストーリー</th>
+                <th class="w-40 border-b border-slate-200 px-4 py-3">キャプチャ</th>
+                <th class="w-36 border-b border-slate-200 px-4 py-3">根拠</th>
+                <th class="w-24 border-b border-slate-200 px-4 py-3">信頼度</th>
               </tr>
             </thead>
             <tbody>
@@ -202,7 +228,7 @@
                 v-for="group in displayedVideoGroups"
                 :key="group.video.id"
               >
-                <tr class="bg-slate-50/80">
+                <tr v-if="!selectedVideoId" class="bg-slate-50/80">
                   <td colspan="5" class="border-b border-slate-200 px-4 py-3">
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="rounded-md border border-slate-200 bg-slate-950 px-2 py-0.5 font-mono text-xs font-bold text-white">
@@ -214,7 +240,7 @@
                       <EnBadge :color="group.status.color" variant="soft" size="xs">
                         {{ group.status.label }}
                       </EnBadge>
-                      <EnBadge variant="tag" size="xs">{{ group.storyCount }} US</EnBadge>
+                      <EnBadge variant="tag" size="xs">{{ group.storyCount }}件</EnBadge>
                       <span class="text-xs font-medium text-slate-400">
                         {{ formatRecordedAt(group.video.recordedAt) }}
                       </span>
@@ -235,7 +261,7 @@
                 </tr>
                 <tr v-else-if="group.stories.length === 0">
                   <td colspan="5" class="border-b border-slate-100 px-3 py-8 text-center text-sm text-slate-500">
-                    {{ group.storyCount === 0 ? "この動画からUS候補は生成されませんでした。" : "検索条件に一致するUS候補がありません。" }}
+                    {{ group.storyCount === 0 ? "この動画からストーリー候補は生成されませんでした。" : "検索条件に一致するストーリー候補がありません。" }}
                   </td>
                 </tr>
 
@@ -243,9 +269,14 @@
                   <tr
                     v-for="(story, storyIndex) in group.stories"
                     :key="story.id"
-                    class="bg-white align-top transition hover:bg-slate-50"
+                    class="cursor-pointer border-l-4 border-l-transparent bg-white align-top transition hover:border-l-slate-300 hover:bg-slate-50 focus:outline-none focus-visible:border-l-slate-500 focus-visible:bg-slate-50"
+                    tabindex="0"
+                    role="button"
+                    @click="openStoryDetail(group, story, storyIndex)"
+                    @keydown.enter.prevent="openStoryDetail(group, story, storyIndex)"
+                    @keydown.space.prevent="openStoryDetail(group, story, storyIndex)"
                   >
-                    <td class="border-b border-slate-100 px-4 py-3">
+                    <td class="border-b border-slate-200 px-4 py-5">
                       <div class="flex flex-col gap-1">
                         <span class="font-mono text-xs font-bold text-slate-700">
                           {{ displayStoryKey(story, storyIndex) }}
@@ -255,28 +286,28 @@
                         </span>
                       </div>
                     </td>
-                    <td class="border-b border-slate-100 px-4 py-3">
+                    <td class="border-b border-slate-200 px-4 py-5">
                       <div class="flex min-w-0 items-start gap-3">
-                        <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-emerald-100 text-emerald-700">
+                        <span class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
                           <UIcon name="material-symbols:bookmark-outline" class="h-4 w-4" />
                         </span>
                         <div class="min-w-0">
                           <p class="line-clamp-1 text-base font-bold leading-snug text-slate-950">
                             {{ story.title }}
                           </p>
-                          <p class="mt-1 line-clamp-1 text-xs font-semibold text-slate-500">
+                          <p class="mt-2 line-clamp-1 text-xs font-semibold text-slate-500">
                             {{ story.role?.value || story.asA || story.goal || story.iWant || "対象ユーザー未生成" }}
                           </p>
                           <p
                             v-if="story.acceptanceCriteria.length > 0"
-                            class="mt-1 line-clamp-1 text-xs leading-relaxed text-slate-500"
+                            class="mt-2 line-clamp-1 text-xs leading-relaxed text-slate-500"
                           >
                             {{ story.acceptanceCriteria[0] }}
                           </p>
                         </div>
                       </div>
                     </td>
-                    <td class="border-b border-slate-100 px-4 py-3">
+                    <td class="border-b border-slate-200 px-4 py-5">
                       <figure
                         v-if="storyThumbnailUrl(group.video, story)"
                         class="overflow-hidden rounded-md border border-slate-200 bg-slate-100 shadow-sm"
@@ -286,7 +317,7 @@
                           class="aspect-video w-full object-cover"
                           :alt="`${displayStoryKey(story, storyIndex)} のキャプチャ`"
                         >
-                        <figcaption class="truncate bg-white px-2 py-1 font-mono text-[11px] font-bold text-violet-600">
+                        <figcaption class="truncate bg-white px-2 py-1 font-mono text-[11px] font-bold text-slate-950">
                           {{ formatEvidenceRange(primaryEvidence(story)?.tRange ?? [0, 0]) }}
                         </figcaption>
                       </figure>
@@ -297,7 +328,7 @@
                         <UIcon name="material-symbols:image-not-supported-outline" class="h-5 w-5" />
                       </div>
                     </td>
-                    <td class="border-b border-slate-100 px-4 py-3">
+                    <td class="border-b border-slate-200 px-4 py-5">
                       <div class="flex flex-wrap items-center gap-1.5">
                         <EnBadge color="neutral" variant="soft" size="xs">
                           {{ story.evidence.length }}件
@@ -318,7 +349,7 @@
                         {{ primaryEvidence(story)?.title || primaryEvidence(story)?.summary || "動画根拠" }}
                       </p>
                     </td>
-                    <td class="border-b border-slate-100 px-4 py-3">
+                    <td class="border-b border-slate-200 px-4 py-5">
                       <div class="flex items-center gap-2">
                         <span class="text-sm font-bold tabular-nums" :class="confidenceTextClass(storyConfidence(story))">
                           {{ storyConfidence(story) }}%
@@ -348,6 +379,172 @@
         </div>
       </div>
     </div>
+
+    <USlideover
+      v-model:open="storyDetailOpen"
+      side="right"
+      :ui="{ content: 'w-full sm:max-w-[620px]' }"
+    >
+      <template #content>
+        <div v-if="selectedStoryDetail" class="flex h-full flex-col bg-white">
+          <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="rounded-md bg-slate-950 px-2 py-1 font-mono text-xs font-bold text-white">
+                  {{ displayStoryKey(selectedStoryDetail.story, selectedStoryDetail.storyIndex) }}
+                </span>
+                <EnBadge color="neutral" variant="soft" size="xs">
+                  {{ selectedStoryDetail.groupDisplayId }}
+                </EnBadge>
+                <EnBadge
+                  :color="selectedStoryDetail.story.unverified ? 'warning' : 'success'"
+                  variant="soft"
+                  size="xs"
+                >
+                  {{ selectedStoryDetail.story.unverified ? "未検証" : "解析済み" }}
+                </EnBadge>
+              </div>
+              <h3 class="mt-3 text-xl font-bold leading-snug text-slate-950">
+                {{ selectedStoryDetail.story.title }}
+              </h3>
+              <p class="mt-2 line-clamp-2 text-sm leading-relaxed text-slate-500">
+                {{ displayVideoTitle(selectedStoryDetail.video) }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              @click="mcpTestChatOpen = true"
+            >
+              テスト会話
+            </button>
+            <button
+              type="button"
+              class="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+              aria-label="詳細を閉じる"
+              @click="storyDetailOpen = false"
+            >
+              <UIcon name="material-symbols:close-rounded" class="h-5 w-5" />
+            </button>
+          </div>
+
+          <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+            <div class="grid grid-cols-3 gap-2">
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p class="text-[11px] font-bold text-slate-500">信頼度</p>
+                <p class="mt-1 text-lg font-bold tabular-nums text-slate-950">
+                  {{ storyConfidence(selectedStoryDetail.story) }}%
+                </p>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p class="text-[11px] font-bold text-slate-500">根拠</p>
+                <p class="mt-1 text-lg font-bold tabular-nums text-slate-950">
+                  {{ selectedStoryDetail.story.evidence.length }}件
+                </p>
+              </div>
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p class="text-[11px] font-bold text-slate-500">録画日時</p>
+                <p class="mt-1 truncate text-sm font-bold text-slate-950">
+                  {{ formatRecordedAt(selectedStoryDetail.video.recordedAt) }}
+                </p>
+              </div>
+            </div>
+
+            <figure
+              v-if="selectedStoryThumbnailUrl"
+              class="overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+            >
+              <img
+                :src="selectedStoryThumbnailUrl"
+                class="aspect-video w-full object-cover"
+                :alt="`${selectedStoryDetail.story.title} の代表キャプチャ`"
+              >
+              <figcaption class="flex items-center justify-between gap-2 bg-white px-3 py-2 text-xs font-bold text-slate-700">
+                <span class="truncate">
+                  {{ selectedStoryPrimaryEvidence?.title || selectedStoryPrimaryEvidence?.summary || "代表キャプチャ" }}
+                </span>
+                <span class="shrink-0 font-mono text-slate-950">
+                  {{ formatEvidenceRange(selectedStoryPrimaryEvidence?.tRange ?? [0, 0]) }}
+                </span>
+              </figcaption>
+            </figure>
+
+            <div class="grid gap-3 sm:grid-cols-3">
+              <section class="rounded-lg border border-slate-200 bg-white p-4">
+                <p class="text-xs font-bold text-slate-500">誰が</p>
+                <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-900">
+                  {{ selectedStoryDetail.story.role?.value || selectedStoryDetail.story.asA || "未生成" }}
+                </p>
+              </section>
+              <section class="rounded-lg border border-slate-200 bg-white p-4">
+                <p class="text-xs font-bold text-slate-500">何をしたいか</p>
+                <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-900">
+                  {{ selectedStoryDetail.story.goal || selectedStoryDetail.story.iWant || "未生成" }}
+                </p>
+              </section>
+              <section class="rounded-lg border border-slate-200 bg-white p-4">
+                <p class="text-xs font-bold text-slate-500">何がうれしいか</p>
+                <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-900">
+                  {{ selectedStoryDetail.story.benefit || selectedStoryDetail.story.soThat || selectedStoryDetail.story.summary || "未生成" }}
+                </p>
+              </section>
+            </div>
+
+            <section
+              v-if="selectedStoryDetail.story.acceptanceCriteria.length > 0"
+              class="rounded-lg border border-slate-200 bg-white p-4"
+            >
+              <h4 class="text-sm font-bold text-slate-950">受け入れ条件</h4>
+              <ol class="mt-3 space-y-2">
+                <li
+                  v-for="(criterion, criterionIndex) in selectedStoryDetail.story.acceptanceCriteria"
+                  :key="`${selectedStoryDetail.story.id}-criterion-${criterionIndex}`"
+                  class="flex gap-2 text-sm leading-relaxed text-slate-600"
+                >
+                  <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-700">
+                    {{ criterionIndex + 1 }}
+                  </span>
+                  <span>{{ criterion }}</span>
+                </li>
+              </ol>
+            </section>
+
+            <section class="rounded-lg border border-slate-200 bg-white p-4">
+              <div class="flex items-center justify-between gap-2">
+                <h4 class="text-sm font-bold text-slate-950">動画上の根拠</h4>
+                <EnBadge variant="tag" size="xs">
+                  {{ selectedStoryDetail.story.evidence.length }}件
+                </EnBadge>
+              </div>
+              <div class="mt-3 space-y-3">
+                <div
+                  v-for="(evidence, evidenceIndex) in selectedStoryDetail.story.evidence"
+                  :key="`${selectedStoryDetail.story.id}-evidence-${evidenceIndex}`"
+                  class="rounded-md border border-slate-200 bg-slate-50 p-3"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="text-sm font-bold text-slate-950">
+                        {{ evidence.title || `根拠 ${evidenceIndex + 1}` }}
+                      </p>
+                      <p
+                        v-if="evidence.summary"
+                        class="mt-1 text-xs leading-relaxed text-slate-500"
+                      >
+                        {{ evidence.summary }}
+                      </p>
+                    </div>
+                    <span class="shrink-0 font-mono text-xs font-bold text-slate-950">
+                      {{ formatEvidenceRange(evidence.tRange) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </template>
+    </USlideover>
   </section>
 </template>
 
@@ -376,6 +573,13 @@ type VideoGroup = {
   averageConfidence: number;
 };
 
+type StoryDetailSelection = {
+  video: DecodedVibeControlOperationVideo;
+  groupDisplayId: string;
+  story: VibeControlZappingAnalysisStoryCandidate;
+  storyIndex: number;
+};
+
 const props = defineProps<{
   applicationId?: string;
   videos: DecodedVibeControlOperationVideo[];
@@ -387,6 +591,9 @@ const query = ref("");
 const statusFilter = ref<StatusFilter>("all");
 const selectedVideoId = ref("");
 const focusMode = ref(false);
+const storyDetailOpen = ref(false);
+const mcpTestChatOpen = ref(false);
+const selectedStoryDetail = ref<StoryDetailSelection | null>(null);
 const frameUrls = reactive<Record<string, string>>({});
 
 const statusOptions: Array<{ label: string; value: StatusFilter }> = [
@@ -475,9 +682,76 @@ const selectedVideoGroup = computed(() => {
 });
 
 const selectedVideoTitle = computed(() => {
-  if (!selectedVideoId.value) return "All issues";
+  if (!selectedVideoId.value) return "すべてのストーリー候補";
   const group = selectedVideoGroup.value;
-  return group ? displayVideoTitle(group.video) : "All issues";
+  return group ? displayVideoTitle(group.video) : "すべてのストーリー候補";
+});
+
+const mcpTargetVideoGroup = computed(() => {
+  const storyVideoId = storyDetailOpen.value
+    ? selectedStoryDetail.value?.video.id
+    : "";
+  if (storyVideoId) {
+    return (
+      filteredVideoGroups.value.find((group) => group.video.id === storyVideoId) ??
+      buildVideoGroup(selectedStoryDetail.value!.video, props.videos.findIndex((video) => video.id === storyVideoId), "")
+    );
+  }
+  return selectedVideoGroup.value;
+});
+
+const mcpTargetGroups = computed(() =>
+  mcpTargetVideoGroup.value ? [mcpTargetVideoGroup.value] : displayedVideoGroups.value
+);
+
+const mcpTestTitle = computed(() =>
+  mcpTargetVideoGroup.value
+    ? `${displayVideoTitle(mcpTargetVideoGroup.value.video)} のテスト会話`
+    : "すべてのストーリー候補のテスト会話"
+);
+
+const mcpTestDescription = computed(() =>
+  mcpTargetVideoGroup.value
+    ? "選択中の操作動画に紐づくストーリー候補と関連コンテキストだけをJSONで渡して会話します"
+    : "一覧に表示されている全ストーリー候補と、それぞれに紐づく操作動画のJSONを渡して会話します"
+);
+
+const mcpTestContextLabel = computed(() =>
+  mcpTargetVideoGroup.value
+    ? mcpTargetVideoGroup.value.video.id
+    : `all-story-candidates:${mcpTargetGroups.value.length}-videos`
+);
+
+const mcpTestContextJson = computed(() => {
+  const groups = mcpTargetGroups.value;
+  const payload = {
+    schemaVersion: "storyvault-story-candidates-context-v1",
+    tool: mcpTargetVideoGroup.value
+      ? "get_operation_video_context"
+      : "list_operation_video_story_candidates",
+    scope: mcpTargetVideoGroup.value ? "selected_operation_video" : "all_story_candidates",
+    application: {
+      id: props.applicationId || "",
+    },
+    counts: {
+      operationVideos: groups.length,
+      storyCandidates: groups.reduce((sum, group) => sum + group.storyCount, 0),
+      visibleStoryCandidates: groups.reduce((sum, group) => sum + group.stories.length, 0),
+      analyzedVideos: groups.filter((group) => isVideoAnalyzed(group.video)).length,
+    },
+    operationVideos: groups.map((group) => buildMcpVideoContext(group)),
+  };
+  return JSON.stringify(payload, null, 2);
+});
+
+const selectedStoryPrimaryEvidence = computed(() => {
+  const detail = selectedStoryDetail.value;
+  return detail ? primaryEvidence(detail.story) : undefined;
+});
+
+const selectedStoryThumbnailUrl = computed(() => {
+  const detail = selectedStoryDetail.value;
+  return detail ? storyThumbnailUrl(detail.video, detail.story) : "";
 });
 
 watch(filteredVideoGroups, (groups) => {
@@ -504,7 +778,25 @@ onBeforeUnmount(() => {
 
 function handleKeydown(event: KeyboardEvent): void {
   if (event.key !== "Escape") return;
+  if (storyDetailOpen.value) {
+    storyDetailOpen.value = false;
+    return;
+  }
   focusMode.value = false;
+}
+
+function openStoryDetail(
+  group: VideoGroup,
+  story: VibeControlZappingAnalysisStoryCandidate,
+  storyIndex: number
+): void {
+  selectedStoryDetail.value = {
+    video: group.video,
+    groupDisplayId: group.displayId,
+    story,
+    storyIndex,
+  };
+  storyDetailOpen.value = true;
 }
 
 function openSelectedVideoDetail(): void {
@@ -558,6 +850,77 @@ function buildVideoGroup(
   };
 }
 
+function buildMcpVideoContext(group: VideoGroup): Record<string, unknown> {
+  const video = group.video;
+  const stories = video.analysisResult?.storyCandidates ?? [];
+  return {
+    id: video.id,
+    displayId: group.displayId,
+    title: displayVideoTitle(video),
+    description: displayVideoDescription(video),
+    videoGroup: {
+      id: video.groupId || "",
+      name: video.groupNameSnapshot || "動画グループ未設定",
+      description: "",
+    },
+    recordedAt: video.recordedAt,
+    durationMs: video.durationMs,
+    storagePath: video.storagePath,
+    analysisStatus: normalizedAnalysisStatus(video),
+    analyzedAt: video.analyzedAt,
+    operationIntent: video.analysisResult?.operationIntent || "",
+    productContextSummary: video.analysisResult?.productContextSummary || "",
+    transcriptSummary:
+      video.analysisResult?.transcriptSummary ||
+      video.transcriptSummary ||
+      video.quickScan?.transcriptSummary ||
+      "",
+    quickScan: video.quickScan ?? null,
+    counts: {
+      storyCandidates: stories.length,
+      visibleStoryCandidates: group.stories.length,
+      evidence: stories.reduce((sum, story) => sum + story.evidence.length, 0),
+      screenshots: video.frameCaptures.length,
+      githubPullRequests: video.relatedContexts?.github?.pullRequests.length ?? 0,
+      slackMessages: video.relatedContexts?.slack?.messages.length ?? 0,
+      knowledgeDocuments: video.relatedContexts?.knowledge?.documents.length ?? 0,
+    },
+    storyCandidates: group.stories.map((story) => ({
+      id: story.id,
+      key: story.storyKey || "",
+      title: story.title,
+      role: story.role ?? null,
+      goal: story.goal || story.iWant || "",
+      benefit: story.benefit || story.soThat || "",
+      userStory: story.userStory || "",
+      confidence: story.confidence ?? story.confidenceScore ?? null,
+      acceptanceCriteria: story.acceptanceCriteria,
+      evidence: story.evidence.map((item) => ({
+        id: item.id,
+        title: item.title,
+        summary: item.summary,
+        videoId: item.videoId,
+        tRange: item.tRange,
+        representativeScreenshotId: item.representativeScreenshotId,
+        screenshotIds: item.screenshotIds ?? [],
+      })),
+    })),
+    screenshots: video.frameCaptures.slice(0, 30).map((frame) => ({
+      id: frame.id,
+      timestampMs: frame.timestampMs,
+      width: frame.width,
+      height: frame.height,
+      storagePath: frame.storagePath,
+      url: savedFrameUrl(video, frame.id),
+    })),
+    relatedContexts: {
+      knowledgeDocuments: video.relatedContexts?.knowledge?.documents ?? [],
+      githubPullRequests: video.relatedContexts?.github?.pullRequests ?? [],
+      slackMessages: video.relatedContexts?.slack?.messages ?? [],
+    },
+  };
+}
+
 function normalizedAnalysisStatus(
   video: DecodedVibeControlOperationVideo
 ): VibeControlZappingAnalysisStatus {
@@ -593,6 +956,10 @@ function emptyStatusMessage(video: DecodedVibeControlOperationVideo): string {
 
 function displayVideoTitle(video: DecodedVibeControlOperationVideo): string {
   return video.quickScan?.title?.trim() || video.title;
+}
+
+function displayVideoDescription(video: DecodedVibeControlOperationVideo): string {
+  return video.quickScan?.description?.trim() || video.description || "";
 }
 
 function displayStoryKey(

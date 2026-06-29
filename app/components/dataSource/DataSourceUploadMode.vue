@@ -50,30 +50,30 @@
       >
         <!-- 装飾: 角丸の中で右上に薄い光彩 -->
         <div class="absolute inset-0 pointer-events-none opacity-50">
-          <div class="absolute -top-12 -right-8 w-40 h-40 rounded-full bg-purple-200/40 blur-3xl" />
+          <div class="absolute -top-12 -right-8 w-40 h-40 rounded-full bg-emerald-200/35 blur-3xl" />
         </div>
         <div class="relative flex items-center gap-4 text-[11px]">
           <!-- 主数字 (1 行に圧縮): ✨ AI に教えた知識 199 -->
           <div class="flex items-baseline gap-1.5 flex-shrink-0">
-            <UIcon name="i-heroicons-sparkles" class="w-3 h-3 text-purple-600" />
-            <span class="text-[10px] uppercase tracking-[0.14em] font-semibold text-purple-700/80 dark:text-purple-400/80">
+            <UIcon name="i-heroicons-sparkles" class="w-3 h-3 text-emerald-600" />
+            <span class="text-[10px] uppercase tracking-[0.14em] font-semibold text-emerald-700/80 dark:text-emerald-400/80">
               AI に教えた知識
             </span>
-            <span class="text-lg font-extrabold text-purple-700 dark:text-purple-300 tracking-tight tabular-nums leading-none">
+            <span class="text-lg font-extrabold text-emerald-700 dark:text-emerald-300 tracking-tight tabular-nums leading-none">
               {{ statsIndexed.toLocaleString() }}
             </span>
             <span class="text-[10px] text-gray-500 font-medium">件</span>
           </div>
 
           <!-- 区切り -->
-          <span class="h-4 w-px bg-purple-200/60 dark:bg-purple-700/40 flex-shrink-0" />
+          <span class="h-4 w-px bg-emerald-200/70 dark:bg-emerald-700/40 flex-shrink-0" />
 
           <!-- 索引率: progress bar + % を 1 行に -->
           <div class="flex items-center gap-2 flex-1 min-w-0">
             <span class="text-[10px] font-semibold text-gray-500 flex-shrink-0">AI 索引率</span>
-            <div class="flex-1 min-w-[60px] h-1.5 rounded-full bg-purple-100/70 dark:bg-purple-900/30 overflow-hidden">
+            <div class="flex-1 min-w-[60px] h-1.5 rounded-full bg-emerald-100/80 dark:bg-emerald-900/30 overflow-hidden">
               <div
-                class="h-full rounded-full bg-gradient-to-r from-purple-400 via-violet-400 to-purple-500 transition-[width] duration-700 ease-out"
+                class="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-600 transition-[width] duration-700 ease-out"
                 :style="{ width: `${indexedRate}%` }"
               />
             </div>
@@ -83,7 +83,7 @@
           <!-- 内訳 chips: 登録済み / 登録待ち / 閲覧のみ を inline -->
           <div class="flex items-center gap-2.5 text-[10px] text-gray-500 flex-shrink-0">
             <span class="inline-flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-purple-500" />
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               {{ statsIndexed.toLocaleString() }}
             </span>
             <span
@@ -105,18 +105,18 @@
           </div>
 
           <!-- 区切り -->
-          <span class="h-4 w-px bg-purple-200/60 dark:bg-purple-700/40 flex-shrink-0" />
+          <span class="h-4 w-px bg-emerald-200/70 dark:bg-emerald-700/40 flex-shrink-0" />
 
           <!-- 右: 全件 + 確認導線 -->
           <button
             type="button"
-            class="group/total flex items-center gap-1.5 flex-shrink-0 text-[10px] text-gray-500 transition-colors hover:text-purple-700 dark:hover:text-purple-400"
+            class="group/total flex items-center gap-1.5 flex-shrink-0 text-[10px] text-gray-500 transition-colors hover:text-emerald-700 dark:hover:text-emerald-400"
             @click="emit('switch-to-view')"
           >
             <span class="uppercase tracking-[0.14em] font-semibold">
               全 {{ statsTotal.toLocaleString() }} 件
             </span>
-            <span class="font-bold text-purple-700 dark:text-purple-400 inline-flex items-center gap-0.5 group-hover/total:gap-1.5 transition-[gap]">
+            <span class="font-bold text-emerald-700 dark:text-emerald-400 inline-flex items-center gap-0.5 group-hover/total:gap-1.5 transition-[gap]">
               知識を確認
               <UIcon name="i-heroicons-arrow-right" class="w-3 h-3" />
             </span>
@@ -133,15 +133,15 @@
           title="ファイルを投げ込んで教える"
           subtitle="PDF / Excel / 画像など、ドラッグ＆ドロップで一括投入"
           icon="i-heroicons-arrow-down-tray"
-          tone="purple"
+          tone="emerald"
           layout="tile"
         >
           <div
             class="dropzone group relative min-h-[220px] flex-1 cursor-pointer overflow-hidden rounded-2xl bg-white transition-[box-shadow,transform] duration-300 dark:bg-gray-900"
             :class="[
               isDragging
-                ? 'is-dragging shadow-[0_16px_40px_-12px_rgba(139,92,246,0.45),0_0_0_3px_rgba(139,92,246,0.2)] ring-2 ring-purple-500'
-                : 'shadow-sm ring-1 ring-purple-200/80 dark:ring-purple-800 hover:shadow-md hover:ring-purple-300',
+                ? 'is-dragging shadow-[0_16px_40px_-12px_rgba(16,185,129,0.35),0_0_0_3px_rgba(16,185,129,0.18)] ring-2 ring-emerald-500'
+                : 'shadow-sm ring-1 ring-emerald-200/80 dark:ring-emerald-800 hover:shadow-md hover:ring-emerald-300',
             ]"
             @click="onZoneClick"
             @dragenter.prevent="onDragEnter"
@@ -151,7 +151,7 @@
           >
             <div
               v-if="!isDragging && !isUploading"
-              class="idle-pulse pointer-events-none absolute left-1/2 top-[42%] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-purple-300/40"
+              class="idle-pulse pointer-events-none absolute left-1/2 top-[42%] h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-300/35"
               aria-hidden="true"
             />
 
@@ -167,7 +167,7 @@
               class="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center"
             >
               <div
-                class="relative rounded-xl bg-white p-3 shadow-sm ring-1 ring-purple-100 transition-transform duration-300 dark:bg-gray-800 dark:ring-purple-900/40"
+                class="relative rounded-xl bg-white p-3 shadow-sm ring-1 ring-emerald-100 transition-transform duration-300 dark:bg-gray-800 dark:ring-emerald-900/40"
                 :class="isDragging ? 'scale-110 rotate-2' : 'group-hover:scale-105'"
               >
                 <UIcon
@@ -176,7 +176,7 @@
                       ? 'i-heroicons-arrow-path'
                       : 'i-heroicons-arrow-down-tray'
                   "
-                  class="h-8 w-8 text-purple-500"
+                  class="h-8 w-8 text-emerald-500"
                   :class="isUploading ? 'animate-spin' : ''"
                 />
               </div>
@@ -202,7 +202,7 @@
                   :key="chip.label"
                   class="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-medium text-gray-600 ring-1 ring-gray-200/80 dark:bg-gray-800/90 dark:text-gray-300 dark:ring-gray-700"
                 >
-                  <UIcon :name="chip.icon" class="h-3 w-3 text-purple-600" />
+                  <UIcon :name="chip.icon" class="h-3 w-3 text-emerald-600" />
                   {{ chip.label }}
                 </span>
               </div>
@@ -227,7 +227,7 @@
           title="Web ページの URL を登録"
           subtitle="サイトを丸ごとクロール"
           icon="i-heroicons-globe-alt"
-          tone="violet"
+          tone="teal"
           layout="tile"
         >
           <WebPageIngestSetupCard
@@ -340,7 +340,7 @@
         </h3>
         <button
           type="button"
-          class="group/link text-xs text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 rounded"
+          class="group/link text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 rounded"
           @click="$emit('switch-to-view')"
         >
           すべて見る
@@ -359,7 +359,7 @@
             v-for="(doc, idx) in marqueeDocuments"
             :key="`marquee-${idx}-${doc.name || doc.displayName || ''}`"
             type="button"
-            class="marquee-card group/card relative w-[200px] flex-shrink-0 rounded-2xl bg-white dark:bg-gray-900 ring-1 ring-gray-900/[0.06] dark:ring-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] hover:shadow-[0_10px_28px_-8px_rgba(139,92,246,0.22)] hover:ring-purple-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 transition-all duration-200 overflow-hidden text-left"
+            class="marquee-card group/card relative w-[200px] flex-shrink-0 rounded-2xl bg-white dark:bg-gray-900 ring-1 ring-gray-900/[0.06] dark:ring-white/10 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)] hover:shadow-[0_10px_28px_-8px_rgba(16,185,129,0.18)] hover:ring-emerald-200 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 transition-all duration-200 overflow-hidden text-left"
             :title="doc.displayName || extractFilename(doc.name) || ''"
             @click="$emit('switch-to-view')"
           >
@@ -633,11 +633,11 @@ const formatInfo = (doc: Document) => {
         label: "画像",
         icon: "i-heroicons-photo",
         vscodeIcon: fileIcons.image,
-        iconColor: "text-violet-500",
-        iconBg: "bg-violet-50/70 dark:bg-violet-900/20",
-        accentBar: "bg-violet-400",
+        iconColor: "text-cyan-600",
+        iconBg: "bg-cyan-50/70 dark:bg-cyan-900/20",
+        accentBar: "bg-cyan-400",
         labelClass:
-          "bg-white/85 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-900/40 dark:text-violet-300",
+          "bg-white/85 text-cyan-700 ring-1 ring-cyan-200 dark:bg-cyan-900/40 dark:text-cyan-300",
       };
     case "word":
       return {
@@ -655,11 +655,11 @@ const formatInfo = (doc: Document) => {
         label: "PPT",
         icon: "i-heroicons-presentation-chart-bar",
         vscodeIcon: fileIcons.powerpoint,
-        iconColor: "text-violet-500",
-        iconBg: "bg-violet-50/70 dark:bg-violet-900/20",
-        accentBar: "bg-violet-400",
+        iconColor: "text-amber-600",
+        iconBg: "bg-amber-50/70 dark:bg-amber-900/20",
+        accentBar: "bg-amber-400",
         labelClass:
-          "bg-white/85 text-violet-700 ring-1 ring-violet-200 dark:bg-violet-900/40 dark:text-violet-300",
+          "bg-white/85 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-300",
       };
     case "md":
       return {

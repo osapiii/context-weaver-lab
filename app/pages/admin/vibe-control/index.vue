@@ -123,6 +123,52 @@
       </template>
     </EnModal>
 
+    <EnModal
+      v-model:open="zappingAnalysisRerunConfirmOpen"
+      title="解析結果を作り直しますか?"
+      subtitle="既存のストーリー候補が新しい解析結果で置き換わります。"
+      header-variant="warning"
+      title-icon="material-symbols:warning-outline"
+      size="md"
+    >
+      <div class="space-y-3">
+        <div
+          v-if="zappingAnalysisRerunTargetVideo"
+          class="rounded-lg border border-amber-100 bg-amber-50 p-3"
+        >
+          <p class="text-sm font-semibold text-slate-950">
+            {{ zappingAnalysisRerunTargetVideo.title || "ザッピング動画" }}
+          </p>
+          <p class="mt-1 text-xs leading-relaxed text-slate-600">
+            現在の解析結果には {{ zappingAnalysisRerunStoryCount }} 件のストーリー候補があります。
+          </p>
+        </div>
+        <p class="text-sm leading-relaxed text-slate-700">
+          再解析すると、操作意図・ストーリー候補・根拠シーンが新しい結果で上書きされます。前回と内容が変わり、確認済みの内容と差分が出る場合があります。
+        </p>
+      </div>
+
+      <template #footer>
+        <EnButton
+          variant="ghost"
+          color="neutral"
+          size="sm"
+          @click="cancelZappingAnalysisRerun"
+        >
+          キャンセル
+        </EnButton>
+        <EnButton
+          variant="soft"
+          color="warning"
+          size="sm"
+          leading-icon="material-symbols:refresh"
+          @click="confirmZappingAnalysisRerun"
+        >
+          上書きして再解析
+        </EnButton>
+      </template>
+    </EnModal>
+
     <UBreadcrumb
       v-if="currentView !== 'application-detail'"
       :items="breadcrumbItems"
@@ -293,6 +339,7 @@
         v-else-if="activeApplicationTab === 'zapping'"
         :application="selectedApplication"
         :videos="store.activeOperationVideos"
+        :operation-video-groups="store.activeOperationVideoGroups"
         :is-saving="store.isSavingOperationVideo"
         :is-analyzing="store.isAnalyzingZappingVideos"
         :is-fetching-related-contexts="store.isFetchingRelatedContexts"
@@ -301,6 +348,10 @@
         @analyze="startZappingVideoAnalysis"
         @fetch-related-context="startRelatedContextAnalysis"
         @save="saveOperationVideo"
+        @create-group="createOperationVideoGroup"
+        @update-group="updateOperationVideoGroup"
+        @delete-group="deleteOperationVideoGroup"
+        @update-title="updateOperationVideoTitle"
         @delete="deleteOperationVideo"
         @refresh="store.fetchFromFirestore()"
       />
@@ -402,8 +453,10 @@ const applicationKnowledgeDocumentsByFileSpace = ref<Record<string, Document[]>>
 const applicationModalOpen = ref(false);
 const deleteConfirmOpen = ref(false);
 const zappingAnalysisModalOpen = ref(false);
+const zappingAnalysisRerunConfirmOpen = ref(false);
 const activeZappingAnalysisVideoId = ref("");
 const activeZappingAnalysisRequestId = ref("");
+const pendingZappingAnalysisVideoId = ref("");
 const editingApplicationId = ref<string | null>(null);
 const initialApplicationRepository = ref<GitHubRepositorySummary | null>(null);
 const isUploadingApplicationKnowledge = ref(false);
@@ -436,6 +489,17 @@ const activeZappingAnalysisVideo = computed(
     store.operationVideos.find(
       (video) => video.id === activeZappingAnalysisVideoId.value
     ) ?? null
+);
+const zappingAnalysisRerunTargetVideo = computed(
+  () =>
+    store.operationVideos.find(
+      (video) => video.id === pendingZappingAnalysisVideoId.value
+    ) ?? null
+);
+const zappingAnalysisRerunStoryCount = computed(
+  () =>
+    zappingAnalysisRerunTargetVideo.value?.analysisResult?.storyCandidates
+      .length ?? 0
 );
 const zappingAnalysisProgressPercent = computed(() => {
   const status = activeZappingAnalysisVideo.value?.analysisStatus;
@@ -1034,6 +1098,89 @@ async function saveOperationVideo(
   }
 }
 
+async function createOperationVideoGroup(input: {
+  applicationId: string;
+  name: string;
+  description?: string;
+}): Promise<void> {
+  try {
+    await store.createOperationVideoGroup(input);
+    toast.add({
+      title: "動画グループを作成しました",
+      description: input.name,
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "動画グループの作成に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function updateOperationVideoGroup(input: {
+  groupId: string;
+  name: string;
+  description?: string;
+}): Promise<void> {
+  try {
+    await store.updateOperationVideoGroup(input);
+    toast.add({
+      title: "動画グループを更新しました",
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "動画グループの更新に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function deleteOperationVideoGroup(groupId: string): Promise<void> {
+  try {
+    await store.deleteOperationVideoGroup(groupId);
+    toast.add({
+      title: "動画グループを削除しました",
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "動画グループの削除に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function updateOperationVideoTitle(
+  videoId: string,
+  title: string,
+  callbacks?: {
+    onSuccess?: () => void;
+    onError?: (message: string) => void;
+  }
+): Promise<void> {
+  try {
+    await store.updateOperationVideoTitle({ videoId, title });
+    callbacks?.onSuccess?.();
+    toast.add({
+      title: "動画タイトルを更新しました",
+      color: "success",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    callbacks?.onError?.(message);
+    toast.add({
+      title: "動画タイトルの更新に失敗しました",
+      description: message,
+      color: "error",
+    });
+  }
+}
+
 async function deleteOperationVideo(videoId: string): Promise<void> {
   try {
     await store.deleteOperationVideo(videoId);
@@ -1051,6 +1198,32 @@ async function deleteOperationVideo(videoId: string): Promise<void> {
 }
 
 async function startZappingVideoAnalysis(videoId: string): Promise<void> {
+  const video = store.operationVideos.find((item) => item.id === videoId);
+  if (
+    video &&
+    (video.analysisStatus === "completed" || Boolean(video.analysisResult))
+  ) {
+    pendingZappingAnalysisVideoId.value = videoId;
+    zappingAnalysisRerunConfirmOpen.value = true;
+    return;
+  }
+  await runZappingVideoAnalysis(videoId);
+}
+
+function cancelZappingAnalysisRerun(): void {
+  zappingAnalysisRerunConfirmOpen.value = false;
+  pendingZappingAnalysisVideoId.value = "";
+}
+
+async function confirmZappingAnalysisRerun(): Promise<void> {
+  const videoId = pendingZappingAnalysisVideoId.value;
+  if (!videoId) return;
+  zappingAnalysisRerunConfirmOpen.value = false;
+  pendingZappingAnalysisVideoId.value = "";
+  await runZappingVideoAnalysis(videoId);
+}
+
+async function runZappingVideoAnalysis(videoId: string): Promise<void> {
   const application = selectedApplication.value;
   if (!application) return;
   activeZappingAnalysisVideoId.value = videoId;
