@@ -5,6 +5,7 @@ from google.adk.sessions.state import State
 
 from vibe_related_context.schemas import RelatedContextResult
 from vibe_related_context.tools import (
+    fetch_knowledge_document_candidates,
     normalize_slack_message,
     normalize_pull_request,
     read_related_context_request,
@@ -71,6 +72,52 @@ def test_read_related_context_request_reads_adk_state_object():
     assert result["provider"] == "github"
     assert result["repoFullName"] == "enostech/app"
     assert result["operationVideo"]["id"] == "video-1"
+
+
+def test_read_related_context_request_reads_knowledge_provider_and_filespace():
+    state = State(
+        value={
+            "vibe_related_context": {
+                "setup": {
+                    "provider": "knowledge",
+                    "organization_id": "org-1",
+                    "space_id": "space-1",
+                    "file_space_id": "fs-1",
+                },
+                "payload": {
+                    "application": {"name": "HAIFF", "fileSpaceId": "fs-from-app"},
+                    "operation_video": {"id": "video-1", "title": "投げ込み"},
+                },
+            }
+        },
+        delta={},
+    )
+
+    result = read_related_context_request(_ToolContext(state))
+
+    assert result["provider"] == "knowledge"
+    assert result["fileSpaceId"] == "fs-1"
+
+
+def test_fetch_knowledge_document_candidates_requires_filespace():
+    state = State(
+        value={
+            "vibe_related_context": {
+                "setup": {
+                    "provider": "knowledge",
+                    "organization_id": "org-1",
+                    "space_id": "space-1",
+                },
+                "payload": {"application": {"name": "HAIFF"}},
+            }
+        },
+        delta={},
+    )
+
+    result = fetch_knowledge_document_candidates(_ToolContext(state))
+
+    assert result["ok"] is False
+    assert "fileSpaceId" in result["error"]
 
 
 def test_normalize_pull_request_handles_missing_fields():
@@ -164,3 +211,37 @@ def test_related_context_result_schema_accepts_reasoned_slack_messages():
 
     assert parsed.slack is not None
     assert parsed.slack.messages[0].channelName == "product"
+
+
+def test_related_context_result_schema_accepts_reasoned_knowledge_documents():
+    parsed = RelatedContextResult.model_validate(
+        {
+            "schemaVersion": "vibe-control-related-context-v1",
+            "generatedAt": "2026-06-28T00:00:00Z",
+            "status": "completed",
+            "knowledge": {
+                "fileSpaceId": "fs-1",
+                "checkedAt": "2026-06-28T00:00:00Z",
+                "documents": [
+                    {
+                        "documentId": "doc-1",
+                        "name": "fileSearchStores/fs-1/documents/doc-1",
+                        "displayName": "architecture.md",
+                        "description": "AI取り込み設計",
+                        "mimeType": "text/markdown",
+                        "sourceKind": "upload",
+                        "gcsUrl": "gs://bucket/path/architecture.md",
+                        "bucketName": "bucket",
+                        "filePath": "path/architecture.md",
+                        "relevanceScore": 91,
+                        "reason": "動画のAI取り込み操作と設計書の説明が一致しています。",
+                        "matchedSignals": ["AI取り込み", "設計書"],
+                    }
+                ],
+            },
+            "notes": [],
+        }
+    )
+
+    assert parsed.knowledge is not None
+    assert parsed.knowledge.documents[0].displayName == "architecture.md"

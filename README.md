@@ -1,8 +1,8 @@
-# VibeControl
+# StoryVault
 
-VibeControl is a hackathon app built from the EN AIstudio foundation. It turns product intent, tickets, code, pull requests, and source evidence into a governed user-story SSOT so teams can keep the speed of vibe coding while preserving delivery confidence.
+StoryVault is a hackathon app built from the EN AIstudio foundation. It turns product intent, tickets, code, pull requests, and source evidence into a governed user-story SSOT so teams can keep the speed of vibe coding while preserving delivery confidence.
 
-This repository was cut out as a fresh repo from `en-aistudio` on 2026-06-18. The inherited base keeps the Nuxt/Firebase UI foundation, ADK agent runtime, and knowledge ingestion pipeline. New VibeControl work should proceed in this repository.
+This repository was cut out as a fresh repo from `en-aistudio` on 2026-06-18. The inherited base keeps the Nuxt/Firebase UI foundation, ADK agent runtime, and knowledge ingestion pipeline. New StoryVault work should proceed in this repository.
 
 ## Hackathon Context
 

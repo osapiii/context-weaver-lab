@@ -173,7 +173,7 @@ export type VibeControlZappingVideoAnalysisInput = {
 export type VibeControlRelatedContextAnalysisInput = {
   applicationId: string;
   videoId: string;
-  provider: "github" | "slack";
+  provider: "github" | "slack" | "knowledge";
   prompt?: string;
 };
 
@@ -976,6 +976,12 @@ export const useVibeControlStore = defineStore("vibeControl", {
     },
     draftPatchCollectionPath(): string {
       return useContextStore().baseFirestorePath("vibeControlDraftPatches");
+    },
+    mcpConnectionCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlMcpConnections");
+    },
+    agentPlanCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlAgentPlans");
     },
     applicationFileSpaceStatus(
       application: DecodedVibeControlApplication | null
@@ -2216,7 +2222,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
       organizationId: string;
       spaceId: string;
       userId: string;
-      provider: "github" | "slack";
+      provider: "github" | "slack" | "knowledge";
       prompt?: string;
     }): Record<string, unknown> {
       return {
@@ -2233,6 +2239,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
             application_id: params.application.id,
             application_key: params.application.applicationKey,
             application_name: params.application.name,
+            file_space_id: params.application.fileSpaceId,
             repo_full_name: params.application.repoFullName,
             default_branch: params.application.defaultBranch || "main",
             operation_video_id: params.video.id,
@@ -2244,6 +2251,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
               name: params.application.name,
               summary: params.application.summary,
               domain: params.application.domain,
+              fileSpaceId: params.application.fileSpaceId,
               repoFullName: params.application.repoFullName,
               defaultBranch: params.application.defaultBranch || "main",
             },
@@ -2264,7 +2272,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
             expected_outputs:
               params.provider === "slack"
                 ? ["slack_messages", "related_reasons"]
-                : ["github_pull_requests", "related_reasons"],
+                : params.provider === "knowledge"
+                  ? ["knowledge_documents", "downloadable_file_refs", "related_reasons"]
+                  : ["github_pull_requests", "related_reasons"],
           },
         },
       };
@@ -2524,6 +2534,10 @@ export const useVibeControlStore = defineStore("vibeControl", {
       if (input.provider === "github" && !application.repoFullName?.trim()) {
         throw new Error("GitHub repositoryを選択してください");
       }
+      if (input.provider === "knowledge" && !application.fileSpaceId?.trim()) {
+        throw new Error("アプリ専用FileSpace IDを設定してください");
+      }
+      const fileSpaceId = application.fileSpaceId?.trim();
 
       const orgId = useOrganizationStore().loggedInOrganizationInfo?.id ?? "";
       const spaceId = useSpaceStore().selectedSpace?.id ?? "";
@@ -2546,7 +2560,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
       });
       const prompt =
         input.prompt?.trim() ||
-        (input.provider === "slack"
+        (input.provider === "knowledge"
+          ? [
+              `${application.name} の操作動画「${video.title}」に関連するFileSpaceナレッジを探してください。`,
+              "動画解析結果、操作メモ、文字起こし要約、Story候補と、Search Store内のファイル名・説明・本文・引用を照合してください。",
+              "音声メモ、Markdown設計書、アーキテクチャ図、投入ファイルなど、実装やリリースノート作成に役立つファイルだけを返してください。",
+              "関連する理由を日本語で付け、関連度の高いナレッジファイルだけを最大10件返してください。",
+            ]
+          : input.provider === "slack"
           ? [
               `${application.name} の操作動画「${video.title}」に関連するSlack会話を探してください。`,
               "動画解析結果、操作メモ、文字起こし要約、Story候補と、Slack投稿・スレッド・チャンネルを照合してください。",
@@ -2567,6 +2588,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
             ...video.relatedContexts,
             generatedAt: nowIso(),
             status: "running",
+            runningProvider: input.provider,
             notes: [],
             github:
               input.provider === "github"
@@ -2583,6 +2605,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
                     messages: [],
                   }
                 : video.relatedContexts?.slack,
+            knowledge:
+              input.provider === "knowledge"
+                ? video.relatedContexts?.knowledge ?? {
+                    fileSpaceId: fileSpaceId || "",
+                    checkedAt: nowIso(),
+                    documents: [],
+                  }
+                : video.relatedContexts?.knowledge,
           },
         });
 
@@ -2598,7 +2628,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
             prompt,
             responseId,
             model: defaultLlmModelSelectionForAdkMode("vibe_related_context"),
-            fileSpaceId: application.fileSpaceId ?? null,
+            fileSpaceId: fileSpaceId ?? null,
             workspaceId: application.id,
             history: [],
             modeState,
@@ -2606,7 +2636,13 @@ export const useVibeControlStore = defineStore("vibeControl", {
         });
 
         this.lastRunLog.unshift(
-          `Related Context: ${application.name} / ${video.title} の${input.provider === "slack" ? "Slack会話" : "GitHub PR"}取得を開始`
+          `Related Context: ${application.name} / ${video.title} の${
+            input.provider === "slack"
+              ? "Slack会話"
+              : input.provider === "knowledge"
+                ? "ナレッジ"
+                : "GitHub PR"
+          }取得を開始`
         );
 
         const stopWatch = watchAdkInvokeRequest({
@@ -2644,9 +2680,11 @@ export const useVibeControlStore = defineStore("vibeControl", {
             ...video.relatedContexts,
             generatedAt: nowIso(),
             status: "error",
+            runningProvider: undefined,
             notes: [message],
             github: video.relatedContexts?.github,
             slack: video.relatedContexts?.slack,
+            knowledge: video.relatedContexts?.knowledge,
           },
         });
         this.error = message;
@@ -2976,14 +3014,16 @@ export const useVibeControlStore = defineStore("vibeControl", {
         (params.output && typeof params.output === "object" && "sessionId" in params.output
           ? params.output.sessionId
           : undefined) || params.sessionId;
-      const result =
-        params.status === "completed" && completedSessionId
+      const outputResult = extractRelatedContextResultCandidate(params.output);
+      const sessionResult =
+        params.status === "completed" && completedSessionId && !outputResult
           ? await this.fetchRelatedContextResultFromSession({
               organizationId: params.organizationId,
               spaceId: params.spaceId,
               sessionId: completedSessionId,
             })
           : undefined;
+      const result = outputResult ?? sessionResult;
       if (params.status !== "completed" && params.status !== "error") {
         return;
       }
@@ -3008,15 +3048,18 @@ export const useVibeControlStore = defineStore("vibeControl", {
               }
             : video.relatedContexts?.github;
       const nextSlack = result?.slack ?? video.relatedContexts?.slack;
+      const nextKnowledge = result?.knowledge ?? video.relatedContexts?.knowledge;
       await this.persistOperationVideo({
         ...video,
         relatedContexts: {
           ...video.relatedContexts,
           generatedAt: result?.generatedAt ?? nowIso(),
           status: params.status === "completed" && result ? result.status : "error",
+          runningProvider: undefined,
           notes: result?.notes ?? (message ? [message] : []),
           github: nextGithub,
           slack: nextSlack,
+          knowledge: nextKnowledge,
         },
       });
     },

@@ -212,6 +212,93 @@
           </template>
         </section>
 
+        <section v-else-if="activeTab === 'report'" class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div>
+              <p class="text-sm font-bold text-slate-900">レポートプレビュー</p>
+              <p class="mt-1 text-xs leading-5 text-slate-500">
+                選択中のStory、根拠、SourceAsset、動画、スクリーンショットをまとめて確認します。
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="inline-flex rounded-md border border-slate-200 bg-white p-1">
+                <button
+                  v-for="mode in reportModes"
+                  :key="mode.value"
+                  type="button"
+                  class="rounded px-3 py-1.5 text-xs font-bold"
+                  :class="reportMode === mode.value ? 'bg-slate-950 text-white' : 'text-slate-600 hover:text-slate-950'"
+                  @click="reportMode = mode.value"
+                >
+                  {{ mode.label }}
+                </button>
+              </div>
+              <EnButton
+                variant="outline"
+                color="neutral"
+                size="xs"
+                leading-icon="material-symbols:open-in-new"
+                @click="openReport"
+              >
+                開く
+              </EnButton>
+              <EnButton
+                variant="outline"
+                color="neutral"
+                size="xs"
+                leading-icon="material-symbols:download"
+                @click="downloadReport"
+              >
+                保存
+              </EnButton>
+              <EnButton
+                variant="outline"
+                color="neutral"
+                size="xs"
+                leading-icon="material-symbols:content-copy"
+                @click="copyReport"
+              >
+                コピー
+              </EnButton>
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-4">
+            <div
+              v-for="metric in reportMetrics"
+              :key="metric.label"
+              class="rounded-lg border border-slate-200 bg-white p-3"
+            >
+              <p class="text-xs font-semibold text-slate-500">{{ metric.label }}</p>
+              <p class="mt-1 text-lg font-bold tabular-nums text-slate-950">{{ metric.value }}</p>
+            </div>
+          </div>
+
+          <iframe
+            v-if="reportMode === 'html' && reportHtmlUrl"
+            :src="reportHtmlUrl"
+            title="Story report HTML preview"
+            class="h-[44rem] w-full rounded-lg border border-slate-200 bg-white"
+          />
+
+          <div
+            v-else-if="reportMode === 'markdown'"
+            class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(28rem,0.85fr)]"
+          >
+            <div class="min-h-[36rem] rounded-lg border border-slate-200 bg-white p-4">
+              <EnMarkdown
+                :markdown-text="reportMarkdown"
+                :enable-router-links="false"
+              />
+            </div>
+            <textarea
+              readonly
+              class="min-h-[36rem] w-full resize-y rounded-lg border border-slate-200 bg-slate-950 px-3 py-2 font-mono text-xs leading-5 text-slate-50 shadow-inner"
+              :value="reportMarkdown"
+            />
+          </div>
+        </section>
+
         <section v-else class="space-y-3">
           <div
             v-if="story.generationTrace.length === 0"
@@ -246,27 +333,47 @@
 
 <script setup lang="ts">
 import type {
+  DecodedVibeControlApplication,
+  DecodedVibeControlOperationVideo,
+  DecodedVibeControlSourceAsset,
   DecodedVibeControlStory,
   DecodedVibeControlStoryEvidence,
   VibeControlEvidenceType,
 } from "@models/vibeControl";
+import { getDownloadURL } from "firebase/storage";
+import EnMarkdown from "@components/EnMarkdown.vue";
+import { storageRefForBucketPath } from "@composables/firebase-storage-operations";
 import { VIBE_CONTROL_DRIFT_LABELS } from "@models/vibeControl";
 import { storyTicketKey } from "@utils/vibeControlStoryKeys";
 
 const props = defineProps<{
+  application: DecodedVibeControlApplication | null;
   story: DecodedVibeControlStory | null;
   evidence: DecodedVibeControlStoryEvidence[];
+  sourceAssets: DecodedVibeControlSourceAsset[];
+  operationVideos: DecodedVibeControlOperationVideo[];
 }>();
 
-type DetailTab = "spec" | "evidence" | "code" | "trace";
+type DetailTab = "spec" | "evidence" | "code" | "report" | "trace";
+type ReportMode = "html" | "markdown";
 
 const activeTab = ref<DetailTab>("spec");
+const reportMode = ref<ReportMode>("html");
+const videoUrls = reactive<Record<string, string>>({});
+const frameUrls = reactive<Record<string, string>>({});
+const reportHtmlUrl = ref("");
 
 const tabs = [
   { value: "spec", label: "仕様・AC", icon: "material-symbols:fact-check-outline" },
   { value: "evidence", label: "根拠", icon: "material-symbols:source-outline" },
   { value: "code", label: "コード", icon: "material-symbols:code-blocks-outline" },
+  { value: "report", label: "レポートプレビュー", icon: "material-symbols:preview-outline" },
   { value: "trace", label: "生成履歴", icon: "material-symbols:timeline-outline" },
+] as const;
+
+const reportModes = [
+  { value: "html", label: "HTML" },
+  { value: "markdown", label: "Markdown" },
 ] as const;
 
 const coveredAcCount = computed(
@@ -319,6 +426,190 @@ const contextFacts = computed(() => {
   ];
 });
 
+const linkedSourceAssetIds = computed(() => {
+  const ids = new Set<string>();
+  for (const item of props.evidence) {
+    if (item.sourceAssetId) ids.add(item.sourceAssetId);
+  }
+  return ids;
+});
+
+const linkedSourceAssets = computed(() =>
+  props.sourceAssets.filter((asset) => linkedSourceAssetIds.value.has(asset.id))
+);
+
+const linkedOperationVideos = computed(() => {
+  const sourceAssetIds = linkedSourceAssetIds.value;
+  const operationVideoIds = new Set(
+    linkedSourceAssets.value
+      .map((asset) => metadataString(asset.metadata, "operationVideoId"))
+      .filter(Boolean)
+  );
+  return props.operationVideos.filter(
+    (video) =>
+      sourceAssetIds.has(video.sourceAssetId || "") ||
+      sourceAssetIds.has(video.journeySourceAssetId || "") ||
+      operationVideoIds.has(video.id)
+  );
+});
+
+const reportMetrics = computed(() => [
+  { label: "Evidence", value: props.evidence.length },
+  { label: "Source assets", value: linkedSourceAssets.value.length },
+  { label: "Videos", value: linkedOperationVideos.value.length },
+  {
+    label: "Screenshots",
+    value: linkedOperationVideos.value.reduce(
+      (sum, video) => sum + (video.frameCaptures?.length ?? 0),
+      0
+    ),
+  },
+]);
+
+const reportFileStem = computed(() => {
+  const key = props.story?.storyKey || props.story?.id || "story-report";
+  return sanitizeFileStem(key);
+});
+
+const reportMarkdown = computed(() => {
+  const story = props.story;
+  if (!story) return "";
+  const lines = [
+    `# StoryVault Story Context: ${story.storyKey || story.id}`,
+    "",
+    "## Application",
+    `- Name: ${props.application?.name || "n/a"}`,
+    `- Application ID: ${props.application?.id || story.applicationId || "n/a"}`,
+    `- Repository: ${story.repoFullName || props.application?.repoFullName || "n/a"}`,
+    "",
+    "## Story",
+    `- Title: ${story.title}`,
+    `- Summary: ${story.summary || "n/a"}`,
+    `- User story: ${story.userStory || "n/a"}`,
+    `- Status: ${story.status}`,
+    `- Review state: ${story.reviewState}`,
+    `- Drift: ${story.driftLevel}`,
+    `- Confidence: ${story.confidenceScore}`,
+    "",
+    "## Acceptance Criteria",
+    ...story.acceptanceCriteria.map(
+      (ac, index) =>
+        `${index + 1}. [${ac.state}] ${ac.text} (evidence: ${ac.evidenceIds.join(", ") || "n/a"})`
+    ),
+    "",
+    "## Evidence",
+    ...props.evidence.flatMap((item) => [
+      `### ${item.title || item.id}`,
+      `- Evidence ID: ${item.id}`,
+      `- Type: ${item.type}`,
+      `- Freshness: ${item.freshness}`,
+      `- Excerpt: ${item.excerpt || "n/a"}`,
+      `- Observed user action: ${item.observedUserAction || "n/a"}`,
+      `- Observed UI surface: ${item.observedUiSurface || "n/a"}`,
+      `- Source URL: ${item.sourceUrl || item.citation.uri || "n/a"}`,
+      `- Source asset ID: ${item.sourceAssetId || "n/a"}`,
+      `- Citation: ${item.citation.snippet || "n/a"}`,
+      "",
+    ]),
+    "## Source Assets",
+    ...linkedSourceAssets.value.flatMap((asset) => [
+      `### ${asset.title || asset.id}`,
+      `- Source asset ID: ${asset.id}`,
+      `- Type: ${asset.sourceType}`,
+      `- Summary: ${asset.summary || "n/a"}`,
+      `- URI: ${asset.uri || "n/a"}`,
+      `- GCS path: ${asset.gcsPath || "n/a"}`,
+      `- Storage path: ${asset.storagePath || "n/a"}`,
+      "",
+    ]),
+    "## Operation Videos",
+    ...linkedOperationVideos.value.flatMap((video) => [
+      `### ${video.title || video.id}`,
+      `- Video URL: ${videoUrls[video.id] || "not resolved"}`,
+      `- Storage path: ${video.storagePath}`,
+      `- Screenshots: ${video.frameCaptures?.length ?? 0}`,
+      ...(video.frameCaptures ?? []).slice(0, 24).map((frame) => {
+        const url = frameUrls[frameKey(video.id, frame.id)] || frame.storagePath || "n/a";
+        return `- Frame ${frame.id} at ${formatMilliseconds(frame.timestampMs)}: ${url}`;
+      }),
+      "",
+    ]),
+    "## Code References",
+    ...story.codeRefs.map(
+      (ref) =>
+        `- ${ref.repoFullName || story.repoFullName || "repo"} ${ref.path || "(no path)"}${ref.lineStart ? `:${ref.lineStart}` : ""}${ref.pullRequest ? ` PR ${ref.pullRequest}` : ""}${ref.summary ? ` - ${ref.summary}` : ""}`
+    ),
+    "",
+    "## Agent Instructions",
+    "- Use this report as read-only implementation context.",
+    "- Preserve cited evidence IDs in local implementation plans, pull request descriptions, and commit notes.",
+  ];
+  return lines.join("\n").trim() + "\n";
+});
+
+const reportHtml = computed(() => {
+  const story = props.story;
+  if (!story) return "";
+  const evidenceChips = props.evidence.length
+    ? props.evidence.map((item) => `<span class="chip">${escapeHtml(item.id)}</span>`).join("")
+    : '<span class="chip">No evidence IDs</span>';
+  const criteria = story.acceptanceCriteria.length
+    ? story.acceptanceCriteria
+        .map(
+          (ac) => `<li><span class="state">${escapeHtml(ac.state)}</span><span>${escapeHtml(ac.text)}<br><small>evidence: ${escapeHtml(ac.evidenceIds.join(", ") || "n/a")}</small></span></li>`
+        )
+        .join("")
+    : '<li><span class="state">n/a</span><span>No acceptance criteria recorded.</span></li>';
+  const evidenceCards = props.evidence.length
+    ? props.evidence
+        .map(
+          (item) => `<article class="panel item"><h3>${escapeHtml(item.title || item.id)}</h3><div class="kv"><b>Evidence ID</b><span>${escapeHtml(item.id)}</span></div><div class="kv"><b>Type</b><span>${escapeHtml(item.type)}</span></div><div class="kv"><b>Excerpt</b><span>${escapeHtml(item.excerpt || "n/a")}</span></div><div class="kv"><b>Observed action</b><span>${escapeHtml(item.observedUserAction || "n/a")}</span></div><div class="kv"><b>UI surface</b><span>${escapeHtml(item.observedUiSurface || "n/a")}</span></div><div class="kv"><b>Source asset</b><span>${escapeHtml(item.sourceAssetId || "n/a")}</span></div>${linkRow("Source URL", item.sourceUrl || item.citation.uri)}</article>`
+        )
+        .join("")
+    : '<div class="panel"><p class="muted">No evidence is linked.</p></div>';
+  const assetCards = linkedSourceAssets.value.length
+    ? linkedSourceAssets.value
+        .map(
+          (asset) => `<article class="panel item"><h3>${escapeHtml(asset.title || asset.id)}</h3><div class="kv"><b>Type</b><span>${escapeHtml(asset.sourceType)}</span></div><div class="kv"><b>Summary</b><span>${escapeHtml(asset.summary || "n/a")}</span></div><div class="kv"><b>URI</b><span>${escapeHtml(asset.uri || "n/a")}</span></div><div class="kv"><b>GCS path</b><span>${escapeHtml(asset.gcsPath || "n/a")}</span></div><div class="kv"><b>Storage path</b><span>${escapeHtml(asset.storagePath || "n/a")}</span></div></article>`
+        )
+        .join("")
+    : '<div class="panel"><p class="muted">No linked source assets.</p></div>';
+  const videos = linkedOperationVideos.value.length
+    ? linkedOperationVideos.value.map((video) => videoHtml(video)).join("")
+    : '<div class="panel"><p class="muted">No linked operation videos.</p></div>';
+  const codeRefs = story.codeRefs.length
+    ? story.codeRefs
+        .map(
+          (ref) => `<li><strong>${escapeHtml(ref.repoFullName || story.repoFullName || "repo")}</strong> ${escapeHtml(ref.path || "(no path)")}${ref.lineStart ? `:${ref.lineStart}` : ""}${ref.pullRequest ? ` / PR ${escapeHtml(ref.pullRequest)}` : ""}</li>`
+        )
+        .join("")
+    : '<li class="muted">No code references recorded.</li>';
+
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(story.storyKey || story.id)} StoryVault Story Context</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#fff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65}.page{max-width:1120px;margin:0 auto;padding:28px 22px 44px}.top{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid #dbe3ef;padding-bottom:18px}.eyebrow{margin:0 0 4px;color:#64748b;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}h1{margin:0;font-size:38px;line-height:1.1}h2{margin:30px 0 12px;font-size:22px}h3{margin:0 0 8px;font-size:16px}a{color:#4f46e5;text-decoration:none}.summary{margin-top:10px;color:#334155}.chips{display:flex;flex-wrap:wrap;gap:6px}.chip{border-radius:999px;background:#eef2ff;color:#3730a3;padding:3px 9px;font-size:12px;font-weight:800}.grid{display:grid;gap:12px}.cols4{grid-template-columns:repeat(4,minmax(0,1fr))}.cols2{grid-template-columns:repeat(2,minmax(0,1fr))}.metric,.panel{border:1px solid #dbe3ef;border-radius:8px;background:#fff;padding:14px}.metric{background:#f8fafc}.metric span{display:block;color:#64748b;font-size:12px;font-weight:800}.metric strong{display:block;font-size:18px}.criteria{margin:0;padding:0;list-style:none}.criteria li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;border-top:1px solid #dbe3ef;padding:12px 0}.criteria li:first-child{border-top:0}.state{color:#047857;font-size:12px;font-weight:900;text-transform:uppercase}.item{margin-bottom:12px}.kv{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px;font-size:13px}.kv b,.muted,small{color:#64748b}.frames{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}video,img{width:100%;max-height:480px;border:1px solid #dbe3ef;border-radius:8px;background:#f1f5f9;object-fit:contain}.refs{padding-left:18px}li{overflow-wrap:anywhere}@media(max-width:860px){.page{padding:20px 14px}.top,.cols4,.cols2,.frames{display:grid;grid-template-columns:1fr}.criteria li,.kv{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top"><div><p class="eyebrow">StoryVault Story Context Report</p><h1>${escapeHtml(story.storyKey || story.id)}</h1><p class="summary">${escapeHtml(story.title)}</p></div><div class="chips">${evidenceChips}</div></header>
+    <section><h2>基本情報</h2><div class="grid cols4"><div class="metric"><span>Application</span><strong>${escapeHtml(props.application?.name || story.applicationId)}</strong></div><div class="metric"><span>Status</span><strong>${escapeHtml(story.status)}</strong></div><div class="metric"><span>Review</span><strong>${escapeHtml(story.reviewState)}</strong></div><div class="metric"><span>Confidence</span><strong>${story.confidenceScore}%</strong></div></div></section>
+    <section class="grid cols2"><div><h2>ユーザーストーリー</h2><div class="panel">${escapeHtml(story.userStory || "No user story recorded.")}<p class="muted">${escapeHtml(story.summary || "")}</p></div></div><div><h2>素材</h2><div class="grid cols2"><div class="metric"><span>Evidence</span><strong>${props.evidence.length}</strong></div><div class="metric"><span>Source Assets</span><strong>${linkedSourceAssets.value.length}</strong></div><div class="metric"><span>Videos</span><strong>${linkedOperationVideos.value.length}</strong></div><div class="metric"><span>Screenshots</span><strong>${linkedOperationVideos.value.reduce((sum, video) => sum + (video.frameCaptures?.length ?? 0), 0)}</strong></div></div></div></section>
+    <section><h2>受け入れ条件</h2><div class="panel"><ol class="criteria">${criteria}</ol></div></section>
+    <section><h2>証跡</h2>${evidenceCards}</section>
+    <section><h2>Source Assets</h2>${assetCards}</section>
+    <section><h2>メディア</h2>${videos}</section>
+    <section><h2>Code References</h2><div class="panel"><ul class="refs">${codeRefs}</ul></div></section>
+  </main>
+</body>
+</html>`;
+});
+
 function acIcon(state: string): string {
   if (state === "covered") return "material-symbols:check-circle-outline";
   if (state === "conflict") return "material-symbols:warning-outline";
@@ -359,4 +650,172 @@ function formatDate(value?: string): string {
     minute: "2-digit",
   });
 }
+
+function metadataString(
+  metadata: Record<string, unknown> | undefined,
+  key: string
+): string {
+  const value = metadata?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function frameKey(videoId: string, frameId: string): string {
+  return `${videoId}:${frameId}`;
+}
+
+function formatMilliseconds(value?: number): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "n/a";
+  const seconds = value / 1000;
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
+  }
+  return `${seconds.toFixed(1)}s`;
+}
+
+function sanitizeFileStem(value: string): string {
+  return (
+    value
+      .trim()
+      .replace(/[^\w.-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120) || "story-report"
+  );
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function linkRow(label: string, url?: string): string {
+  if (!url?.trim()) return "";
+  const safeUrl = escapeHtml(url.trim());
+  return `<div class="kv"><b>${escapeHtml(label)}</b><span><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a></span></div>`;
+}
+
+function videoHtml(video: DecodedVibeControlOperationVideo): string {
+  const videoUrl = videoUrls[video.id] || "";
+  const frames = (video.frameCaptures ?? [])
+    .slice(0, 24)
+    .map((frame) => {
+      const url = frameUrls[frameKey(video.id, frame.id)] || "";
+      if (!url) return "";
+      return `<figure><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="${escapeHtml(frame.id)}"></a><figcaption class="muted">${escapeHtml(frame.id)} / ${escapeHtml(formatMilliseconds(frame.timestampMs))}</figcaption></figure>`;
+    })
+    .filter(Boolean)
+    .join("");
+  return `<article class="panel item"><h3>${escapeHtml(video.title || video.id)}</h3>${videoUrl ? `<video controls preload="metadata" src="${escapeHtml(videoUrl)}"></video><p><a href="${escapeHtml(videoUrl)}" target="_blank" rel="noopener noreferrer">動画ファイルを開く</a></p>` : `<p class="muted">${escapeHtml(video.storagePath || "No video URL")}</p>`}${frames ? `<div class="frames">${frames}</div>` : ""}</article>`;
+}
+
+async function resolveReportMediaUrls(): Promise<void> {
+  await Promise.all(
+    linkedOperationVideos.value.map(async (video) => {
+      if (!videoUrls[video.id] && video.bucketName && video.storagePath) {
+        try {
+          const storageRef = storageRefForBucketPath({
+            bucketName: video.bucketName,
+            filePath: video.storagePath,
+          });
+          videoUrls[video.id] = await getDownloadURL(storageRef);
+        } catch {
+          videoUrls[video.id] = "";
+        }
+      }
+      await Promise.all(
+        (video.frameCaptures ?? []).map(async (frame) => {
+          const key = frameKey(video.id, frame.id);
+          if (frameUrls[key] || !frame.bucketName || !frame.storagePath) return;
+          try {
+            const storageRef = storageRefForBucketPath({
+              bucketName: frame.bucketName,
+              filePath: frame.storagePath,
+            });
+            frameUrls[key] = await getDownloadURL(storageRef);
+          } catch {
+            frameUrls[key] = "";
+          }
+        })
+      );
+    })
+  );
+}
+
+function refreshReportHtmlUrl(): void {
+  if (reportHtmlUrl.value) {
+    URL.revokeObjectURL(reportHtmlUrl.value);
+    reportHtmlUrl.value = "";
+  }
+  if (!reportHtml.value) return;
+  reportHtmlUrl.value = URL.createObjectURL(
+    new Blob([reportHtml.value], { type: "text/html;charset=utf-8" })
+  );
+}
+
+function currentReportText(): string {
+  return reportMode.value === "html" ? reportHtml.value : reportMarkdown.value;
+}
+
+function openReport(): void {
+  refreshReportHtmlUrl();
+  if (reportMode.value === "html" && reportHtmlUrl.value) {
+    window.open(reportHtmlUrl.value, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const url = URL.createObjectURL(
+    new Blob([reportMarkdown.value], { type: "text/markdown;charset=utf-8" })
+  );
+  window.open(url, "_blank", "noopener,noreferrer");
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadReport(): void {
+  const text = currentReportText();
+  if (!text) return;
+  const isHtml = reportMode.value === "html";
+  const url = URL.createObjectURL(
+    new Blob([text], {
+      type: isHtml ? "text/html;charset=utf-8" : "text/markdown;charset=utf-8",
+    })
+  );
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${reportFileStem.value}-storyvault-report.${isHtml ? "html" : "md"}`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function copyReport(): Promise<void> {
+  await navigator.clipboard.writeText(currentReportText());
+}
+
+watch(
+  () => [props.story?.id, activeTab.value],
+  () => {
+    if (activeTab.value === "report") {
+      void resolveReportMediaUrls().then(refreshReportHtmlUrl);
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  reportHtml,
+  () => {
+    refreshReportHtmlUrl();
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  if (reportHtmlUrl.value) {
+    URL.revokeObjectURL(reportHtmlUrl.value);
+  }
+});
 </script>

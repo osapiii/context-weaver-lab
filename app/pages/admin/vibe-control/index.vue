@@ -313,8 +313,11 @@
 
     <template v-else>
       <VibeControlStoryDetail
+        :application="selectedApplication"
         :story="selectedStory"
         :evidence="store.selectedEvidence"
+        :source-assets="store.activeSourceAssets"
+        :operation-videos="store.activeOperationVideos"
       />
     </template>
   </div>
@@ -1076,7 +1079,7 @@ async function startZappingVideoAnalysis(videoId: string): Promise<void> {
 
 async function startRelatedContextAnalysis(
   videoId: string,
-  provider: "github" | "slack"
+  provider: "github" | "slack" | "knowledge"
 ): Promise<void> {
   if (!selectedApplication.value) return;
   try {

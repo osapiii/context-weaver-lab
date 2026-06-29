@@ -393,14 +393,14 @@
 
         <div
           v-if="richTranscriptSummarySections(quickScanPreviewVideo).length > 0"
-          class="rounded-xl border border-primary-100 bg-primary-50/60 p-4"
+          class="rounded-xl border border-slate-200 bg-slate-50/70 p-4"
         >
           <div class="mb-3 flex items-center justify-between gap-2">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-wide text-primary-700">
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 文字起こし要約
               </p>
-              <p class="mt-1 text-xs text-primary-700/80">
+              <p class="mt-1 text-xs text-slate-600">
                 音声から読み取れた意図と期待結果を整理しています。
               </p>
             </div>
@@ -412,9 +412,9 @@
             <div
               v-for="section in richTranscriptSummarySections(quickScanPreviewVideo)"
               :key="`${quickScanPreviewVideo.id}-summary-${section.title}`"
-              class="rounded-lg border border-primary-100 bg-white p-3"
+              class="rounded-lg border border-slate-200 bg-white p-3"
             >
-              <p class="text-xs font-semibold text-primary-900">
+              <p class="text-xs font-semibold text-slate-700">
                 {{ section.title }}
               </p>
               <p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-700">
@@ -437,7 +437,7 @@
               :key="`${quickScanPreviewVideo.id}-modal-step-${index}`"
               class="flex gap-3 rounded-lg bg-slate-50 p-3 text-sm leading-relaxed text-slate-700"
             >
-              <span class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-700">
+              <span class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
                 {{ index + 1 }}
               </span>
               <span>{{ step }}</span>
@@ -543,7 +543,7 @@
               <span class="inline-flex shrink-0 items-center rounded-md bg-slate-950 px-2 py-1 text-xs font-semibold text-white">
                 {{ videoDisplayId(detailVideo) }}
               </span>
-              <h3 class="min-w-0 text-3xl font-bold tracking-normal text-slate-950">
+              <h3 class="min-w-0 text-[28px] font-bold leading-tight tracking-normal text-slate-950">
                 {{ displayVideoTitle(detailVideo) }}
               </h3>
               <VibeControlAnalysisStatusTip :status="detailVideo.analysisStatus" />
@@ -565,7 +565,7 @@
       </div>
 
       <div class="mb-5 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
-        <div class="grid gap-1 sm:grid-cols-4">
+        <div class="grid gap-1 sm:grid-cols-5">
           <button
             type="button"
             class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
@@ -584,7 +584,7 @@
           <button
             type="button"
             class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
-            :class="detailTab === 'videoAnalysis' ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500 hover:bg-primary-50 hover:text-primary-700'"
+            :class="detailTab === 'videoAnalysis' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
             @click="detailTab = 'videoAnalysis'"
           >
             <UIcon
@@ -594,7 +594,7 @@
             <span>動画解析</span>
             <span
               class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              :class="detailTab === 'videoAnalysis' ? 'bg-white/15 text-white' : isVideoAnalysisCompleted(detailVideo) ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600'"
+              :class="detailTab === 'videoAnalysis' ? 'bg-white/15 text-white' : isVideoAnalysisCompleted(detailVideo) ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-slate-100 text-slate-600'"
             >
               {{ videoAnalysisTabStatus(detailVideo) }}
             </span>
@@ -602,14 +602,14 @@
           <button
             type="button"
             class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
-            :class="detailTab === 'storyAnalysis' ? 'bg-amber-400 text-slate-950 shadow-sm' : 'text-slate-500 hover:bg-amber-50 hover:text-amber-800'"
+            :class="detailTab === 'storyAnalysis' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
             @click="detailTab = 'storyAnalysis'"
           >
             <UIcon name="material-symbols:sticky-note-2-outline" class="h-4 w-4 shrink-0" />
             <span>ストーリー解析</span>
             <span
               class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-              :class="detailTab === 'storyAnalysis' ? 'bg-white/55 text-slate-950' : storyCandidateCount(detailVideo) > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'"
+              :class="detailTab === 'storyAnalysis' ? 'bg-white/15 text-white' : storyCandidateCount(detailVideo) > 0 ? 'bg-slate-100 text-slate-700' : 'bg-slate-100 text-slate-600'"
             >
               {{ storyCandidateCount(detailVideo) }}件
             </span>
@@ -617,8 +617,8 @@
           <button
             type="button"
             class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
-            :class="detailTab === 'relatedContext' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
-            @click="detailTab = 'relatedContext'"
+            :class="detailTab === 'relatedContext' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
+            @click="openRelatedContextTab"
           >
             <UIcon name="material-symbols:hub-outline" class="h-4 w-4 shrink-0" />
             <span>関連コンテキスト</span>
@@ -626,7 +626,22 @@
               class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
               :class="detailTab === 'relatedContext' ? 'bg-white/15 text-white' : relatedContextCount(detailVideo) > 0 ? 'bg-slate-200 text-slate-800' : 'bg-slate-100 text-slate-600'"
             >
-              PR {{ relatedGithubPullRequestCount(detailVideo) }} / Slack {{ relatedSlackMessageCount(detailVideo) }}
+              Knowledge {{ relatedKnowledgeDocumentCount(detailVideo) }} / PR {{ relatedGithubPullRequestCount(detailVideo) }} / Slack {{ relatedSlackMessageCount(detailVideo) }}
+            </span>
+          </button>
+          <button
+            type="button"
+            class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
+            :class="detailTab === 'report' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
+            @click="detailTab = 'report'"
+          >
+            <UIcon name="material-symbols:preview-outline" class="h-4 w-4 shrink-0" />
+            <span>レポート</span>
+            <span
+              class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              :class="detailTab === 'report' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-700'"
+            >
+              HTML / MD
             </span>
           </button>
         </div>
@@ -637,19 +652,19 @@
         class="space-y-4"
       >
         <div class="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside class="relative overflow-hidden rounded-3xl border border-amber-100 bg-[#fffdf6] p-4 shadow-sm">
-            <div class="pointer-events-none absolute inset-0 opacity-[0.45] [background-image:linear-gradient(#eef2f7_1px,transparent_1px),linear-gradient(90deg,#eef2f7_1px,transparent_1px)] [background-size:28px_28px]" />
+          <aside class="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="pointer-events-none absolute inset-0 opacity-[0.24] [background-image:linear-gradient(#e5e7eb_1px,transparent_1px),linear-gradient(90deg,#e5e7eb_1px,transparent_1px)] [background-size:28px_28px]" />
             <div class="relative space-y-3">
-              <div class="rounded-2xl border border-amber-200 bg-amber-50/95 p-4 shadow-sm">
-                <p class="text-xs font-semibold text-amber-800">
+              <div class="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
                   操作で見えた意図
                 </p>
                 <p class="mt-3 text-sm leading-relaxed text-slate-800">
                   {{ detailVideo.analysisResult?.operationIntent || detailVideo.quickScan?.description || "未生成" }}
                 </p>
               </div>
-              <div class="rounded-2xl border border-primary-100 bg-primary-50/70 p-4 shadow-sm">
-                <p class="text-xs font-semibold text-primary-800">
+              <div class="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
                   背景として参照した知識
                 </p>
                 <p class="mt-3 text-sm leading-relaxed text-slate-800">
@@ -657,7 +672,7 @@
                 </p>
               </div>
               <div class="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-                <p class="text-xs font-semibold text-slate-700">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
                   話していた内容
                 </p>
                 <p class="mt-3 text-sm leading-relaxed text-slate-800">
@@ -683,8 +698,8 @@
           class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
           >
             <div class="mb-2 flex items-center justify-between gap-2">
-            <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <UIcon name="material-symbols:photo-library-outline" class="h-4 w-4 text-primary-600" />
+            <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
+              <UIcon name="material-symbols:photo-library-outline" class="h-4 w-4 text-slate-500" />
                 操作スクリーンショット
               </h4>
               <EnBadge color="neutral" variant="soft">
@@ -714,19 +729,19 @@
         v-else-if="detailTab === 'videoAnalysis'"
         class="space-y-4"
       >
-        <div class="relative overflow-hidden rounded-3xl border border-amber-100 bg-[#fffdf6] p-5 shadow-sm">
-          <div class="pointer-events-none absolute inset-0 opacity-[0.55] [background-image:linear-gradient(#eef2f7_1px,transparent_1px),linear-gradient(90deg,#eef2f7_1px,transparent_1px)] [background-size:28px_28px]" />
+        <div class="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="pointer-events-none absolute inset-0 opacity-[0.24] [background-image:linear-gradient(#e5e7eb_1px,transparent_1px),linear-gradient(90deg,#e5e7eb_1px,transparent_1px)] [background-size:28px_28px]" />
           <div class="relative space-y-5">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p class="inline-flex -rotate-1 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-800">
+                <p class="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
                   動画解析ノート
                 </p>
-                <h4 class="mt-3 text-xl font-semibold text-slate-950">
+                <h4 class="mt-3 text-2xl font-bold leading-tight text-slate-950">
                   AIの下書きと文字起こしを確認します
                 </h4>
               </div>
-              <EnBadge color="primary" variant="soft">
+              <EnBadge color="neutral" variant="soft">
                 {{ quickScanProviderLabel(detailVideo) }}
               </EnBadge>
             </div>
@@ -736,8 +751,8 @@
               class="rounded-3xl border border-slate-200 bg-white/95 p-5 shadow-sm"
             >
               <div class="mb-4 flex items-center justify-between gap-2">
-                <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                  <UIcon name="material-symbols:draw-outline" class="h-4 w-4 text-primary-600" />
+                <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
+                  <UIcon name="material-symbols:draw-outline" class="h-4 w-4 text-slate-500" />
                   AIの下書きメモ
                 </h4>
                 <div class="flex items-center gap-2">
@@ -782,7 +797,7 @@
                       :key="`${detailVideo.id}-detail-step-${index}`"
                       class="flex gap-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-700"
                     >
-                      <span class="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-700">
+                      <span class="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
                         {{ index + 1 }}
                       </span>
                       <span>{{ step }}</span>
@@ -794,19 +809,19 @@
 
             <div
               v-if="detailVideo.transcriptSummary || detailVideo.quickScan?.transcriptSummary"
-              class="rounded-3xl border border-primary-100 bg-primary-50/45 p-5 shadow-sm"
+              class="rounded-3xl border border-slate-200 bg-slate-50/70 p-5 shadow-sm"
             >
-              <h4 class="flex items-center gap-2 text-sm font-semibold text-primary-950">
-                <UIcon name="material-symbols:summarize-outline" class="h-4 w-4" />
+              <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
+                <UIcon name="material-symbols:summarize-outline" class="h-4 w-4 text-slate-500" />
                 文字起こしの読みどころ
               </h4>
               <div class="mt-3 grid gap-3 md:grid-cols-3">
                 <div
                   v-for="section in richTranscriptSummarySections(detailVideo).slice(0, 3)"
                   :key="`${detailVideo.id}-detail-summary-${section.title}`"
-                  class="rounded-2xl border border-primary-100 bg-white p-3"
+                  class="rounded-2xl border border-slate-200 bg-white p-3"
                 >
-                  <p class="text-xs font-semibold text-primary-900">
+                  <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
                     {{ section.title }}
                   </p>
                   <p class="mt-2 text-sm leading-relaxed text-slate-700">
@@ -844,21 +859,99 @@
       </div>
 
       <div
+        v-else-if="detailTab === 'report'"
+        class="space-y-4"
+      >
+        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
+                <UIcon name="material-symbols:preview-outline" class="h-4 w-4 text-slate-500" />
+                操作動画 Bundle レポート
+              </h4>
+              <p class="mt-1 text-sm leading-6 text-slate-600">
+                1つの操作動画に紐づくユーザーストーリー候補、証跡、スクリーンショットをまとめて確認できます
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <button
+                  v-for="mode in reportModes"
+                  :key="mode.value"
+                  type="button"
+                  class="rounded-md px-3 py-1.5 text-xs font-semibold transition"
+                  :class="reportMode === mode.value ? 'bg-slate-950 text-white' : 'text-slate-600 hover:text-slate-950'"
+                  @click="reportMode = mode.value"
+                >
+                  {{ mode.label }}
+                </button>
+              </div>
+              <EnButton
+                variant="outline"
+                color="neutral"
+                size="xs"
+                leading-icon="material-symbols:open-in-new"
+                @click="openReportPreview"
+              >
+                開く
+              </EnButton>
+              <EnButton
+                variant="outline"
+                color="neutral"
+                size="xs"
+                leading-icon="material-symbols:download"
+                @click="downloadReport"
+              >
+                DL
+              </EnButton>
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-6">
+            <div
+              v-for="metric in reportMetrics"
+              :key="metric.label"
+              class="rounded-lg border border-slate-200 bg-slate-50 p-3"
+            >
+              <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                {{ metric.label }}
+              </p>
+              <p class="mt-1 text-lg font-bold text-slate-950">
+                {{ metric.value }}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <iframe
+          v-if="reportMode === 'html' && reportHtmlUrl"
+          :src="reportHtmlUrl"
+          title="Operation video bundle report preview"
+          class="h-[680px] w-full rounded-2xl border border-slate-200 bg-white shadow-sm"
+        />
+        <textarea
+          v-else
+          :value="reportMarkdown"
+          readonly
+          class="h-[680px] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-100 shadow-sm"
+        />
+      </div>
+
+      <div
         v-else-if="detailTab === 'storyAnalysis'"
         class="space-y-4"
       >
-        <div class="relative overflow-hidden rounded-3xl border border-amber-100 bg-[#fffdf6] p-5 shadow-sm">
-          <div class="pointer-events-none absolute inset-0 opacity-[0.45] [background-image:linear-gradient(#e9edf3_1px,transparent_1px),linear-gradient(90deg,#e9edf3_1px,transparent_1px)] [background-size:30px_30px]" />
-          <div class="pointer-events-none absolute right-4 top-4 h-10 w-24 rotate-12 rounded-sm bg-primary-100/80 shadow-sm" />
+        <div class="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="pointer-events-none absolute inset-0 opacity-[0.28] [background-image:linear-gradient(#e5e7eb_1px,transparent_1px),linear-gradient(90deg,#e5e7eb_1px,transparent_1px)] [background-size:32px_32px]" />
           <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p class="relative inline-flex -rotate-1 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-800">
+              <p class="relative inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
                 ユーザーの「やりたいこと」メモ
               </p>
-              <h4 class="relative mt-3 text-xl font-semibold text-slate-950">
+              <h4 class="relative mt-3 text-2xl font-bold leading-tight text-slate-950">
                 ストーリー解析
               </h4>
-              <p class="relative mt-1 text-sm text-slate-500">
+              <p class="relative mt-2 text-sm leading-6 text-slate-600">
                 操作動画で見つけたニーズを、付箋と根拠つきで整理します
               </p>
             </div>
@@ -893,13 +986,13 @@
               v-else
               class="grid gap-5 xl:grid-cols-[minmax(320px,0.78fr)_minmax(0,1.22fr)]"
             >
-              <section class="rounded-3xl border border-amber-100 bg-white/80 p-4 shadow-sm">
+              <section class="rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-sm">
                 <div class="mb-3 flex items-center justify-between gap-2">
-                  <h5 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <UIcon name="material-symbols:sticky-note-2-outline" class="h-4 w-4 text-amber-600" />
+                  <h5 class="flex items-center gap-2 text-base font-bold text-slate-950">
+                    <UIcon name="material-symbols:sticky-note-2-outline" class="h-4 w-4 text-slate-500" />
                     見つかったストーリー
                   </h5>
-                  <EnBadge color="warning" variant="soft">
+                  <EnBadge color="neutral" variant="soft">
                     {{ detailVideo.analysisResult.storyCandidates.length }}
                   </EnBadge>
                 </div>
@@ -909,7 +1002,7 @@
                     :key="story.id"
                     type="button"
                     class="w-full rounded-xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                    :class="selectedAnalysisStory?.id === story.id ? 'rotate-[-0.25deg] border-primary-300 bg-amber-50 ring-2 ring-primary-100' : 'rotate-[0.15deg] border-amber-100 bg-white hover:border-amber-300'"
+                    :class="selectedAnalysisStory?.id === story.id ? 'border-slate-900 bg-slate-50 ring-2 ring-slate-200' : 'border-slate-200 bg-white hover:border-slate-400'"
                     @click="selectedAnalysisStoryId = story.id"
                   >
                     <div class="flex items-start justify-between gap-2">
@@ -917,11 +1010,11 @@
                         <p class="mb-1 inline-flex rounded-md border border-slate-200 bg-slate-950 px-2 py-0.5 font-mono text-[11px] font-bold text-white shadow-sm">
                           [{{ analysisStoryTicketKey(story) }}]
                         </p>
-                        <p class="line-clamp-2 text-sm font-semibold text-slate-900">
+                        <p class="line-clamp-2 text-base font-bold leading-snug text-slate-950">
                           {{ story.title }}
                         </p>
                       </div>
-                      <EnBadge color="warning" variant="soft">
+                      <EnBadge color="neutral" variant="soft">
                         {{ story.confidence ?? story.confidenceScore ?? 0 }}
                       </EnBadge>
                     </div>
@@ -932,11 +1025,7 @@
                       {{ story.goal }}
                     </p>
                     <div class="mt-3 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
-                      <EnBadge
-                        v-if="story.role"
-                        :color="story.role.grounding === 'explicit' ? 'success' : 'warning'"
-                        variant="soft"
-                      >
+                      <EnBadge v-if="story.role" color="neutral" variant="soft">
                         {{ story.role.value }}
                       </EnBadge>
                       <EnBadge
@@ -949,7 +1038,7 @@
                       <EnBadge
                         v-for="(item, evidenceIndex) in story.evidence.slice(0, 2)"
                         :key="`${story.id}-range-${evidenceIndex}`"
-                        color="primary"
+                        color="neutral"
                         variant="soft"
                       >
                         {{ formatEvidenceRange(item.tRange) }}
@@ -976,17 +1065,17 @@
                   v-else
                   class="space-y-4"
                 >
-                  <div class="rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-primary-50 p-5">
+                  <div class="rounded-3xl border border-slate-200 bg-slate-50/80 p-5">
                     <div class="flex flex-wrap items-start justify-between gap-3">
                       <div class="min-w-0">
-                        <p class="mb-2 inline-flex rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                        <p class="mb-2 inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
                           選択中のストーリー
                         </p>
                         <div class="flex flex-wrap items-center gap-2">
                           <span class="rounded-md border border-slate-200 bg-slate-950 px-2.5 py-1 font-mono text-xs font-bold text-white shadow-sm">
                             [{{ analysisStoryTicketKey(selectedAnalysisStory) }}]
                           </span>
-                          <h5 class="text-lg font-semibold text-slate-950">
+                          <h5 class="text-xl font-bold leading-snug text-slate-950">
                             {{ selectedAnalysisStory.title }}
                           </h5>
                         </div>
@@ -1000,7 +1089,7 @@
                     <div class="flex flex-shrink-0 flex-wrap gap-1">
                       <EnBadge
                         v-if="selectedAnalysisStory.role"
-                        :color="selectedAnalysisStory.role.grounding === 'explicit' ? 'success' : 'warning'"
+                        color="neutral"
                         variant="soft"
                       >
                         {{ selectedAnalysisStory.role.grounding === 'explicit' ? '発話から確認' : '推定' }}
@@ -1016,24 +1105,24 @@
                     v-if="selectedAnalysisStory.role || selectedAnalysisStory.goal || selectedAnalysisStory.benefit"
                     class="grid gap-3 md:grid-cols-3"
                   >
-                    <div class="rounded-2xl border border-amber-100 bg-amber-50/80 p-4 shadow-sm">
-                      <p class="text-xs font-semibold text-amber-800">
+                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
                         誰が
                       </p>
                       <p class="mt-2 text-sm leading-relaxed text-slate-800">
                         {{ selectedAnalysisStory.role?.value || selectedAnalysisStory.asA || "未生成" }}
                       </p>
                     </div>
-                    <div class="rounded-2xl border border-primary-100 bg-primary-50 p-4 shadow-sm">
-                      <p class="text-xs font-semibold text-primary-800">
+                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
                         何をしたいか
                       </p>
                       <p class="mt-2 text-sm leading-relaxed text-slate-800">
                         {{ selectedAnalysisStory.goal || selectedAnalysisStory.iWant || "未生成" }}
                       </p>
                     </div>
-                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
-                      <p class="text-xs font-semibold text-slate-700">
+                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
                         何がうれしいか
                       </p>
                       <p class="mt-2 text-sm leading-relaxed text-slate-800">
@@ -1044,23 +1133,23 @@
 
                   <p
                     v-if="selectedAnalysisStory.userStory"
-                    class="rounded-lg border border-primary-100 bg-primary-50 p-3 text-sm leading-relaxed text-primary-950"
+                    class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-800"
                   >
                     {{ selectedAnalysisStory.userStory }}
                   </p>
 
-                  <div class="rounded-3xl border border-primary-100 bg-primary-50/60 p-4">
+                  <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p class="flex items-center gap-2 text-sm font-semibold text-primary-950">
-                          <UIcon name="material-symbols:movie-filter-outline" class="h-4 w-4" />
+                        <p class="flex items-center gap-2 text-base font-bold text-slate-950">
+                          <UIcon name="material-symbols:movie-filter-outline" class="h-4 w-4 text-slate-500" />
                           根拠になった動画の場面
                         </p>
-                        <p class="mt-1 text-xs text-primary-800">
+                        <p class="mt-1 text-sm leading-6 text-slate-600">
                           タイムスタンプから、近いスクリーンショットも一緒に確認できます
                         </p>
                       </div>
-                      <EnBadge color="primary" variant="soft">
+                      <EnBadge color="neutral" variant="soft">
                         {{ selectedAnalysisStory.evidence.length }}
                       </EnBadge>
                     </div>
@@ -1068,7 +1157,7 @@
                       <div
                         v-for="(item, evidenceIndex) in selectedAnalysisStory.evidence"
                         :key="`${selectedAnalysisStory.id}-timestamp-${evidenceIndex}`"
-                        class="rounded-xl border border-primary-100 bg-white p-3 shadow-sm"
+                        class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                       >
                         <div class="flex flex-wrap items-start justify-between gap-2">
                           <div class="min-w-0">
@@ -1082,7 +1171,7 @@
                               {{ item.summary }}
                             </p>
                           </div>
-                          <EnBadge color="primary" variant="soft">
+                          <EnBadge color="neutral" variant="soft">
                             {{ formatEvidenceRange(item.tRange) }}
                           </EnBadge>
                         </div>
@@ -1107,7 +1196,7 @@
                               v-for="frame in storyEvidenceFrames(detailVideo, item)"
                               :key="`${selectedAnalysisStory.id}-${item.videoId}-${frame.id}`"
                               class="overflow-hidden rounded-md border bg-white"
-                              :class="item.representativeScreenshotId === frame.id ? 'border-primary-300 ring-2 ring-primary-100' : 'border-slate-200'"
+                              :class="item.representativeScreenshotId === frame.id ? 'border-slate-900 ring-2 ring-slate-200' : 'border-slate-200'"
                             >
                               <img
                                 :src="savedFrameUrl(detailVideo, frame.id)"
@@ -1118,7 +1207,7 @@
                                 <span>{{ formatDuration(frame.timestampMs) }}</span>
                                 <span
                                   v-if="item.representativeScreenshotId === frame.id"
-                                  class="font-semibold text-primary-700"
+                                  class="font-semibold text-slate-900"
                                 >
                                   代表
                                 </span>
@@ -1132,9 +1221,9 @@
 
                   <div
                     v-if="selectedAnalysisStory.acceptanceCriteria.length > 0"
-                    class="rounded-3xl border border-amber-100 bg-amber-50/60 p-4"
+                    class="rounded-3xl border border-slate-200 bg-white p-4"
                   >
-                    <p class="text-sm font-semibold text-amber-950">
+                    <p class="text-base font-bold text-slate-950">
                       できたと言える条件
                     </p>
                     <ul class="mt-2 space-y-2">
@@ -1143,7 +1232,7 @@
                         :key="criterion"
                         class="flex gap-2 text-sm leading-relaxed text-slate-700"
                       >
-                        <span class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-[10px] font-semibold text-amber-700">
+                        <span class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-700">
                           {{ index + 1 }}
                         </span>
                         <span>{{ criterion }}</span>
@@ -1156,12 +1245,12 @@
 
             <div
               v-if="detailVideo.analysisResult.notes.length > 0"
-              class="rounded-lg border border-amber-200 bg-amber-50 p-3"
+              class="rounded-lg border border-slate-200 bg-white p-3"
             >
-              <p class="text-xs font-semibold text-amber-900">
+              <p class="text-xs font-semibold text-slate-700">
                 補足メモ
               </p>
-              <ul class="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-amber-900">
+              <ul class="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-slate-600">
                 <li
                   v-for="note in detailVideo.analysisResult.notes"
                   :key="note"
@@ -1176,12 +1265,245 @@
 
       <div
         v-else
-        class="space-y-4"
+        class="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]"
       >
-        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <aside class="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm xl:sticky xl:top-4 xl:self-start">
+          <div class="mb-3 px-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">
+              Context Tools
+            </p>
+            <p class="mt-1 text-xs leading-5 text-slate-500">
+              取得元を選ぶと右側に結果を表示します
+            </p>
+          </div>
+          <nav class="space-y-1" aria-label="関連コンテキストツール">
+            <button
+              type="button"
+              class="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition"
+              :class="relatedContextProviderTab === 'knowledge' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'"
+              @click="relatedContextProviderTab = 'knowledge'"
+            >
+              <span
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                :class="relatedContextProviderTab === 'knowledge' ? 'bg-white/10' : 'bg-slate-100'"
+              >
+                <UIcon name="material-symbols:folder-managed-outline" class="h-4 w-4" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-sm font-bold">Knowledge</span>
+                <span
+                  class="mt-0.5 block truncate text-xs"
+                  :class="relatedContextProviderTab === 'knowledge' ? 'text-slate-300' : 'text-slate-500'"
+                >
+                  FileSpace ナレッジ
+                </span>
+              </span>
+              <span
+                class="inline-flex min-w-6 shrink-0 items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="relatedContextProviderTab === 'knowledge' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-700'"
+              >
+                {{ relatedKnowledgeDocumentCount(detailVideo) }}
+              </span>
+            </button>
+            <button
+              type="button"
+              class="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition"
+              :class="relatedContextProviderTab === 'github' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'"
+              @click="relatedContextProviderTab = 'github'"
+            >
+              <span
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                :class="relatedContextProviderTab === 'github' ? 'bg-white/10' : 'bg-slate-100'"
+              >
+                <UIcon name="i-simple-icons-github" class="h-4 w-4" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-sm font-bold">GitHub</span>
+                <span
+                  class="mt-0.5 block truncate text-xs"
+                  :class="relatedContextProviderTab === 'github' ? 'text-slate-300' : 'text-slate-500'"
+                >
+                  PR と変更履歴
+                </span>
+              </span>
+              <span
+                class="inline-flex min-w-6 shrink-0 items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="relatedContextProviderTab === 'github' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-700'"
+              >
+                {{ relatedGithubPullRequestCount(detailVideo) }}
+              </span>
+            </button>
+            <button
+              type="button"
+              class="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition"
+              :class="relatedContextProviderTab === 'slack' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'"
+              @click="relatedContextProviderTab = 'slack'"
+            >
+              <span
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                :class="relatedContextProviderTab === 'slack' ? 'bg-white/10' : 'bg-slate-100'"
+              >
+                <UIcon name="i-simple-icons-slack" class="h-4 w-4" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-sm font-bold">Slack</span>
+                <span
+                  class="mt-0.5 block truncate text-xs"
+                  :class="relatedContextProviderTab === 'slack' ? 'text-slate-300' : 'text-slate-500'"
+                >
+                  会話とスレッド
+                </span>
+              </span>
+              <span
+                class="inline-flex min-w-6 shrink-0 items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                :class="relatedContextProviderTab === 'slack' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-700'"
+              >
+                {{ relatedSlackMessageCount(detailVideo) }}
+              </span>
+            </button>
+          </nav>
+        </aside>
+
+        <div class="min-w-0 space-y-4">
+          <section
+            v-if="relatedContextProviderTab === 'knowledge'"
+            class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
           <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-950">
+              <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
+                <UIcon name="material-symbols:folder-managed-outline" class="h-4 w-4 text-slate-500" />
+                ナレッジファイル
+              </h4>
+              <p class="mt-1 text-xs text-slate-500">
+                {{ application?.fileSpaceId || "FileSpace未設定" }}
+              </p>
+            </div>
+            <EnButton
+              variant="solid"
+              color="neutral"
+              size="xs"
+              custom-class="!border-slate-950 !bg-slate-950 !text-white shadow-lg shadow-slate-950/15 hover:!bg-slate-800 disabled:!bg-slate-400"
+              leading-icon="material-symbols:travel-explore"
+              :loading="isRelatedContextProviderRunning(detailVideo, 'knowledge')"
+              :global-loading="false"
+              :disabled="!application?.fileSpaceId || isRelatedContextBusy(detailVideo)"
+              @click="$emit('fetch-related-context', detailVideo.id, 'knowledge')"
+            >
+              ナレッジ取得
+            </EnButton>
+          </div>
+
+          <div
+            v-if="isRelatedContextProviderRunning(detailVideo, 'knowledge')"
+            class="mb-4 overflow-hidden rounded-xl border border-slate-900 bg-slate-950 text-white shadow-sm"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+              <div class="flex items-center gap-3">
+                <span class="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                  <UIcon name="material-symbols:travel-explore" class="h-4 w-4" />
+                  <span class="absolute inset-0 animate-ping rounded-full border border-white/20" />
+                </span>
+                <div>
+                  <p class="text-sm font-semibold">
+                    ナレッジファイルを取得しています
+                  </p>
+                  <p class="mt-0.5 text-xs text-slate-300">
+                    Search Store、動画解析、Story候補、投入ファイルのメタデータを照合中
+                  </p>
+                </div>
+              </div>
+              <EnBadge color="neutral" variant="soft">
+                analyzing
+              </EnBadge>
+            </div>
+            <div class="grid gap-3 bg-white p-4 md:grid-cols-3">
+              <div
+                v-for="index in 3"
+                :key="`related-context-knowledge-skeleton-${index}`"
+                class="rounded-lg border border-slate-100 p-3"
+              >
+                <div class="h-20 animate-pulse rounded-lg bg-slate-100" />
+                <div class="mt-3 h-3 w-2/3 animate-pulse rounded-full bg-slate-200" />
+                <div class="mt-2 h-3 w-full animate-pulse rounded-full bg-slate-100" />
+              </div>
+            </div>
+          </div>
+
+          <EnAlert
+            v-if="!application?.fileSpaceId"
+            color="warning"
+            title="アプリ専用FileSpaceを作成してください"
+            description="投入済みファイルやSearch Storeのナレッジを関連付けるにはFileSpaceが必要です。"
+          />
+
+          <div
+            v-else-if="!isRelatedContextProviderRunning(detailVideo, 'knowledge') && !detailVideo.relatedContexts?.knowledge"
+            class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
+          >
+            ナレッジ取得を実行すると、操作動画に関連する投入ファイルや設計書がここに表示されます
+          </div>
+
+          <div v-else-if="detailVideo.relatedContexts?.knowledge" class="space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <span>{{ detailVideo.relatedContexts.knowledge.fileSpaceId }}</span>
+              <span>{{ formatRecordedAt(detailVideo.relatedContexts.knowledge.checkedAt) }}</span>
+            </div>
+
+            <div
+              v-if="detailVideo.relatedContexts.knowledge.documents.length === 0"
+              class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
+            >
+              関連するナレッジファイルは見つかりませんでした
+            </div>
+
+            <div v-else class="grid gap-3 md:grid-cols-3 2xl:grid-cols-4">
+              <article
+                v-for="doc in detailVideo.relatedContexts.knowledge.documents"
+                :key="`${detailVideo.id}-related-knowledge-${doc.documentId || doc.name}`"
+                class="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
+              >
+                <div class="relative">
+                  <KnowledgeDocumentCompactCard
+                    :document="knowledgeDocumentToFileSpaceDocument(doc)"
+                    :show-actions="false"
+                  />
+                  <EnBadge
+                    color="neutral"
+                    variant="soft"
+                    class="absolute right-2 top-2"
+                  >
+                    {{ doc.relevanceScore }}
+                  </EnBadge>
+                </div>
+                <p
+                  v-if="doc.reason"
+                  class="mt-2 line-clamp-3 text-xs leading-relaxed text-slate-700"
+                >
+                  {{ doc.reason }}
+                </p>
+                <div class="mt-2 flex flex-wrap gap-1">
+                  <EnBadge
+                    v-for="signal in doc.matchedSignals.slice(0, 3)"
+                    :key="`${doc.documentId || doc.name}-${signal}`"
+                    color="neutral"
+                    variant="soft"
+                  >
+                    {{ signal }}
+                  </EnBadge>
+                </div>
+              </article>
+            </div>
+          </div>
+          </section>
+
+          <section
+            v-if="relatedContextProviderTab === 'github'"
+            class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
                 <UIcon name="i-simple-icons-github" class="h-4 w-4" />
                 GitHub PR
               </h4>
@@ -1195,9 +1517,9 @@
               custom-class="!border-slate-950 !bg-slate-950 !text-white shadow-lg shadow-slate-950/20 hover:!bg-slate-800 disabled:!bg-slate-400"
               size="xs"
               leading-icon="i-simple-icons-github"
-              :loading="isFetchingRelatedContexts"
+              :loading="isRelatedContextProviderRunning(detailVideo, 'github')"
               :global-loading="false"
-              :disabled="!application?.repoFullName || isFetchingRelatedContexts"
+              :disabled="!application?.repoFullName || isRelatedContextBusy(detailVideo)"
               @click="$emit('fetch-related-context', detailVideo.id, 'github')"
             >
               PR一覧を取得
@@ -1212,7 +1534,7 @@
           />
 
           <div
-            v-if="isRelatedContextRunning(detailVideo)"
+            v-if="isRelatedContextProviderRunning(detailVideo, 'github')"
             class="mb-4 overflow-hidden rounded-xl border border-slate-900 bg-slate-950 text-white shadow-sm"
           >
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
@@ -1251,7 +1573,7 @@
           </div>
 
           <div
-            v-if="!isRelatedContextRunning(detailVideo) && !detailVideo.relatedContexts?.github"
+            v-if="!isRelatedContextProviderRunning(detailVideo, 'github') && !detailVideo.relatedContexts?.github"
             class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
           >
             GitHub PRを取得すると、操作動画に関連するPRと理由がここに表示されます
@@ -1282,7 +1604,7 @@
                       :href="pr.htmlUrl"
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="line-clamp-2 text-xs font-semibold leading-snug text-slate-950 hover:text-primary-700"
+                      class="line-clamp-2 text-sm font-bold leading-snug text-slate-950 hover:text-slate-700"
                     >
                       #{{ pr.number }} {{ pr.title }}
                     </a>
@@ -1290,7 +1612,7 @@
                       {{ pr.author || "unknown" }} / {{ pr.state || "pr" }}
                     </p>
                   </div>
-                  <EnBadge color="primary" variant="soft" class="shrink-0">
+                  <EnBadge color="neutral" variant="soft" class="shrink-0">
                     {{ pr.relevanceScore }}
                   </EnBadge>
                 </div>
@@ -1312,7 +1634,7 @@
                   <EnBadge
                     v-for="label in pr.labels.slice(0, 2)"
                     :key="`${pr.number}-label-${label}`"
-                    color="warning"
+                    color="neutral"
                     variant="soft"
                   >
                     {{ label }}
@@ -1329,12 +1651,15 @@
               </article>
             </div>
           </div>
-        </section>
+          </section>
 
-        <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section
+            v-if="relatedContextProviderTab === 'slack'"
+            class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+          >
           <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h4 class="flex items-center gap-2 text-sm font-semibold text-slate-950">
+              <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
                 <UIcon name="i-simple-icons-slack" class="h-4 w-4" />
                 Slack 会話
               </h4>
@@ -1344,12 +1669,13 @@
             </div>
             <EnButton
               variant="solid"
-              color="purple"
+              color="neutral"
               size="xs"
+              custom-class="!border-slate-950 !bg-slate-950 !text-white shadow-lg shadow-slate-950/15 hover:!bg-slate-800 disabled:!bg-slate-400"
               leading-icon="i-simple-icons-slack"
-              :loading="isFetchingRelatedContexts"
+              :loading="isRelatedContextProviderRunning(detailVideo, 'slack')"
               :global-loading="false"
-              :disabled="isFetchingRelatedContexts"
+              :disabled="isRelatedContextBusy(detailVideo)"
               @click="$emit('fetch-related-context', detailVideo.id, 'slack')"
             >
               会話を取得
@@ -1357,7 +1683,7 @@
           </div>
 
           <div
-            v-if="isRelatedContextRunning(detailVideo)"
+            v-if="isRelatedContextProviderRunning(detailVideo, 'slack')"
             class="mb-4 overflow-hidden rounded-xl border border-slate-900 bg-slate-950 text-white shadow-sm"
           >
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
@@ -1396,7 +1722,7 @@
           </div>
 
           <div
-            v-if="!isRelatedContextRunning(detailVideo) && !detailVideo.relatedContexts?.slack"
+            v-if="!isRelatedContextProviderRunning(detailVideo, 'slack') && !detailVideo.relatedContexts?.slack"
             class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
           >
             Slack会話を取得すると、操作動画に関連する投稿と理由がここに表示されます
@@ -1428,18 +1754,18 @@
                       :href="message.permalink"
                       target="_blank"
                       rel="noopener noreferrer"
-                      class="text-sm font-semibold text-slate-950 hover:text-primary-700"
+                      class="text-sm font-bold text-slate-950 hover:text-slate-700"
                     >
                       #{{ message.channelName || message.channelId || "slack" }}
                     </a>
-                    <p v-else class="text-sm font-semibold text-slate-950">
+                    <p v-else class="text-sm font-bold text-slate-950">
                       #{{ message.channelName || message.channelId || "slack" }}
                     </p>
                     <p class="mt-1 text-xs text-slate-500">
                       {{ message.author || "unknown" }} / {{ message.postedAt || message.messageTs }}
                     </p>
                   </div>
-                  <EnBadge color="purple" variant="soft">
+                  <EnBadge color="neutral" variant="soft">
                     {{ message.relevanceScore }}
                   </EnBadge>
                 </div>
@@ -1468,7 +1794,9 @@
               </article>
             </div>
           </div>
-        </section>
+          </section>
+        </div>
+
       </div>
     </div>
 
@@ -1519,7 +1847,7 @@
         <article
           v-for="video in filteredVideos"
           :key="video.id"
-          class="group cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md focus-within:border-primary-300 focus-within:ring-2 focus-within:ring-primary-100"
+          class="group cursor-pointer overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-md focus-within:border-slate-900 focus-within:ring-2 focus-within:ring-slate-200"
           tabindex="0"
           role="button"
           @click="openVideoDetail(video)"
@@ -1556,7 +1884,7 @@
 
           <div class="space-y-3 p-4">
             <div class="min-w-0">
-              <h4 class="line-clamp-2 text-sm font-semibold text-slate-950 group-hover:text-primary-700">
+              <h4 class="line-clamp-2 text-sm font-semibold text-slate-950 group-hover:text-slate-700">
                 {{ displayVideoTitle(video) }}
               </h4>
               <p class="mt-1 text-xs text-slate-500">
@@ -1600,7 +1928,7 @@
                   :key="`${video.id}-memo-${index}`"
                   class="flex gap-2 text-xs leading-relaxed text-slate-600"
                 >
-                  <span class="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary-100 text-[10px] font-semibold text-primary-700">
+                  <span class="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-700">
                     {{ index + 1 }}
                   </span>
                   <span class="line-clamp-1">{{ step }}</span>
@@ -1627,14 +1955,17 @@ import { getDownloadURL } from "firebase/storage";
 import { storageRefForBucketPath } from "@composables/firebase-storage-operations";
 import { reportDatadogError } from "@utils/datadogObservability";
 import { formatUserStoryKey } from "@utils/vibeControlStoryKeys";
+import KnowledgeDocumentCompactCard from "@components/knowledge/KnowledgeDocumentCompactCard.vue";
 import type {
   DecodedVibeControlApplication,
   DecodedVibeControlOperationVideo,
+  VibeControlRelatedContextKnowledgeDocument,
   VibeControlOperationVideoDiscoveryStatus,
   VibeControlOperationVideoDisplaySurface,
   VibeControlZappingAnalysisStoryCandidate,
   VibeControlZappingAnalysisStatus,
 } from "@models/vibeControl";
+import type { Document } from "@models/document";
 import type { VibeControlOperationVideoSaveInput } from "@stores/vibeControl";
 
 type OperationVideoSaveCallbacks = {
@@ -1669,7 +2000,9 @@ type SaveProgressStep = {
   description: string;
   status: "pending" | "active" | "done" | "error";
 };
-type DetailTab = "video" | "videoAnalysis" | "storyAnalysis" | "relatedContext";
+type DetailTab = "video" | "videoAnalysis" | "storyAnalysis" | "relatedContext" | "report";
+type ReportMode = "html" | "markdown";
+type RelatedContextProviderTab = "knowledge" | "github" | "slack";
 
 type RichTranscriptSummarySection = {
   title: string;
@@ -1700,7 +2033,7 @@ const emit = defineEmits<{
     callbacks?: OperationVideoSaveCallbacks,
   ];
   analyze: [videoId: string];
-  "fetch-related-context": [videoId: string, provider: "github" | "slack"];
+  "fetch-related-context": [videoId: string, provider: "github" | "slack" | "knowledge"];
   "create-file-space": [];
   delete: [videoId: string];
   refresh: [];
@@ -1732,6 +2065,9 @@ const saveProgressPhase = ref<SaveProgressPhase>("idle");
 const selectedVideoId = ref("");
 const detailVideoId = ref("");
 const detailTab = ref<DetailTab>("video");
+const reportMode = ref<ReportMode>("html");
+const relatedContextProviderTab = ref<RelatedContextProviderTab>("knowledge");
+const reportHtmlUrl = ref("");
 const selectedAnalysisStoryId = ref("");
 const videoSearchQuery = ref("");
 const videoStatusFilter = ref<"all" | VibeControlZappingAnalysisStatus>("all");
@@ -1742,6 +2078,10 @@ const videoUrls = reactive<Record<string, string>>({});
 const frameUrls = reactive<Record<string, string>>({});
 const AQUA_AUDIO_MAX_BYTES = 8 * 1024 * 1024;
 const route = useRoute();
+const reportModes = [
+  { value: "html", label: "HTML" },
+  { value: "markdown", label: "Markdown" },
+] as const;
 
 let mediaRecorder: MediaRecorder | null = null;
 let audioRecorder: MediaRecorder | null = null;
@@ -1804,6 +2144,151 @@ const filteredVideos = computed(() => {
       .toLowerCase()
       .includes(query);
   });
+});
+
+const reportMetrics = computed(() => {
+  const video = detailVideo.value;
+  if (!video) return [];
+  return [
+    { label: "Stories", value: video.analysisResult?.storyCandidates.length ?? 0 },
+    { label: "Evidence", value: video.analysisResult?.storyCandidates.reduce((sum, story) => sum + story.evidence.length, 0) ?? 0 },
+    { label: "Screenshots", value: video.frameCaptures.length },
+    { label: "PRs", value: relatedGithubPullRequestCount(video) },
+    { label: "Slack", value: relatedSlackMessageCount(video) },
+    { label: "Knowledge", value: relatedKnowledgeDocumentCount(video) },
+  ];
+});
+
+const reportFileStem = computed(() => {
+  const video = detailVideo.value;
+  return sanitizeFileStem(video?.id || "operation-video-report");
+});
+
+const reportMarkdown = computed(() => {
+  const video = detailVideo.value;
+  if (!video) return "";
+  const stories = video.analysisResult?.storyCandidates ?? [];
+  const lines = [
+    `# StoryVault Operation Video Bundle: ${displayVideoTitle(video)}`,
+    "",
+    "## Bundle",
+    `- Application: ${props.application?.name || video.applicationKey || "n/a"}`,
+    `- Application ID: ${props.application?.id || video.applicationId || "n/a"}`,
+    `- Operation video ID: ${video.id}`,
+    `- Linked stories: ${stories.length}`,
+    `- Evidence: ${stories.reduce((sum, story) => sum + story.evidence.length, 0)}`,
+    `- Screenshots: ${video.frameCaptures.length}`,
+    `- GitHub pull requests: ${relatedGithubPullRequestCount(video)}`,
+    `- Knowledge documents: ${relatedKnowledgeDocumentCount(video)}`,
+    "",
+    "## Operation Video",
+    `- Title: ${displayVideoTitle(video)}`,
+    `- Description: ${displayVideoDescription(video) || "n/a"}`,
+    `- Recorded at: ${video.recordedAt || "n/a"}`,
+    `- Duration: ${formatDuration(video.durationMs)}`,
+    `- Video URL: ${videoUrls[video.id] || "not resolved"}`,
+    `- Storage path: ${video.storagePath}`,
+    `- Transcript summary: ${video.analysisResult?.transcriptSummary || video.transcriptSummary || video.quickScan?.transcriptSummary || "n/a"}`,
+    "",
+    "## Linked User Stories",
+    ...(stories.length
+      ? stories.flatMap((story, index) => [
+          `### ${index + 1}. ${story.title}`,
+          `- Story candidate ID: ${story.id}`,
+          `- Role: ${story.role?.value || "n/a"} (${story.role?.grounding || "n/a"})`,
+          `- Goal: ${story.goal || "n/a"}`,
+          `- Benefit: ${story.benefit || "n/a"}`,
+          `- Confidence: ${story.confidence ?? story.confidenceScore ?? "n/a"}`,
+          "",
+          "#### Acceptance Criteria",
+          ...(story.acceptanceCriteria.length
+            ? story.acceptanceCriteria.map((criterion, criterionIndex) => `${criterionIndex + 1}. ${criterion}`)
+            : ["- No acceptance criteria recorded."]),
+          "",
+          "#### Evidence",
+          ...(story.evidence.length
+            ? story.evidence.map((item) => {
+                const frames = item.screenshotIds?.join(", ") || "n/a";
+                return `- ${item.title}: ${item.summary} (video: ${item.videoId}, range: ${item.tRange?.join("-") || "n/a"}, representative: ${item.representativeScreenshotId || "n/a"}, screenshots: ${frames})`;
+              })
+            : ["- No evidence recorded."]),
+          "",
+        ])
+      : ["- No user stories are linked to this operation video.", ""]),
+    "## Screenshots",
+    ...video.frameCaptures.slice(0, 30).map((frame) => {
+      const url = savedFrameUrl(video, frame.id) || frame.storagePath || "n/a";
+      return `- Frame ${frame.id} at ${frame.timestampMs}ms: ${url}`;
+    }),
+    "",
+    "## GitHub Pull Requests",
+    ...(video.relatedContexts?.github?.pullRequests.length
+      ? video.relatedContexts.github.pullRequests.map((pr) => `- ${video.relatedContexts?.github?.repoFullName || "repo"} PR ${pr.number}: ${pr.title} (${pr.htmlUrl})`)
+      : ["- No GitHub pull request refs."]),
+    "",
+    "## Knowledge Documents",
+    ...(video.relatedContexts?.knowledge?.documents.length
+      ? video.relatedContexts.knowledge.documents.map((doc) => `- ${doc.displayName || doc.documentId || doc.name || "Knowledge"} (${doc.mimeType || "unknown"}): ${doc.reason || "No reason recorded."}${doc.gcsUrl ? ` ${doc.gcsUrl}` : ""}`)
+      : ["- No knowledge document refs."]),
+    "",
+    "## Agent Instructions",
+    "- Treat this as an operation-video bundle report.",
+    "- Summarize the operation video first, then use linked user stories as interpretations attached to the video.",
+    "- Preserve operationVideoId, story candidate IDs, evidence ranges, and screenshot IDs in implementation plans and release notes.",
+  ];
+  return lines.join("\n").trim() + "\n";
+});
+
+const reportHtml = computed(() => {
+  const video = detailVideo.value;
+  if (!video) return "";
+  const stories = video.analysisResult?.storyCandidates ?? [];
+  const storyCards = stories.length
+    ? stories
+        .map(
+          (story, index) => `<article class="panel story"><h3>${index + 1}. ${escapeHtml(story.title)}</h3><p>${escapeHtml(story.goal || story.summary || story.userStory || "No goal recorded.")}</p><div class="chips"><span class="chip">${escapeHtml(story.role?.value || "role n/a")}</span><span class="chip">confidence ${escapeHtml(String(story.confidenceScore ?? "n/a"))}</span></div><h4>Acceptance Criteria</h4><ol>${story.acceptanceCriteria.map((criterion) => `<li>${escapeHtml(criterion)}</li>`).join("") || "<li>No acceptance criteria recorded.</li>"}</ol><h4>Evidence</h4><ul>${story.evidence.map((item) => `<li><strong>${escapeHtml(item.title || "Evidence")}</strong>: ${escapeHtml(item.summary || "No summary recorded.")}<br><span class="muted">${escapeHtml(item.videoId)} / ${escapeHtml(item.representativeScreenshotId || "no representative screenshot")}</span></li>`).join("") || '<li class="muted">No evidence recorded.</li>'}</ul></article>`
+        )
+        .join("")
+    : '<div class="panel"><p class="muted">No user stories are linked to this operation video.</p></div>';
+  const frames = video.frameCaptures.length
+    ? video.frameCaptures
+        .slice(0, 30)
+        .map((frame) => `<figure class="frame"><img src="${escapeHtml(savedFrameUrl(video, frame.id) || frame.storagePath || "")}" alt="${escapeHtml(frame.id)}"><figcaption>${escapeHtml(frame.id)} / ${escapeHtml(formatDuration(frame.timestampMs))}</figcaption></figure>`)
+        .join("")
+    : '<div class="panel"><p class="muted">No screenshots.</p></div>';
+  const prs = video.relatedContexts?.github?.pullRequests.length
+    ? video.relatedContexts.github.pullRequests
+        .map((pr) => `<li>PR ${escapeHtml(String(pr.number))}: <a href="${escapeHtml(pr.htmlUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(pr.title)}</a></li>`)
+        .join("")
+    : '<li class="muted">No GitHub pull request refs.</li>';
+  const knowledge = video.relatedContexts?.knowledge?.documents.length
+    ? video.relatedContexts.knowledge.documents
+        .map((doc) => `<article class="panel"><h3>${escapeHtml(doc.displayName || doc.documentId || doc.name || "Knowledge")}</h3><p class="muted">${escapeHtml(doc.mimeType || "unknown")} / score ${escapeHtml(String(doc.relevanceScore ?? "n/a"))}</p>${doc.reason ? `<p>${escapeHtml(doc.reason)}</p>` : ""}${doc.gcsUrl ? `<p class="muted">${escapeHtml(doc.gcsUrl)}</p>` : ""}</article>`)
+        .join("")
+    : '<div class="panel"><p class="muted">No knowledge document refs.</p></div>';
+  const videoUrl = videoUrls[video.id] || "";
+  return `<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(displayVideoTitle(video))} StoryVault Operation Video Bundle</title>
+  <style>
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:#0f172a;background:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65}.layout{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;border-right:1px solid #dbe3ef;background:#f8fafc;padding:22px 18px}.brand{margin:0;color:#64748b;font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.side-title{margin:8px 0 18px;font-size:18px;line-height:1.25}.nav{display:grid;gap:7px;margin-top:18px}.nav a{display:block;border-radius:8px;padding:9px 10px;color:#334155;font-size:13px;font-weight:800;text-decoration:none}.nav a:hover{background:#fff}.content{min-width:0;padding:30px min(5vw,54px) 56px}.hero{border-bottom:1px solid #dbe3ef;padding-bottom:22px}.eyebrow{margin:0 0 6px;color:#0f9aa7;font-size:13px;font-weight:900}h1{margin:0;font-size:clamp(30px,4vw,54px);line-height:1.08}h2{margin:36px 0 12px;padding-top:10px;font-size:24px}h3{margin:0 0 8px;font-size:17px}.summary{margin-top:12px;color:#475569}.grid{display:grid;gap:14px}.cols5{grid-template-columns:repeat(6,minmax(0,1fr))}.metric,.panel{border:1px solid #dbe3ef;border-radius:8px;background:#fff;padding:15px}.metric{background:#f8fafc}.metric span{display:block;color:#64748b;font-size:12px;font-weight:900}.metric strong{display:block;font-size:18px}.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.chip{border-radius:999px;background:#ecfeff;color:#0e7490;padding:3px 9px;font-size:12px;font-weight:800}.story{border-left:4px solid #0f9aa7}.muted{color:#64748b}.frames{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}video,img{width:100%;max-height:560px;border:1px solid #dbe3ef;border-radius:8px;background:#f1f5f9;object-fit:contain}.frame figcaption{margin-top:5px;color:#64748b;font-size:12px}li{overflow-wrap:anywhere}@media(max-width:960px){.layout{grid-template-columns:1fr}.sidebar{position:static;height:auto}.content{padding:22px 16px 44px}.cols5,.frames{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="layout"><aside class="sidebar"><p class="brand">StoryVault Bundle</p><h2 class="side-title">${escapeHtml(displayVideoTitle(video))}</h2><div class="chips"><span class="chip">${stories.length} stories</span><span class="chip">${video.frameCaptures.length} screenshots</span></div><nav class="nav"><a href="#overview">Overview</a><a href="#video">Operation Video</a><a href="#stories">Linked User Stories</a><a href="#knowledge">Knowledge Documents</a><a href="#screenshots">Screenshots</a><a href="#pull-requests">Pull Requests</a></nav></aside><main class="content">
+    <header id="overview" class="hero"><p class="eyebrow">Operation video centered context</p><h1>${escapeHtml(displayVideoTitle(video))}</h1><p class="summary">${escapeHtml(displayVideoDescription(video) || video.analysisResult?.operationIntent || "")}</p></header>
+    <section><h2>Bundle Metrics</h2><div class="grid cols5">${reportMetrics.value.map((metric) => `<div class="metric"><span>${escapeHtml(metric.label)}</span><strong>${escapeHtml(String(metric.value))}</strong></div>`).join("")}</div></section>
+    <section id="video"><h2>Operation Video</h2><div class="panel">${videoUrl ? `<video controls preload="metadata" src="${escapeHtml(videoUrl)}"></video>` : ""}<p class="summary">${escapeHtml(video.analysisResult?.transcriptSummary || video.transcriptSummary || video.quickScan?.transcriptSummary || "")}</p></div></section>
+    <section id="stories"><h2>Linked User Stories</h2><div class="grid">${storyCards}</div></section>
+    <section id="knowledge"><h2>Knowledge Documents</h2><div class="grid">${knowledge}</div></section>
+    <section id="screenshots"><h2>Screenshots</h2><div class="frames">${frames}</div></section>
+    <section id="pull-requests"><h2>GitHub Pull Requests</h2><div class="panel"><ul>${prs}</ul></div></section>
+  </main></div>
+</body>
+</html>`;
 });
 const detailVideo = computed(
   () => props.videos.find((video) => video.id === detailVideoId.value) ?? null
@@ -2014,11 +2499,20 @@ watch(
   { immediate: true }
 );
 
+watch(
+  reportHtml,
+  () => {
+    refreshReportHtmlUrl();
+  },
+  { immediate: true }
+);
+
 onBeforeUnmount(() => {
   stopElapsedTimer();
   stopTracks();
   revokePreviewUrl();
   revokeFramePreviewUrls();
+  revokeReportHtmlUrl();
 });
 
 function openRecordingModal(): void {
@@ -2312,11 +2806,79 @@ function routeDetailTab(): DetailTab {
     tab === "video" ||
     tab === "videoAnalysis" ||
     tab === "storyAnalysis" ||
-    tab === "relatedContext"
+    tab === "relatedContext" ||
+    tab === "report"
   ) {
     return tab;
   }
   return "video";
+}
+
+function refreshReportHtmlUrl(): void {
+  revokeReportHtmlUrl();
+  if (!import.meta.client || typeof URL === "undefined" || typeof Blob === "undefined") return;
+  if (!reportHtml.value) return;
+  reportHtmlUrl.value = URL.createObjectURL(
+    new Blob([reportHtml.value], { type: "text/html;charset=utf-8" })
+  );
+}
+
+function revokeReportHtmlUrl(): void {
+  if (!import.meta.client || typeof URL === "undefined") {
+    reportHtmlUrl.value = "";
+    return;
+  }
+  if (!reportHtmlUrl.value) return;
+  URL.revokeObjectURL(reportHtmlUrl.value);
+  reportHtmlUrl.value = "";
+}
+
+function openReportPreview(): void {
+  if (!import.meta.client || typeof URL === "undefined" || typeof Blob === "undefined") return;
+  if (reportMode.value === "html" && reportHtmlUrl.value) {
+    window.open(reportHtmlUrl.value, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const url = URL.createObjectURL(
+    new Blob([reportMarkdown.value], { type: "text/markdown;charset=utf-8" })
+  );
+  window.open(url, "_blank", "noopener,noreferrer");
+  window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function downloadReport(): void {
+  if (!import.meta.client || typeof URL === "undefined" || typeof Blob === "undefined") return;
+  const isHtml = reportMode.value === "html";
+  const blob = new Blob([isHtml ? reportHtml.value : reportMarkdown.value], {
+    type: isHtml ? "text/html;charset=utf-8" : "text/markdown;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${reportFileStem.value}-operation-video-bundle.${isHtml ? "html" : "md"}`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function sanitizeFileStem(value: string): string {
+  return (
+    value
+      .trim()
+      .replace(/[^\w.-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120) || "operation-video-report"
+  );
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function buildFallbackRecordingTitle(): string {
@@ -2430,6 +2992,11 @@ function deleteConfirmedVideo(): void {
   emit("delete", videoId);
 }
 
+function openRelatedContextTab(): void {
+  detailTab.value = "relatedContext";
+  relatedContextProviderTab.value = "knowledge";
+}
+
 function analysisResultCount(video: DecodedVibeControlOperationVideo): string {
   const stories = video.analysisResult?.storyCandidates.length ?? 0;
   return `${stories} stories`;
@@ -2471,15 +3038,33 @@ function relatedSlackMessageCount(
   return video.relatedContexts?.slack?.messages.length ?? 0;
 }
 
+function relatedKnowledgeDocumentCount(
+  video: DecodedVibeControlOperationVideo
+): number {
+  return video.relatedContexts?.knowledge?.documents.length ?? 0;
+}
+
 function relatedContextCount(video: DecodedVibeControlOperationVideo): number {
   return (
-    relatedGithubPullRequestCount(video) + relatedSlackMessageCount(video)
+    relatedGithubPullRequestCount(video) +
+    relatedSlackMessageCount(video) +
+    relatedKnowledgeDocumentCount(video)
   );
 }
 
-function isRelatedContextRunning(video: DecodedVibeControlOperationVideo): boolean {
+function isRelatedContextBusy(video: DecodedVibeControlOperationVideo): boolean {
   return Boolean(
     props.isFetchingRelatedContexts || video.relatedContexts?.status === "running"
+  );
+}
+
+function isRelatedContextProviderRunning(
+  video: DecodedVibeControlOperationVideo,
+  provider: RelatedContextProviderTab
+): boolean {
+  return Boolean(
+    video.relatedContexts?.status === "running" &&
+      video.relatedContexts.runningProvider === provider
   );
 }
 
@@ -2488,6 +3073,7 @@ function relatedContextErrorTitle(video: DecodedVibeControlOperationVideo): stri
     video.relatedContexts?.notes?.[0] ||
     video.relatedContexts?.github?.errorMessage ||
     video.relatedContexts?.slack?.errorMessage ||
+    video.relatedContexts?.knowledge?.errorMessage ||
     "";
   if (
     message.includes("Unknown agent mode: vibe_related_context") ||
@@ -2496,6 +3082,29 @@ function relatedContextErrorTitle(video: DecodedVibeControlOperationVideo): stri
     return "関連コンテキスト用ADKがまだデプロイに反映されていません。unified ADKを再デプロイしてください。";
   }
   return message || "関連コンテキストの取得に失敗しました";
+}
+
+function knowledgeDocumentToFileSpaceDocument(
+  doc: VibeControlRelatedContextKnowledgeDocument
+): Document {
+  return {
+    id: doc.documentId || doc.name || "",
+    name: doc.name || doc.documentId || "",
+    displayName: doc.displayName || doc.documentId || doc.name || "Knowledge",
+    description: doc.description || doc.reason || null,
+    createTime: null,
+    updateTime: null,
+    state: "STATE_ACTIVE",
+    sizeBytes: null,
+    mimeType: doc.mimeType || "application/octet-stream",
+    bucketName: doc.bucketName || null,
+    filePath: doc.filePath || null,
+    status: null,
+    subCategory: null,
+    originalFileInfo: null,
+    gcsUrl: doc.gcsUrl || null,
+    sourceKind: doc.sourceKind ?? undefined,
+  };
 }
 
 function formatEvidenceRange(range: number[]): string {

@@ -571,6 +571,10 @@
         </div>
       </template>
 
+      <template #mcp>
+        <VibeControlMcpSetupPanel />
+      </template>
+
       <!-- Godモード (内部オンボーディング) -->
       <template v-if="showGodMode" #god-mode>
         <GodModeOnboardingPanel />
@@ -614,6 +618,7 @@ import GlobalPinnedKnowledgePanel from "@components/preferences/GlobalPinnedKnow
 import OAuthConnectionGitHubCard from "@components/preferences/OAuthConnectionGitHubCard.vue";
 import OAuthConnectionSlackCard from "@components/preferences/OAuthConnectionSlackCard.vue";
 import OrganizationMemberManagementPanel from "@components/admin/members/OrganizationMemberManagementPanel.vue";
+import VibeControlMcpSetupPanel from "@components/vibeControl/VibeControlMcpSetupPanel.vue";
 import EnCard from "@components/EnCard.vue";
 import {
   themeSemanticClasses,
@@ -706,6 +711,11 @@ const tabItems = computed(() => {
       label: "OAuth認証",
       slot: "oauth-connections",
       icon: "material-symbols:hub",
+    },
+    {
+      label: "MCP",
+      slot: "mcp",
+      icon: "material-symbols:account-tree-outline",
     }
   );
   if (canAccessGodMode.value) {

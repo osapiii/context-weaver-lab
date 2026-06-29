@@ -113,6 +113,14 @@ export const AdkInvokeOutputSchema = z
         progress_logs: z.array(z.record(z.string(), z.unknown())).optional(),
       })
       .optional(),
+    vibe_related_context: z
+      .object({
+        related_context_result: z.unknown().optional(),
+        github_pull_request_count: z.number().optional(),
+        slack_message_count: z.number().optional(),
+        knowledge_document_count: z.number().optional(),
+      })
+      .optional(),
   })
   .nullable()
   .optional();

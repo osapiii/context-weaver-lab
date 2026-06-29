@@ -188,6 +188,13 @@ export const VibeControlDraftPatchStatusSchema = z.enum([
   "superseded",
 ]);
 
+export const VibeControlAgentPlanStatusSchema = z.enum([
+  "proposed",
+  "accepted",
+  "rejected",
+  "superseded",
+]);
+
 export const VibeControlApplicationSchema = z.object({
   id: z.string().optional(),
   applicationKey: z.string(),
@@ -242,6 +249,12 @@ export const VibeControlGenerationTraceSchema = z.object({
   message: z.string(),
 });
 
+const NullableOptionalStringSchema = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((value) => value ?? undefined);
+
 export const VibeControlStorySchema = z.object({
   id: z.string().optional(),
   applicationId: z.string().default("app-default"),
@@ -263,8 +276,8 @@ export const VibeControlStorySchema = z.object({
   driftLevel: VibeControlDriftLevelSchema,
   driftReason: z.string().optional(),
   sourceFreshness: z.object({
-    knowledgeCheckedAt: z.string().optional(),
-    githubCheckedAt: z.string().optional(),
+    knowledgeCheckedAt: NullableOptionalStringSchema,
+    githubCheckedAt: NullableOptionalStringSchema,
     staleSources: z.array(z.string()).default([]),
   }),
   acceptanceCriteria: z.array(VibeControlAcceptanceCriterionSchema).default([]),
@@ -423,6 +436,25 @@ export const VibeControlRelatedContextSlackMessageSchema = z.object({
   matchedSignals: z.array(z.string()).default([]),
 });
 
+export const VibeControlRelatedContextKnowledgeDocumentSchema = z.object({
+  documentId: z.string().optional(),
+  name: z.string().optional(),
+  displayName: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  mimeType: z.string().optional().nullable(),
+  sourceKind: z
+    .enum(["en-aistudioData", "drive", "upload", "web"])
+    .optional()
+    .nullable(),
+  gcsUrl: z.string().optional().nullable(),
+  bucketName: z.string().optional().nullable(),
+  filePath: z.string().optional().nullable(),
+  relevanceScore: z.number().min(0).max(100).default(0),
+  reason: z.string().optional(),
+  matchedSignals: z.array(z.string()).default([]),
+  downloadUrl: z.string().optional().nullable(),
+});
+
 export const VibeControlRelatedContextResultSchema = z.object({
   schemaVersion: z
     .literal("vibe-control-related-context-v1")
@@ -450,14 +482,26 @@ export const VibeControlRelatedContextResultSchema = z.object({
       errorMessage: z.string().optional(),
     })
     .optional(),
+  knowledge: z
+    .object({
+      fileSpaceId: z.string(),
+      checkedAt: z.string(),
+      documents: z
+        .array(VibeControlRelatedContextKnowledgeDocumentSchema)
+        .default([]),
+      errorMessage: z.string().optional(),
+    })
+    .optional(),
   notes: z.array(z.string()).default([]),
 });
 
 export const VibeControlOperationVideoRelatedContextsSchema = z.object({
   github: VibeControlRelatedContextResultSchema.shape.github.optional(),
   slack: VibeControlRelatedContextResultSchema.shape.slack.optional(),
+  knowledge: VibeControlRelatedContextResultSchema.shape.knowledge.optional(),
   generatedAt: z.string().optional(),
   status: z.enum(["running", "completed", "error"]).optional(),
+  runningProvider: z.enum(["github", "slack", "knowledge"]).optional(),
   notes: z.array(z.string()).default([]),
 });
 
@@ -698,6 +742,48 @@ export const DecodedVibeControlDraftPatchSchema =
     id: z.string(),
   });
 
+export const VibeControlMcpConnectionSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+  tokenHash: z.string(),
+  externalAgent: z.string().default("codex"),
+  allowedApplicationIds: z.array(z.string()).default([]),
+  scopes: z.array(z.string()).default(["context:read"]),
+  createdBy: z.string().optional(),
+  createdAt: z.instanceof(Timestamp).optional(),
+  updatedAt: z.instanceof(Timestamp).optional(),
+  revokedAt: z.instanceof(Timestamp).optional().nullable(),
+  lastUsedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlMcpConnectionSchema =
+  VibeControlMcpConnectionSchema.extend({
+    id: z.string(),
+  });
+
+export const VibeControlAgentPlanSchema = z.object({
+  id: z.string().optional(),
+  applicationId: z.string(),
+  storyId: z.string().optional().nullable(),
+  capabilityId: z.string().optional().nullable(),
+  externalAgent: z.string().default("codex"),
+  title: z.string(),
+  summary: z.string().optional().nullable(),
+  planMarkdown: z.string(),
+  evidenceIds: z.array(z.string()).default([]),
+  implementationRefs: z.array(z.record(z.string(), z.unknown())).default([]),
+  patchSuggestion: z.record(z.string(), z.unknown()).optional().nullable(),
+  status: VibeControlAgentPlanStatusSchema.default("proposed"),
+  mcpConnectionId: z.string().optional(),
+  createdAt: z.instanceof(Timestamp).optional(),
+  updatedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlAgentPlanSchema =
+  VibeControlAgentPlanSchema.extend({
+    id: z.string(),
+  });
+
 export type VibeControlStoryStatus = z.infer<
   typeof VibeControlStoryStatusSchema
 >;
@@ -740,6 +826,9 @@ export type VibeControlRelatedContextPullRequest = z.infer<
 >;
 export type VibeControlRelatedContextSlackMessage = z.infer<
   typeof VibeControlRelatedContextSlackMessageSchema
+>;
+export type VibeControlRelatedContextKnowledgeDocument = z.infer<
+  typeof VibeControlRelatedContextKnowledgeDocumentSchema
 >;
 export type VibeControlRelatedContextResult = z.infer<
   typeof VibeControlRelatedContextResultSchema
@@ -821,6 +910,19 @@ export type VibeControlDraftPatch = z.infer<typeof VibeControlDraftPatchSchema>;
 export type DecodedVibeControlDraftPatch = z.infer<
   typeof DecodedVibeControlDraftPatchSchema
 >;
+export type VibeControlMcpConnection = z.infer<
+  typeof VibeControlMcpConnectionSchema
+>;
+export type DecodedVibeControlMcpConnection = z.infer<
+  typeof DecodedVibeControlMcpConnectionSchema
+>;
+export type VibeControlAgentPlanStatus = z.infer<
+  typeof VibeControlAgentPlanStatusSchema
+>;
+export type VibeControlAgentPlan = z.infer<typeof VibeControlAgentPlanSchema>;
+export type DecodedVibeControlAgentPlan = z.infer<
+  typeof DecodedVibeControlAgentPlanSchema
+>;
 
 export const vibeControlStoryConverter = firestoreTypeConverter(
   DecodedVibeControlStorySchema
@@ -851,6 +953,12 @@ export const vibeControlGenerationSessionConverter = firestoreTypeConverter(
 );
 export const vibeControlDraftPatchConverter = firestoreTypeConverter(
   DecodedVibeControlDraftPatchSchema
+);
+export const vibeControlMcpConnectionConverter = firestoreTypeConverter(
+  DecodedVibeControlMcpConnectionSchema
+);
+export const vibeControlAgentPlanConverter = firestoreTypeConverter(
+  DecodedVibeControlAgentPlanSchema
 );
 
 export const VIBE_CONTROL_STATUS_LABELS: Record<

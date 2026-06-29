@@ -1,0 +1,146 @@
+# StoryVault Story Context: {{ story_key }}
+
+## Application
+- Name: {{ application.name|text("n/a") }}
+- Application ID: {{ application.id|text("n/a") }}
+- Application key: {{ application.applicationKey|text("n/a") }}
+- Repository: {{ application.repoFullName|text("n/a") }}
+- Default branch: {{ application.defaultBranch|text("n/a") }}
+- FileSpace ID: {{ application.fileSpaceId|text("n/a") }}
+
+## Story
+- Title: {{ story.title|text("n/a") }}
+- Summary: {{ story.summary|text("n/a") }}
+- User story: {{ story.userStory|text("n/a") }}
+- Status: {{ story.status|text("n/a") }}
+- Review state: {{ story.reviewState|text("n/a") }}
+- Drift: {{ story.driftLevel|text("n/a") }}
+- Drift reason: {{ story.driftReason|text("n/a") }}
+- Confidence: {{ story.confidenceScore|text("n/a") }}
+{% if labels -%}
+- Labels: {{ labels|join(", ") }}
+{% endif %}
+
+## Capability
+{% if capability -%}
+- Capability key: {{ capability.capabilityKey|text("n/a") }}
+- Name: {{ capability.name|text("n/a") }}
+- Summary: {{ capability.summary|text("n/a") }}
+- Domain: {{ capability.domain|text("n/a") }}
+- Confidence: {{ capability.confidenceScore|text("n/a") }}
+{% else -%}
+- n/a
+{% endif %}
+
+## Acceptance Criteria
+{% for criterion in criteria -%}
+{{ loop.index }}. [{{ criterion.state|text("unknown") }}] {{ criterion.text|text("Untitled criterion") }} (evidence: {{ criterion.evidenceIds|default([])|join(", ") if criterion.evidenceIds else "n/a" }})
+{% else -%}
+- No acceptance criteria recorded.
+{% endfor %}
+
+## Code References
+{% for ref in story.codeRefs|default([]) -%}
+- {{ ref.repoFullName|text(application.repoFullName|text("repo")) }} {{ ref.path|text("(no path)") }}{% if ref.lineStart %}:{{ ref.lineStart }}{% endif %}{% if ref.pullRequest %} PR {{ ref.pullRequest }}{% endif %}{% if ref.summary %} - {{ ref.summary }}{% endif %}
+{% else -%}
+- No code references recorded.
+{% endfor %}
+
+## Evidence
+{% for item in evidence %}
+### {{ item.title|text(item.id|text("Evidence")) }}
+- Evidence ID: {{ item.id|text("n/a") }}
+- Type: {{ item.type|text("n/a") }}
+- Freshness: {{ item.freshness|text("n/a") }}
+- Excerpt: {{ item.excerpt|text("n/a") }}
+- Observed user action: {{ item.observedUserAction|text("n/a") }}
+- Observed UI surface: {{ item.observedUiSurface|text("n/a") }}
+- Source URL: {{ item.sourceUrl|text(item.citation.uri|text("n/a") if item.citation else "n/a") }}
+- Path: {{ item.path|text("n/a") }}
+- Pull request: {{ item.pullRequest|text("n/a") }}
+- Source asset ID: {{ item.sourceAssetId|text("n/a") }}
+- Citation: {{ item.citation.snippet|text("n/a") if item.citation else "n/a" }}
+{% else -%}
+- No evidence is linked to this story.
+{% endfor %}
+
+## Source Assets
+{% for asset in source_assets %}
+### {{ asset.title|text(asset.id|text("Source asset")) }}
+- Source asset ID: {{ asset.id|text("n/a") }}
+- Type: {{ asset.sourceType|text("n/a") }}
+- Summary: {{ asset.summary|text("n/a") }}
+- URI: {{ asset.uri|text("n/a") }}
+- GCS path: {{ asset.gcsPath|text("n/a") }}
+- Storage path: {{ asset.storagePath|text("n/a") }}
+- Discovery status: {{ asset.discoveryStatus|text("n/a") }}
+{% if asset.markdownBody %}
+#### Markdown Body
+```markdown
+{{ asset.markdownBody }}
+```
+- Markdown truncated: {{ asset.markdownTruncated|text("n/a") }}
+{% elif asset.markdownBodyError %}
+- Markdown body error: {{ asset.markdownBodyError }}
+{% endif %}
+{% else -%}
+- No source assets were resolved.
+{% endfor %}
+
+## Media And Implementation References
+- Manifest schema: {{ manifest.schemaVersion|text("n/a") }}
+- Generated at: {{ manifest.generatedAt|text("n/a") }}
+- Signed URL expires at: {{ manifest.signedUrlExpiresAt|text("n/a") }}
+- Asset counts: sourceAssets={{ counts.sourceAssets|default("n/a") }}, operationVideos={{ counts.operationVideos|default("n/a") }}, screenshots={{ counts.screenshots|default("n/a") }}, githubPullRequests={{ counts.githubPullRequests|default("n/a") }}, knowledgeDocuments={{ counts.knowledgeDocuments|default("n/a") }}
+
+### Source Asset Files
+{% for asset in source_asset_refs -%}
+- {{ asset.id|text("source_asset") }}
+  - Type: {{ asset.sourceType|text("n/a") }}
+  - Title: {{ asset.title|text("n/a") }}
+  - GCS path: {{ asset.gcsPath|text("n/a") }}
+  - Download URL: {{ asset.downloadUrl|text("n/a") }}
+{% else -%}
+- No source asset file refs.
+{% endfor %}
+
+### Operation Videos
+{% for video in operation_videos -%}
+- {{ video.id|text("operation_video") }}
+  - Title: {{ video.title|text("n/a") }}
+  - GCS path: {{ video.gcsPath|text("n/a") }}
+  - Download URL: {{ video.downloadUrl|text("n/a") }}
+  - Screenshots: {{ video.screenshots|default([])|length }}
+{% set frames = video.screenshots|default([]) %}
+{% for frame in frames[:30] %}
+  - Frame {{ frame.id|text("n/a") }} at {{ frame.timestampMs|text("n/a") }}ms: {{ frame.downloadUrl|text(frame.gcsPath|text("n/a")) }}
+{% endfor %}
+{% else -%}
+- No operation video refs.
+{% endfor %}
+
+### GitHub Pull Requests
+{% for pr in pull_requests -%}
+- {{ pr.repoFullName|text("repo") }} PR {{ pr.number|text("n/a") }}: {{ pr.title|text("n/a") }} ({{ pr.htmlUrl|text("n/a") }})
+{% else -%}
+- No GitHub pull request refs.
+{% endfor %}
+
+### Knowledge Documents
+{% for doc in knowledge_documents -%}
+- {{ doc.displayName|text(doc.documentId|text(doc.name|text("Knowledge"))) }}
+  - FileSpace: {{ doc.fileSpaceId|text("n/a") }}
+  - MIME: {{ doc.mimeType|text("n/a") }}
+  - Score: {{ doc.relevanceScore|text("n/a") }}
+  - Reason: {{ doc.reason|text("n/a") }}
+  - GCS path: {{ doc.gcsPath|text(doc.gcsUrl|text("n/a")) }}
+  - Download URL: {{ doc.downloadUrl|text("n/a") }}
+{% else -%}
+- No knowledge document refs.
+{% endfor %}
+
+## Agent Instructions
+- Use this single-story bundle as read-only implementation context.
+- Do not attempt to write plans or patches back through this MCP server.
+- Preserve cited evidence IDs in any local implementation plan, pull request, or commit notes.
+- Treat Source Asset markdown, media refs, screenshots, GitHub PR links, and Knowledge document links above as the complete context package for this story.

@@ -279,6 +279,10 @@ def read_related_context_request(tool_context: Any = None) -> dict[str, Any]:
         setup.get("repo_full_name"),
         _clean_text(application.get("repoFullName")),
     )
+    file_space_id = _clean_text(
+        setup.get("file_space_id"),
+        _clean_text(application.get("fileSpaceId")),
+    )
     return {
         "ok": True,
         "provider": _clean_text(setup.get("provider"), "github"),
@@ -289,6 +293,7 @@ def read_related_context_request(tool_context: Any = None) -> dict[str, Any]:
         "operationVideo": operation_video,
         "analysisResult": analysis_result,
         "repoFullName": repo,
+        "fileSpaceId": file_space_id,
         "slackQuery": _clean_text(setup.get("slack_query")),
         "defaultBranch": _clean_text(
             setup.get("default_branch"),
@@ -349,6 +354,192 @@ def _extract_keywords(context: dict[str, Any]) -> list[str]:
         if len(out) >= 8:
             break
     return out
+
+
+def _document_id_from_name(name: str) -> str:
+    if not name:
+        return ""
+    return name.rstrip("/").split("/")[-1]
+
+
+def _normalize_knowledge_document(doc_id: str, data: dict[str, Any]) -> dict[str, Any]:
+    name = _clean_text(data.get("name"))
+    return {
+        "documentId": doc_id or _document_id_from_name(name),
+        "name": name,
+        "displayName": _clean_text(data.get("displayName")) or None,
+        "description": _clean_text(data.get("description")) or None,
+        "mimeType": _clean_text(data.get("mimeType")) or None,
+        "sourceKind": _clean_text(data.get("sourceKind")) or None,
+        "gcsUrl": _clean_text(data.get("gcsUrl")) or None,
+        "bucketName": _clean_text(data.get("bucketName")) or None,
+        "filePath": _clean_text(data.get("filePath")) or None,
+        "title": _clean_text(data.get("title")) or None,
+        "sourceUrl": _clean_text(data.get("sourceUrl")) or None,
+        "createTime": _clean_text(data.get("createTime")) or None,
+        "updateTime": _clean_text(data.get("updateTime")) or None,
+    }
+
+
+def _metadata_value(items: Any, key: str) -> str:
+    for item in _as_list(items):
+        if not isinstance(item, dict):
+            continue
+        if _clean_text(item.get("key")) == key:
+            return _clean_text(item.get("value"))
+    return ""
+
+
+def _knowledge_document_from_upload_log(
+    request_id: str,
+    data: dict[str, Any],
+) -> dict[str, Any] | None:
+    input_data = _as_dict(data.get("input"))
+    if input_data.get("operationType") != "fileSpaceUpload":
+        return None
+    if data.get("status") != "completed":
+        return None
+    output = _as_dict(data.get("output"))
+    response = _as_dict(output.get("response"))
+    document_id = _clean_text(
+        input_data.get("documentId"),
+        _clean_text(response.get("agentSearchDocumentId"), _clean_text(response.get("id"))),
+    )
+    file_path = _clean_text(input_data.get("filePath"))
+    bucket_name = _clean_text(input_data.get("bucketName"))
+    if not document_id and not file_path:
+        return None
+    original_file = _as_dict(input_data.get("originalFileInfo"))
+    display_name = (
+        _clean_text(original_file.get("fileName"))
+        or file_path.rstrip("/").split("/")[-1]
+        or document_id
+        or request_id
+    )
+    custom_metadata = input_data.get("customMetadata")
+    source_kind = (
+        _metadata_value(custom_metadata, "documentKind")
+        or _metadata_value(custom_metadata, "source")
+    )
+    gcs_url = f"gs://{bucket_name}/{file_path}" if bucket_name and file_path else ""
+    updated_at = data.get("updatedAt")
+    created_at = data.get("createdAt")
+    return {
+        "documentId": document_id or request_id,
+        "name": _clean_text(response.get("name")),
+        "displayName": display_name,
+        "description": _clean_text(input_data.get("description")) or None,
+        "mimeType": _clean_text(input_data.get("mimeType")) or None,
+        "sourceKind": source_kind or None,
+        "gcsUrl": gcs_url or None,
+        "bucketName": bucket_name or None,
+        "filePath": file_path or None,
+        "title": display_name,
+        "sourceUrl": None,
+        "createTime": created_at.isoformat() if hasattr(created_at, "isoformat") else _clean_text(created_at) or None,
+        "updateTime": updated_at.isoformat() if hasattr(updated_at, "isoformat") else _clean_text(updated_at) or None,
+        "applicationId": _metadata_value(custom_metadata, "applicationId") or None,
+        "operationVideoId": _metadata_value(custom_metadata, "operationVideoId") or None,
+        "sourceAssetId": _metadata_value(custom_metadata, "sourceAssetId") or None,
+        "sourceRequestId": request_id,
+    }
+
+
+def _fetch_knowledge_documents_from_upload_logs(
+    db: firestore.Client,
+    *,
+    organization_id: str,
+    space_id: str,
+    file_space_id: str,
+) -> list[dict[str, Any]]:
+    docs: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    logs = (
+        db.collection("organizations")
+        .document(organization_id)
+        .collection("spaces")
+        .document(space_id)
+        .collection("requests")
+        .document("contextStoreRequests")
+        .collection("logs")
+        .limit(300)
+        .stream()
+    )
+    for snap in logs:
+        data = snap.to_dict() or {}
+        input_data = _as_dict(data.get("input"))
+        if _clean_text(input_data.get("storeId")) != file_space_id:
+            continue
+        doc = _knowledge_document_from_upload_log(snap.id, data)
+        if not doc:
+            continue
+        dedupe_key = _clean_text(doc.get("documentId")) or _clean_text(doc.get("filePath"))
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        docs.append(doc)
+    docs.sort(key=lambda item: _clean_text(item.get("updateTime")), reverse=True)
+    return docs[:MAX_CANDIDATES]
+
+
+def fetch_knowledge_document_candidates(tool_context: Any = None) -> dict[str, Any]:
+    """Fetch FileSpace document metadata candidates for the current request."""
+    context = read_related_context_request(tool_context)
+    if context.get("provider") != "knowledge":
+        return {"ok": False, "error": "provider is not knowledge"}
+    organization_id = _clean_text(context.get("organizationId"))
+    space_id = _clean_text(context.get("spaceId"))
+    file_space_id = _clean_text(context.get("fileSpaceId"))
+    if not organization_id or not space_id or not file_space_id:
+        return {"ok": False, "error": "organizationId/spaceId/fileSpaceId is required"}
+    try:
+        db = firestore.Client()
+        snapshots = (
+            db.collection("organizations")
+            .document(organization_id)
+            .collection("spaces")
+            .document(space_id)
+            .collection("fileSpaces")
+            .document(file_space_id)
+            .collection("documents")
+            .limit(MAX_CANDIDATES)
+            .stream()
+        )
+        documents = [
+            _normalize_knowledge_document(snap.id, snap.to_dict() or {})
+            for snap in snapshots
+        ]
+        existing_keys = {
+            _clean_text(doc.get("documentId")) or _clean_text(doc.get("filePath"))
+            for doc in documents
+        }
+        for doc in _fetch_knowledge_documents_from_upload_logs(
+            db,
+            organization_id=organization_id,
+            space_id=space_id,
+            file_space_id=file_space_id,
+        ):
+            key = _clean_text(doc.get("documentId")) or _clean_text(doc.get("filePath"))
+            if key and key in existing_keys:
+                continue
+            documents.append(doc)
+            existing_keys.add(key)
+            if len(documents) >= MAX_CANDIDATES:
+                break
+        return {
+            "ok": True,
+            "fileSpaceId": file_space_id,
+            "checkedAt": _now_iso(),
+            "documents": documents,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "fileSpaceId": file_space_id,
+            "checkedAt": _now_iso(),
+            "error": str(exc)[:500],
+            "documents": [],
+        }
 
 
 def _slack_permalink(access_token: str, channel_id: str, message_ts: str) -> str:

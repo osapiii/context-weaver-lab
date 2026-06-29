@@ -31,6 +31,7 @@ if __package__ in (None, ""):
 
 from vibe_related_context.tools import (  # noqa: E402
     fetch_github_pull_request_candidates,
+    fetch_knowledge_document_candidates,
     fetch_slack_message_candidates,
     read_related_context_request,
 )
@@ -158,6 +159,7 @@ def build_mode_state(
                 "application_name": app.get("name"),
                 "repo_full_name": app.get("repoFullName"),
                 "default_branch": app.get("defaultBranch") or "main",
+                "file_space_id": app.get("fileSpaceId"),
                 "operation_video_id": video.get("id"),
             },
             "payload": {
@@ -169,6 +171,7 @@ def build_mode_state(
                     "domain": app.get("domain"),
                     "repoFullName": app.get("repoFullName"),
                     "defaultBranch": app.get("defaultBranch") or "main",
+                    "fileSpaceId": app.get("fileSpaceId"),
                 },
                 "operation_video": {
                     "id": video.get("id"),
@@ -186,7 +189,11 @@ def build_mode_state(
                 "expected_outputs": (
                     ["slack_messages", "related_reasons"]
                     if provider == "slack"
-                    else ["github_pull_requests", "related_reasons"]
+                    else (
+                        ["knowledge_documents", "downloadable_file_refs", "related_reasons"]
+                        if provider == "knowledge"
+                        else ["github_pull_requests", "related_reasons"]
+                    )
                 ),
             },
         },
@@ -210,8 +217,8 @@ def build_invoke_input(
         "userId": target.user_id,
         "prompt": "\n".join(
             [
-                f"{app.get('name') or 'Application'} の操作動画「{video.get('title') or video.get('id')}」に関連する{'Slack会話' if provider == 'slack' else 'GitHub Pull Request'}を探してください。",
-                "動画解析結果、操作メモ、文字起こし要約、Story候補と、外部サービスの候補情報を照合してください。",
+                f"{app.get('name') or 'Application'} の操作動画「{video.get('title') or video.get('id')}」に関連する{('Slack会話' if provider == 'slack' else 'FileSpaceナレッジファイル' if provider == 'knowledge' else 'GitHub Pull Request')}を探してください。",
+                "動画解析結果、操作メモ、文字起こし要約、Story候補と、候補情報を照合してください。",
                 "関連する理由を日本語で付け、関連度の高い候補だけを返してください。",
             ]
         ),
@@ -270,11 +277,12 @@ def run_tool_smoke(target: SmokeTarget, *, provider: str = "github") -> dict[str
     state = build_mode_state(target, session_id, provider=provider)
     ctx = ToolContext(state)
     request_context = read_related_context_request(ctx)
-    candidates = (
-        fetch_slack_message_candidates(ctx)
-        if provider == "slack"
-        else fetch_github_pull_request_candidates(ctx)
-    )
+    if provider == "slack":
+        candidates = fetch_slack_message_candidates(ctx)
+    elif provider == "knowledge":
+        candidates = fetch_knowledge_document_candidates(ctx)
+    else:
+        candidates = fetch_github_pull_request_candidates(ctx)
     return {
         "requestContext": request_context,
         "candidateResult": candidates,
@@ -378,7 +386,7 @@ def main() -> None:
     parser.add_argument("--video-id", default="")
     parser.add_argument("--user-id", default="")
     parser.add_argument("--user-email", default="")
-    parser.add_argument("--provider", choices=["github", "slack"], default="github")
+    parser.add_argument("--provider", choices=["github", "slack", "knowledge"], default="github")
     parser.add_argument("--write-request-doc", action="store_true")
     parser.add_argument("--invoke-adk-url", default="")
     parser.add_argument("--internal-secret", default="")
@@ -406,12 +414,14 @@ def main() -> None:
             "candidateCount": len(
                 tool_result["candidateResult"].get("pullRequests")
                 or tool_result["candidateResult"].get("messages")
+                or tool_result["candidateResult"].get("documents")
                 or []
             ),
             "error": tool_result["candidateResult"].get("error"),
             "firstCandidates": (
                 tool_result["candidateResult"].get("pullRequests")
                 or tool_result["candidateResult"].get("messages")
+                or tool_result["candidateResult"].get("documents")
                 or []
             )[:5],
         },

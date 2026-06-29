@@ -338,6 +338,9 @@
             </div>
           </EnCard>
         </div>
+        <div v-if="item.key == 'mcp'">
+          <VibeControlMcpSetupPanel />
+        </div>
       </template>
     </UTabs>
   </div>
@@ -516,10 +519,17 @@ const items = [
   {
     key: "users",
     label: "ユーザー管理",
+    icon: "material-symbols:group-outline",
   },
   {
     key: "serviceConfig",
     label: "サービス連携設定",
+    icon: "material-symbols:settings-applications-outline",
+  },
+  {
+    key: "mcp",
+    label: "MCP",
+    icon: "material-symbols:hub-outline",
   },
 ];
 

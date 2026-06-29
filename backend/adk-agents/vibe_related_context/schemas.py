@@ -60,6 +60,33 @@ class RelatedSlackContext(BaseModel):
     errorMessage: str | None = None
 
 
+class RelatedKnowledgeDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    documentId: str = ""
+    name: str = ""
+    displayName: str | None = None
+    description: str | None = None
+    mimeType: str | None = None
+    sourceKind: str | None = None
+    gcsUrl: str | None = None
+    bucketName: str | None = None
+    filePath: str | None = None
+    relevanceScore: int = Field(ge=0, le=100)
+    reason: str = Field(min_length=1)
+    matchedSignals: list[str] = Field(default_factory=list)
+    downloadUrl: str | None = None
+
+
+class RelatedKnowledgeContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fileSpaceId: str = ""
+    checkedAt: str = ""
+    documents: list[RelatedKnowledgeDocument] = Field(default_factory=list)
+    errorMessage: str | None = None
+
+
 class RelatedContextResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -70,4 +97,5 @@ class RelatedContextResult(BaseModel):
     status: Literal["completed", "error"] = "completed"
     github: RelatedGitHubContext | None = None
     slack: RelatedSlackContext | None = None
+    knowledge: RelatedKnowledgeContext | None = None
     notes: list[str] = Field(default_factory=list)

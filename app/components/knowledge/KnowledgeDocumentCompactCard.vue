@@ -34,7 +34,7 @@
     </button>
 
     <button
-      v-if="enableSelection"
+      v-if="showActions && enableSelection"
       type="button"
       :aria-label="selected ? '選択を解除' : '一括削除のために選択'"
       :aria-pressed="selected"
@@ -50,7 +50,7 @@
     </button>
 
     <UButton
-      v-if="true"
+      v-if="showActions"
       icon="i-heroicons-trash"
       color="error"
       variant="soft"
@@ -81,10 +81,12 @@ const props = withDefaults(
     document: Document;
     enableSelection?: boolean;
     selected?: boolean;
+    showActions?: boolean;
   }>(),
   {
     enableSelection: false,
     selected: false,
+    showActions: true,
   }
 );
 

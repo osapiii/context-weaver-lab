@@ -221,6 +221,17 @@ def _parse_json_document_body(body: Any) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _related_context_from_text(text: str) -> dict[str, Any] | None:
+    parsed = _parse_json_document_body(text)
+    if not parsed:
+        return None
+    if parsed.get("schemaVersion") != "vibe-control-related-context-v1":
+        return None
+    if parsed.get("status") not in ("completed", "error"):
+        return None
+    return parsed
+
+
 def _consume_sse(response: requests.Response) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "responseTextLength": 0,
@@ -232,6 +243,7 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
         "businessPartner": None,
     }
     event_name = ""
+    response_text_parts: list[str] = []
     for line in response.iter_lines(decode_unicode=True):
         if line is None:
             continue
@@ -250,6 +262,7 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
             continue
         if event_name == "text_delta" and isinstance(payload.get("text"), str):
             text_delta = payload["text"]
+            response_text_parts.append(text_delta)
             summary["responseTextLength"] += len(text_delta)
             if len(summary["responseTextPreview"]) < 2000:
                 summary["responseTextPreview"] = (
@@ -282,10 +295,31 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
                     merged = dict(raw_bp)
                     merged.setdefault("draft", existing.get("draft"))
                     summary["businessPartner"] = merged
+            raw_related = payload.get("vibe_related_context")
+            if isinstance(raw_related, dict) and raw_related:
+                summary["vibe_related_context"] = raw_related
         elif event_name == "error":
             msg = payload.get("message")
             if isinstance(msg, str) and msg.strip():
                 raise RuntimeError(msg.strip())
+    related_context = _related_context_from_text("".join(response_text_parts))
+    if related_context is not None and not isinstance(
+        summary.get("vibe_related_context"), dict
+    ):
+        knowledge = related_context.get("knowledge")
+        knowledge_documents = (
+            knowledge.get("documents") if isinstance(knowledge, dict) else []
+        )
+        github = related_context.get("github")
+        pull_requests = github.get("pullRequests") if isinstance(github, dict) else []
+        slack = related_context.get("slack")
+        slack_messages = slack.get("messages") if isinstance(slack, dict) else []
+        summary["vibe_related_context"] = {
+            "related_context_result": related_context,
+            "github_pull_request_count": len(pull_requests or []),
+            "slack_message_count": len(slack_messages or []),
+            "knowledge_document_count": len(knowledge_documents or []),
+        }
     return summary
 
 

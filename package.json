@@ -1,0 +1,13 @@
+{
+  "name": "@enostech/storyvault-mcp-setup",
+  "version": "0.1.1",
+  "description": "Local setup helper for StoryVault remote MCP connections.",
+  "type": "module",
+  "bin": {
+    "storyvault-mcp-setup": "./tools/storyvault-mcp-setup/bin/storyvault-mcp-setup.mjs"
+  },
+  "files": [
+    "tools/storyvault-mcp-setup"
+  ],
+  "license": "UNLICENSED"
+}

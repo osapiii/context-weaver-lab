@@ -256,6 +256,7 @@ def build_agent_for_mode(
         from vibe_related_context.schemas import RelatedContextResult  # type: ignore
         from vibe_related_context.tools import (  # type: ignore
             fetch_github_pull_request_candidates,
+            fetch_knowledge_document_candidates,
             fetch_slack_message_candidates,
             read_related_context_request,
         )
@@ -265,6 +266,7 @@ def build_agent_for_mode(
             FunctionTool(func=read_related_context_request),
             FunctionTool(func=fetch_github_pull_request_candidates),
             FunctionTool(func=fetch_slack_message_candidates),
+            FunctionTool(func=fetch_knowledge_document_candidates),
         ]
         return LlmAgent(
             name="vibe_related_context_agent",

@@ -191,6 +191,7 @@ _RELATED_CONTEXT_RESULT_KEYS = (
     "status",
     "github",
     "slack",
+    "knowledge",
     "notes",
 )
 
@@ -230,6 +231,12 @@ def _related_context_result_from_bucket(value: Any) -> dict[str, Any] | None:
         return None
     github = value.get("github")
     if github is not None and not isinstance(github, dict):
+        return None
+    slack = value.get("slack")
+    if slack is not None and not isinstance(slack, dict):
+        return None
+    knowledge = value.get("knowledge")
+    if knowledge is not None and not isinstance(knowledge, dict):
         return None
     notes = value.get("notes")
     if notes is not None and not isinstance(notes, list):
@@ -1453,10 +1460,17 @@ async def _stream_invoke(
                     if isinstance(slack, dict)
                     else []
                 )
+                knowledge = related_result.get("knowledge")
+                knowledge_documents = (
+                    knowledge.get("documents")
+                    if isinstance(knowledge, dict)
+                    else []
+                )
                 done_payload["vibe_related_context"] = {
                     "related_context_result": related_result,
                     "github_pull_request_count": len(pull_requests or []),
                     "slack_message_count": len(slack_messages or []),
+                    "knowledge_document_count": len(knowledge_documents or []),
                 }
         if ui_sync is not None:
             await ui_sync.finalize_turn()

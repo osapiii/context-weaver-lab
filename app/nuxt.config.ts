@@ -253,6 +253,19 @@ export default defineNuxtConfig({
       /** Slack OAuth callback URL. Localhost is normalized in the client when omitted. */
       slackOAuthRedirectUri:
         process.env.NUXT_PUBLIC_SLACK_OAUTH_REDIRECT_URI || "",
+      /** StoryVault remote MCP endpoint for coding agents. */
+      storyVaultMcpUrl:
+        process.env.NUXT_PUBLIC_STORYVAULT_MCP_URL ||
+        process.env.NUXT_PUBLIC_VIBE_CONTROL_MCP_URL ||
+        "https://storyvault-mcp-q2uwnmd3yq-an.a.run.app/mcp",
+      /** Optional override for the StoryVault Codex Skill install command shown in settings. */
+      storyVaultSkillInstallCommand:
+        process.env.NUXT_PUBLIC_STORYVAULT_SKILL_INSTALL_COMMAND || "",
+      /** @deprecated use storyVaultMcpUrl */
+      vibeControlMcpUrl:
+        process.env.NUXT_PUBLIC_STORYVAULT_MCP_URL ||
+        process.env.NUXT_PUBLIC_VIBE_CONTROL_MCP_URL ||
+        "https://storyvault-mcp-q2uwnmd3yq-an.a.run.app/mcp",
       /** Gシート連携: ユーザーが「編集者」で招待する SA（ui-backend の .cred.json と一致） */
       gsheetServiceAccountEmail:
         process.env.NUXT_PUBLIC_GSHEET_SERVICE_ACCOUNT_EMAIL ||

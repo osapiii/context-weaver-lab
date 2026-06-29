@@ -90,13 +90,12 @@
             aria-hidden="true"
           />
           <img
-            :src="appearance.aiAvatarUrl.value"
+            :src="petImageSrc"
             :alt="avatarAlt"
             class="workflow-pet-image relative z-10 h-full w-full object-contain"
-            :class="{ 'workflow-pet-image-working': isWorking }"
             draggable="false"
-            width="80"
-            height="80"
+            width="96"
+            height="96"
             decoding="async"
           >
           <span
@@ -145,7 +144,6 @@ import type { WorkflowItemStatus } from "@models/workflowItem";
 const workflowExecutions = useWorkflowExecutionsStore();
 const notifications = useWorkflowNotificationsStore();
 const aiAssistant = useEnAiStudioAssistantStore();
-const appearance = useAppAppearance();
 
 const dismissedBubbleKey = ref<string | null>(null);
 const petContainer = ref<HTMLElement | null>(null);
@@ -153,10 +151,10 @@ const petContainer = ref<HTMLElement | null>(null);
 const PET_POSITION_STORAGE_KEY = "vibe-control:workflowNotificationPetPosition";
 const PET_SIZE_STORAGE_KEY = "vibe-control:workflowNotificationPetSize";
 const PET_VIEWPORT_MARGIN = 16;
-const PET_DEFAULT_WIDTH = 112;
-const PET_DEFAULT_HEIGHT = 112;
-const PET_COMPACT_WIDTH = 80;
-const PET_COMPACT_HEIGHT = 80;
+const PET_DEFAULT_WIDTH = 128;
+const PET_DEFAULT_HEIGHT = 128;
+const PET_COMPACT_WIDTH = 96;
+const PET_COMPACT_HEIGHT = 96;
 const PET_CLICK_DRAG_THRESHOLD = 5;
 
 type PetPosition = {
@@ -194,8 +192,8 @@ const petContainerStyle = computed(() => {
 
 const petAvatarSizeClass = computed(() =>
   petSize.value === "compact"
-    ? "h-16 w-16 sm:h-20 sm:w-20"
-    : "h-24 w-24 sm:h-28 sm:w-28"
+    ? "h-20 w-20 sm:h-24 sm:w-24"
+    : "h-28 w-28 sm:h-32 sm:w-32"
 );
 
 const petShadowSizeClass = computed(() =>
@@ -246,6 +244,12 @@ const isWorking = computed(
     displayItem.value?.status === "running"
 );
 
+const petImageSrc = computed(() =>
+  isWorking.value
+    ? "/storyvault-hamster-running.gif"
+    : "/storyvault-hamster-idle.png"
+);
+
 const unreadLabel = computed(() =>
   notifications.unreadCount > 99 ? "99+" : String(notifications.unreadCount)
 );
@@ -264,9 +268,7 @@ const updatedLabel = computed(() => {
   }).format(item.updatedAt);
 });
 
-const avatarAlt = computed(() =>
-  appearance.hasCustomAiAvatar.value ? "AI アシスタント" : "工程ペンギン"
-);
+const avatarAlt = computed(() => "StoryVault ハムスター");
 
 const avatarTitle = computed(() =>
   displayItem.value ? "お知らせを開く" : "仕事ログ"
@@ -538,20 +540,6 @@ onBeforeUnmount(() => {
   transform-origin: 50% 86%;
 }
 
-.workflow-pet-image-working {
-  animation: workflow-pet-bob 2.8s ease-in-out infinite;
-}
-
-@keyframes workflow-pet-bob {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-1deg);
-  }
-  50% {
-    transform: translateY(-5px) rotate(1deg);
-  }
-}
-
 .workflow-pet-fade-enter-active,
 .workflow-pet-fade-leave-active,
 .workflow-bubble-pop-enter-active,
@@ -574,10 +562,6 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workflow-pet-image-working {
-    animation: none;
-  }
-
   .workflow-pet-image,
   .workflow-pet-avatar,
   .workflow-pet-fade-enter-active,
