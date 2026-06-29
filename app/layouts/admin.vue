@@ -6,7 +6,7 @@
     />
 
     <header class="fixed left-0 top-0 z-30 w-full border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div class="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+      <div class="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
         <div class="flex min-w-0 items-center gap-3">
           <button
             type="button"
@@ -17,7 +17,7 @@
             <img
               src="/storyvault-logo.svg"
               alt="StoryVault"
-              class="h-8 w-[164px] object-contain"
+              class="h-10 w-[205px] object-contain"
             >
           </button>
 

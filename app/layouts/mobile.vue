@@ -8,7 +8,7 @@
     <header
       class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200"
     >
-      <div class="flex items-center justify-between px-4 h-12">
+      <div class="flex h-14 items-center justify-between px-4">
         <NuxtLink
           :to="{ name: 'admin-vibe-control' }"
           class="inline-flex items-center"
@@ -17,7 +17,7 @@
           <img
             src="/storyvault-logo.svg"
             alt="StoryVault"
-            class="h-7 w-[144px] object-contain"
+            class="h-8 w-[164px] object-contain"
           >
         </NuxtLink>
 
