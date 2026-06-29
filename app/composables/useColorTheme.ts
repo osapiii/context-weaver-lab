@@ -11,6 +11,7 @@
 
 export type ColorThemePresetId =
   | "violet"
+  | "emerald"
   | "default"
   | "sunset"
   | "ocean"
@@ -50,17 +51,30 @@ export const COLOR_THEME_PRESETS: readonly ColorThemePreset[] = [
     swatch: { primary: "#8b5cf6", secondary: "#a855f7", neutral: "#64748b" },
   },
   {
+    id: "emerald",
+    label: "StoryVault Emerald",
+    description:
+      "StoryVault 向け。深い emerald と teal を中心に、知識管理らしい落ち着きと鮮度を両立する配色。",
+    colors: {
+      primary: "emerald",
+      secondary: "teal",
+      accent: "emerald",
+      neutral: "slate",
+    },
+    swatch: { primary: "#10b981", secondary: "#14b8a6", neutral: "#64748b" },
+  },
+  {
     id: "default",
     label: "デフォルト Teal",
     description:
-      "EN AIstudio 標準。落ち着いた teal と暖色 purple を組み合わせた配色。",
+      "EN AIstudio 標準。落ち着いた teal と emerald を組み合わせた配色。",
     colors: {
       primary: "teal",
-      secondary: "purple",
-      accent: "purple",
+      secondary: "emerald",
+      accent: "teal",
       neutral: "slate",
     },
-    swatch: { primary: "#14b8a6", secondary: "#8b5cf6", neutral: "#64748b" },
+    swatch: { primary: "#14b8a6", secondary: "#10b981", neutral: "#64748b" },
   },
   {
     id: "sunset",
@@ -112,7 +126,7 @@ export const COLOR_THEME_PRESETS: readonly ColorThemePreset[] = [
   },
 ] as const;
 
-export const DEFAULT_COLOR_THEME_ID: ColorThemePresetId = "violet";
+export const DEFAULT_COLOR_THEME_ID: ColorThemePresetId = "emerald";
 
 /**
  * 組織カラーテーマ (Nuxt UI `primary`) に追従する Tailwind クラス。

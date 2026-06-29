@@ -44,6 +44,7 @@ import type {
   DecodedVibeControlDraftPatch,
   DecodedVibeControlGenerationSession,
   DecodedVibeControlOperationVideo,
+  DecodedVibeControlOperationVideoGroup,
   DecodedVibeControlSourceConnection,
   DecodedVibeControlSourceAsset,
   DecodedVibeControlStory,
@@ -65,6 +66,7 @@ import {
   vibeControlDraftPatchConverter,
   vibeControlGenerationSessionConverter,
   vibeControlOperationVideoConverter,
+  vibeControlOperationVideoGroupConverter,
   vibeControlSourceAssetConverter,
   vibeControlSourceConnectionConverter,
   vibeControlStoryConverter,
@@ -144,6 +146,7 @@ export type VibeControlScreenVariantExplorationInput = {
 
 export type VibeControlOperationVideoSaveInput = {
   applicationId: string;
+  groupId: string;
   title: string;
   description?: string;
   tags?: string[];
@@ -175,6 +178,13 @@ export type VibeControlRelatedContextAnalysisInput = {
   videoId: string;
   provider: "github" | "slack" | "knowledge";
   prompt?: string;
+};
+
+export type VibeControlOperationVideoGroupInput = {
+  id?: string;
+  applicationId: string;
+  name: string;
+  description?: string;
 };
 
 export type VibeControlSeparatedAdkMode =
@@ -709,6 +719,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
     scanProfiles: [] as DecodedVibeControlApplicationScanProfile[],
     sourceAssets: [] as DecodedVibeControlSourceAsset[],
     operationVideos: [] as DecodedVibeControlOperationVideo[],
+    operationVideoGroups: [] as DecodedVibeControlOperationVideoGroup[],
     generationSessions: [] as DecodedVibeControlGenerationSession[],
     draftPatches: [] as DecodedVibeControlDraftPatch[],
     selectedApplicationId: "" as string,
@@ -806,6 +817,19 @@ export const useVibeControlStore = defineStore("vibeControl", {
       return state.operationVideos.filter(
         (video) => video.applicationId === applicationId
       );
+    },
+    activeOperationVideoGroups(state): DecodedVibeControlOperationVideoGroup[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      const groups = !applicationId
+        ? state.operationVideoGroups
+        : state.operationVideoGroups.filter(
+            (group) => group.applicationId === applicationId
+          );
+      return [...groups].sort((a, b) => {
+        const updated = (b.updatedAt?.toMillis?.() ?? 0) - (a.updatedAt?.toMillis?.() ?? 0);
+        return updated || a.name.localeCompare(b.name, "ja");
+      });
     },
     filteredStories(state): DecodedVibeControlStory[] {
       const query = state.filters.query.trim().toLowerCase();
@@ -965,6 +989,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
     operationVideoCollectionPath(): string {
       return useContextStore().baseFirestorePath("vibeControlOperationVideos");
     },
+    operationVideoGroupCollectionPath(): string {
+      return useContextStore().baseFirestorePath("vibeControlOperationVideoGroups");
+    },
     capabilityCollectionPath(): string {
       return useContextStore().baseFirestorePath("vibeControlCapabilities");
     },
@@ -999,6 +1026,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
       this.capabilities = [];
       this.sourceAssets = [];
       this.operationVideos = [];
+      this.operationVideoGroups = [];
       this.generationSessions = [];
       this.draftPatches = [];
       this.selectedApplicationId = this.applications.some(
@@ -1030,6 +1058,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
           sourceConnections,
           scanProfiles,
           operationVideos,
+          operationVideoGroups,
           capabilities,
           sourceAssets,
           generationSessions,
@@ -1069,6 +1098,12 @@ export const useVibeControlStore = defineStore("vibeControl", {
             limit: 200,
           }),
           firestoreOps.getDocumentsWithQueryAndConverter({
+            collectionName: this.operationVideoGroupCollectionPath(),
+            converter: vibeControlOperationVideoGroupConverter,
+            orderBy: { field: "updatedAt", direction: "desc" },
+            limit: 200,
+          }),
+          firestoreOps.getDocumentsWithQueryAndConverter({
             collectionName: this.capabilityCollectionPath(),
             converter: vibeControlCapabilityConverter,
             orderBy: { field: "order", direction: "asc" },
@@ -1096,6 +1131,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
         this.sourceConnections = sourceConnections;
         this.scanProfiles = scanProfiles;
         this.operationVideos = operationVideos;
+        this.operationVideoGroups = operationVideoGroups;
         this.capabilities = capabilities;
         this.sourceAssets = sourceAssets;
         this.generationSessions = generationSessions;
@@ -1111,6 +1147,8 @@ export const useVibeControlStore = defineStore("vibeControl", {
         this.selectedStoryId = activeStories[0]?.id ?? "";
         if (this.applications.length === 0) {
           this.loadMockData();
+        } else {
+          await this.ensureDefaultOperationVideoGroups();
         }
       } catch (err) {
         log("WARN", "VibeControl Firestore fetch failed, using mock data", err);
@@ -2105,6 +2143,189 @@ export const useVibeControlStore = defineStore("vibeControl", {
             Boolean(video.quickScan?.transcriptSummary?.trim()),
         })),
       };
+    },
+    defaultOperationVideoGroupId(applicationId: string): string {
+      return `operation-video-group-${applicationId}-legacy`;
+    },
+    operationVideoCountForGroup(groupId: string): number {
+      return this.operationVideos.filter((video) => video.groupId === groupId).length;
+    },
+    async createOperationVideoGroup(
+      input: VibeControlOperationVideoGroupInput
+    ): Promise<DecodedVibeControlOperationVideoGroup> {
+      const application = this.applications.find(
+        (item) => item.id === input.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      const name = input.name.trim();
+      if (!name) {
+        throw new Error("動画グループ名を入力してください");
+      }
+      const groupId = input.id || `operation-video-group-${createRandomDocId()}`;
+      const group: DecodedVibeControlOperationVideoGroup = {
+        id: groupId,
+        applicationId: application.id,
+        applicationKey: application.applicationKey,
+        name,
+        description: input.description?.trim() || undefined,
+        videoCount: this.operationVideoCountForGroup(groupId),
+      };
+      const firestoreOps = useFirestoreDocOperation();
+      const created = await firestoreOps.createDocument({
+        collectionName: this.operationVideoGroupCollectionPath(),
+        docId: group.id,
+        docData: group,
+        converter: vibeControlOperationVideoGroupConverter,
+        merge: true,
+      });
+      const savedGroup = created ?? group;
+      this.operationVideoGroups = [
+        savedGroup,
+        ...this.operationVideoGroups.filter((item) => item.id !== savedGroup.id),
+      ];
+      this.lastRunLog.unshift(`Operation Video Group: ${name} を作成`);
+      return savedGroup;
+    },
+    async updateOperationVideoGroup(input: {
+      groupId: string;
+      name: string;
+      description?: string;
+    }): Promise<void> {
+      const group = this.operationVideoGroups.find(
+        (item) => item.id === input.groupId
+      );
+      if (!group) {
+        throw new Error("更新対象の動画グループが見つかりません");
+      }
+      const name = input.name.trim();
+      if (!name) {
+        throw new Error("動画グループ名を入力してください");
+      }
+      const nextGroup: DecodedVibeControlOperationVideoGroup = {
+        ...group,
+        name,
+        description: input.description?.trim() || undefined,
+        videoCount: this.operationVideoCountForGroup(group.id),
+      };
+      const groupVideos = this.operationVideos.filter(
+        (video) => video.groupId === group.id
+      );
+      const nextVideos = this.operationVideos.map((video) =>
+        video.groupId === group.id
+          ? { ...video, groupNameSnapshot: name }
+          : video
+      );
+      const firestoreOps = useFirestoreDocOperation();
+      await Promise.all([
+        firestoreOps.createDocument({
+          collectionName: this.operationVideoGroupCollectionPath(),
+          docId: nextGroup.id,
+          docData: nextGroup,
+          converter: vibeControlOperationVideoGroupConverter,
+          merge: true,
+        }),
+        ...groupVideos.map((video) =>
+          firestoreOps.createDocument({
+            collectionName: this.operationVideoCollectionPath(),
+            docId: video.id,
+            docData: { ...video, groupNameSnapshot: name },
+            converter: vibeControlOperationVideoConverter,
+            merge: true,
+          })
+        ),
+      ]);
+      this.operationVideoGroups = this.operationVideoGroups.map((item) =>
+        item.id === nextGroup.id ? nextGroup : item
+      );
+      this.operationVideos = nextVideos;
+      this.lastRunLog.unshift(`Operation Video Group: ${group.name} を ${name} に変更`);
+    },
+    async deleteOperationVideoGroup(groupId: string): Promise<void> {
+      const group = this.operationVideoGroups.find((item) => item.id === groupId);
+      if (!group) {
+        throw new Error("削除対象の動画グループが見つかりません");
+      }
+      if (this.operationVideos.some((video) => video.groupId === groupId)) {
+        throw new Error("動画が登録されているグループは削除できません");
+      }
+      const deleted = await useFirestoreDocOperation().deleteDocument({
+        collectionName: this.operationVideoGroupCollectionPath(),
+        docId: group.id,
+      });
+      if (!deleted) {
+        throw new Error("動画グループを削除できませんでした");
+      }
+      this.operationVideoGroups = this.operationVideoGroups.filter(
+        (item) => item.id !== group.id
+      );
+      this.lastRunLog.unshift(`Operation Video Group: ${group.name} を削除`);
+    },
+    async ensureDefaultOperationVideoGroups(): Promise<void> {
+      const firestoreOps = useFirestoreDocOperation();
+      const updatedGroups = [...this.operationVideoGroups];
+      const updatedVideos = [...this.operationVideos];
+
+      for (const application of this.applications) {
+        const orphanVideos = updatedVideos.filter(
+          (video) => video.applicationId === application.id && !video.groupId
+        );
+        if (orphanVideos.length === 0) continue;
+
+        const groupId = this.defaultOperationVideoGroupId(application.id);
+        const existingGroup = updatedGroups.find((group) => group.id === groupId);
+        const existingGroupVideoCount = updatedVideos.filter(
+          (video) => video.groupId === groupId
+        ).length;
+        const group: DecodedVibeControlOperationVideoGroup = {
+          ...(existingGroup ?? {}),
+          id: groupId,
+          applicationId: application.id,
+          applicationKey: application.applicationKey,
+          name: "既存の操作動画",
+          description: "グループ機能の追加前に保存された操作動画です。",
+          videoCount: existingGroupVideoCount + orphanVideos.length,
+        };
+
+        await firestoreOps.createDocument({
+          collectionName: this.operationVideoGroupCollectionPath(),
+          docId: group.id,
+          docData: group,
+          converter: vibeControlOperationVideoGroupConverter,
+          merge: true,
+        });
+
+        if (!existingGroup) {
+          updatedGroups.push(group);
+        }
+
+        await Promise.all(
+          orphanVideos.map((video) => {
+            const nextVideo: DecodedVibeControlOperationVideo = {
+              ...video,
+              groupId: group.id,
+              groupNameSnapshot: group.name,
+            };
+            const index = updatedVideos.findIndex((item) => item.id === video.id);
+            if (index >= 0) updatedVideos[index] = nextVideo;
+            return firestoreOps.createDocument({
+              collectionName: this.operationVideoCollectionPath(),
+              docId: nextVideo.id,
+              docData: nextVideo,
+              converter: vibeControlOperationVideoConverter,
+              merge: true,
+            });
+          })
+        );
+      }
+
+      this.operationVideoGroups = updatedGroups.map((group) => ({
+        ...group,
+        videoCount: updatedVideos.filter((video) => video.groupId === group.id)
+          .length,
+      }));
+      this.operationVideos = updatedVideos;
     },
     async persistGenerationSession(
       session: DecodedVibeControlGenerationSession
@@ -3249,6 +3470,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
       if (!title) {
         throw new Error("動画タイトルを入力してください");
       }
+      const group = this.operationVideoGroups.find(
+        (item) =>
+          item.id === input.groupId &&
+          item.applicationId === application.id
+      );
+      if (!group) {
+        throw new Error("動画グループを選択してください");
+      }
       if (input.blob.size <= 0) {
         throw new Error("録画データが空です");
       }
@@ -3412,6 +3641,8 @@ export const useVibeControlStore = defineStore("vibeControl", {
                   { key: "applicationId", value: application.id },
                   { key: "applicationKey", value: application.applicationKey },
                   { key: "operationVideoId", value: videoId },
+                  { key: "operationVideoGroupId", value: group.id },
+                  { key: "operationVideoGroupName", value: group.name },
                   { key: "sourceAssetId", value: sourceAssetId },
                   { key: "videoStoragePath", value: storagePath },
                   { key: "documentKind", value: "operation_video_metadata" },
@@ -3456,6 +3687,8 @@ export const useVibeControlStore = defineStore("vibeControl", {
                   { key: "applicationName", value: application.name },
                   { key: "repoFullName", value: application.repoFullName },
                   { key: "operationVideoId", value: videoId },
+                  { key: "operationVideoGroupId", value: group.id },
+                  { key: "operationVideoGroupName", value: group.name },
                   { key: "sourceAssetId", value: journeySourceAssetId },
                   { key: "videoStoragePath", value: storagePath },
                   { key: "documentKind", value: "operation_video_journey" },
@@ -3493,6 +3726,8 @@ export const useVibeControlStore = defineStore("vibeControl", {
           id: videoId,
           applicationId: application.id,
           applicationKey: application.applicationKey,
+          groupId: group.id,
+          groupNameSnapshot: group.name,
           title,
           description: input.description?.trim() || undefined,
           fileName,
@@ -3560,6 +3795,8 @@ export const useVibeControlStore = defineStore("vibeControl", {
               tags,
               metadataStoragePath,
               sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
+              operationVideoGroupId: group.id,
+              operationVideoGroupName: group.name,
             },
           },
         ];
@@ -3592,10 +3829,18 @@ export const useVibeControlStore = defineStore("vibeControl", {
               transcriptSummary,
               tags,
               sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
+              operationVideoGroupId: group.id,
+              operationVideoGroupName: group.name,
             },
           });
         }
 
+        const nextGroup: DecodedVibeControlOperationVideoGroup = {
+          ...group,
+          videoCount: this.operationVideos.filter(
+            (item) => item.groupId === group.id && item.id !== video.id
+          ).length + 1,
+        };
         const firestoreOps = useFirestoreDocOperation();
         await Promise.all([
           firestoreOps.createDocument({
@@ -3603,6 +3848,13 @@ export const useVibeControlStore = defineStore("vibeControl", {
             docId: video.id,
             docData: video,
             converter: vibeControlOperationVideoConverter,
+            merge: true,
+          }),
+          firestoreOps.createDocument({
+            collectionName: this.operationVideoGroupCollectionPath(),
+            docId: nextGroup.id,
+            docData: nextGroup,
+            converter: vibeControlOperationVideoGroupConverter,
             merge: true,
           }),
           ...sourceAssets.map((asset) =>
@@ -3620,6 +3872,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
           video,
           ...this.operationVideos.filter((item) => item.id !== video.id),
         ];
+        this.operationVideoGroups = this.operationVideoGroups.map((item) =>
+          item.id === nextGroup.id ? nextGroup : item
+        );
         this.sourceAssets = [
           ...sourceAssets,
           ...this.sourceAssets.filter(
@@ -3643,6 +3898,90 @@ export const useVibeControlStore = defineStore("vibeControl", {
         throw err;
       } finally {
         this.isSavingOperationVideo = false;
+      }
+    },
+    async updateOperationVideoTitle(params: {
+      videoId: string;
+      title: string;
+    }): Promise<void> {
+      const video = this.operationVideos.find((item) => item.id === params.videoId);
+      if (!video) {
+        throw new Error("更新対象のザッピング動画が見つかりません");
+      }
+      const title = params.title.trim();
+      if (!title) {
+        throw new Error("動画タイトルを入力してください");
+      }
+      if (title === video.title) return;
+
+      this.isLoading = true;
+      this.error = null;
+      try {
+        const nextVideo: DecodedVibeControlOperationVideo = {
+          ...video,
+          title,
+        };
+        const sourceAssetIds = [
+          video.sourceAssetId,
+          video.journeySourceAssetId,
+          `source-asset-${video.id}`,
+          `source-asset-${video.id}-journey`,
+        ].filter((id, index, arr): id is string =>
+          Boolean(id) && arr.indexOf(id) === index
+        );
+        const nextSourceAssets = this.sourceAssets.map((asset) => {
+          if (!sourceAssetIds.includes(asset.id)) return asset;
+          if (asset.id === video.journeySourceAssetId || asset.id === `source-asset-${video.id}-journey`) {
+            return {
+              ...asset,
+              title: `Operation Journey: ${title}`,
+            };
+          }
+          return {
+            ...asset,
+            title,
+          };
+        });
+
+        const firestoreOps = useFirestoreDocOperation();
+        await Promise.all([
+          firestoreOps.createDocument({
+            collectionName: this.operationVideoCollectionPath(),
+            docId: nextVideo.id,
+            docData: nextVideo,
+            converter: vibeControlOperationVideoConverter,
+            merge: true,
+          }),
+          ...nextSourceAssets
+            .filter((asset) => sourceAssetIds.includes(asset.id))
+            .map((asset) =>
+              firestoreOps.createDocument({
+                collectionName: this.sourceAssetCollectionPath(),
+                docId: asset.id,
+                docData: asset,
+                converter: vibeControlSourceAssetConverter,
+                merge: true,
+              })
+            ),
+        ]);
+
+        this.operationVideos = this.operationVideos.map((item) =>
+          item.id === nextVideo.id ? nextVideo : item
+        );
+        this.sourceAssets = nextSourceAssets;
+        this.lastRunLog.unshift(`Operation Video: ${video.title} を ${title} に変更`);
+      } catch (err) {
+        log("ERROR", "VibeControl operation video title update failed", err);
+        reportDatadogError(err, {
+          feature: "vibe_control_zapping_video_title_update",
+          videoId: params.videoId,
+          applicationId: video.applicationId,
+        });
+        this.error =
+          err instanceof Error ? err.message : "ザッピング動画タイトルの更新に失敗しました";
+        throw err;
+      } finally {
+        this.isLoading = false;
       }
     },
     async deleteOperationVideo(videoId: string): Promise<void> {
@@ -3735,6 +4074,29 @@ export const useVibeControlStore = defineStore("vibeControl", {
         this.operationVideos = this.operationVideos.filter(
           (item) => item.id !== video.id
         );
+        if (video.groupId) {
+          const group = this.operationVideoGroups.find(
+            (item) => item.id === video.groupId
+          );
+          if (group) {
+            const nextGroup: DecodedVibeControlOperationVideoGroup = {
+              ...group,
+              videoCount: this.operationVideos.filter(
+                (item) => item.groupId === group.id
+              ).length,
+            };
+            await firestoreOps.createDocument({
+              collectionName: this.operationVideoGroupCollectionPath(),
+              docId: nextGroup.id,
+              docData: nextGroup,
+              converter: vibeControlOperationVideoGroupConverter,
+              merge: true,
+            });
+            this.operationVideoGroups = this.operationVideoGroups.map((item) =>
+              item.id === nextGroup.id ? nextGroup : item
+            );
+          }
+        }
         this.sourceAssets = this.sourceAssets.filter(
           (asset) => !sourceAssetIds.includes(asset.id)
         );

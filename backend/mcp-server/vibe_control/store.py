@@ -144,10 +144,42 @@ class VibeControlStore:
             ]
         return docs
 
+    def list_operation_video_groups(
+        self,
+        *,
+        application_id: str,
+        query: str = "",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        self.principal.require_scope("context:read")
+        self._require_application(application_id)
+        q = self._collection("vibeControlOperationVideoGroups").where(
+            filter=firestore.FieldFilter("applicationId", "==", application_id)
+        )
+        docs = [_serialize_firestore(_doc_to_dict(snap)) for snap in q.limit(max(1, min(limit, 100))).stream()]
+        needle = query.strip().lower()
+        if needle:
+            docs = [
+                group
+                for group in docs
+                if needle
+                in " ".join(
+                    str(group.get(key) or "")
+                    for key in (
+                        "id",
+                        "name",
+                        "description",
+                        "applicationKey",
+                    )
+                ).lower()
+            ]
+        return sorted(docs, key=lambda item: str(item.get("createdAt") or item.get("name") or ""))
+
     def list_operation_videos(
         self,
         *,
         application_id: str,
+        operation_video_group_id: str = "",
         query: str = "",
         discovery_status: str = "",
         analysis_status: str = "",
@@ -158,6 +190,8 @@ class VibeControlStore:
         q = self._collection("vibeControlOperationVideos").where(
             filter=firestore.FieldFilter("applicationId", "==", application_id)
         )
+        if operation_video_group_id:
+            q = q.where(filter=firestore.FieldFilter("groupId", "==", operation_video_group_id))
         if discovery_status:
             q = q.where(filter=firestore.FieldFilter("discoveryStatus", "==", discovery_status))
         if analysis_status:
@@ -182,6 +216,23 @@ class VibeControlStore:
                     )
                 ).lower()
             ]
+        group_ids = {
+            str(video.get("groupId") or "")
+            for video in docs
+            if str(video.get("groupId") or "")
+        }
+        groups = {group_id: self._operation_video_group_by_id(group_id) for group_id in group_ids}
+        docs = [
+            {
+                **video,
+                "videoGroup": self._operation_video_group_ref(
+                    groups.get(str(video.get("groupId") or "")),
+                    fallback_id=str(video.get("groupId") or ""),
+                    fallback_name=str(video.get("groupNameSnapshot") or ""),
+                ),
+            }
+            for video in docs
+        ]
         return docs
 
     def get_operation_video(self, operation_video_id: str) -> dict[str, Any]:
@@ -352,6 +403,11 @@ class VibeControlStore:
         video = self.get_operation_video(operation_video_id)
         if video.get("applicationId") != application_id:
             raise HTTPException(status_code=400, detail="operationVideoId does not belong to applicationId")
+        video_group = self._operation_video_group_ref(
+            self._operation_video_group_by_id(str(video.get("groupId") or "")),
+            fallback_id=str(video.get("groupId") or ""),
+            fallback_name=str(video.get("groupNameSnapshot") or ""),
+        )
 
         source_asset_ids = [
             item
@@ -401,6 +457,7 @@ class VibeControlStore:
             "operationVideoId": operation_video_id,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "signedUrlExpiresAt": expires_at.isoformat() if include_signed_urls else None,
+            "videoGroup": video_group,
             "operationVideo": video_ref,
             "linkedStories": [self._story_ref(item) for item in stories],
             "evidence": [self._evidence_ref(item) for item in evidence],
@@ -474,6 +531,34 @@ class VibeControlStore:
                     item = _serialize_firestore(_doc_to_dict(snap))
                     stories[str(item.get("id") or snap.id)] = item
         return list(stories.values())
+
+    def _operation_video_group_by_id(self, group_id: str) -> dict[str, Any] | None:
+        if not group_id:
+            return None
+        snap = self._collection("vibeControlOperationVideoGroups").document(group_id).get()
+        if not snap.exists:
+            return None
+        group = _serialize_firestore(_doc_to_dict(snap))
+        self._require_application(str(group.get("applicationId") or ""))
+        return group
+
+    def _operation_video_group_ref(
+        self,
+        group: dict[str, Any] | None,
+        *,
+        fallback_id: str = "",
+        fallback_name: str = "",
+    ) -> dict[str, Any] | None:
+        if not group and not (fallback_id or fallback_name):
+            return None
+        return {
+            "id": (group or {}).get("id") or fallback_id or None,
+            "name": (group or {}).get("name") or fallback_name or None,
+            "description": (group or {}).get("description") or None,
+            "videoCount": (group or {}).get("videoCount"),
+            "createdAt": (group or {}).get("createdAt"),
+            "updatedAt": (group or {}).get("updatedAt"),
+        }
 
     def _story_ref(self, item: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -598,6 +683,11 @@ class VibeControlStore:
             "sourceAssetId": item.get("sourceAssetId"),
             "journeySourceAssetId": item.get("journeySourceAssetId"),
             "journeyStoragePath": item.get("journeyStoragePath"),
+            "videoGroup": self._operation_video_group_ref(
+                None,
+                fallback_id=str(item.get("groupId") or ""),
+                fallback_name=str(item.get("groupNameSnapshot") or ""),
+            ),
             "screenshots": [
                 self._frame_ref(
                     frame,

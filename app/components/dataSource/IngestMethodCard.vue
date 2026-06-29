@@ -63,7 +63,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-export type IngestMethodTone = "purple" | "violet" | "blue" | "sky";
+export type IngestMethodTone = "emerald" | "teal" | "purple" | "violet" | "blue" | "sky";
 
 const props = withDefaults(
   defineProps<{
@@ -77,7 +77,8 @@ const props = withDefaults(
     layout?: "default" | "tile";
   }>(),
   {
-    tone: "purple",
+    tone: "emerald",
+    subtitle: "",
     bare: false,
     layout: "default",
   }
@@ -85,6 +86,8 @@ const props = withDefaults(
 
 const iconTileClass = computed(() => {
   const map: Record<IngestMethodTone, string> = {
+    emerald: "bg-emerald-50 ring-emerald-200/80 dark:bg-emerald-950/40 dark:ring-emerald-800/50",
+    teal: "bg-teal-50 ring-teal-200/80 dark:bg-teal-950/40 dark:ring-teal-800/50",
     purple: "bg-purple-50 ring-purple-200/80 dark:bg-purple-950/40 dark:ring-purple-800/50",
     violet: "bg-violet-50 ring-violet-200/80 dark:bg-violet-950/40 dark:ring-violet-800/50",
     blue: "bg-blue-50 ring-blue-200/80 dark:bg-blue-950/40 dark:ring-blue-800/50",
@@ -95,6 +98,8 @@ const iconTileClass = computed(() => {
 
 const iconClass = computed(() => {
   const map: Record<IngestMethodTone, string> = {
+    emerald: "text-emerald-600 dark:text-emerald-400",
+    teal: "text-teal-600 dark:text-teal-400",
     purple: "text-purple-600 dark:text-purple-400",
     violet: "text-violet-600 dark:text-violet-400",
     blue: "text-blue-600 dark:text-blue-400",
@@ -105,6 +110,8 @@ const iconClass = computed(() => {
 
 const bodyHoverClass = computed(() => {
   const map: Record<IngestMethodTone, string> = {
+    emerald: "hover:shadow-[0_4px_20px_-8px_rgba(16,185,129,0.18)]",
+    teal: "hover:shadow-[0_4px_20px_-8px_rgba(20,184,166,0.18)]",
     purple: "hover:shadow-[0_4px_20px_-8px_rgba(139,92,246,0.15)]",
     violet: "hover:shadow-[0_4px_20px_-8px_rgba(124,58,237,0.15)]",
     blue: "hover:shadow-[0_4px_20px_-8px_rgba(37,99,235,0.15)]",

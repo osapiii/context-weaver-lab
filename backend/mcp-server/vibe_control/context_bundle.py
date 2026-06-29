@@ -147,6 +147,7 @@ def _operation_video_template_context(context_manifest: dict[str, Any]) -> dict[
         "manifest": manifest,
         "application": _dict(manifest.get("application")),
         "operation_video_id": _text(manifest.get("operationVideoId"), "operation-video"),
+        "video_group": _dict(manifest.get("videoGroup")),
         "video": _dict(manifest.get("operationVideo")),
         "linked_stories": _list(manifest.get("linkedStories")),
         "evidence": _list(manifest.get("evidence")),

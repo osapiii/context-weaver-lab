@@ -505,10 +505,28 @@ export const VibeControlOperationVideoRelatedContextsSchema = z.object({
   notes: z.array(z.string()).default([]),
 });
 
+export const VibeControlOperationVideoGroupSchema = z.object({
+  id: z.string().optional(),
+  applicationId: z.string().default("app-default"),
+  applicationKey: z.string().default("APP"),
+  name: z.string(),
+  description: z.string().optional(),
+  videoCount: z.number().min(0).default(0),
+  createdAt: z.instanceof(Timestamp).optional(),
+  updatedAt: z.instanceof(Timestamp).optional(),
+});
+
+export const DecodedVibeControlOperationVideoGroupSchema =
+  VibeControlOperationVideoGroupSchema.extend({
+    id: z.string(),
+  });
+
 export const VibeControlOperationVideoSchema = z.object({
   id: z.string().optional(),
   applicationId: z.string().default("app-default"),
   applicationKey: z.string().default("APP"),
+  groupId: z.string().optional(),
+  groupNameSnapshot: z.string().optional(),
   title: z.string(),
   description: z.string().optional(),
   fileName: z.string(),
@@ -871,6 +889,12 @@ export type VibeControlOperationVideo = z.infer<
 export type DecodedVibeControlOperationVideo = z.infer<
   typeof DecodedVibeControlOperationVideoSchema
 >;
+export type VibeControlOperationVideoGroup = z.infer<
+  typeof VibeControlOperationVideoGroupSchema
+>;
+export type DecodedVibeControlOperationVideoGroup = z.infer<
+  typeof DecodedVibeControlOperationVideoGroupSchema
+>;
 export type VibeControlApplicationScanRun = z.infer<
   typeof VibeControlApplicationScanRunSchema
 >;
@@ -938,6 +962,9 @@ export const vibeControlSourceConnectionConverter = firestoreTypeConverter(
 );
 export const vibeControlOperationVideoConverter = firestoreTypeConverter(
   DecodedVibeControlOperationVideoSchema
+);
+export const vibeControlOperationVideoGroupConverter = firestoreTypeConverter(
+  DecodedVibeControlOperationVideoGroupSchema
 );
 export const vibeControlApplicationScanProfileConverter = firestoreTypeConverter(
   DecodedVibeControlApplicationScanProfileSchema

@@ -99,6 +99,7 @@
       <section>
         <h2>Bundle Metrics</h2>
         <div class="grid cols-5">
+          <div class="metric"><span>Group</span><strong>{{ video_group.name|text("n/a") }}</strong></div>
           <div class="metric"><span>Stories</span><strong>{{ linked_stories|length }}</strong></div>
           <div class="metric"><span>Evidence</span><strong>{{ evidence|length }}</strong></div>
           <div class="metric"><span>Assets</span><strong>{{ source_assets|length }}</strong></div>
@@ -117,10 +118,15 @@
           {% endif %}
           <div class="grid cols-2" style="margin-top: 14px;">
             <div class="kv"><b>Video ID</b><span>{{ operation_video_id }}</span></div>
+            <div class="kv"><b>Group</b><span>{{ video.videoGroup.name|text(video_group.name|text("n/a")) }}</span></div>
             <div class="kv"><b>Recorded at</b><span>{{ video.recordedAt|text("n/a") }}</span></div>
             <div class="kv"><b>Duration</b><span>{{ video.durationMs|format_ms }}</span></div>
             <div class="kv"><b>GCS path</b><span>{{ video.gcsPath|text("n/a") }}</span></div>
           </div>
+          {% if video_group.description %}
+            <h3>Group Description</h3>
+            <p>{{ video_group.description }}</p>
+          {% endif %}
           {% if video.transcriptSummary %}
             <h3>Transcript Summary</h3>
             <p>{{ video.transcriptSummary }}</p>
