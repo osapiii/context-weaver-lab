@@ -92,6 +92,33 @@ export const VibeControlOperationVideoQuickScanSchema = z.object({
   errorMessage: z.string().optional(),
 });
 
+export const VibeControlOperationVideoClipSchema = z.object({
+  id: z.string(),
+  fileName: z.string(),
+  bucketName: z.string(),
+  storagePath: z.string(),
+  contentType: z.string().default("video/webm"),
+  sizeBytes: z.number().min(0).default(0),
+  durationMs: z.number().min(0).optional(),
+  transcriptText: z.string().optional(),
+  transcriptProvider: z.string().optional(),
+  transcriptSummary: z.string().optional(),
+  quickScan: VibeControlOperationVideoQuickScanSchema.optional(),
+  frameCaptures: z.array(VibeControlOperationVideoFrameSchema).default([]),
+  metadataFileName: z.string().optional(),
+  metadataStoragePath: z.string().optional(),
+  journeyFileName: z.string().optional(),
+  journeyStoragePath: z.string().optional(),
+  fileSpaceRequestId: z.string().optional(),
+  journeyFileSpaceRequestId: z.string().optional(),
+  sourceAssetId: z.string().optional(),
+  journeySourceAssetId: z.string().optional(),
+  sourceDisplaySurface: VibeControlOperationVideoDisplaySurfaceSchema.default(
+    "unknown"
+  ),
+  recordedAt: z.string(),
+});
+
 export const VibeControlZappingAnalysisStatusSchema = z.enum([
   "not_analyzed",
   "queued",
@@ -540,6 +567,12 @@ export const VibeControlOperationVideoSchema = z.object({
   transcriptSummary: z.string().optional(),
   quickScan: VibeControlOperationVideoQuickScanSchema.optional(),
   frameCaptures: z.array(VibeControlOperationVideoFrameSchema).default([]),
+  clips: z.array(VibeControlOperationVideoClipSchema).default([]),
+  clipCount: z.number().min(0).default(1),
+  totalDurationMs: z.number().min(0).optional(),
+  hasUnanalyzedClip: z.boolean().default(false),
+  lastClipAddedAt: z.string().optional(),
+  analysisStaleReason: z.string().optional(),
   tags: z.array(z.string()).default([]),
   fileSpaceId: z.string().optional(),
   fileSpaceRequestId: z.string().optional(),
@@ -829,6 +862,9 @@ export type VibeControlOperationVideoFrame = z.infer<
 >;
 export type VibeControlOperationVideoQuickScan = z.infer<
   typeof VibeControlOperationVideoQuickScanSchema
+>;
+export type VibeControlOperationVideoClip = z.infer<
+  typeof VibeControlOperationVideoClipSchema
 >;
 export type VibeControlZappingAnalysisStatus = z.infer<
   typeof VibeControlZappingAnalysisStatusSchema

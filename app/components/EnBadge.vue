@@ -37,7 +37,7 @@
  *   <EnBadge color="warning" variant="solid">編集中</EnBadge>
  *   <EnBadge color="success">充足</EnBadge>
  *
- *   <!-- AI 関連 (color/variant 無視で violet + soft 強制) -->
+ *   <!-- AI 関連 (color/variant 無視で primary + soft 強制) -->
  *   <EnBadge variant="ai">AI 提案中</EnBadge>
  *
  *   <!-- 操作アシスタント関連 (info + soft 強制) -->
@@ -50,7 +50,7 @@ type BadgeVariant =
   | "subtle" // UBadge color 透過
   | "solid" // UBadge color 透過
   | "tag" // = neutral outline 強制. メタ情報・分類用
-  | "ai" // = violet soft 強制 (color prop 無視). AI 部下の出力
+  | "ai" // = primary soft 強制 (color prop 無視). AI 部下の出力
   | "assistant"; // = info soft 強制 (color prop 無視). 操作アシスタント
 
 type BadgeColor =
@@ -91,7 +91,7 @@ const props = withDefaults(defineProps<Props>(), {
 const mappedColor = computed<BadgeColor>(() => {
   switch (props.variant) {
     case "ai":
-      return "violet";
+      return "primary";
     case "assistant":
       return "info";
     case "tag":

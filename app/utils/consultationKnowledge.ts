@@ -228,6 +228,16 @@ export type KnowledgeSourceTone = "violet" | "sky" | "cyan" | "slate";
 export const knowledgeSourceMeta = (
   doc: Document
 ): { label: string; icon: string; tone: KnowledgeSourceTone } => {
+  if (
+    doc.uploadedVia === "remote_mcp" ||
+    doc.sourceKind === "en-aistudioData"
+  ) {
+    return {
+      label: "AIエディター",
+      icon: "material-symbols:code-blocks-outline",
+      tone: "violet",
+    };
+  }
   if (doc.driveFileId) {
     return {
       label: "Drive",

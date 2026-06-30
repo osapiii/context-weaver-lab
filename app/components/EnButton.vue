@@ -60,9 +60,8 @@
  * - `variant="hero"` / `"nav"` / `"ai"` → 内部で Button3D を render
  * - それ以外 (`solid` / `outline` / `soft` / `ghost` / `assistant`) → UButton を render
  *
- * 色名は **UButton の `color` 名に統一** (`primary` = teal, `info` = blue, ...).
- * AI 系 (`variant="ai"` / `"assistant"`) は色を内部固定し、MEMORY 配色規約を
- * API レベルで強制する.
+ * 色名は **UButton の `color` 名に統一** (`primary` = 組織テーマ primary, `info` = blue, ...).
+ * `variant="ai"` は組織テーマ primary に追従し、`variant="assistant"` は淡い情報色で表示する.
  *
  * 利用例:
  *   <EnButton variant="hero" color="success" size="lg" @click="confirm">
@@ -87,7 +86,7 @@ type ButtonVariant =
   | "soft" // = UButton soft
   | "ghost" // = UButton ghost (キャンセル / 戻る等)
   | "nav" // = Button3D neutral-soft (内部). Ribbon / Master タブ
-  | "ai" // = Button3D purple + AI 色強制 (color prop 無視)
+  | "ai" // = Button3D theme primary (color prop 無視)
   | "assistant"; // = UButton color=sky variant=soft (color prop 無視)
 
 type ButtonColor =
@@ -190,7 +189,7 @@ const mappedColorType = computed<
   | "purple"
   | "neutral-soft"
 >(() => {
-  if (props.variant === "ai") return "purple";
+  if (props.variant === "ai") return "theme";
   if (props.variant === "nav") {
     // nav variant:
     //   - 通常 (active=false) は neutral-soft (淡灰色)

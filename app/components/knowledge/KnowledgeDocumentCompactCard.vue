@@ -3,13 +3,13 @@
     class="relative group"
     :class="
       selected
-        ? 'rounded-2xl ring-2 ring-purple-400 ring-offset-2 ring-offset-transparent'
+        ? 'rounded-2xl ring-2 ring-primary-400 ring-offset-2 ring-offset-transparent'
         : ''
     "
   >
     <button
       type="button"
-      class="flex w-full flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-gray-900/[0.06] transition hover:-translate-y-0.5 hover:shadow-md hover:ring-purple-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 dark:bg-gray-900 dark:ring-white/10"
+      class="flex w-full flex-col overflow-hidden rounded-2xl bg-white text-left shadow-sm ring-1 ring-gray-900/[0.06] transition hover:-translate-y-0.5 hover:shadow-md hover:ring-primary-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 dark:bg-gray-900 dark:ring-white/10"
       @click="emit('click')"
     >
       <div class="relative h-[96px] w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
@@ -20,6 +20,10 @@
         <KnowledgeDocumentStatusBadges :document="document" />
       </div>
       <div class="space-y-0.5 px-2.5 py-2">
+        <div class="flex items-center gap-1 text-[10px] font-semibold text-slate-500">
+          <UIcon :name="sourceMeta.icon" class="h-3 w-3" />
+          <span class="truncate">{{ sourceMeta.label }}</span>
+        </div>
         <p
           class="truncate text-xs font-bold text-gray-800 dark:text-gray-100"
           :title="displayName"
@@ -41,8 +45,8 @@
       :class="[
         'absolute top-2 right-2 z-20 flex h-6 w-6 items-center justify-center rounded-md ring-1 backdrop-blur-sm shadow-sm transition-all duration-150',
         selected
-          ? 'bg-purple-500 ring-purple-500 text-white'
-          : 'bg-white/95 ring-gray-300 text-gray-300 hover:ring-purple-400 hover:text-purple-500',
+          ? 'bg-primary-500 ring-primary-500 text-white'
+          : 'bg-white/95 ring-gray-300 text-gray-300 hover:ring-primary-400 hover:text-primary-500',
       ]"
       @click.stop="emit('toggle')"
     >
@@ -73,6 +77,7 @@ import {
   formatKnowledgeBytes,
   knowledgeDocumentName,
   knowledgeDocumentSizeBytes,
+  knowledgeSourceMeta,
 } from "@utils/consultationKnowledge";
 import { formatTimestamp } from "@utils/date";
 
@@ -97,6 +102,7 @@ const emit = defineEmits<{
 }>();
 
 const displayName = computed(() => knowledgeDocumentName(props.document));
+const sourceMeta = computed(() => knowledgeSourceMeta(props.document));
 
 const sizeLabel = computed(() => {
   const bytes = knowledgeDocumentSizeBytes(props.document);

@@ -268,6 +268,16 @@ export const DocumentPersistedSchema = z.object({
   driveModifiedTime: z.string().nullable().optional(),
   driveWebViewLink: z.string().nullable().optional(), // Drive で開くリンク
   thumbnailLink: z.string().nullable().optional(), // Drive 提供のサムネイル URL
+  sourceKind: z.enum(["en-aistudioData", "drive", "upload", "web"]).nullable().optional(),
+  enAiStudioDataKind: z.literal("en-aistudioData").nullable().optional(),
+  uploadedVia: z.string().nullable().optional(),
+  externalAgent: z.string().nullable().optional(),
+  mcpConnectionId: z.string().nullable().optional(),
+  applicationId: z.string().nullable().optional(),
+  storyId: z.string().nullable().optional(),
+  operationVideoId: z.string().nullable().optional(),
+  tags: z.array(z.string()).nullable().optional(),
+  sourceNote: z.string().nullable().optional(),
   storeId: z.string(), // FileSearchStoreのID
   organizationId: z.string(), // 所属Organization ID
   spaceId: z.string(), // 所属Space ID

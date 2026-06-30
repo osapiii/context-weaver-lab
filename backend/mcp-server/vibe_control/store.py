@@ -1,8 +1,11 @@
 """Firestore access layer for StoryVault MCP tools."""
 from __future__ import annotations
 
+import base64
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from uuid import uuid4
 
 import google.auth
 from google.auth.transport.requests import Request as GoogleAuthRequest
@@ -44,6 +47,29 @@ def _default_storage_bucket() -> str:
         or _clean_text(os.getenv("VIBE_CONTROL_MCP_DEFAULT_STORAGE_BUCKET"))
         or "vibe-control-dev.firebasestorage.app"
     )
+
+
+def _max_push_knowledge_bytes() -> int:
+    raw = (
+        _clean_text(os.getenv("STORYVAULT_MCP_PUSH_MAX_BYTES"))
+        or _clean_text(os.getenv("VIBE_CONTROL_MCP_PUSH_MAX_BYTES"))
+    )
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = 10 * 1024 * 1024
+    return max(1, min(value, 50 * 1024 * 1024))
+
+
+def _safe_storage_file_name(file_name: str) -> str:
+    basename = file_name.replace("\\", "/").rstrip("/").split("/")[-1].strip()
+    basename = re.sub(r"[^A-Za-z0-9._() -]+", "_", basename)
+    basename = re.sub(r"\s+", " ", basename).strip(" .")
+    return basename[:160] or "knowledge.md"
+
+
+def _custom_metadata(key: str, value: Any) -> dict[str, str]:
+    return {"key": key, "value": str(value)}
 
 
 def _storage_ref_from_values(
@@ -111,6 +137,205 @@ class VibeControlStore:
         if not snap.exists:
             raise HTTPException(status_code=404, detail="Application not found")
         return _serialize_firestore(_doc_to_dict(snap))
+
+    def _get_application_for_write(self, application_id: str) -> dict[str, Any]:
+        self._require_application(application_id)
+        snap = self._collection("vibeControlApplications").document(application_id).get()
+        if not snap.exists:
+            raise HTTPException(status_code=404, detail="Application not found")
+        return _serialize_firestore(_doc_to_dict(snap))
+
+    def push_knowledge_document(
+        self,
+        *,
+        application_id: str,
+        file_name: str,
+        mime_type: str,
+        content: str = "",
+        content_base64: str = "",
+        title: str = "",
+        description: str = "",
+        story_id: str = "",
+        operation_video_id: str = "",
+        tags: list[Any] | None = None,
+        source_note: str = "",
+    ) -> dict[str, Any]:
+        self.principal.require_scope("knowledge:write")
+        if not application_id:
+            raise HTTPException(status_code=400, detail="applicationId is required")
+        if not file_name:
+            raise HTTPException(status_code=400, detail="fileName is required")
+        if not mime_type:
+            raise HTTPException(status_code=400, detail="mimeType is required")
+        if not content and not content_base64:
+            raise HTTPException(status_code=400, detail="content or contentBase64 is required")
+
+        application = self._get_application_for_write(application_id)
+        file_space_id = _clean_text(application.get("fileSpaceId"))
+        if not file_space_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Application does not have a FileSpace. Create the app FileSpace before pushing knowledge.",
+            )
+
+        try:
+            raw_bytes = base64.b64decode(content_base64, validate=True) if content_base64 else content.encode("utf-8")
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="contentBase64 is not valid base64") from exc
+
+        max_bytes = _max_push_knowledge_bytes()
+        if len(raw_bytes) > max_bytes:
+            raise HTTPException(status_code=413, detail=f"Knowledge document is too large. Max bytes: {max_bytes}")
+
+        safe_name = _safe_storage_file_name(file_name)
+        now = datetime.now(timezone.utc)
+        stamp = now.strftime("%Y%m%dT%H%M%SZ")
+        connection_id = _safe_storage_file_name(self.principal.connection_id or "mcp")
+        document_id = f"mcp-{uuid4().hex[:20]}"
+        file_path = (
+            f"organizations/{self.principal.organization_id}/spaces/{self.principal.space_id}/"
+            f"fileSpaces/{file_space_id}/knowledges/manual_upload/ai_editor/"
+            f"{connection_id}/{stamp}-{document_id}-{safe_name}"
+        )
+        bucket_name = _default_storage_bucket()
+
+        blob = self.storage.bucket(bucket_name).blob(file_path)
+        blob.upload_from_string(raw_bytes, content_type=mime_type, timeout=120)
+
+        gcs_url = f"gs://{bucket_name}/{file_path}"
+        clean_tags = [str(tag).strip() for tag in _as_list(tags) if str(tag).strip()]
+        display_name = title.strip() or safe_name
+        description_text = description.strip() or source_note.strip() or None
+
+        metadata: list[dict[str, str]] = [
+            _custom_metadata("sourceKind", "en-aistudioData"),
+            _custom_metadata("documentKind", "en-aistudioData"),
+            _custom_metadata("source", "en-aistudioData"),
+            _custom_metadata("uploadedVia", "remote_mcp"),
+            _custom_metadata("externalAgent", self.principal.external_agent),
+            _custom_metadata("mcpConnectionId", self.principal.connection_id),
+            _custom_metadata("applicationId", application_id),
+            _custom_metadata("fileName", safe_name),
+            _custom_metadata("displayName", display_name),
+        ]
+        if story_id:
+            metadata.append(_custom_metadata("storyId", story_id))
+        if operation_video_id:
+            metadata.append(_custom_metadata("operationVideoId", operation_video_id))
+        if clean_tags:
+            metadata.append(_custom_metadata("tags", ",".join(clean_tags)))
+        if source_note:
+            metadata.append(_custom_metadata("sourceNote", source_note))
+
+        request_id = f"fileSpace_fileSpaceUpload_{int(now.timestamp() * 1000)}_{uuid4().hex[:8]}"
+        request_data = {
+            "input": {
+                "operationType": "fileSpaceUpload",
+                "storeId": file_space_id,
+                "bucketName": bucket_name,
+                "filePath": file_path,
+                "customMetadata": metadata,
+                "mimeType": mime_type,
+                "documentId": document_id,
+                "description": description_text,
+                "originalFileInfo": {
+                    "fileName": safe_name,
+                    "bytes": len(raw_bytes),
+                },
+            },
+            "operationMetadata": {
+                "organizationId": self.principal.organization_id,
+                "spaceId": self.principal.space_id,
+                "loggingCollectionId": "requests/contextStoreRequests/logs",
+                "loggingDocumentId": request_id,
+                "requestedBy": {
+                    "userId": self.principal.connection_id,
+                    "email": f"{self.principal.external_agent}@remote-mcp.local",
+                    "role": 3,
+                },
+                "isCommand": True,
+                "isOouiCrud": True,
+                "isLlmCall": False,
+                "isAdminCrud": False,
+                "externalAgent": self.principal.external_agent,
+                "mcpConnectionId": self.principal.connection_id,
+            },
+            "output": None,
+            "status": "pending",
+            "logs": [],
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        (
+            self.db.collection("organizations")
+            .document(self.principal.organization_id)
+            .collection("spaces")
+            .document(self.principal.space_id)
+            .collection("requests")
+            .document("contextStoreRequests")
+            .collection("logs")
+            .document(request_id)
+            .set(request_data)
+        )
+
+        document_data = {
+            "name": f"fileSearchStores/{file_space_id}/documents/{document_id}",
+            "displayName": display_name,
+            "description": description_text,
+            "createTime": now.isoformat(),
+            "updateTime": now.isoformat(),
+            "state": "STATE_PENDING",
+            "sizeBytes": str(len(raw_bytes)),
+            "mimeType": mime_type,
+            "bucketName": bucket_name,
+            "filePath": file_path,
+            "gcsUrl": gcs_url,
+            "status": "uploading",
+            "subCategory": "fileUpload",
+            "originalFileInfo": {
+                "fileName": safe_name,
+                "bytes": len(raw_bytes),
+            },
+            "storeId": file_space_id,
+            "organizationId": self.principal.organization_id,
+            "spaceId": self.principal.space_id,
+            "sourceKind": "en-aistudioData",
+            "enAiStudioDataKind": "en-aistudioData",
+            "uploadedVia": "remote_mcp",
+            "externalAgent": self.principal.external_agent,
+            "mcpConnectionId": self.principal.connection_id,
+            "applicationId": application_id,
+            "storyId": story_id or None,
+            "operationVideoId": operation_video_id or None,
+            "tags": clean_tags,
+            "sourceNote": source_note or None,
+            "registration": {
+                "stage": "uploading",
+                "gcsUploaded": True,
+                "geminiRegistered": False,
+            },
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        (
+            self._collection("fileSpaces")
+            .document(file_space_id)
+            .collection("documents")
+            .document(document_id)
+            .set(document_data, merge=True)
+        )
+
+        return {
+            "requestId": request_id,
+            "fileSpaceId": file_space_id,
+            "documentId": document_id,
+            "bucketName": bucket_name,
+            "filePath": file_path,
+            "gcsUrl": gcs_url,
+            "status": "accepted",
+            "registrationStatus": "processing",
+            "message": "アップロードリクエストを受け付けました。少し時間が経つとSearch Storeへの登録が完了します。",
+        }
 
     def list_stories(
         self,
@@ -383,7 +608,13 @@ class VibeControlStore:
         manifest["assetCounts"] = {
             "sourceAssets": len(manifest["sourceAssets"]),
             "operationVideos": len(manifest["operationVideos"]),
-            "screenshots": sum(len(item.get("screenshots") or []) for item in manifest["operationVideos"]),
+            "videoClips": sum(len(item.get("clips") or []) for item in manifest["operationVideos"]),
+            "screenshots": sum(
+                len(clip.get("screenshots") or [])
+                for item in manifest["operationVideos"]
+                for clip in _as_list(item.get("clips"))
+                if isinstance(clip, dict)
+            ),
             "githubPullRequests": len(manifest["githubPullRequests"]),
             "knowledgeDocuments": len(manifest["knowledgeDocuments"]),
         }
@@ -409,14 +640,20 @@ class VibeControlStore:
             fallback_name=str(video.get("groupNameSnapshot") or ""),
         )
 
-        source_asset_ids = [
-            item
+        source_asset_ids = []
+        for item in [
+            _clean_text(video.get("sourceAssetId")),
+            _clean_text(video.get("journeySourceAssetId")),
+        ]:
+            if item and item not in source_asset_ids:
+                source_asset_ids.append(item)
+        for clip in self._operation_video_clips(video):
             for item in [
-                _clean_text(video.get("sourceAssetId")),
-                _clean_text(video.get("journeySourceAssetId")),
-            ]
-            if item
-        ]
+                _clean_text(clip.get("sourceAssetId")),
+                _clean_text(clip.get("journeySourceAssetId")),
+            ]:
+                if item and item not in source_asset_ids:
+                    source_asset_ids.append(item)
         source_assets = self.source_assets_by_ids(
             application_id=application_id,
             source_asset_ids=source_asset_ids,
@@ -468,7 +705,12 @@ class VibeControlStore:
                 "linkedStories": len(stories),
                 "evidence": len(evidence),
                 "sourceAssets": len(source_asset_refs),
-                "screenshots": len(video_ref.get("screenshots") or []),
+                "videoClips": len(video_ref.get("clips") or []),
+                "screenshots": sum(
+                    len(clip.get("screenshots") or [])
+                    for clip in _as_list(video_ref.get("clips"))
+                    if isinstance(clip, dict)
+                ),
                 "githubPullRequests": len(pull_requests),
                 "knowledgeDocuments": len(knowledge_documents),
             },
@@ -664,30 +906,95 @@ class VibeControlStore:
         include_signed_urls: bool,
         expires_at: datetime,
     ) -> dict[str, Any]:
-        bucket_name = _clean_text(item.get("bucketName"))
-        storage_path = _clean_text(item.get("storagePath"))
+        clips = self._operation_video_clips(item)
+        primary_clip = clips[0] if clips else {}
+        bucket_name = _clean_text(primary_clip.get("bucketName") or item.get("bucketName"))
+        storage_path = _clean_text(primary_clip.get("storagePath") or item.get("storagePath"))
+        clip_refs = [
+            self._operation_video_clip_ref(
+                clip,
+                include_signed_urls=include_signed_urls,
+                expires_at=expires_at,
+            )
+            for clip in clips
+        ]
         video_ref = {
             "id": item.get("id"),
             "kind": "operation_video",
             "title": item.get("title"),
             "description": item.get("description"),
-            "contentType": item.get("contentType"),
-            "sizeBytes": item.get("sizeBytes"),
-            "durationMs": item.get("durationMs"),
-            "recordedAt": item.get("recordedAt"),
+            "contentType": primary_clip.get("contentType") or item.get("contentType"),
+            "sizeBytes": primary_clip.get("sizeBytes") or item.get("sizeBytes"),
+            "durationMs": item.get("totalDurationMs") or primary_clip.get("durationMs") or item.get("durationMs"),
+            "recordedAt": primary_clip.get("recordedAt") or item.get("recordedAt"),
             "bucketName": bucket_name or None,
             "storagePath": storage_path or None,
             "gcsPath": f"gs://{bucket_name}/{storage_path}" if bucket_name and storage_path else None,
-            "transcriptSummary": item.get("transcriptSummary"),
-            "quickScan": item.get("quickScan"),
-            "sourceAssetId": item.get("sourceAssetId"),
-            "journeySourceAssetId": item.get("journeySourceAssetId"),
-            "journeyStoragePath": item.get("journeyStoragePath"),
+            "transcriptSummary": primary_clip.get("transcriptSummary") or item.get("transcriptSummary"),
+            "quickScan": primary_clip.get("quickScan") or item.get("quickScan"),
+            "sourceAssetId": primary_clip.get("sourceAssetId") or item.get("sourceAssetId"),
+            "journeySourceAssetId": primary_clip.get("journeySourceAssetId") or item.get("journeySourceAssetId"),
+            "journeyStoragePath": primary_clip.get("journeyStoragePath") or item.get("journeyStoragePath"),
+            "clipCount": len(clip_refs),
+            "clips": clip_refs,
             "videoGroup": self._operation_video_group_ref(
                 None,
                 fallback_id=str(item.get("groupId") or ""),
                 fallback_name=str(item.get("groupNameSnapshot") or ""),
             ),
+            "screenshots": clip_refs[0].get("screenshots", []) if clip_refs else [],
+        }
+        self._attach_signed_url(video_ref, bucket_name, storage_path, include_signed_urls=include_signed_urls, expires_at=expires_at)
+        return video_ref
+
+    def _operation_video_clips(self, item: dict[str, Any]) -> list[dict[str, Any]]:
+        clips = [clip for clip in _as_list(item.get("clips")) if isinstance(clip, dict)]
+        if clips:
+            return sorted(clips, key=lambda clip: str(clip.get("recordedAt") or ""))
+        return [
+            {
+                "id": "clip-001",
+                "fileName": item.get("fileName"),
+                "bucketName": item.get("bucketName"),
+                "storagePath": item.get("storagePath"),
+                "contentType": item.get("contentType"),
+                "sizeBytes": item.get("sizeBytes"),
+                "durationMs": item.get("durationMs"),
+                "recordedAt": item.get("recordedAt"),
+                "transcriptSummary": item.get("transcriptSummary"),
+                "quickScan": item.get("quickScan"),
+                "sourceAssetId": item.get("sourceAssetId"),
+                "journeySourceAssetId": item.get("journeySourceAssetId"),
+                "journeyStoragePath": item.get("journeyStoragePath"),
+                "frameCaptures": item.get("frameCaptures"),
+            }
+        ]
+
+    def _operation_video_clip_ref(
+        self,
+        clip: dict[str, Any],
+        *,
+        include_signed_urls: bool,
+        expires_at: datetime,
+    ) -> dict[str, Any]:
+        bucket_name = _clean_text(clip.get("bucketName"))
+        storage_path = _clean_text(clip.get("storagePath"))
+        ref = {
+            "id": clip.get("id"),
+            "kind": "operation_video_clip",
+            "fileName": clip.get("fileName"),
+            "contentType": clip.get("contentType"),
+            "sizeBytes": clip.get("sizeBytes"),
+            "durationMs": clip.get("durationMs"),
+            "recordedAt": clip.get("recordedAt"),
+            "bucketName": bucket_name or None,
+            "storagePath": storage_path or None,
+            "gcsPath": f"gs://{bucket_name}/{storage_path}" if bucket_name and storage_path else None,
+            "transcriptSummary": clip.get("transcriptSummary"),
+            "quickScan": clip.get("quickScan"),
+            "sourceAssetId": clip.get("sourceAssetId"),
+            "journeySourceAssetId": clip.get("journeySourceAssetId"),
+            "journeyStoragePath": clip.get("journeyStoragePath"),
             "screenshots": [
                 self._frame_ref(
                     frame,
@@ -695,12 +1002,12 @@ class VibeControlStore:
                     include_signed_urls=include_signed_urls,
                     expires_at=expires_at,
                 )
-                for frame in _as_list(item.get("frameCaptures"))
+                for frame in _as_list(clip.get("frameCaptures"))
                 if isinstance(frame, dict)
             ],
         }
-        self._attach_signed_url(video_ref, bucket_name, storage_path, include_signed_urls=include_signed_urls, expires_at=expires_at)
-        return video_ref
+        self._attach_signed_url(ref, bucket_name, storage_path, include_signed_urls=include_signed_urls, expires_at=expires_at)
+        return ref
 
     def _frame_ref(
         self,

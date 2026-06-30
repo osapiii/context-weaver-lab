@@ -51,6 +51,7 @@ import type {
   DecodedVibeControlStoryEvidence,
   VibeControlApplicationScanRun,
   VibeControlDriftLevel,
+  VibeControlOperationVideoClip,
   VibeControlOperationVideoDisplaySurface,
   VibeControlOperationVideoQuickScan,
   VibeControlReviewState,
@@ -167,6 +168,11 @@ export type VibeControlOperationVideoSaveInput = {
   sourceDisplaySurface?: VibeControlOperationVideoDisplaySurface;
 };
 
+export type VibeControlOperationVideoAppendInput =
+  VibeControlOperationVideoSaveInput & {
+    videoId: string;
+  };
+
 export type VibeControlZappingVideoAnalysisInput = {
   applicationId: string;
   videoId: string;
@@ -208,6 +214,111 @@ const toDocId = (value: string, fallback: string): string => {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return normalized || fallback;
+};
+
+const primaryOperationVideoClip = (
+  video: DecodedVibeControlOperationVideo
+): VibeControlOperationVideoClip => {
+  const clips = Array.isArray(video.clips) ? video.clips : [];
+  const sortedClips = [...clips].sort((a, b) =>
+    (a.recordedAt || "").localeCompare(b.recordedAt || "")
+  );
+  const firstClip = sortedClips[0];
+  if (firstClip) return firstClip;
+  return {
+    id: "clip-001",
+    fileName: video.fileName,
+    bucketName: video.bucketName,
+    storagePath: video.storagePath,
+    contentType: video.contentType || "video/webm",
+    sizeBytes: video.sizeBytes || 0,
+    durationMs: video.durationMs,
+    transcriptText: video.transcriptText,
+    transcriptProvider: video.transcriptProvider,
+    transcriptSummary: video.transcriptSummary,
+    quickScan: video.quickScan,
+    frameCaptures: video.frameCaptures ?? [],
+    metadataFileName: video.metadataFileName,
+    metadataStoragePath: video.metadataStoragePath,
+    journeyFileName: video.journeyFileName,
+    journeyStoragePath: video.journeyStoragePath,
+    fileSpaceRequestId: video.fileSpaceRequestId,
+    journeyFileSpaceRequestId: video.journeyFileSpaceRequestId,
+    sourceAssetId: video.sourceAssetId,
+    journeySourceAssetId: video.journeySourceAssetId,
+    sourceDisplaySurface: video.sourceDisplaySurface ?? "unknown",
+    recordedAt: video.recordedAt,
+  };
+};
+
+const normalizedOperationVideoClips = (
+  video: DecodedVibeControlOperationVideo
+): VibeControlOperationVideoClip[] => {
+  const clips = Array.isArray(video.clips) ? video.clips : [];
+  const normalized = clips.length > 0 ? clips : [primaryOperationVideoClip(video)];
+  return [...normalized].sort((a, b) =>
+    (a.recordedAt || "").localeCompare(b.recordedAt || "")
+  );
+};
+
+const normalizeOperationVideo = (
+  video: DecodedVibeControlOperationVideo
+): DecodedVibeControlOperationVideo => {
+  const clips = normalizedOperationVideoClips(video);
+  const primary = clips[0] ?? primaryOperationVideoClip(video);
+  const totalDurationMs = clips.reduce(
+    (sum, clip) => sum + Math.max(0, clip.durationMs ?? 0),
+    0
+  );
+  return {
+    ...video,
+    fileName: primary.fileName,
+    bucketName: primary.bucketName,
+    storagePath: primary.storagePath,
+    contentType: primary.contentType,
+    sizeBytes: primary.sizeBytes,
+    durationMs: primary.durationMs,
+    transcriptText: primary.transcriptText,
+    transcriptProvider: primary.transcriptProvider,
+    transcriptSummary: primary.transcriptSummary,
+    quickScan: primary.quickScan,
+    frameCaptures: primary.frameCaptures ?? [],
+    fileSpaceRequestId: primary.fileSpaceRequestId ?? video.fileSpaceRequestId,
+    metadataFileName: primary.metadataFileName ?? video.metadataFileName,
+    metadataStoragePath: primary.metadataStoragePath ?? video.metadataStoragePath,
+    journeyFileName: primary.journeyFileName ?? video.journeyFileName,
+    journeyStoragePath: primary.journeyStoragePath ?? video.journeyStoragePath,
+    journeyFileSpaceRequestId:
+      primary.journeyFileSpaceRequestId ?? video.journeyFileSpaceRequestId,
+    sourceAssetId: primary.sourceAssetId ?? video.sourceAssetId,
+    journeySourceAssetId:
+      primary.journeySourceAssetId ?? video.journeySourceAssetId,
+    sourceDisplaySurface: primary.sourceDisplaySurface ?? video.sourceDisplaySurface,
+    recordedAt: primary.recordedAt || video.recordedAt,
+    clips,
+    clipCount: clips.length,
+    totalDurationMs: totalDurationMs || primary.durationMs,
+    lastClipAddedAt:
+      video.lastClipAddedAt || clips.at(-1)?.recordedAt || video.recordedAt,
+  };
+};
+
+const operationVideoSourceAssetIds = (
+  video: DecodedVibeControlOperationVideo
+): string[] => {
+  const ids = [
+    video.sourceAssetId,
+    video.journeySourceAssetId,
+    `source-asset-${video.id}`,
+    `source-asset-${video.id}-journey`,
+    ...normalizedOperationVideoClips(video).flatMap((clip) => [
+      clip.sourceAssetId,
+      clip.journeySourceAssetId,
+    ]),
+  ];
+  return ids.filter(
+    (id, index, arr): id is string => Boolean(id) && arr.indexOf(id) === index
+  );
 };
 
 const scanProfilePasswordSecretId = (profileId: string): string =>
@@ -1130,7 +1241,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
         this.evidence = evidence;
         this.sourceConnections = sourceConnections;
         this.scanProfiles = scanProfiles;
-        this.operationVideos = operationVideos;
+        this.operationVideos = operationVideos.map(normalizeOperationVideo);
         this.operationVideoGroups = operationVideoGroups;
         this.capabilities = capabilities;
         this.sourceAssets = sourceAssets;
@@ -2262,6 +2373,65 @@ export const useVibeControlStore = defineStore("vibeControl", {
       );
       this.lastRunLog.unshift(`Operation Video Group: ${group.name} を削除`);
     },
+    async moveOperationVideosToGroup(input: {
+      videoIds: string[];
+      groupId: string;
+    }): Promise<void> {
+      const group = this.operationVideoGroups.find((item) => item.id === input.groupId);
+      if (!group) {
+        throw new Error("移動先の動画グループが見つかりません");
+      }
+      const targetIds = Array.from(new Set(input.videoIds)).filter(Boolean);
+      if (targetIds.length === 0) return;
+      const targetVideos = this.operationVideos.filter((video) =>
+        targetIds.includes(video.id)
+      );
+      if (targetVideos.length === 0) {
+        throw new Error("移動対象の操作動画が見つかりません");
+      }
+
+      const nextVideos = this.operationVideos.map((video) =>
+        targetIds.includes(video.id)
+          ? {
+              ...video,
+              groupId: group.id,
+              groupNameSnapshot: group.name,
+            }
+          : video
+      );
+      const nextGroups = this.operationVideoGroups.map((item) => ({
+        ...item,
+        videoCount: nextVideos.filter((video) => video.groupId === item.id).length,
+      }));
+      const firestoreOps = useFirestoreDocOperation();
+      await Promise.all([
+        ...targetVideos.map((video) => {
+          const nextVideo = nextVideos.find((item) => item.id === video.id)!;
+          return firestoreOps.createDocument({
+            collectionName: this.operationVideoCollectionPath(),
+            docId: nextVideo.id,
+            docData: nextVideo,
+            converter: vibeControlOperationVideoConverter,
+            merge: true,
+          });
+        }),
+        ...nextGroups.map((nextGroup) =>
+          firestoreOps.createDocument({
+            collectionName: this.operationVideoGroupCollectionPath(),
+            docId: nextGroup.id,
+            docData: nextGroup,
+            converter: vibeControlOperationVideoGroupConverter,
+            merge: true,
+          })
+        ),
+      ]);
+
+      this.operationVideos = nextVideos;
+      this.operationVideoGroups = nextGroups;
+      this.lastRunLog.unshift(
+        `Operation Video Group: ${targetVideos.length}件を ${group.name} に移動`
+      );
+    },
     async ensureDefaultOperationVideoGroups(): Promise<void> {
       const firestoreOps = useFirestoreDocOperation();
       const updatedGroups = [...this.operationVideoGroups];
@@ -2345,14 +2515,15 @@ export const useVibeControlStore = defineStore("vibeControl", {
     async persistOperationVideo(
       video: DecodedVibeControlOperationVideo
     ): Promise<void> {
+      const normalizedVideo = normalizeOperationVideo(video);
       this.operationVideos = [
-        video,
-        ...this.operationVideos.filter((item) => item.id !== video.id),
+        normalizedVideo,
+        ...this.operationVideos.filter((item) => item.id !== normalizedVideo.id),
       ];
       await useFirestoreDocOperation().createDocument({
         collectionName: this.operationVideoCollectionPath(),
-        docId: video.id,
-        docData: video,
+        docId: normalizedVideo.id,
+        docData: normalizedVideo,
         converter: vibeControlOperationVideoConverter,
         merge: true,
       });
@@ -2366,6 +2537,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
       const sourceAssets = this.sourceAssetPayloadForApplication(
         params.application.id
       );
+      const video = normalizeOperationVideo(params.video);
+      const clips = normalizedOperationVideoClips(video);
+      const primaryClip = clips[0] ?? primaryOperationVideoClip(video);
       return {
         active_mode: "vibe_zapping_analysis",
         vibe_zapping_analysis: {
@@ -2379,32 +2553,35 @@ export const useVibeControlStore = defineStore("vibeControl", {
             file_space_id: params.application.fileSpaceId,
             repo_full_name: params.application.repoFullName,
             default_branch: params.application.defaultBranch || "main",
-            operation_video_id: params.video.id,
-            video_storage_path: params.video.storagePath,
-            video_bucket_name: params.video.bucketName,
-            video_content_type: params.video.contentType,
-            video_duration_ms: params.video.durationMs,
+            operation_video_id: video.id,
+            video_storage_path: primaryClip.storagePath,
+            video_bucket_name: primaryClip.bucketName,
+            video_content_type: primaryClip.contentType,
+            video_duration_ms: video.totalDurationMs ?? primaryClip.durationMs,
+            video_clip_count: clips.length,
           },
           payload: {
             operation_video: {
-              id: params.video.id,
-              title: params.video.title,
-              description: params.video.description,
-              quickScan: params.video.quickScan,
-              transcriptText: params.video.transcriptText,
-              transcriptProvider: params.video.transcriptProvider,
-              transcriptSummary: params.video.transcriptSummary,
-              fileName: params.video.fileName,
-              bucketName: params.video.bucketName,
-              storagePath: params.video.storagePath,
-              contentType: params.video.contentType,
-              sizeBytes: params.video.sizeBytes,
-              durationMs: params.video.durationMs,
-              frameCaptures: params.video.frameCaptures,
-              recordedAt: params.video.recordedAt,
-              sourceDisplaySurface: params.video.sourceDisplaySurface,
-              sourceAssetId: params.video.sourceAssetId,
-              journeySourceAssetId: params.video.journeySourceAssetId,
+              id: video.id,
+              title: video.title,
+              description: video.description,
+              quickScan: primaryClip.quickScan,
+              transcriptText: primaryClip.transcriptText,
+              transcriptProvider: primaryClip.transcriptProvider,
+              transcriptSummary: primaryClip.transcriptSummary,
+              fileName: primaryClip.fileName,
+              bucketName: primaryClip.bucketName,
+              storagePath: primaryClip.storagePath,
+              contentType: primaryClip.contentType,
+              sizeBytes: primaryClip.sizeBytes,
+              durationMs: video.totalDurationMs ?? primaryClip.durationMs,
+              frameCaptures: primaryClip.frameCaptures,
+              recordedAt: primaryClip.recordedAt,
+              sourceDisplaySurface: primaryClip.sourceDisplaySurface,
+              sourceAssetId: primaryClip.sourceAssetId,
+              journeySourceAssetId: primaryClip.journeySourceAssetId,
+              clipCount: clips.length,
+              clips,
             },
             source_assets: sourceAssets,
             existing_capabilities: this.capabilities.filter(
@@ -2446,6 +2623,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
       provider: "github" | "slack" | "knowledge";
       prompt?: string;
     }): Record<string, unknown> {
+      const video = normalizeOperationVideo(params.video);
       return {
         active_mode: "vibe_related_context",
         vibe_related_context: {
@@ -2477,18 +2655,20 @@ export const useVibeControlStore = defineStore("vibeControl", {
               defaultBranch: params.application.defaultBranch || "main",
             },
             operation_video: {
-              id: params.video.id,
-              title: params.video.title,
-              description: params.video.description,
-              quickScan: params.video.quickScan,
-              transcriptSummary: params.video.transcriptSummary,
-              transcriptProvider: params.video.transcriptProvider,
-              frameCaptures: params.video.frameCaptures,
-              recordedAt: params.video.recordedAt,
-              sourceDisplaySurface: params.video.sourceDisplaySurface,
+              id: video.id,
+              title: video.title,
+              description: video.description,
+              quickScan: video.quickScan,
+              transcriptSummary: video.transcriptSummary,
+              transcriptProvider: video.transcriptProvider,
+              frameCaptures: video.frameCaptures,
+              clips: video.clips,
+              clipCount: video.clipCount,
+              recordedAt: video.recordedAt,
+              sourceDisplaySurface: video.sourceDisplaySurface,
             },
-            analysis_result: params.video.analysisResult,
-            existing_related_contexts: params.video.relatedContexts,
+            analysis_result: video.analysisResult,
+            existing_related_contexts: video.relatedContexts,
             user_notes: params.prompt?.trim() || undefined,
             expected_outputs:
               params.provider === "slack"
@@ -2619,6 +2799,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
         analysisSessionId,
         prompt: input.prompt,
       });
+      const clips = normalizedOperationVideoClips(video);
       const prompt =
         input.prompt?.trim() ||
         [
@@ -2660,13 +2841,11 @@ export const useVibeControlStore = defineStore("vibeControl", {
             workspaceId: application.id,
             history: [],
             modeState,
-            attachments: [
-              {
-                gcsPath: `gs://${video.bucketName}/${video.storagePath}`,
-                mimeType: video.contentType || "video/webm",
-                fileName: video.fileName,
-              },
-            ],
+            attachments: clips.map((clip) => ({
+              gcsPath: `gs://${clip.bucketName}/${clip.storagePath}`,
+              mimeType: clip.contentType || "video/webm",
+              fileName: clip.fileName,
+            })),
           }),
         });
 
@@ -3216,6 +3395,10 @@ export const useVibeControlStore = defineStore("vibeControl", {
             : params.errorMessage || "",
         analyzedAt: params.status === "completed" ? nowIso() : video.analyzedAt,
         analysisResult: keyedAnalysisResult ?? video.analysisResult,
+        hasUnanalyzedClip:
+          params.status === "completed" ? false : video.hasUnanalyzedClip,
+        analysisStaleReason:
+          params.status === "completed" ? undefined : video.analysisStaleReason,
       });
     },
     async updateRelatedContextAnalysisStatus(params: {
@@ -3447,6 +3630,385 @@ export const useVibeControlStore = defineStore("vibeControl", {
     }): string {
       return buildOperationVideoMetadataMarkdown(params);
     },
+    async uploadOperationVideoClip(params: {
+      application: DecodedVibeControlApplication;
+      group: DecodedVibeControlOperationVideoGroup;
+      videoId: string;
+      input: VibeControlOperationVideoSaveInput;
+      title: string;
+      description?: string;
+      organizationId: string;
+      spaceId: string;
+      clipIndex: number;
+    }): Promise<{
+      clip: VibeControlOperationVideoClip;
+      sourceAssets: DecodedVibeControlSourceAsset[];
+      discoveryStatus: DecodedVibeControlOperationVideo["discoveryStatus"];
+      discoveryErrorMessage?: string;
+    }> {
+      const { application, group, videoId, input, title } = params;
+      const fileSpaceId = application.fileSpaceId?.trim();
+      const contextStore = useContextStore();
+      const storageOps = useFirebaseStorageOperations();
+      const config = useRuntimeConfig();
+      const bucketName = resolveStorageBucketName(
+        config.public.firebase.storageBucket
+      );
+      const now = nowIso();
+      const clipId = `clip-${String(params.clipIndex + 1).padStart(3, "0")}`;
+      const safeTitle = toDocId(title, "operation-video");
+      const timestamp = now.replace(/[:.]/g, "-");
+      const contentType = input.contentType || input.blob.type || "video/webm";
+      const tags =
+        input.tags
+          ?.map((tag) => tag.trim())
+          .filter((tag, index, arr) => tag && arr.indexOf(tag) === index) ?? [];
+      const transcriptText = input.transcriptText?.trim() || undefined;
+      const transcriptProvider = input.transcriptProvider?.trim() || undefined;
+      const transcriptSummary = input.transcriptSummary?.trim() || undefined;
+      const quickScan = input.quickScan;
+      const requestErrors: string[] = [];
+      const extension = contentType.includes("mp4") ? "mp4" : "webm";
+      const fileName = `${safeTitle}-${timestamp}.${extension}`;
+      const storagePath = contextStore.baseGcsPath(
+        `vibeControl/applications/${application.id}/operationVideos/${videoId}/clips/${clipId}/${fileName}`
+      );
+
+      const uploaded = await storageOps.uploadPdfFile({
+        bucketName,
+        filePath: storagePath,
+        rawData: input.blob,
+        mimeType: contentType,
+      });
+      if (!uploaded) {
+        throw new Error("ザッピング動画のFirebase Storage保存に失敗しました");
+      }
+
+      const frameCaptures: NonNullable<
+        DecodedVibeControlOperationVideo["frameCaptures"]
+      > = [];
+      for (const [index, frame] of (input.frameCaptures ?? []).entries()) {
+        if (frame.blob.size <= 0) continue;
+        const frameId = `frame-${String(index + 1).padStart(3, "0")}`;
+        const frameContentType = frame.contentType || frame.blob.type || "image/jpeg";
+        const frameFileName = `${safeTitle}-${timestamp}-${clipId}-${frameId}.jpg`;
+        const frameStoragePath = contextStore.baseGcsPath(
+          `vibeControl/applications/${application.id}/operationVideos/${videoId}/clips/${clipId}/frames/${frameFileName}`
+        );
+        const frameUploaded = await storageOps.uploadPdfFile({
+          bucketName,
+          filePath: frameStoragePath,
+          rawData: frame.blob,
+          mimeType: frameContentType,
+        });
+        if (!frameUploaded) {
+          requestErrors.push(`${clipId}/${frameId} のスクリーンショット保存に失敗しました`);
+          continue;
+        }
+        frameCaptures.push({
+          id: frameId,
+          timestampMs: Math.max(0, Math.round(frame.timestampMs)),
+          fileName: frameFileName,
+          bucketName,
+          storagePath: frameStoragePath,
+          contentType: frameContentType,
+          width: frame.width,
+          height: frame.height,
+        });
+      }
+
+      const metadataFileName =
+        params.clipIndex === 0
+          ? `${safeTitle}-${timestamp}.md`
+          : `${safeTitle}-${timestamp}-${clipId}.md`;
+      const metadataMarkdown = this.buildOperationVideoMarkdown({
+        application,
+        videoId,
+        title,
+        description: params.description,
+        bucketName,
+        storagePath,
+        contentType,
+        sizeBytes: input.blob.size,
+        durationMs: input.durationMs,
+        recordedAt: now,
+        sourceDisplaySurface: input.sourceDisplaySurface,
+        tags,
+        transcriptText,
+        transcriptProvider,
+        transcriptSummary,
+        quickScan,
+        frameCaptures,
+      });
+      const journeyFileName =
+        params.clipIndex === 0
+          ? `${safeTitle}-${timestamp}-journey.md`
+          : `${safeTitle}-${timestamp}-${clipId}-journey.md`;
+      const journeyMarkdown = buildOperationVideoJourneyMarkdown({
+        application,
+        videoId,
+        title,
+        description: params.description,
+        bucketName,
+        storagePath,
+        contentType,
+        sizeBytes: input.blob.size,
+        durationMs: input.durationMs,
+        recordedAt: now,
+        sourceDisplaySurface: input.sourceDisplaySurface,
+        tags,
+        transcriptText,
+        transcriptProvider,
+        transcriptSummary,
+        quickScan,
+        frameCaptures,
+      });
+
+      let fileSpaceRequestId: string | undefined;
+      let journeyFileSpaceRequestId: string | undefined;
+      let metadataStoragePath: string | undefined;
+      let journeyStoragePath: string | undefined;
+      const sourceAssetId =
+        params.clipIndex === 0
+          ? `source-asset-${videoId}`
+          : `source-asset-${videoId}-${clipId}`;
+      const journeySourceAssetId =
+        params.clipIndex === 0
+          ? `source-asset-${videoId}-journey`
+          : `source-asset-${videoId}-${clipId}-journey`;
+
+      if (fileSpaceId) {
+        metadataStoragePath = contextStore.baseGcsPath(
+          manualUploadRelativePath({ fileSpaceId, fileName: metadataFileName })
+        );
+        journeyStoragePath = contextStore.baseGcsPath(
+          manualUploadRelativePath({ fileSpaceId, fileName: journeyFileName })
+        );
+
+        const metadataUploaded = await storageOps.uploadPdfFile({
+          bucketName,
+          filePath: metadataStoragePath,
+          rawData: new Blob([metadataMarkdown], { type: "text/markdown" }),
+          mimeType: "text/markdown",
+        });
+
+        if (metadataUploaded) {
+          const requestDoc =
+            await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
+              operationType: "fileSpaceUpload",
+              storeId: fileSpaceId,
+              bucketName,
+              filePath: metadataStoragePath,
+              mimeType: "text/markdown",
+              documentId:
+                params.clipIndex === 0
+                  ? `vibecontrol-operation-video-${videoId}`
+                  : `vibecontrol-operation-video-${videoId}-${clipId}`,
+              description: `VibeControl operation video metadata: ${title}`,
+              customMetadata: [
+                { key: "source", value: "vibe-control-operation-video" },
+                { key: "applicationId", value: application.id },
+                { key: "applicationKey", value: application.applicationKey },
+                { key: "operationVideoId", value: videoId },
+                { key: "operationVideoClipId", value: clipId },
+                { key: "operationVideoGroupId", value: group.id },
+                { key: "operationVideoGroupName", value: group.name },
+                { key: "sourceAssetId", value: sourceAssetId },
+                { key: "videoStoragePath", value: storagePath },
+                { key: "documentKind", value: "operation_video_metadata" },
+              ],
+              originalFileInfo: {
+                fileName: metadataFileName,
+                bytes: new Blob([metadataMarkdown]).size,
+              },
+              organizationId: params.organizationId,
+              spaceId: params.spaceId,
+            });
+          if (requestDoc?.id) {
+            fileSpaceRequestId = requestDoc.id;
+          } else {
+            requestErrors.push("動画メタデータのFileSpace upload RequestDoc作成に失敗しました");
+          }
+        } else {
+          requestErrors.push("検索用メタデータMarkdownの保存に失敗しました");
+        }
+
+        const journeyUploaded = await storageOps.uploadPdfFile({
+          bucketName,
+          filePath: journeyStoragePath,
+          rawData: new Blob([journeyMarkdown], { type: "text/markdown" }),
+          mimeType: "text/markdown",
+        });
+
+        if (journeyUploaded) {
+          const requestDoc =
+            await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
+              operationType: "fileSpaceUpload",
+              storeId: fileSpaceId,
+              bucketName,
+              filePath: journeyStoragePath,
+              mimeType: "text/markdown",
+              documentId:
+                params.clipIndex === 0
+                  ? `vibecontrol-operation-video-journey-${videoId}`
+                  : `vibecontrol-operation-video-journey-${videoId}-${clipId}`,
+              description: `VibeControl operation journey evidence: ${title}`,
+              customMetadata: [
+                { key: "source", value: "vibe-control-operation-video-journey" },
+                { key: "applicationId", value: application.id },
+                { key: "applicationKey", value: application.applicationKey },
+                { key: "applicationName", value: application.name },
+                { key: "repoFullName", value: application.repoFullName },
+                { key: "operationVideoId", value: videoId },
+                { key: "operationVideoClipId", value: clipId },
+                { key: "operationVideoGroupId", value: group.id },
+                { key: "operationVideoGroupName", value: group.name },
+                { key: "sourceAssetId", value: journeySourceAssetId },
+                { key: "videoStoragePath", value: storagePath },
+                { key: "documentKind", value: "operation_video_journey" },
+              ],
+              originalFileInfo: {
+                fileName: journeyFileName,
+                bytes: new Blob([journeyMarkdown]).size,
+              },
+              organizationId: params.organizationId,
+              spaceId: params.spaceId,
+            });
+          if (requestDoc?.id) {
+            journeyFileSpaceRequestId = requestDoc.id;
+          } else {
+            requestErrors.push("操作JourneyのFileSpace upload RequestDoc作成に失敗しました");
+          }
+        } else {
+          requestErrors.push("操作Journey Markdownの保存に失敗しました");
+        }
+      }
+
+      const discoveryStatus: DecodedVibeControlOperationVideo["discoveryStatus"] =
+        fileSpaceId
+          ? fileSpaceRequestId || journeyFileSpaceRequestId
+            ? "queued"
+            : "error"
+          : "not_registered";
+      const discoveryErrorMessage =
+        requestErrors.length > 0
+          ? requestErrors.join(" / ")
+          : fileSpaceId
+            ? undefined
+            : "アプリ専用FileSpaceが未設定のため、動画のみ保存しました";
+
+      const clip: VibeControlOperationVideoClip = {
+        id: clipId,
+        fileName,
+        bucketName,
+        storagePath,
+        contentType,
+        sizeBytes: input.blob.size,
+        durationMs: input.durationMs,
+        transcriptText,
+        transcriptProvider,
+        transcriptSummary,
+        quickScan,
+        frameCaptures,
+        metadataFileName,
+        metadataStoragePath,
+        journeyFileName,
+        journeyStoragePath,
+        fileSpaceRequestId,
+        journeyFileSpaceRequestId,
+        sourceAssetId,
+        journeySourceAssetId,
+        sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
+        recordedAt: now,
+      };
+
+      const sourceAssets: DecodedVibeControlSourceAsset[] = [
+        {
+          id: sourceAssetId,
+          applicationId: application.id,
+          applicationKey: application.applicationKey,
+          sourceType: "operation_video",
+          title,
+          summary: params.description,
+          uri: `gs://${bucketName}/${storagePath}`,
+          gcsPath: `gs://${bucketName}/${storagePath}`,
+          storagePath,
+          fileSpaceId: fileSpaceId || undefined,
+          fileSpaceRequestId,
+          discoveryStatus: fileSpaceId
+            ? fileSpaceRequestId
+              ? "queued"
+              : "error"
+            : "not_registered",
+          discoveryDocumentId:
+            params.clipIndex === 0
+              ? `vibecontrol-operation-video-${videoId}`
+              : `vibecontrol-operation-video-${videoId}-${clipId}`,
+          discoveryErrorMessage: !fileSpaceId
+            ? "アプリ専用FileSpaceが未設定のため、Discovery Engine登録は未実行です"
+            : fileSpaceRequestId
+              ? undefined
+              : "動画メタデータのDiscovery Engine登録に失敗しました",
+          metadata: {
+            operationVideoId: videoId,
+            operationVideoClipId: clipId,
+            contentType,
+            sizeBytes: input.blob.size,
+            durationMs: input.durationMs,
+            transcriptProvider,
+            transcriptText,
+            transcriptSummary,
+            quickScan,
+            frameCaptures,
+            tags,
+            metadataStoragePath,
+            sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
+            operationVideoGroupId: group.id,
+            operationVideoGroupName: group.name,
+          },
+        },
+      ];
+
+      if (journeyStoragePath) {
+        sourceAssets.push({
+          id: journeySourceAssetId,
+          applicationId: application.id,
+          applicationKey: application.applicationKey,
+          sourceType: "operation_video_journey",
+          title: `Operation Journey: ${title}`,
+          summary:
+            params.description ||
+            "ザッピング動画から生成したユーザージャーニー検索用証跡",
+          uri: `gs://${bucketName}/${journeyStoragePath}`,
+          gcsPath: `gs://${bucketName}/${journeyStoragePath}`,
+          storagePath: journeyStoragePath,
+          fileSpaceId: fileSpaceId || undefined,
+          fileSpaceRequestId: journeyFileSpaceRequestId,
+          discoveryStatus: journeyFileSpaceRequestId ? "queued" : "error",
+          discoveryDocumentId:
+            params.clipIndex === 0
+              ? `vibecontrol-operation-video-journey-${videoId}`
+              : `vibecontrol-operation-video-journey-${videoId}-${clipId}`,
+          discoveryErrorMessage: journeyFileSpaceRequestId
+            ? undefined
+            : "操作JourneyのDiscovery Engine登録に失敗しました",
+          metadata: {
+            operationVideoId: videoId,
+            operationVideoClipId: clipId,
+            videoStoragePath: storagePath,
+            transcriptProvider,
+            transcriptText,
+            transcriptSummary,
+            tags,
+            sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
+            operationVideoGroupId: group.id,
+            operationVideoGroupName: group.name,
+          },
+        });
+      }
+
+      return { clip, sourceAssets, discoveryStatus, discoveryErrorMessage };
+    },
     async saveOperationVideoCapture(
       input: VibeControlOperationVideoSaveInput
     ): Promise<DecodedVibeControlOperationVideo> {
@@ -3486,355 +4048,64 @@ export const useVibeControlStore = defineStore("vibeControl", {
       this.error = null;
 
       try {
-        const contextStore = useContextStore();
-        const storageOps = useFirebaseStorageOperations();
-        const config = useRuntimeConfig();
-        const bucketName = resolveStorageBucketName(
-          config.public.firebase.storageBucket
-        );
-        const now = nowIso();
+        {
         const videoId = `operation-video-${createRandomDocId()}`;
-        const safeTitle = toDocId(title, "operation-video");
-        const timestamp = now.replace(/[:.]/g, "-");
-        const contentType = input.contentType || input.blob.type || "video/webm";
-        const tags =
-          input.tags
-            ?.map((tag) => tag.trim())
-            .filter((tag, index, arr) => tag && arr.indexOf(tag) === index) ?? [];
-        const transcriptText = input.transcriptText?.trim() || undefined;
-        const transcriptProvider = input.transcriptProvider?.trim() || undefined;
-        const transcriptSummary = input.transcriptSummary?.trim() || undefined;
-        const quickScan = input.quickScan;
-        const requestErrors: string[] = [];
-        const extension = contentType.includes("mp4") ? "mp4" : "webm";
-        const fileName = `${safeTitle}-${timestamp}.${extension}`;
-        const storagePath = contextStore.baseGcsPath(
-          `vibeControl/applications/${application.id}/operationVideos/${videoId}/${fileName}`
-        );
-
-        const uploaded = await storageOps.uploadPdfFile({
-          bucketName,
-          filePath: storagePath,
-          rawData: input.blob,
-          mimeType: contentType,
-        });
-        if (!uploaded) {
-          throw new Error("ザッピング動画のFirebase Storage保存に失敗しました");
-        }
-
-        const frameCaptures: NonNullable<
-          DecodedVibeControlOperationVideo["frameCaptures"]
-        > = [];
-        for (const [index, frame] of (input.frameCaptures ?? []).entries()) {
-          if (frame.blob.size <= 0) continue;
-          const frameId = `frame-${String(index + 1).padStart(3, "0")}`;
-          const frameContentType = frame.contentType || frame.blob.type || "image/jpeg";
-          const frameFileName = `${safeTitle}-${timestamp}-${frameId}.jpg`;
-          const frameStoragePath = contextStore.baseGcsPath(
-            `vibeControl/applications/${application.id}/operationVideos/${videoId}/frames/${frameFileName}`
-          );
-          const frameUploaded = await storageOps.uploadPdfFile({
-            bucketName,
-            filePath: frameStoragePath,
-            rawData: frame.blob,
-            mimeType: frameContentType,
+        const description = input.description?.trim() || undefined;
+        const { clip, sourceAssets, discoveryStatus, discoveryErrorMessage } =
+          await this.uploadOperationVideoClip({
+            application,
+            group,
+            videoId,
+            input,
+            title,
+            description,
+            organizationId,
+            spaceId,
+            clipIndex: 0,
           });
-          if (!frameUploaded) {
-            requestErrors.push(`${frameId} のスクリーンショット保存に失敗しました`);
-            continue;
-          }
-          frameCaptures.push({
-            id: frameId,
-            timestampMs: Math.max(0, Math.round(frame.timestampMs)),
-            fileName: frameFileName,
-            bucketName,
-            storagePath: frameStoragePath,
-            contentType: frameContentType,
-            width: frame.width,
-            height: frame.height,
-          });
-        }
-
-        const metadataFileName = `${safeTitle}-${timestamp}.md`;
-        const metadataMarkdown = this.buildOperationVideoMarkdown({
-          application,
-          videoId,
-          title,
-          description: input.description,
-          bucketName,
-          storagePath,
-          contentType,
-          sizeBytes: input.blob.size,
-          durationMs: input.durationMs,
-          recordedAt: now,
-          sourceDisplaySurface: input.sourceDisplaySurface,
-          tags,
-          transcriptText,
-          transcriptProvider,
-          transcriptSummary,
-          quickScan,
-          frameCaptures,
-        });
-        const journeyFileName = `${safeTitle}-${timestamp}-journey.md`;
-        const journeyMarkdown = buildOperationVideoJourneyMarkdown({
-          application,
-          videoId,
-          title,
-          description: input.description,
-          bucketName,
-          storagePath,
-          contentType,
-          sizeBytes: input.blob.size,
-          durationMs: input.durationMs,
-          recordedAt: now,
-          sourceDisplaySurface: input.sourceDisplaySurface,
-          tags,
-          transcriptText,
-          transcriptProvider,
-          transcriptSummary,
-          quickScan,
-          frameCaptures,
-        });
-
-        let fileSpaceRequestId: string | undefined;
-        let journeyFileSpaceRequestId: string | undefined;
-        let metadataStoragePath: string | undefined;
-        let journeyStoragePath: string | undefined;
-        let discoveryStatus: DecodedVibeControlOperationVideo["discoveryStatus"] =
-          "not_registered";
-        const sourceAssetId = `source-asset-${videoId}`;
-        const journeySourceAssetId = `source-asset-${videoId}-journey`;
-
-        if (fileSpaceId) {
-          metadataStoragePath = contextStore.baseGcsPath(
-            manualUploadRelativePath({
-              fileSpaceId,
-              fileName: metadataFileName,
-            })
-          );
-          journeyStoragePath = contextStore.baseGcsPath(
-            manualUploadRelativePath({
-              fileSpaceId,
-              fileName: journeyFileName,
-            })
-          );
-
-          const metadataUploaded = await storageOps.uploadPdfFile({
-            bucketName,
-            filePath: metadataStoragePath,
-            rawData: new Blob([metadataMarkdown], { type: "text/markdown" }),
-            mimeType: "text/markdown",
-          });
-
-          if (metadataUploaded) {
-            const requestDoc =
-              await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
-                operationType: "fileSpaceUpload",
-                storeId: fileSpaceId,
-                bucketName,
-                filePath: metadataStoragePath,
-                mimeType: "text/markdown",
-                documentId: `vibecontrol-operation-video-${videoId}`,
-                description: `VibeControl operation video metadata: ${title}`,
-                customMetadata: [
-                  { key: "source", value: "vibe-control-operation-video" },
-                  { key: "applicationId", value: application.id },
-                  { key: "applicationKey", value: application.applicationKey },
-                  { key: "operationVideoId", value: videoId },
-                  { key: "operationVideoGroupId", value: group.id },
-                  { key: "operationVideoGroupName", value: group.name },
-                  { key: "sourceAssetId", value: sourceAssetId },
-                  { key: "videoStoragePath", value: storagePath },
-                  { key: "documentKind", value: "operation_video_metadata" },
-                ],
-                originalFileInfo: {
-                  fileName: metadataFileName,
-                  bytes: new Blob([metadataMarkdown]).size,
-                },
-                organizationId,
-                spaceId,
-              });
-            if (requestDoc?.id) {
-              fileSpaceRequestId = requestDoc.id;
-            } else {
-              requestErrors.push("動画メタデータのFileSpace upload RequestDoc作成に失敗しました");
-            }
-          } else {
-            requestErrors.push("検索用メタデータMarkdownの保存に失敗しました");
-          }
-
-          const journeyUploaded = await storageOps.uploadPdfFile({
-            bucketName,
-            filePath: journeyStoragePath,
-            rawData: new Blob([journeyMarkdown], { type: "text/markdown" }),
-            mimeType: "text/markdown",
-          });
-
-          if (journeyUploaded) {
-            const requestDoc =
-              await useGeminiFileSpaceOperatorStore().createFileSpaceRequest({
-                operationType: "fileSpaceUpload",
-                storeId: fileSpaceId,
-                bucketName,
-                filePath: journeyStoragePath,
-                mimeType: "text/markdown",
-                documentId: `vibecontrol-operation-video-journey-${videoId}`,
-                description: `VibeControl operation journey evidence: ${title}`,
-                customMetadata: [
-                  { key: "source", value: "vibe-control-operation-video-journey" },
-                  { key: "applicationId", value: application.id },
-                  { key: "applicationKey", value: application.applicationKey },
-                  { key: "applicationName", value: application.name },
-                  { key: "repoFullName", value: application.repoFullName },
-                  { key: "operationVideoId", value: videoId },
-                  { key: "operationVideoGroupId", value: group.id },
-                  { key: "operationVideoGroupName", value: group.name },
-                  { key: "sourceAssetId", value: journeySourceAssetId },
-                  { key: "videoStoragePath", value: storagePath },
-                  { key: "documentKind", value: "operation_video_journey" },
-                ],
-                originalFileInfo: {
-                  fileName: journeyFileName,
-                  bytes: new Blob([journeyMarkdown]).size,
-                },
-                organizationId,
-                spaceId,
-              });
-            if (requestDoc?.id) {
-              journeyFileSpaceRequestId = requestDoc.id;
-            } else {
-              requestErrors.push("操作JourneyのFileSpace upload RequestDoc作成に失敗しました");
-            }
-          } else {
-            requestErrors.push("操作Journey Markdownの保存に失敗しました");
-          }
-        }
-
-        discoveryStatus = fileSpaceId
-          ? fileSpaceRequestId || journeyFileSpaceRequestId
-            ? "queued"
-            : "error"
-          : "not_registered";
-        const discoveryErrorMessage =
-          requestErrors.length > 0
-            ? requestErrors.join(" / ")
-            : fileSpaceId
-              ? undefined
-              : "アプリ専用FileSpaceが未設定のため、動画のみ保存しました";
-
-        const video: DecodedVibeControlOperationVideo = {
+        const video = normalizeOperationVideo({
           id: videoId,
           applicationId: application.id,
           applicationKey: application.applicationKey,
           groupId: group.id,
           groupNameSnapshot: group.name,
           title,
-          description: input.description?.trim() || undefined,
-          fileName,
-          bucketName,
-          storagePath,
-          contentType,
-          sizeBytes: input.blob.size,
-          durationMs: input.durationMs,
-          transcriptText,
-          transcriptProvider,
-          transcriptSummary,
-          quickScan,
-          frameCaptures,
-          tags,
+          description,
+          fileName: clip.fileName,
+          bucketName: clip.bucketName,
+          storagePath: clip.storagePath,
+          contentType: clip.contentType,
+          sizeBytes: clip.sizeBytes,
+          durationMs: clip.durationMs,
+          transcriptText: clip.transcriptText,
+          transcriptProvider: clip.transcriptProvider,
+          transcriptSummary: clip.transcriptSummary,
+          quickScan: clip.quickScan,
+          frameCaptures: clip.frameCaptures,
+          clips: [clip],
+          clipCount: 1,
+          totalDurationMs: clip.durationMs,
+          hasUnanalyzedClip: false,
+          lastClipAddedAt: clip.recordedAt,
+          tags:
+            input.tags
+              ?.map((tag) => tag.trim())
+              .filter((tag, index, arr) => tag && arr.indexOf(tag) === index) ?? [],
           fileSpaceId,
-          fileSpaceRequestId,
-          metadataFileName,
-          metadataStoragePath,
-          journeyFileName,
-          journeyStoragePath,
-          journeyFileSpaceRequestId,
-          sourceAssetId,
-          journeySourceAssetId,
+          fileSpaceRequestId: clip.fileSpaceRequestId,
+          metadataFileName: clip.metadataFileName,
+          metadataStoragePath: clip.metadataStoragePath,
+          journeyFileName: clip.journeyFileName,
+          journeyStoragePath: clip.journeyStoragePath,
+          journeyFileSpaceRequestId: clip.journeyFileSpaceRequestId,
+          sourceAssetId: clip.sourceAssetId,
+          journeySourceAssetId: clip.journeySourceAssetId,
           discoveryStatus,
           discoveryErrorMessage,
           analysisStatus: "not_analyzed",
-          sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
-          recordedAt: now,
-        };
-
-        const sourceAssets: DecodedVibeControlSourceAsset[] = [
-          {
-            id: sourceAssetId,
-            applicationId: application.id,
-            applicationKey: application.applicationKey,
-            sourceType: "operation_video",
-            title,
-            summary: input.description?.trim() || undefined,
-            uri: `gs://${bucketName}/${storagePath}`,
-            gcsPath: `gs://${bucketName}/${storagePath}`,
-            storagePath,
-            fileSpaceId: fileSpaceId || undefined,
-            fileSpaceRequestId,
-            discoveryStatus: fileSpaceId
-              ? fileSpaceRequestId
-                ? "queued"
-                : "error"
-              : "not_registered",
-            discoveryDocumentId: `vibecontrol-operation-video-${videoId}`,
-            discoveryErrorMessage: !fileSpaceId
-              ? "アプリ専用FileSpaceが未設定のため、Discovery Engine登録は未実行です"
-              : fileSpaceRequestId
-                ? undefined
-                : "動画メタデータのDiscovery Engine登録に失敗しました",
-            metadata: {
-              operationVideoId: videoId,
-              contentType,
-              sizeBytes: input.blob.size,
-              durationMs: input.durationMs,
-              transcriptProvider,
-              transcriptText,
-              transcriptSummary,
-              quickScan,
-              frameCaptures,
-              tags,
-              metadataStoragePath,
-              sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
-              operationVideoGroupId: group.id,
-              operationVideoGroupName: group.name,
-            },
-          },
-        ];
-
-        if (journeyStoragePath) {
-          sourceAssets.push({
-            id: journeySourceAssetId,
-            applicationId: application.id,
-            applicationKey: application.applicationKey,
-            sourceType: "operation_video_journey",
-            title: `Operation Journey: ${title}`,
-            summary:
-              input.description?.trim() ||
-              "ザッピング動画から生成したユーザージャーニー検索用証跡",
-            uri: `gs://${bucketName}/${journeyStoragePath}`,
-            gcsPath: `gs://${bucketName}/${journeyStoragePath}`,
-            storagePath: journeyStoragePath,
-            fileSpaceId: fileSpaceId || undefined,
-            fileSpaceRequestId: journeyFileSpaceRequestId,
-            discoveryStatus: journeyFileSpaceRequestId ? "queued" : "error",
-            discoveryDocumentId: `vibecontrol-operation-video-journey-${videoId}`,
-            discoveryErrorMessage: journeyFileSpaceRequestId
-              ? undefined
-              : "操作JourneyのDiscovery Engine登録に失敗しました",
-            metadata: {
-              operationVideoId: videoId,
-              videoStoragePath: storagePath,
-              transcriptProvider,
-              transcriptText,
-              transcriptSummary,
-              tags,
-              sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
-              operationVideoGroupId: group.id,
-              operationVideoGroupName: group.name,
-            },
-          });
-        }
-
+          sourceDisplaySurface: clip.sourceDisplaySurface,
+          recordedAt: clip.recordedAt,
+        });
         const nextGroup: DecodedVibeControlOperationVideoGroup = {
           ...group,
           videoCount: this.operationVideos.filter(
@@ -3867,7 +4138,6 @@ export const useVibeControlStore = defineStore("vibeControl", {
             })
           ),
         ]);
-
         this.operationVideos = [
           video,
           ...this.operationVideos.filter((item) => item.id !== video.id),
@@ -3885,6 +4155,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
           `Operation Video: ${application.name} に ${title} を保存`
         );
         return video;
+        }
       } catch (err) {
         log("ERROR", "VibeControl operation video save failed", err);
         reportDatadogError(err, {
@@ -3895,6 +4166,130 @@ export const useVibeControlStore = defineStore("vibeControl", {
         });
         this.error =
           err instanceof Error ? err.message : "ザッピング動画の保存に失敗しました";
+        throw err;
+      } finally {
+        this.isSavingOperationVideo = false;
+      }
+    },
+    async appendOperationVideoClip(
+      input: VibeControlOperationVideoAppendInput
+    ): Promise<DecodedVibeControlOperationVideo> {
+      const targetVideo = this.operationVideos.find(
+        (item) => item.id === input.videoId && item.applicationId === input.applicationId
+      );
+      if (!targetVideo) {
+        throw new Error("追加先の操作セットが見つかりません");
+      }
+      const application = this.applications.find(
+        (item) => item.id === input.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      const group = this.operationVideoGroups.find(
+        (item) =>
+          item.id === (targetVideo.groupId || input.groupId) &&
+          item.applicationId === application.id
+      );
+      if (!group) {
+        throw new Error("動画グループを選択してください");
+      }
+      if (input.blob.size <= 0) {
+        throw new Error("録画データが空です");
+      }
+
+      const organizationStore = useOrganizationStore();
+      const spaceStore = useSpaceStore();
+      const organizationId = organizationStore.getLoggedInOrganizationId;
+      const spaceId = spaceStore.selectedSpace?.id ?? "";
+      if (!organizationId || !spaceId) {
+        throw new Error("組織・スペースを確認してください");
+      }
+
+      const normalizedVideo = normalizeOperationVideo(targetVideo);
+      const title = input.title.trim() || normalizedVideo.title;
+      const description =
+        input.description?.trim() || normalizedVideo.description || undefined;
+      this.isSavingOperationVideo = true;
+      this.error = null;
+      try {
+        const { clip, sourceAssets, discoveryStatus, discoveryErrorMessage } =
+          await this.uploadOperationVideoClip({
+            application,
+            group,
+            videoId: normalizedVideo.id,
+            input,
+            title,
+            description,
+            organizationId,
+            spaceId,
+            clipIndex: normalizedVideo.clips.length,
+          });
+        const clips = [...normalizedVideo.clips, clip].sort((a, b) =>
+          (a.recordedAt || "").localeCompare(b.recordedAt || "")
+        );
+        const existingError = normalizedVideo.discoveryErrorMessage?.trim();
+        const nextVideo = normalizeOperationVideo({
+          ...normalizedVideo,
+          clips,
+          fileSpaceId: application.fileSpaceId?.trim() || normalizedVideo.fileSpaceId,
+          discoveryStatus:
+            discoveryStatus === "error" || normalizedVideo.discoveryStatus === "error"
+              ? "error"
+              : discoveryStatus === "queued" || normalizedVideo.discoveryStatus === "queued"
+                ? "queued"
+                : normalizedVideo.discoveryStatus,
+          discoveryErrorMessage: [existingError, discoveryErrorMessage]
+            .filter(Boolean)
+            .join(" / ") || undefined,
+          hasUnanalyzedClip: true,
+          lastClipAddedAt: clip.recordedAt,
+          analysisStaleReason:
+            "追加された動画があります。再解析すると最新の操作セットに反映されます。",
+        });
+        const firestoreOps = useFirestoreDocOperation();
+        await Promise.all([
+          firestoreOps.createDocument({
+            collectionName: this.operationVideoCollectionPath(),
+            docId: nextVideo.id,
+            docData: nextVideo,
+            converter: vibeControlOperationVideoConverter,
+            merge: true,
+          }),
+          ...sourceAssets.map((asset) =>
+            firestoreOps.createDocument({
+              collectionName: this.sourceAssetCollectionPath(),
+              docId: asset.id,
+              docData: asset,
+              converter: vibeControlSourceAssetConverter,
+              merge: true,
+            })
+          ),
+        ]);
+        this.operationVideos = this.operationVideos.map((item) =>
+          item.id === nextVideo.id ? nextVideo : item
+        );
+        this.sourceAssets = [
+          ...sourceAssets,
+          ...this.sourceAssets.filter(
+            (item) => !sourceAssets.some((asset) => asset.id === item.id)
+          ),
+        ];
+        this.lastRunLog.unshift(
+          `Operation Video: ${normalizedVideo.title} にクリップを追加`
+        );
+        return nextVideo;
+      } catch (err) {
+        log("ERROR", "VibeControl operation video clip append failed", err);
+        reportDatadogError(err, {
+          feature: "vibe_control_zapping_video_clip_append",
+          applicationId: input.applicationId,
+          videoId: input.videoId,
+          blobSize: input.blob.size,
+          contentType: input.contentType || input.blob.type || "video/webm",
+        });
+        this.error =
+          err instanceof Error ? err.message : "動画クリップの追加に失敗しました";
         throw err;
       } finally {
         this.isSavingOperationVideo = false;
@@ -3921,14 +4316,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
           ...video,
           title,
         };
-        const sourceAssetIds = [
-          video.sourceAssetId,
-          video.journeySourceAssetId,
-          `source-asset-${video.id}`,
-          `source-asset-${video.id}-journey`,
-        ].filter((id, index, arr): id is string =>
-          Boolean(id) && arr.indexOf(id) === index
-        );
+        const sourceAssetIds = operationVideoSourceAssetIds(video);
         const nextSourceAssets = this.sourceAssets.map((asset) => {
           if (!sourceAssetIds.includes(asset.id)) return asset;
           if (asset.id === video.journeySourceAssetId || asset.id === `source-asset-${video.id}-journey`) {
@@ -3993,36 +4381,32 @@ export const useVibeControlStore = defineStore("vibeControl", {
       this.error = null;
       try {
         const firestoreOps = useFirestoreDocOperation();
-        const sourceAssetIds = [
-          video.sourceAssetId,
-          video.journeySourceAssetId,
-          `source-asset-${video.id}`,
-          `source-asset-${video.id}-journey`,
-        ].filter((id, index, arr): id is string =>
-          Boolean(id) && arr.indexOf(id) === index
-        );
+        const normalizedVideo = normalizeOperationVideo(video);
+        const sourceAssetIds = operationVideoSourceAssetIds(normalizedVideo);
 
         const storageTargets = [
-          {
-            bucketName: video.bucketName,
-            storagePath: video.storagePath,
-          },
-          ...video.frameCaptures.map((frame) => ({
-            bucketName: frame.bucketName,
-            storagePath: frame.storagePath,
-          })),
-          video.metadataStoragePath
-            ? {
-                bucketName: video.bucketName,
-                storagePath: video.metadataStoragePath,
-              }
-            : undefined,
-          video.journeyStoragePath
-            ? {
-                bucketName: video.bucketName,
-                storagePath: video.journeyStoragePath,
-              }
-            : undefined,
+          ...normalizedVideo.clips.flatMap((clip) => [
+            {
+              bucketName: clip.bucketName,
+              storagePath: clip.storagePath,
+            },
+            ...clip.frameCaptures.map((frame) => ({
+              bucketName: frame.bucketName,
+              storagePath: frame.storagePath,
+            })),
+            clip.metadataStoragePath
+              ? {
+                  bucketName: clip.bucketName,
+                  storagePath: clip.metadataStoragePath,
+                }
+              : undefined,
+            clip.journeyStoragePath
+              ? {
+                  bucketName: clip.bucketName,
+                  storagePath: clip.journeyStoragePath,
+                }
+              : undefined,
+          ]),
         ].filter(
           (
             target

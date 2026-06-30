@@ -313,7 +313,7 @@
               class="rounded-lg border border-slate-200 p-4"
             >
               <div class="flex flex-wrap items-center gap-2">
-                <EnBadge :color="trace.actor === 'agent' ? 'purple' : 'neutral'" size="xs">
+                <EnBadge :color="trace.actor === 'agent' ? 'primary' : 'neutral'" size="xs">
                   {{ trace.actor }}
                 </EnBadge>
                 <span class="text-xs font-semibold text-slate-500">
@@ -624,10 +624,10 @@ function acIconClass(state: string): string {
   return "text-slate-400";
 }
 
-function evidenceColor(type: VibeControlEvidenceType): "primary" | "info" | "success" | "warning" | "neutral" | "purple" {
+function evidenceColor(type: VibeControlEvidenceType): "primary" | "info" | "success" | "warning" | "neutral" {
   if (type === "knowledge") return "primary";
   if (type === "code" || type === "commit") return "info";
-  if (type === "pr") return "purple";
+  if (type === "pr") return "primary";
   if (type === "ticket") return "warning";
   if (type === "agent") return "success";
   return "neutral";

@@ -117,6 +117,57 @@ def _persist_file_space(
     ).document(file_space_id).set(doc_data, merge=True)
 
 
+def _persist_file_space_upload_document(
+    *,
+    organization_id: str,
+    space_id: str,
+    request_fields: dict[str, Any],
+    output: dict[str, Any],
+) -> None:
+    input_data = request_fields.get("input") or {}
+    store_id = str(input_data.get("storeId") or "").strip()
+    if not store_id:
+        return
+
+    response = output.get("response") if isinstance(output.get("response"), dict) else output
+    if not isinstance(response, dict):
+        response = {}
+    document_id = (
+        str(response.get("agentSearchDocumentId") or "").strip()
+        or str(response.get("id") or "").strip()
+        or str(input_data.get("documentId") or "").strip()
+    )
+    if not document_id:
+        return
+
+    document_name = str(response.get("name") or "").strip()
+    file_path = str(input_data.get("filePath") or "").strip()
+    bucket_name = str(input_data.get("bucketName") or "").strip()
+    doc_data: dict[str, Any] = {
+        "state": "STATE_ACTIVE",
+        "status": "connected",
+        "agentSearchDocumentId": document_id,
+        "registration": {
+            "stage": "indexed",
+            "gcsUploaded": True,
+            "geminiRegistered": True,
+        },
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    if document_name:
+        doc_data["name"] = document_name
+    if bucket_name:
+        doc_data["bucketName"] = bucket_name
+    if file_path:
+        doc_data["filePath"] = file_path
+        if bucket_name:
+            doc_data["gcsUrl"] = f"gs://{bucket_name}/{file_path}"
+
+    db.collection(
+        f"organizations/{organization_id}/spaces/{space_id}/fileSpaces/{store_id}/documents"
+    ).document(document_id).set(doc_data, merge=True)
+
+
 def _parse_error_message(response: requests.Response) -> str:
     try:
         data = response.json()
@@ -272,6 +323,13 @@ def on_context_store_request_created(
     )
     if operation_type == "fileSpaceCreate":
         _persist_file_space(
+            organization_id=event.params.get("organizationId", ""),
+            space_id=event.params.get("spaceId", ""),
+            request_fields=fields,
+            output=output,
+        )
+    elif operation_type == "fileSpaceUpload":
+        _persist_file_space_upload_document(
             organization_id=event.params.get("organizationId", ""),
             space_id=event.params.get("spaceId", ""),
             request_fields=fields,

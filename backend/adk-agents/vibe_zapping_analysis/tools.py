@@ -59,13 +59,15 @@ def _metadata_from_assets(source_assets: list[Any]) -> dict[str, Any]:
     return merged
 
 
-def _compact_frames(value: Any) -> list[dict[str, Any]]:
+def _compact_frames(value: Any, *, clip_id: str = "") -> list[dict[str, Any]]:
     frames: list[dict[str, Any]] = []
     for raw in _as_list(value)[:60]:
         if not isinstance(raw, dict):
             continue
+        frame_id = raw.get("id")
         frame = {
-            "id": raw.get("id"),
+            "id": f"{clip_id}:{frame_id}" if clip_id and frame_id else frame_id,
+            "clipId": clip_id or None,
             "timestampMs": raw.get("timestampMs"),
             "fileName": raw.get("fileName"),
             "storagePath": raw.get("storagePath"),
@@ -74,27 +76,66 @@ def _compact_frames(value: Any) -> list[dict[str, Any]]:
     return frames
 
 
+def _operation_video_clips(operation_video: dict[str, Any]) -> list[dict[str, Any]]:
+    clips = [clip for clip in _as_list(operation_video.get("clips")) if isinstance(clip, dict)]
+    if clips:
+        return clips
+    return [
+        {
+            "id": "clip-001",
+            "fileName": operation_video.get("fileName"),
+            "bucketName": operation_video.get("bucketName"),
+            "storagePath": operation_video.get("storagePath"),
+            "contentType": operation_video.get("contentType"),
+            "sizeBytes": operation_video.get("sizeBytes"),
+            "durationMs": operation_video.get("durationMs"),
+            "transcriptText": operation_video.get("transcriptText"),
+            "transcriptProvider": operation_video.get("transcriptProvider"),
+            "transcriptSummary": operation_video.get("transcriptSummary"),
+            "quickScan": operation_video.get("quickScan"),
+            "frameCaptures": operation_video.get("frameCaptures"),
+            "recordedAt": operation_video.get("recordedAt"),
+        }
+    ]
+
+
 def _analysis_evidence(
     *,
     operation_video: dict[str, Any],
     source_assets: list[Any],
 ) -> dict[str, Any]:
     metadata = _metadata_from_assets(source_assets)
+    clips = _operation_video_clips(operation_video)
     quick_scan = _as_dict(operation_video.get("quickScan") or metadata.get("quickScan"))
     transcript_text = _first_text(
         operation_video.get("transcriptText"),
         metadata.get("transcriptText"),
     )
+    if not transcript_text:
+        transcript_text = "\n\n".join(
+            _clean_text(clip.get("transcriptText")) for clip in clips if _clean_text(clip.get("transcriptText"))
+        ) or None
     transcript_summary = _first_text(
         operation_video.get("transcriptSummary"),
         metadata.get("transcriptSummary"),
         quick_scan.get("transcriptSummary"),
     )
+    if not transcript_summary:
+        transcript_summary = "\n".join(
+            f"{_clean_text(clip.get('id'), 'clip')}: {_clean_text(clip.get('transcriptSummary'))}"
+            for clip in clips
+            if _clean_text(clip.get("transcriptSummary"))
+        ) or None
     frame_captures = operation_video.get("frameCaptures") or metadata.get(
         "frameCaptures"
     )
+    clip_frames: list[dict[str, Any]] = []
+    for clip in clips:
+        clip_frames.extend(
+            _compact_frames(clip.get("frameCaptures"), clip_id=_clean_text(clip.get("id")))
+        )
     return {
-        "has_video_file": bool(_clean_text(operation_video.get("storagePath"))),
+        "has_video_file": any(_clean_text(clip.get("storagePath")) for clip in clips),
         "transcriptText": transcript_text,
         "transcriptSummary": transcript_summary,
         "transcriptProvider": _first_text(
@@ -102,7 +143,18 @@ def _analysis_evidence(
             metadata.get("transcriptProvider"),
         ),
         "quickScan": quick_scan,
-        "frameCaptures": _compact_frames(frame_captures),
+        "frameCaptures": clip_frames or _compact_frames(frame_captures),
+        "clips": [
+            {
+                "id": clip.get("id"),
+                "fileName": clip.get("fileName"),
+                "durationMs": clip.get("durationMs"),
+                "recordedAt": clip.get("recordedAt"),
+                "hasTranscript": bool(_clean_text(clip.get("transcriptText")) or _clean_text(clip.get("transcriptSummary"))),
+                "frameCount": len(_as_list(clip.get("frameCaptures"))),
+            }
+            for clip in clips
+        ],
     }
 
 

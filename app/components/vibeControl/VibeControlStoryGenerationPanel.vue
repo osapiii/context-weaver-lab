@@ -69,9 +69,9 @@
           placeholder="任意: 例) 録画で説明された利用意図を優先して、Acceptance Criteriaも根拠付きで出す"
         />
 
-        <div class="rounded-md border border-violet-200 bg-violet-50/70 px-3 py-3">
+        <div class="rounded-md border border-primary-200 bg-primary-50/70 px-3 py-3">
           <div class="flex items-start gap-3">
-            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-violet-700 ring-1 ring-violet-100">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-primary-700 ring-1 ring-primary-100">
               <UIcon name="material-symbols:database-search-outline-rounded" class="h-4 w-4" />
             </span>
             <div class="min-w-0">
