@@ -320,6 +320,17 @@
             {% else %}
               <p class="muted">{{ video.gcsPath|text("No video URL") }}</p>
             {% endif %}
+            {% set clips = video.clips if video.clips is sequence else [] %}
+            {% if clips %}
+              <div class="media">
+                <h3>動画クリップ</h3>
+                <ul>
+                  {% for clip in clips %}
+                    <li><strong>{{ clip.id|text("clip") }}</strong>: {% if clip.downloadUrl %}<a href="{{ clip.downloadUrl }}" target="_blank" rel="noopener noreferrer">{{ clip.downloadUrl }}</a>{% else %}{{ clip.gcsPath|text("n/a") }}{% endif %} / {{ clip.durationMs|format_ms }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
+            {% endif %}
             {% set screenshots = video.screenshots if video.screenshots is sequence else [] %}
             {% if screenshots %}
               <div class="media">

@@ -110,7 +110,11 @@
   - Title: {{ video.title|text("n/a") }}
   - GCS path: {{ video.gcsPath|text("n/a") }}
   - Download URL: {{ video.downloadUrl|text("n/a") }}
+  - Video clips: {{ video.clips|default([])|length }}
   - Screenshots: {{ video.screenshots|default([])|length }}
+{% for clip in video.clips|default([]) %}
+  - Clip {{ clip.id|text("clip") }}: {{ clip.downloadUrl|text(clip.gcsPath|text("n/a")) }} ({{ clip.durationMs|format_ms }})
+{% endfor %}
 {% set frames = video.screenshots|default([]) %}
 {% for frame in frames[:30] %}
   - Frame {{ frame.id|text("n/a") }} at {{ frame.timestampMs|text("n/a") }}ms: {{ frame.downloadUrl|text(frame.gcsPath|text("n/a")) }}

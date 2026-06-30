@@ -25,6 +25,16 @@
           variant="outline"
           color="neutral"
           size="sm"
+          leading-icon="material-symbols:auto-awesome-outline"
+          :disabled="!application"
+          @click="assistantPanelOpen = true"
+        >
+          AI整理
+        </EnButton>
+        <EnButton
+          variant="outline"
+          color="neutral"
+          size="sm"
           leading-icon="material-symbols:create-new-folder-outline"
           :disabled="!application"
           @click="openGroupCreateModal"
@@ -59,6 +69,66 @@
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-150 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="assistantPanelOpen"
+          class="fixed inset-0 z-[80] bg-slate-950/25 backdrop-blur-[1px]"
+          @click.self="assistantPanelOpen = false"
+        />
+      </Transition>
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="translate-x-full"
+        enter-to-class="translate-x-0"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="translate-x-0"
+        leave-to-class="translate-x-full"
+      >
+        <aside
+          v-if="assistantPanelOpen"
+          class="fixed bottom-0 right-0 top-0 z-[90] flex w-full max-w-[560px] flex-col border-l border-slate-200 bg-slate-50 shadow-2xl"
+          aria-label="AI整理アシスタント"
+        >
+          <div class="flex items-start justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
+            <div>
+              <p class="flex items-center gap-2 text-base font-bold text-slate-950">
+                <UIcon name="material-symbols:auto-awesome-outline" class="h-4 w-4 text-slate-500" />
+                AI整理アシスタント
+              </p>
+              <p class="mt-1 text-sm leading-6 text-slate-500">
+                グループ作成や動画の割り振りをまとめて相談できます。
+              </p>
+            </div>
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+              aria-label="AI整理アシスタントを閉じる"
+              @click="assistantPanelOpen = false"
+            >
+              <UIcon name="material-symbols:close-rounded" class="h-5 w-5" />
+            </button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto p-4">
+            <VibeControlOperationVideoGroupAssistant
+              :application="application"
+              :videos="videos"
+              :groups="operationVideoGroups"
+              :is-applying="isApplyingOrganizationPlan"
+              @apply="applyOrganizationPlan"
+            />
+          </div>
+        </aside>
+      </Transition>
+    </Teleport>
 
     <EnAlert
       v-if="errorMessage"
@@ -97,8 +167,8 @@
 
     <EnModal
       v-model:open="recordingModalOpen"
-      title="ザッピング動画を録画"
-      subtitle="マイク音声を含めて、操作意図と画面の流れを一緒に残します。"
+      :title="appendTargetVideoId ? '動画クリップを追加' : 'ザッピング動画を録画'"
+      :subtitle="appendTargetVideoId ? '同じ操作セットに短い録画を追加します。' : 'マイク音声を含めて、操作意図と画面の流れを一緒に残します。'"
       title-icon="material-symbols:video-camera-back-outline"
       size="full"
       padding="none"
@@ -357,6 +427,64 @@
           </EnButton>
         </div>
       </form>
+    </EnModal>
+
+    <EnModal
+      v-model:open="deleteGroupConfirmOpen"
+      title="動画グループを削除しますか?"
+      subtitle="動画が入っていないグループだけ削除できます。"
+      header-variant="warning"
+      title-icon="material-symbols:delete-outline"
+      size="md"
+    >
+      <div
+        v-if="deleteTargetGroup"
+        class="space-y-3"
+      >
+        <div class="rounded-lg border border-red-100 bg-red-50 p-3">
+          <p class="text-sm font-semibold text-slate-900">
+            {{ deleteTargetGroup.name }}
+          </p>
+          <p class="mt-1 text-xs leading-relaxed text-slate-600">
+            {{ deleteTargetGroup.description || "説明なし" }}
+          </p>
+          <p class="mt-2 w-fit rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-700 ring-1 ring-red-100">
+            {{ groupVideoCount(deleteTargetGroup.id) }}件
+          </p>
+        </div>
+        <p
+          v-if="groupVideoCount(deleteTargetGroup.id) > 0"
+          class="text-xs leading-relaxed text-red-600"
+        >
+          このグループには操作動画が登録されています。先に動画を別グループへ移動するか削除してください。
+        </p>
+        <p
+          v-else
+          class="text-xs leading-relaxed text-slate-500"
+        >
+          削除後、このグループは一覧に表示されなくなります。必要になった場合は新しく作成してください。
+        </p>
+      </div>
+      <template #footer>
+        <EnButton
+          variant="ghost"
+          color="neutral"
+          size="sm"
+          @click="deleteGroupConfirmOpen = false"
+        >
+          キャンセル
+        </EnButton>
+        <EnButton
+          variant="soft"
+          color="error"
+          size="sm"
+          leading-icon="material-symbols:delete-outline"
+          :disabled="!deleteTargetGroup || groupVideoCount(deleteTargetGroup.id) > 0"
+          @click="deleteConfirmedGroup"
+        >
+          削除
+        </EnButton>
+      </template>
     </EnModal>
 
     <EnModal
@@ -661,6 +789,23 @@
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+          <EnBadge
+            v-if="detailVideo.hasUnanalyzedClip"
+            color="warning"
+            variant="soft"
+          >
+            追加あり
+          </EnBadge>
+          <EnButton
+            variant="outline"
+            color="neutral"
+            size="xs"
+            leading-icon="material-symbols:add-photo-alternate-outline"
+            :disabled="props.isSaving"
+            @click="openAppendRecordingModal(detailVideo)"
+          >
+            動画を追加
+          </EnButton>
           <EnButton
             variant="ai"
             size="xs"
@@ -669,9 +814,39 @@
             :disabled="!application?.fileSpaceId || detailVideo.analysisStatus === 'queued' || detailVideo.analysisStatus === 'running'"
             @click="$emit('analyze', detailVideo.id)"
           >
-            解析を実行
+            {{ detailVideo.hasUnanalyzedClip ? "まとめて再解析" : "解析を実行" }}
           </EnButton>
         </div>
+      </div>
+
+      <div
+        v-if="detailVideo.hasUnanalyzedClip"
+        class="mb-5 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div class="flex min-w-0 items-start gap-3">
+          <span class="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 ring-1 ring-amber-200">
+            <UIcon name="material-symbols:sync-problem-outline" class="h-4 w-4" />
+          </span>
+          <div class="min-w-0">
+            <p class="text-sm font-bold text-slate-950">
+              追加されたクリップがあります
+            </p>
+            <p class="mt-1 text-xs leading-relaxed text-slate-600">
+              {{ detailVideo.analysisStaleReason || "まとめて再解析すると最新の操作セットに反映されます。" }}
+            </p>
+          </div>
+        </div>
+        <EnButton
+          variant="outline"
+          color="neutral"
+          size="xs"
+          leading-icon="material-symbols:psychology-outline"
+          :loading="isAnalyzing && detailVideo.analysisStatus === 'running'"
+          :disabled="!application?.fileSpaceId || detailVideo.analysisStatus === 'queued' || detailVideo.analysisStatus === 'running'"
+          @click="$emit('analyze', detailVideo.id)"
+        >
+          まとめて再解析
+        </EnButton>
       </div>
 
       <div class="mb-5 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
@@ -818,36 +993,124 @@
           </div>
         </div>
 
-          <div
-            v-if="detailVideo.frameCaptures.length > 0"
-          class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <div class="mb-2 flex items-center justify-between gap-2">
-            <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
-              <UIcon name="material-symbols:photo-library-outline" class="h-4 w-4 text-slate-500" />
-                操作スクリーンショット
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
+                <UIcon name="material-symbols:video-library-outline" class="h-4 w-4 text-slate-500" />
+                動画クリップ
               </h4>
+              <p class="mt-1 text-xs text-slate-500">
+                追加順にまとめています
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-1">
               <EnBadge color="neutral" variant="soft">
-                {{ detailVideo.frameCaptures.length }}
+                {{ videoClipCount(detailVideo) }}本
+              </EnBadge>
+              <EnBadge color="neutral" variant="soft">
+                {{ formatDuration(videoTotalDurationMs(detailVideo)) }}
+              </EnBadge>
+              <EnBadge color="neutral" variant="soft">
+                {{ formatBytes(videoTotalSizeBytes(detailVideo)) }}
               </EnBadge>
             </div>
-            <div class="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
-              <figure
-                v-for="frame in detailVideo.frameCaptures"
-                :key="frame.id"
-                class="overflow-hidden rounded-md border border-slate-100 bg-slate-50"
-              >
-                <img
-                  :src="savedFrameUrl(detailVideo, frame.id)"
-                  class="aspect-video w-full object-cover"
-                  :alt="`${formatDuration(frame.timestampMs)} のスクリーンショット`"
-                >
-              <figcaption class="bg-white px-2 py-1 text-[11px] font-semibold text-slate-500">
-                  {{ formatDuration(frame.timestampMs) }}
-                </figcaption>
-              </figure>
-            </div>
           </div>
+          <div class="space-y-3">
+            <article
+              v-for="(clip, clipIndex) in videoClips(detailVideo)"
+              :key="clip.id"
+              class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]"
+            >
+              <div>
+                <div class="mb-2 flex items-center justify-between gap-2">
+                  <div class="flex min-w-0 items-center gap-2">
+                    <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-xs font-bold text-slate-700 ring-1 ring-slate-200">
+                      {{ clipIndex + 1 }}
+                    </span>
+                    <p class="min-w-0 truncate text-sm font-bold text-slate-950">
+                      {{ clip.fileName }}
+                    </p>
+                  </div>
+                  <EnBadge
+                    v-if="clipIndex === 0"
+                    color="neutral"
+                    variant="soft"
+                  >
+                    メイン
+                  </EnBadge>
+                </div>
+                <video
+                  v-if="clipVideoUrl(detailVideo, clip)"
+                  :src="clipVideoUrl(detailVideo, clip)"
+                  controls
+                  preload="metadata"
+                  class="aspect-video w-full rounded-lg bg-slate-950"
+                />
+                <div
+                  v-else
+                  class="flex aspect-video w-full items-center justify-center rounded-lg bg-slate-950 text-xs font-semibold text-slate-300"
+                >
+                  動画URLを取得中
+                </div>
+              </div>
+              <div class="flex min-w-0 flex-col justify-between gap-3">
+                <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div class="rounded-md bg-white px-2 py-2 ring-1 ring-slate-100">
+                    <p class="font-semibold text-slate-500">時間</p>
+                    <p class="mt-1 font-bold text-slate-900">{{ formatDuration(clip.durationMs) }}</p>
+                  </div>
+                  <div class="rounded-md bg-white px-2 py-2 ring-1 ring-slate-100">
+                    <p class="font-semibold text-slate-500">スクショ</p>
+                    <p class="mt-1 font-bold text-slate-900">{{ clip.frameCaptures.length }}枚</p>
+                  </div>
+                  <div class="rounded-md bg-white px-2 py-2 ring-1 ring-slate-100">
+                    <p class="font-semibold text-slate-500">文字起こし</p>
+                    <p class="mt-1 font-bold text-slate-900">{{ clip.transcriptSummary ? "あり" : "なし" }}</p>
+                  </div>
+                  <div class="rounded-md bg-white px-2 py-2 ring-1 ring-slate-100">
+                    <p class="font-semibold text-slate-500">サイズ</p>
+                    <p class="mt-1 font-bold text-slate-900">{{ formatBytes(clip.sizeBytes) }}</p>
+                  </div>
+                </div>
+                <p class="truncate text-xs font-semibold text-slate-500">
+                  {{ formatRecordedAt(clip.recordedAt) }}
+                </p>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div
+          v-if="detailVideo.frameCaptures.length > 0"
+          class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+        >
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
+              <UIcon name="material-symbols:photo-library-outline" class="h-4 w-4 text-slate-500" />
+              操作スクリーンショット
+            </h4>
+            <EnBadge color="neutral" variant="soft">
+              {{ detailVideo.frameCaptures.length }}
+            </EnBadge>
+          </div>
+          <div class="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
+            <figure
+              v-for="frame in detailVideo.frameCaptures"
+              :key="frame.id"
+              class="overflow-hidden rounded-md border border-slate-100 bg-slate-50"
+            >
+              <img
+                :src="savedFrameUrl(detailVideo, frame.id)"
+                class="aspect-video w-full object-cover"
+                :alt="`${formatDuration(frame.timestampMs)} のスクリーンショット`"
+              >
+              <figcaption class="bg-white px-2 py-1 text-[11px] font-semibold text-slate-500">
+                {{ formatDuration(frame.timestampMs) }}
+              </figcaption>
+            </figure>
+          </div>
+        </div>
       </div>
 
       <div
@@ -2046,28 +2309,46 @@
         class="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]"
       >
         <aside class="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-          <button
+          <div
             v-for="group in operationVideoGroups"
             :key="group.id"
-            type="button"
-            class="mb-1 grid w-full gap-1 rounded-md px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+            class="group mb-1 flex items-start gap-2 rounded-md pr-2 transition"
             :class="selectedVideoGroupId === group.id ? 'bg-slate-100 text-slate-950 shadow-sm ring-1 ring-slate-300' : 'text-slate-600 hover:bg-slate-50'"
-            @click="selectedVideoGroupId = group.id"
           >
-            <span class="truncate text-sm font-bold">{{ group.name }}</span>
-            <span
-              class="line-clamp-2 text-xs"
-              :class="selectedVideoGroupId === group.id ? 'text-slate-600' : 'text-slate-500'"
+            <button
+              type="button"
+              class="grid min-w-0 flex-1 gap-1 rounded-md px-3 py-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+              @click="selectedVideoGroupId = group.id"
             >
-              {{ group.description || "説明なし" }}
-            </span>
-            <span
-              class="mt-1 w-fit rounded-full px-2 py-0.5 text-[11px] font-bold"
-              :class="selectedVideoGroupId === group.id ? 'bg-white text-slate-700 ring-1 ring-slate-200' : 'bg-slate-100 text-slate-600'"
+              <span class="truncate text-sm font-bold">{{ group.name }}</span>
+              <span
+                class="line-clamp-2 text-xs"
+                :class="selectedVideoGroupId === group.id ? 'text-slate-600' : 'text-slate-500'"
+              >
+                {{ group.description || "説明なし" }}
+              </span>
+              <span
+                class="mt-1 w-fit rounded-full px-2 py-0.5 text-[11px] font-bold"
+                :class="selectedVideoGroupId === group.id ? 'bg-white text-slate-700 ring-1 ring-slate-200' : 'bg-slate-100 text-slate-600'"
+              >
+                {{ groupVideoCount(group.id) }}件
+              </span>
+            </button>
+            <button
+              type="button"
+              class="mt-2 grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 group-hover:opacity-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-300"
+              :class="groupVideoCount(group.id) > 0 ? 'text-slate-300' : ''"
+              :disabled="groupVideoCount(group.id) > 0"
+              :title="groupVideoCount(group.id) > 0 ? '動画があるグループは削除できません' : '動画グループを削除'"
+              aria-label="動画グループを削除"
+              @click.stop="openGroupDeleteConfirm(group)"
             >
-              {{ videoCountByGroup[group.id] ?? 0 }}件
-            </span>
-          </button>
+              <UIcon
+                name="material-symbols:delete-outline"
+                class="h-4 w-4"
+              />
+            </button>
+          </div>
         </aside>
 
         <div
@@ -2111,7 +2392,7 @@
                 v-else
                 class="flex aspect-video w-full items-center justify-center bg-slate-950 text-xs text-slate-300"
               >
-                URL loading
+                動画URLを取得中
               </div>
               <div class="absolute left-3 top-3 flex flex-wrap gap-1">
                 <EnBadge
@@ -2119,6 +2400,13 @@
                   variant="soft"
                 >
                   {{ analysisLabel(video.analysisStatus) }}
+                </EnBadge>
+                <EnBadge
+                  v-if="video.hasUnanalyzedClip"
+                  color="warning"
+                  variant="soft"
+                >
+                  再解析推奨
                 </EnBadge>
               </div>
             </div>
@@ -2165,8 +2453,9 @@
               </div>
 
               <div class="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                <span>{{ formatDuration(video.durationMs) }}</span>
-                <span>{{ formatBytes(video.sizeBytes) }}</span>
+                <span>クリップ {{ videoClipCount(video) }}本</span>
+                <span>{{ formatDuration(videoTotalDurationMs(video)) }}</span>
+                <span>{{ formatBytes(videoTotalSizeBytes(video)) }}</span>
                 <span>{{ displaySurfaceLabel(video.sourceDisplaySurface) }}</span>
                 <span>{{ discoveryLabel(video.discoveryStatus) }}</span>
               </div>
@@ -2192,11 +2481,15 @@ import type {
   VibeControlRelatedContextKnowledgeDocument,
   VibeControlOperationVideoDiscoveryStatus,
   VibeControlOperationVideoDisplaySurface,
+  VibeControlOperationVideoClip,
   VibeControlZappingAnalysisStoryCandidate,
   VibeControlZappingAnalysisStatus,
 } from "@models/vibeControl";
 import type { Document } from "@models/document";
-import type { VibeControlOperationVideoSaveInput } from "@stores/vibeControl";
+import type {
+  VibeControlOperationVideoAppendInput,
+  VibeControlOperationVideoSaveInput,
+} from "@stores/vibeControl";
 
 type OperationVideoSaveCallbacks = {
   onSuccess?: (video: DecodedVibeControlOperationVideo) => void;
@@ -2206,6 +2499,25 @@ type OperationVideoSaveCallbacks = {
 type OperationVideoTitleUpdateCallbacks = {
   onSuccess?: () => void;
   onError?: (message: string) => void;
+};
+
+type OperationVideoGroupAssistantPlanGroup = {
+  existingGroupId?: string;
+  name: string;
+  description?: string;
+  videoIds: string[];
+  reason?: string;
+};
+
+type OperationVideoGroupAssistantPlan = {
+  summary: string;
+  groups: OperationVideoGroupAssistantPlanGroup[];
+};
+
+type OperationVideoOrganizationCallbacks = {
+  onSuccess?: () => void;
+  onError?: (message: string) => void;
+  onFinally?: () => void;
 };
 
 type LocalFrameCapture = {
@@ -2274,6 +2586,10 @@ const emit = defineEmits<{
     input: VibeControlOperationVideoSaveInput,
     callbacks?: OperationVideoSaveCallbacks,
   ];
+  "append-clip": [
+    input: VibeControlOperationVideoAppendInput,
+    callbacks?: OperationVideoSaveCallbacks,
+  ];
   analyze: [videoId: string];
   "update-title": [
     videoId: string,
@@ -2284,6 +2600,10 @@ const emit = defineEmits<{
   "create-group": [input: { applicationId: string; name: string; description?: string }];
   "update-group": [input: { groupId: string; name: string; description?: string }];
   "delete-group": [groupId: string];
+  "apply-organization-plan": [
+    plan: OperationVideoGroupAssistantPlan,
+    callbacks?: OperationVideoOrganizationCallbacks,
+  ];
   "create-file-space": [];
   delete: [videoId: string];
   refresh: [];
@@ -2294,6 +2614,8 @@ const errorMessage = ref("");
 const sourceDisplaySurface = ref<VibeControlOperationVideoDisplaySurface>("unknown");
 const isRecording = ref(false);
 const recordingModalOpen = ref(false);
+const assistantPanelOpen = ref(false);
+const appendTargetVideoId = ref("");
 const elapsedMs = ref(0);
 const recordedDurationMs = ref<number | undefined>();
 const recordedBlob = ref<Blob | null>(null);
@@ -2326,8 +2648,11 @@ const videoStatusFilter = ref<"all" | VibeControlZappingAnalysisStatus>("all");
 const groupCreateModalOpen = ref(false);
 const groupNameDraft = ref("");
 const groupDescriptionDraft = ref("");
+const isApplyingOrganizationPlan = ref(false);
 const pendingCreatedGroupName = ref("");
 const quickScanPreviewVideoId = ref("");
+const deleteTargetGroup = ref<DecodedVibeControlOperationVideoGroup | null>(null);
+const deleteGroupConfirmOpen = ref(false);
 const deleteTargetVideoId = ref("");
 const deleteVideoConfirmOpen = ref(false);
 const editingVideoTitleId = ref("");
@@ -2335,7 +2660,9 @@ const editingVideoTitleDraft = ref("");
 const updatingVideoTitleId = ref("");
 const videoTitleInput = ref<HTMLInputElement | null>(null);
 const videoUrls = reactive<Record<string, string>>({});
+const clipVideoUrls = reactive<Record<string, string>>({});
 const frameUrls = reactive<Record<string, string>>({});
+const clipFrameUrls = reactive<Record<string, string>>({});
 const AQUA_AUDIO_MAX_BYTES = 8 * 1024 * 1024;
 const route = useRoute();
 const reportModes = [
@@ -2377,6 +2704,9 @@ const selectedGroupVideos = computed(() => {
   if (!group) return [];
   return props.videos.filter((video) => video.groupId === group.id);
 });
+function groupVideoCount(groupId: string): number {
+  return videoCountByGroup.value[groupId] ?? 0;
+}
 const canCapture = computed(
   () => Boolean(props.application?.id && selectedVideoGroup.value) && !props.isSaving
 );
@@ -2576,7 +2906,7 @@ const mcpTestContextJson = computed(() => {
       confidence: story.confidence ?? story.confidenceScore ?? null,
       acceptanceCriteria: story.acceptanceCriteria,
       evidence: story.evidence.map((item) => ({
-        id: item.id,
+        id: `${item.videoId}:${item.tRange.join("-")}:${item.representativeScreenshotId || "evidence"}`,
         title: item.title,
         summary: item.summary,
         videoId: item.videoId,
@@ -2919,10 +3249,18 @@ onBeforeUnmount(() => {
 
 function openRecordingModal(): void {
   errorMessage.value = "";
+  appendTargetVideoId.value = "";
   if (!selectedVideoGroup.value) {
     errorMessage.value = "先に動画グループを作成・選択してください";
     return;
   }
+  recordingModalOpen.value = true;
+}
+
+function openAppendRecordingModal(video: DecodedVibeControlOperationVideo): void {
+  errorMessage.value = "";
+  appendTargetVideoId.value = video.id;
+  selectedVideoGroupId.value = video.groupId || selectedVideoGroupId.value;
   recordingModalOpen.value = true;
 }
 
@@ -2948,9 +3286,47 @@ function submitOperationVideoGroup(): void {
   groupCreateModalOpen.value = false;
 }
 
+function openGroupDeleteConfirm(group: DecodedVibeControlOperationVideoGroup): void {
+  deleteTargetGroup.value = group;
+  deleteGroupConfirmOpen.value = true;
+}
+
+function deleteConfirmedGroup(): void {
+  const group = deleteTargetGroup.value;
+  if (!group || groupVideoCount(group.id) > 0) return;
+  deleteGroupConfirmOpen.value = false;
+  deleteTargetGroup.value = null;
+  emit("delete-group", group.id);
+}
+
+function applyOrganizationPlan(
+  plan: OperationVideoGroupAssistantPlan,
+  childCallbacks?: OperationVideoOrganizationCallbacks
+): void {
+  errorMessage.value = "";
+  isApplyingOrganizationPlan.value = true;
+  emit("apply-organization-plan", plan, {
+    onSuccess: () => {
+      errorMessage.value = "";
+      childCallbacks?.onSuccess?.();
+    },
+    onError: (message) => {
+      errorMessage.value = message;
+      childCallbacks?.onError?.(message);
+    },
+    onFinally: () => {
+      isApplyingOrganizationPlan.value = false;
+      childCallbacks?.onFinally?.();
+    },
+  });
+}
+
 function handleRecordingModalClose(): void {
   if (isRecording.value) return;
   errorMessage.value = "";
+  if (!recordedBlob.value) {
+    appendTargetVideoId.value = "";
+  }
 }
 
 async function startCapture(): Promise<void> {
@@ -3162,36 +3538,36 @@ async function saveRecording(): Promise<void> {
     title.value.trim() ||
     buildFallbackRecordingTitle();
   const resolvedDescription = quickScan.value?.description?.trim() || undefined;
-  emit(
-    "save",
-    {
-      applicationId: props.application.id,
-      groupId: group.id,
-      title: resolvedTitle,
-      description: resolvedDescription,
-      blob: recordedBlob.value,
-      durationMs: recordedDurationMs.value ?? elapsedMs.value,
-      contentType: recordedBlob.value.type || "video/webm",
-      sourceDisplaySurface: sourceDisplaySurface.value,
-      quickScan: quickScan.value,
-      transcriptText: transcriptText.value || undefined,
-      transcriptProvider: transcriptProvider.value || undefined,
-      transcriptSummary: transcriptSummary.value || undefined,
-      frameCaptures: frameCaptures.value.map((frame) => ({
-        timestampMs: frame.timestampMs,
-        blob: frame.blob,
-        contentType: frame.contentType,
-        width: frame.width,
-        height: frame.height,
-      })),
-      tags: [],
-    },
-    {
-      onSuccess: (video) => {
+  const payload: VibeControlOperationVideoSaveInput = {
+    applicationId: props.application.id,
+    groupId: group.id,
+    title: resolvedTitle,
+    description: resolvedDescription,
+    blob: recordedBlob.value,
+    durationMs: recordedDurationMs.value ?? elapsedMs.value,
+    contentType: recordedBlob.value.type || "video/webm",
+    sourceDisplaySurface: sourceDisplaySurface.value,
+    quickScan: quickScan.value,
+    transcriptText: transcriptText.value || undefined,
+    transcriptProvider: transcriptProvider.value || undefined,
+    transcriptSummary: transcriptSummary.value || undefined,
+    frameCaptures: frameCaptures.value.map((frame) => ({
+      timestampMs: frame.timestampMs,
+      blob: frame.blob,
+      contentType: frame.contentType,
+      width: frame.width,
+      height: frame.height,
+    })),
+    tags: [],
+  };
+  const targetVideoId = appendTargetVideoId.value;
+  const callbacks: OperationVideoSaveCallbacks = {
+    onSuccess: (video: DecodedVibeControlOperationVideo) => {
         saveProgressPhase.value = "done";
         selectedVideoGroupId.value = video.groupId || group.id;
         selectedVideoId.value = video.id;
         detailVideoId.value = video.id;
+        appendTargetVideoId.value = "";
         window.setTimeout(() => {
           recordingModalOpen.value = false;
           saveProgressOpen.value = false;
@@ -3199,12 +3575,16 @@ async function saveRecording(): Promise<void> {
           resetRecording();
         }, 650);
       },
-      onError: (message) => {
+      onError: (message: string) => {
         errorMessage.value = message;
         saveProgressPhase.value = "error";
       },
-    }
-  );
+  };
+  if (targetVideoId) {
+    emit("append-clip", { ...payload, videoId: targetVideoId }, callbacks);
+  } else {
+    emit("save", payload, callbacks);
+  }
 }
 
 function displayVideoTitle(video: DecodedVibeControlOperationVideo): string {
@@ -4081,38 +4461,134 @@ async function resolveVideoUrls(
 ): Promise<void> {
   await Promise.all(
     videos.map(async (video) => {
-      if (videoUrls[video.id]) return;
+      const clips = videoClips(video);
+      const primary = clips[0];
       try {
-        const storageRef = storageRefForBucketPath({
-          bucketName: video.bucketName,
-          filePath: video.storagePath,
-        });
-        videoUrls[video.id] = await getDownloadURL(storageRef);
+        if (primary && !clipVideoUrls[clipKey(video.id, primary.id)]) {
+          const storageRef = storageRefForBucketPath({
+            bucketName: primary.bucketName,
+            filePath: primary.storagePath,
+          });
+          const url = await getDownloadURL(storageRef);
+          clipVideoUrls[clipKey(video.id, primary.id)] = url;
+          videoUrls[video.id] = url;
+        } else if (primary) {
+          videoUrls[video.id] = clipVideoUrls[clipKey(video.id, primary.id)] || "";
+        }
       } catch {
         videoUrls[video.id] = "";
       }
       await Promise.all(
-        (video.frameCaptures ?? []).map(async (frame) => {
-          if (!frame.storagePath || !frame.bucketName) return;
-          const key = frameKey(video.id, frame.id);
-          if (frameUrls[key]) return;
-          try {
-            const storageRef = storageRefForBucketPath({
-              bucketName: frame.bucketName,
-              filePath: frame.storagePath,
-            });
-            frameUrls[key] = await getDownloadURL(storageRef);
-          } catch {
-            frameUrls[key] = "";
-          }
-        })
+        clips.flatMap((clip) => [
+          (async () => {
+            const key = clipKey(video.id, clip.id);
+            if (clipVideoUrls[key]) return;
+            try {
+              const storageRef = storageRefForBucketPath({
+                bucketName: clip.bucketName,
+                filePath: clip.storagePath,
+              });
+              clipVideoUrls[key] = await getDownloadURL(storageRef);
+            } catch {
+              clipVideoUrls[key] = "";
+            }
+          })(),
+          ...clip.frameCaptures.map(async (frame) => {
+            if (!frame.storagePath || !frame.bucketName) return;
+            const key = clipFrameKey(video.id, clip.id, frame.id);
+            if (clipFrameUrls[key]) return;
+            try {
+              const storageRef = storageRefForBucketPath({
+                bucketName: frame.bucketName,
+                filePath: frame.storagePath,
+              });
+              const url = await getDownloadURL(storageRef);
+              clipFrameUrls[key] = url;
+              if (clip.id === primary?.id) {
+                frameUrls[frameKey(video.id, frame.id)] = url;
+              }
+            } catch {
+              clipFrameUrls[key] = "";
+            }
+          }),
+        ])
       );
     })
   );
 }
 
+function clipKey(videoId: string, clipId: string): string {
+  return `${videoId}:${clipId}`;
+}
+
 function frameKey(videoId: string, frameId: string): string {
   return `${videoId}:${frameId}`;
+}
+
+function clipFrameKey(videoId: string, clipId: string, frameId: string): string {
+  return `${videoId}:${clipId}:${frameId}`;
+}
+
+function videoClips(
+  video: DecodedVibeControlOperationVideo
+): VibeControlOperationVideoClip[] {
+  const clips = Array.isArray(video.clips) && video.clips.length > 0
+    ? video.clips
+    : [
+        {
+          id: "clip-001",
+          fileName: video.fileName,
+          bucketName: video.bucketName,
+          storagePath: video.storagePath,
+          contentType: video.contentType,
+          sizeBytes: video.sizeBytes,
+          durationMs: video.durationMs,
+          transcriptText: video.transcriptText,
+          transcriptProvider: video.transcriptProvider,
+          transcriptSummary: video.transcriptSummary,
+          quickScan: video.quickScan,
+          frameCaptures: video.frameCaptures ?? [],
+          metadataFileName: video.metadataFileName,
+          metadataStoragePath: video.metadataStoragePath,
+          journeyFileName: video.journeyFileName,
+          journeyStoragePath: video.journeyStoragePath,
+          fileSpaceRequestId: video.fileSpaceRequestId,
+          journeyFileSpaceRequestId: video.journeyFileSpaceRequestId,
+          sourceAssetId: video.sourceAssetId,
+          journeySourceAssetId: video.journeySourceAssetId,
+          sourceDisplaySurface: video.sourceDisplaySurface,
+          recordedAt: video.recordedAt,
+        },
+      ];
+  return [...clips].sort((a, b) =>
+    (a.recordedAt || "").localeCompare(b.recordedAt || "")
+  );
+}
+
+function videoClipCount(video: DecodedVibeControlOperationVideo): number {
+  return video.clipCount || videoClips(video).length;
+}
+
+function videoTotalDurationMs(video: DecodedVibeControlOperationVideo): number | undefined {
+  return video.totalDurationMs ?? videoClips(video).reduce(
+    (sum, clip) => sum + Math.max(0, clip.durationMs ?? 0),
+    0
+  );
+}
+
+function videoTotalSizeBytes(video: DecodedVibeControlOperationVideo): number {
+  const totalClipSize = videoClips(video).reduce(
+    (sum, clip) => sum + Math.max(0, clip.sizeBytes ?? 0),
+    0
+  );
+  return totalClipSize || video.sizeBytes || 0;
+}
+
+function clipVideoUrl(
+  video: DecodedVibeControlOperationVideo,
+  clip: VibeControlOperationVideoClip
+): string {
+  return clipVideoUrls[clipKey(video.id, clip.id)] ?? "";
 }
 
 function savedFrameUrl(

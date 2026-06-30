@@ -160,6 +160,38 @@ def _tool_definitions() -> list[dict[str, Any]]:
                 "additionalProperties": False,
             },
         },
+        {
+            "name": "push_knowledge_document",
+            "description": "Push a local AI-editor file or text note into an application's FileSpace knowledge tank. Requires the knowledge:write MCP scope.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["applicationId", "fileName", "mimeType"],
+                "anyOf": [
+                    {"required": ["content"]},
+                    {"required": ["contentBase64"]},
+                ],
+                "properties": {
+                    "applicationId": {"type": "string"},
+                    "fileName": {"type": "string"},
+                    "mimeType": {"type": "string"},
+                    "content": {
+                        "type": "string",
+                        "description": "UTF-8 text content. Use contentBase64 for binary files.",
+                    },
+                    "contentBase64": {
+                        "type": "string",
+                        "description": "Base64-encoded binary content. Default max size is 10 MiB.",
+                    },
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                    "storyId": {"type": "string"},
+                    "operationVideoId": {"type": "string"},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                    "sourceNote": {"type": "string"},
+                },
+                "additionalProperties": False,
+            },
+        },
     ]
 
 
@@ -281,6 +313,24 @@ class FixtureVibeControlStore:
         if application_id != self.application["id"]:
             raise HTTPException(status_code=404, detail="Application not found")
         return self.application
+
+    def push_knowledge_document(self, *, application_id: str, file_name: str, mime_type: str, **kwargs: Any) -> dict[str, Any]:
+        self.principal.require_scope("knowledge:write")
+        if application_id != self.application["id"]:
+            raise HTTPException(status_code=404, detail="Application not found")
+        if not file_name or not mime_type:
+            raise HTTPException(status_code=400, detail="fileName and mimeType are required")
+        return {
+            "requestId": "fixture-upload-request",
+            "fileSpaceId": self.application["fileSpaceId"],
+            "documentId": "fixture-mcp-document",
+            "bucketName": "fixture-bucket",
+            "filePath": f"organizations/local/spaces/default/fileSpaces/{self.application['fileSpaceId']}/knowledges/manual_upload/ai_editor/fixture/{file_name}",
+            "gcsUrl": f"gs://fixture-bucket/fixture/{file_name}",
+            "status": "accepted",
+            "registrationStatus": "processing",
+            "message": "アップロードリクエストを受け付けました。少し時間が経つとSearch Storeへの登録が完了します。",
+        }
 
     def list_stories(self, *, application_id: str, **_: Any) -> list[dict[str, Any]]:
         self.principal.require_scope("context:read")
@@ -692,6 +742,22 @@ def _call_tool(principal: McpPrincipal, name: str, arguments: dict[str, Any]) ->
         return _text_content(_get_operation_video_context(store, arguments))
     if name == "get_story_context":
         return _text_content(_get_story_context(store, arguments))
+    if name == "push_knowledge_document":
+        return _text_content(
+            store.push_knowledge_document(
+                application_id=str(arguments.get("applicationId") or ""),
+                file_name=str(arguments.get("fileName") or ""),
+                mime_type=str(arguments.get("mimeType") or ""),
+                content=str(arguments.get("content") or ""),
+                content_base64=str(arguments.get("contentBase64") or ""),
+                title=str(arguments.get("title") or ""),
+                description=str(arguments.get("description") or ""),
+                story_id=str(arguments.get("storyId") or ""),
+                operation_video_id=str(arguments.get("operationVideoId") or ""),
+                tags=arguments.get("tags") if isinstance(arguments.get("tags"), list) else [],
+                source_note=str(arguments.get("sourceNote") or ""),
+            )
+        )
     raise HTTPException(status_code=404, detail=f"Unknown tool: {name}")
 
 

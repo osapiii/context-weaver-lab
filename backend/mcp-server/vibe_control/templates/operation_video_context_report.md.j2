@@ -11,7 +11,8 @@
 - Linked stories: {{ linked_stories|length }}
 - Evidence: {{ evidence|length }}
 - Source assets: {{ source_assets|length }}
-- Screenshots: {{ video.screenshots|default([])|length }}
+- Video clips: {{ video.clips|default([])|length }}
+- Screenshots: {{ counts.screenshots|default(video.screenshots|default([])|length) }}
 - GitHub pull requests: {{ pull_requests|length }}
 - Knowledge documents: {{ knowledge_documents|length }}
 
@@ -24,6 +25,19 @@
 - GCS path: {{ video.gcsPath|text("n/a") }}
 - Download URL: {{ video.downloadUrl|text("n/a") }}
 - Transcript summary: {{ video.transcriptSummary|text("n/a") }}
+
+## Operation Clips
+{% for clip in video.clips|default([]) %}
+### {{ clip.id|text("clip") }}{% if clip.fileName %}: {{ clip.fileName }}{% endif %}
+- Recorded at: {{ clip.recordedAt|text("n/a") }}
+- Duration: {{ clip.durationMs|format_ms }}
+- GCS path: {{ clip.gcsPath|text("n/a") }}
+- Download URL: {{ clip.downloadUrl|text("n/a") }}
+- Screenshots: {{ clip.screenshots|default([])|length }}
+- Transcript summary: {{ clip.transcriptSummary|text("n/a") }}
+{% else %}
+- No clips.
+{% endfor %}
 
 ## Linked User Stories
 {% for story in linked_stories %}

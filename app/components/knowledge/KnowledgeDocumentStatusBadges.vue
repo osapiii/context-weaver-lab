@@ -9,7 +9,7 @@
         quiet
           ? 'bg-white/95 text-slate-600 ring-slate-200'
           : indexed
-            ? 'bg-purple-50/90 text-purple-700 ring-purple-200'
+            ? 'bg-primary-50/90 text-primary-700 ring-primary-200'
             : 'bg-gray-100/90 text-gray-500 ring-gray-200'
       "
       :title="
@@ -60,7 +60,7 @@ const indexed = computed(() => isKnowledgeIndexed(props.document));
 const source = computed(() => knowledgeSourceMeta(props.document));
 
 const sourceToneClass: Record<KnowledgeSourceTone, string> = {
-  violet: "bg-violet-50/90 text-violet-700 ring-violet-200",
+  violet: "bg-primary-50/90 text-primary-700 ring-primary-200",
   sky: "bg-sky-50/90 text-sky-700 ring-sky-200",
   cyan: "bg-cyan-50/90 text-cyan-700 ring-cyan-200",
   slate: "bg-slate-100/90 text-slate-600 ring-slate-200",

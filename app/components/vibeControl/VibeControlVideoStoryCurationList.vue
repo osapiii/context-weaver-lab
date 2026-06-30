@@ -21,7 +21,7 @@
     <div :class="toolbarClass">
       <div class="flex min-w-0 flex-1 flex-col gap-3 xl:flex-row xl:items-center">
         <div class="flex min-w-0 items-center gap-2 xl:w-[18rem]">
-          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-violet-50 text-violet-600">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-50 text-primary-600">
             <UIcon name="material-symbols:account-tree-outline" class="h-4 w-4" />
           </span>
           <div class="min-w-0">
@@ -42,7 +42,7 @@
           <input
             v-model="query"
             type="search"
-            class="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-2 focus:ring-violet-100"
+            class="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
             placeholder="動画タイトル・概要・ストーリー候補で検索"
           >
         </label>
@@ -66,7 +66,7 @@
             v-for="option in statusOptions"
             :key="option.value"
             type="button"
-            class="h-8 rounded-md px-2.5 text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+            class="h-8 rounded-md px-2.5 text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
             :class="statusFilter === option.value ? 'bg-slate-950 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
             @click="statusFilter = option.value"
           >
@@ -76,7 +76,7 @@
 
         <button
           type="button"
-          class="flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-200 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+          class="flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-600 shadow-sm transition hover:border-primary-200 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
           @click="focusMode = !focusMode"
         >
           <UIcon
@@ -130,8 +130,8 @@
         <div :class="epicListClass">
           <button
             type="button"
-            class="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
-            :class="selectedVideoId === '' ? 'bg-violet-100 text-violet-900' : 'text-slate-600 hover:bg-white'"
+            class="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+            :class="selectedVideoId === '' ? 'bg-primary-100 text-primary-900' : 'text-slate-600 hover:bg-white'"
             @click="selectedVideoId = ''"
           >
             <span>すべてのストーリー</span>
@@ -144,8 +144,8 @@
             v-for="group in filteredVideoGroups"
             :key="group.video.id"
             type="button"
-            class="group mb-1 grid w-full gap-2 rounded-md px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
-            :class="selectedVideoId === group.video.id ? 'bg-white text-slate-950 shadow-sm ring-1 ring-violet-100' : 'text-slate-600 hover:bg-white'"
+            class="group mb-1 grid w-full gap-2 rounded-md px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+            :class="selectedVideoId === group.video.id ? 'bg-white text-slate-950 shadow-sm ring-1 ring-primary-100' : 'text-slate-600 hover:bg-white'"
             @click="selectedVideoId = group.video.id"
           >
             <div class="flex min-w-0 items-center justify-between gap-2">
@@ -167,7 +167,7 @@
             </div>
             <div class="ml-6 h-1 overflow-hidden rounded-full bg-slate-200">
               <div
-                class="h-full rounded-full bg-violet-500"
+                class="h-full rounded-full bg-primary-500"
                 :style="{ width: `${Math.min(group.averageConfidence, 100)}%` }"
               />
             </div>
@@ -188,7 +188,7 @@
           <div class="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              class="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              class="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
               @click="mcpTestChatOpen = true"
             >
               <UIcon name="material-symbols:terminal" class="h-4 w-4" />
@@ -197,7 +197,7 @@
             <button
               v-if="selectedVideoGroup"
               type="button"
-              class="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              class="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
               @click="openSelectedVideoDetail"
             >
               <UIcon name="material-symbols:open-in-new" class="h-4 w-4" />
@@ -413,7 +413,7 @@
             </div>
             <button
               type="button"
-              class="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+              class="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
               @click="mcpTestChatOpen = true"
             >
               テスト会話
@@ -994,7 +994,7 @@ function statusDotClass(color: BadgeColor): string {
   if (color === "info") return "bg-sky-500";
   if (color === "warning") return "bg-amber-500";
   if (color === "error") return "bg-rose-500";
-  if (color === "primary") return "bg-violet-500";
+  if (color === "primary") return "bg-primary-500";
   return "bg-slate-300";
 }
 

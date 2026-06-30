@@ -98,6 +98,14 @@ export const DocumentSchema = z.object({
   enAiStudioDataset: z.string().nullable().optional(),
   workspaceId: z.string().nullable().optional(),
   exportedAt: z.string().nullable().optional(),
+  uploadedVia: z.string().nullable().optional(),
+  externalAgent: z.string().nullable().optional(),
+  mcpConnectionId: z.string().nullable().optional(),
+  applicationId: z.string().nullable().optional(),
+  storyId: z.string().nullable().optional(),
+  operationVideoId: z.string().nullable().optional(),
+  tags: z.array(z.string()).nullable().optional(),
+  sourceNote: z.string().nullable().optional(),
   // Firestore docID をフロント経由でも参照できるよう保持
   // (Document.name の末尾は Gemini ID、Firestore docID は別物のため、削除等で別途必要)
   id: z.string().optional(),
@@ -143,4 +151,3 @@ export type DecodedKnowledge = DecodedDocument;
 export const KnowledgeSchema = DocumentSchema;
 export const DecodedKnowledgeSchema = DecodedDocumentSchema;
 export const knowledgeConverter = documentConverter;
-

@@ -348,9 +348,11 @@
         @analyze="startZappingVideoAnalysis"
         @fetch-related-context="startRelatedContextAnalysis"
         @save="saveOperationVideo"
+        @append-clip="appendOperationVideoClip"
         @create-group="createOperationVideoGroup"
         @update-group="updateOperationVideoGroup"
         @delete-group="deleteOperationVideoGroup"
+        @apply-organization-plan="applyOperationVideoOrganizationPlan"
         @update-title="updateOperationVideoTitle"
         @delete="deleteOperationVideo"
         @refresh="store.fetchFromFirestore()"
@@ -395,6 +397,7 @@ import type { Document } from "@models/geminiFileSpaceRequest";
 import type {
   VibeControlApplicationInput,
   VibeControlGenerationInput,
+  VibeControlOperationVideoAppendInput,
   VibeControlOperationVideoSaveInput,
 } from "@stores/vibeControl";
 import type { GitHubRepositorySummary } from "@composables/useGitHubOAuth";
@@ -887,6 +890,7 @@ function openEditApplicationModal(application?: DecodedVibeControlApplication): 
 }
 
 async function saveApplication(input: VibeControlApplicationInput): Promise<void> {
+  const shouldAutoProvisionFileSpace = !input.id?.trim() && !input.fileSpaceId?.trim();
   const application = await store.upsertApplication(input);
   applicationModalOpen.value = false;
   editingApplicationId.value = null;
@@ -900,6 +904,11 @@ async function saveApplication(input: VibeControlApplicationInput): Promise<void
     description: application.name,
     color: "success",
   });
+  if (shouldAutoProvisionFileSpace) {
+    await provisionApplicationFileSpace(application, {
+      startedTitle: "専用FileSpaceの作成を開始しました",
+    });
+  }
 }
 
 async function startCapabilityStructuring(
@@ -929,7 +938,13 @@ async function startCapabilityStructuring(
 async function provisionSelectedApplicationFileSpace(): Promise<void> {
   const application = selectedApplication.value;
   if (!application) return;
+  await provisionApplicationFileSpace(application);
+}
 
+async function provisionApplicationFileSpace(
+  application: DecodedVibeControlApplication,
+  options: { startedTitle?: string } = {}
+): Promise<void> {
   try {
     const requestId = await store.provisionApplicationFileSpace(application.id);
     if (requestId === application.fileSpaceId) {
@@ -942,7 +957,7 @@ async function provisionSelectedApplicationFileSpace(): Promise<void> {
     }
 
     toast.add({
-      title: "専用FileSpaceの作成を開始しました",
+      title: options.startedTitle || "専用FileSpaceの作成を開始しました",
       description: requestId,
       color: "success",
     });
@@ -1098,6 +1113,32 @@ async function saveOperationVideo(
   }
 }
 
+async function appendOperationVideoClip(
+  input: VibeControlOperationVideoAppendInput,
+  callbacks?: {
+    onSuccess?: (video: DecodedVibeControlOperationVideo) => void;
+    onError?: (message: string) => void;
+  }
+): Promise<void> {
+  try {
+    const video = await store.appendOperationVideoClip(input);
+    callbacks?.onSuccess?.(video);
+    toast.add({
+      title: "動画クリップを追加しました",
+      description: "まとめて再解析すると、追加した動画も解析結果に反映されます",
+      color: "success",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    callbacks?.onError?.(message);
+    toast.add({
+      title: "動画クリップの追加に失敗しました",
+      description: message,
+      color: "error",
+    });
+  }
+}
+
 async function createOperationVideoGroup(input: {
   applicationId: string;
   name: string;
@@ -1152,6 +1193,64 @@ async function deleteOperationVideoGroup(groupId: string): Promise<void> {
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });
+  }
+}
+
+type OperationVideoOrganizationPlan = {
+  summary: string;
+  groups: {
+    existingGroupId?: string;
+    name: string;
+    description?: string;
+    videoIds: string[];
+    reason?: string;
+  }[];
+};
+
+async function applyOperationVideoOrganizationPlan(
+  plan: OperationVideoOrganizationPlan,
+  callbacks?: {
+    onSuccess?: () => void;
+    onError?: (message: string) => void;
+    onFinally?: () => void;
+  }
+): Promise<void> {
+  try {
+    if (!selectedApplication.value) {
+      throw new Error("対象アプリが選択されていません");
+    }
+    let movedCount = 0;
+    for (const groupPlan of plan.groups) {
+      const group = groupPlan.existingGroupId
+        ? store.operationVideoGroups.find((item) => item.id === groupPlan.existingGroupId)
+        : await store.createOperationVideoGroup({
+            applicationId: selectedApplication.value.id,
+            name: groupPlan.name,
+            description: groupPlan.description,
+          });
+      if (!group) continue;
+      await store.moveOperationVideosToGroup({
+        groupId: group.id,
+        videoIds: groupPlan.videoIds,
+      });
+      movedCount += groupPlan.videoIds.length;
+    }
+    callbacks?.onSuccess?.();
+    toast.add({
+      title: "AI整理案を適用しました",
+      description: `${plan.groups.length}グループ / ${movedCount}件の動画を整理しました`,
+      color: "success",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    callbacks?.onError?.(message);
+    toast.add({
+      title: "AI整理案の適用に失敗しました",
+      description: message,
+      color: "error",
+    });
+  } finally {
+    callbacks?.onFinally?.();
   }
 }
 

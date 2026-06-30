@@ -86,7 +86,10 @@
         >
       </label>
 
-      <label class="block min-w-0">
+      <label
+        v-if="isEdit"
+        class="block min-w-0"
+      >
         <span class="text-xs font-medium text-slate-600">FileSpace ID</span>
         <input
           v-model="form.fileSpaceId"
@@ -96,6 +99,17 @@
           :disabled="isSaving"
         >
       </label>
+      <div
+        v-else
+        class="min-w-0 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2"
+      >
+        <p class="text-xs font-semibold text-emerald-800">
+          専用FileSpace
+        </p>
+        <p class="mt-1 text-xs leading-5 text-emerald-700">
+          アプリ登録後に自動で作成します。
+        </p>
+      </div>
 
       <div class="min-w-0 md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div class="flex flex-wrap items-center justify-between gap-3">

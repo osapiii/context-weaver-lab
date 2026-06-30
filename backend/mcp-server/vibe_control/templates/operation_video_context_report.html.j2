@@ -80,6 +80,7 @@
       <nav class="nav" aria-label="Report sections">
         <a href="#overview">Overview</a>
         <a href="#video">Operation Video</a>
+        <a href="#clips">Operation Clips</a>
         <a href="#stories">Linked User Stories</a>
         <a href="#evidence">Evidence</a>
         <a href="#assets">Source Assets</a>
@@ -103,7 +104,8 @@
           <div class="metric"><span>Stories</span><strong>{{ linked_stories|length }}</strong></div>
           <div class="metric"><span>Evidence</span><strong>{{ evidence|length }}</strong></div>
           <div class="metric"><span>Assets</span><strong>{{ source_assets|length }}</strong></div>
-          <div class="metric"><span>Screenshots</span><strong>{{ video.screenshots|default([])|length }}</strong></div>
+          <div class="metric"><span>Clips</span><strong>{{ video.clips|default([])|length }}</strong></div>
+          <div class="metric"><span>Screenshots</span><strong>{{ counts.screenshots|default(video.screenshots|default([])|length) }}</strong></div>
           <div class="metric"><span>PRs</span><strong>{{ pull_requests|length }}</strong></div>
           <div class="metric"><span>Knowledge</span><strong>{{ knowledge_documents|length }}</strong></div>
         </div>
@@ -131,6 +133,33 @@
             <h3>Transcript Summary</h3>
             <p>{{ video.transcriptSummary }}</p>
           {% endif %}
+        </div>
+      </section>
+
+      <section id="clips">
+        <h2>Operation Clips</h2>
+        <div class="grid">
+          {% for clip in video.clips|default([]) %}
+            <article class="panel">
+              <h3>{{ clip.id|text("clip") }}{% if clip.fileName %}: {{ clip.fileName }}{% endif %}</h3>
+              {% if clip.downloadUrl %}
+                <video controls preload="metadata" src="{{ clip.downloadUrl }}"></video>
+                <p class="muted"><a href="{{ clip.downloadUrl }}" target="_blank" rel="noopener noreferrer">クリップ動画を開く</a></p>
+              {% endif %}
+              <div class="grid cols-2" style="margin-top: 14px;">
+                <div class="kv"><b>Recorded at</b><span>{{ clip.recordedAt|text("n/a") }}</span></div>
+                <div class="kv"><b>Duration</b><span>{{ clip.durationMs|format_ms }}</span></div>
+                <div class="kv"><b>Screenshots</b><span>{{ clip.screenshots|default([])|length }}</span></div>
+                <div class="kv"><b>GCS path</b><span>{{ clip.gcsPath|text("n/a") }}</span></div>
+              </div>
+              {% if clip.transcriptSummary %}
+                <h3>Transcript Summary</h3>
+                <p>{{ clip.transcriptSummary }}</p>
+              {% endif %}
+            </article>
+          {% else %}
+            <div class="panel"><p class="muted">No clips.</p></div>
+          {% endfor %}
         </div>
       </section>
 

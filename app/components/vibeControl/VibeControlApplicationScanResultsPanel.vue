@@ -1041,7 +1041,7 @@ function flowColorClass(seed: string, index: number): string {
     "bg-sky-400",
     "bg-emerald-400",
     "bg-orange-400",
-    "bg-violet-400",
+    "bg-primary-400",
     "bg-cyan-300",
   ];
   const sum = [...seed].reduce((acc, char) => acc + char.charCodeAt(0), index);

@@ -118,6 +118,20 @@ class FakeStore:
     def get_application(self, application_id):
         return {"id": application_id, "name": "Demo App", "repoFullName": "org/repo"}
 
+    def push_knowledge_document(self, *, application_id, file_name, mime_type, **kwargs):
+        self.principal.require_scope("knowledge:write")
+        return {
+            "requestId": "req-push-1",
+            "fileSpaceId": "fs-app-1",
+            "documentId": "doc-push-1",
+            "bucketName": "bucket",
+            "filePath": f"organizations/org/spaces/space/fileSpaces/fs-app-1/knowledges/manual_upload/ai_editor/test/{file_name}",
+            "gcsUrl": f"gs://bucket/{file_name}",
+            "status": "accepted",
+            "registrationStatus": "processing",
+            "message": "アップロードリクエストを受け付けました。少し時間が経つとSearch Storeへの登録が完了します。",
+        }
+
     def get_story(self, story_id):
         return {
             "id": story_id,
@@ -205,6 +219,24 @@ class FakeStore:
                 "id": kwargs["operation_video_id"],
                 "title": "Demo operation video",
                 "downloadUrl": "https://storage.example.test/video.webm",
+                "clipCount": 2,
+                "clips": [
+                    {
+                        "id": "clip-001",
+                        "downloadUrl": "https://storage.example.test/video.webm",
+                        "screenshots": [
+                            {
+                                "id": "frame-001",
+                                "downloadUrl": "https://storage.example.test/frame.jpg",
+                            }
+                        ],
+                    },
+                    {
+                        "id": "clip-002",
+                        "downloadUrl": "https://storage.example.test/video-2.webm",
+                        "screenshots": [],
+                    },
+                ],
                 "videoGroup": {
                     "id": "group-1",
                     "name": "Existing operation videos",
@@ -245,6 +277,7 @@ class FakeStore:
                 "linkedStories": 1,
                 "evidence": 1,
                 "sourceAssets": 1,
+                "videoClips": 2,
                 "screenshots": 1,
                 "githubPullRequests": 1,
                 "knowledgeDocuments": 1,
@@ -282,8 +315,73 @@ def test_initialize_and_tools_list(monkeypatch):
     assert "list_operation_video_groups" in names
     assert "get_operation_video_context" in names
     assert "get_story_context" in names
+    assert "push_knowledge_document" in names
     assert "get_story_assets" not in names
     assert "submit_agent_plan" not in names
+
+
+def test_push_knowledge_document_requires_write_scope(monkeypatch):
+    client = _client(monkeypatch)
+    with patch.object(server, "_store", side_effect=lambda principal: FakeStore(principal)):
+        response = client.post(
+            "/mcp",
+            headers={"Authorization": "Bearer dev-token"},
+            json={
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "tools/call",
+                "params": {
+                    "name": "push_knowledge_document",
+                    "arguments": {
+                        "applicationId": "app-1",
+                        "fileName": "plan.md",
+                        "mimeType": "text/markdown",
+                        "content": "# Plan",
+                    },
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["error"]["code"] == -32000
+    assert response.json()["error"]["data"]["httpStatus"] == 403
+    assert "knowledge:write" in response.json()["error"]["message"]
+
+
+def test_tool_call_push_knowledge_document(monkeypatch):
+    monkeypatch.setenv("VIBE_CONTROL_MCP_DEV_SCOPES", "context:read,knowledge:write")
+    client = _client(monkeypatch)
+    with patch.object(server, "_store", side_effect=lambda principal: FakeStore(principal)):
+        response = client.post(
+            "/mcp",
+            headers={"Authorization": "Bearer dev-token"},
+            json={
+                "jsonrpc": "2.0",
+                "id": 10,
+                "method": "tools/call",
+                "params": {
+                    "name": "push_knowledge_document",
+                    "arguments": {
+                        "applicationId": "app-1",
+                        "fileName": "plan.md",
+                        "mimeType": "text/markdown",
+                        "content": "# Plan\n\nRemote MCP upload.",
+                        "storyId": "story-1",
+                        "tags": ["plan", "codex"],
+                    },
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    text = response.json()["result"]["content"][0]["text"]
+    payload = json.loads(text)
+    assert payload["requestId"] == "req-push-1"
+    assert payload["fileSpaceId"] == "fs-app-1"
+    assert payload["documentId"] == "doc-push-1"
+    assert payload["status"] == "accepted"
+    assert payload["registrationStatus"] == "processing"
+    assert "登録が完了" in payload["message"]
 
 
 def test_tool_call_list_operation_video_groups(monkeypatch):
@@ -360,9 +458,11 @@ def test_tool_call_get_operation_video_context(monkeypatch):
     payload = json.loads(text)
     assert payload["schemaVersion"] == "vibe-control-operation-video-context-v1"
     assert payload["operationVideo"]["downloadUrl"] == "https://storage.example.test/video.webm"
+    assert payload["operationVideo"]["clips"][1]["id"] == "clip-002"
     assert payload["videoGroup"]["name"] == "Existing operation videos"
     assert payload["linkedStories"][0]["storyKey"] == "APP-ST-001"
     assert payload["counts"]["linkedStories"] == 1
+    assert payload["counts"]["videoClips"] == 2
     assert payload["counts"]["knowledgeDocuments"] == 1
     assert payload["knowledgeDocuments"][0]["downloadUrl"] == "https://storage.example.test/architecture.md"
     assert payload["reports"]["html"]["url"] == "https://storage.example.test/operation-video-context.html"
