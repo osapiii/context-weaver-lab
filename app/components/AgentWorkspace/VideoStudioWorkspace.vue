@@ -542,7 +542,7 @@
       class="video-editor-light fixed inset-0 z-[90] flex h-dvh min-h-0 w-screen flex-col overflow-hidden bg-gray-900 text-white"
       data-testid="video-studio-fullscreen-editor"
     >
-      <header class="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-4 py-2">
+      <header class="relative z-[140] flex shrink-0 items-center justify-between border-b border-gray-700 bg-gray-800 px-4 py-2">
         <div class="flex min-w-0 items-center gap-4">
           <h2 class="truncate font-bold text-white">{{ store.selectedVideo?.title || store.selectedProject.editorState.video.title }}</h2>
           <div class="flex min-w-0 items-center gap-2 text-sm text-gray-300">
@@ -573,7 +573,7 @@
         </div>
       </header>
 
-      <div class="border-b border-gray-700 bg-gray-800 px-4 py-1.5">
+      <div class="relative z-[130] shrink-0 border-b border-gray-700 bg-gray-800 px-4 py-1.5">
         <div class="flex items-center gap-3">
           <div class="flex flex-1 items-center gap-2">
             <div
@@ -6172,6 +6172,43 @@ const getSectionVideoForMerge = (
   return sectionVideoSourceInfo(section);
 };
 
+const clearSectionMergedVideoOutput = (section: VideoStudioSection): VideoStudioSection => {
+  const { mergedVideoOutput: _mergedVideoOutput, ...rest } = section;
+  return rest;
+};
+
+const clearPreviousExportOutputs = async (): Promise<void> => {
+  const project = store.selectedProject;
+  if (!project) return;
+
+  const sections = project.sections.map(clearSectionMergedVideoOutput);
+  const selectedIndex = project.editorState.selectedSectionIndex;
+  const selectedSection =
+    typeof selectedIndex === "number"
+      ? sections[selectedIndex] ?? null
+      : project.editorState.selectedSection
+        ? clearSectionMergedVideoOutput(project.editorState.selectedSection)
+        : null;
+
+  await store.updateProject(project.videoId, project.id, {
+    sections,
+    editorState: {
+      ...project.editorState,
+      selectedSection,
+    },
+    mergedVideoOutput: null,
+    mergedVideoOutputSilenceCut: null,
+    subtitleOutput: null,
+    silenceCutOutput: null,
+    latestExportedZip: null,
+    latestExportedAt: null,
+    currentStep: "export",
+    completedSteps: project.completedSteps.filter(
+      (step) => step !== "export" && step !== "subtitle"
+    ),
+  });
+};
+
 const sectionExportTiming = (section: VideoStudioSection) => {
   const startSeconds = sectionStartSeconds(section);
   const endSeconds = sectionEndSeconds(section);
@@ -6554,6 +6591,7 @@ const requestExport = async (): Promise<void> => {
   requestNotice.value = { kind: "success", message: "動画出力を開始しています..." };
   exportProgress.message = "セクション動画の合成準備をしています。";
   try {
+    await clearPreviousExportOutputs();
     const sectionOutputs: Array<{
       bucketName: string;
       filePath: string;
