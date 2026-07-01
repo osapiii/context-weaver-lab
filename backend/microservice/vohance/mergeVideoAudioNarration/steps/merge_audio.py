@@ -485,8 +485,9 @@ def _build_ffmpeg_merge_command(
 ) -> List[str]:
     """
     QuickTime互換性を最大化したffmpegコマンドを構築。
-    - anullsrc: 0秒からの音声Gapを防ぎ、QuickTimeの同期ズレを防止
-    - aformat: mix前にサンプルレート・チャネルを統一（44.1kHz/Stereo）
+    - 48kHz/Stereo: 最終連結と同じ形式に統一して再サンプリングを最小化
+    - 単一音声: 無音トラックとのamixを避け、微小な音切れ・クリックを抑制
+    - 複数音声: anullsrcをベースにして0秒から音声ストリームを維持
     - adelay=ms:all=1: 全チャネルに確実に遅延適用
     - fps固定: VFR→CFR変換でQuickTimeの音ズレを防止
     """
@@ -504,36 +505,55 @@ def _build_ffmpeg_merge_command(
     for seg in audio_segments_with_paths:
         cmd.extend(["-i", seg["local_path"]])
 
-    # 1. 無音ベース: 動画長の無音をamixの最初に入れ、0秒から音声ストリームが存在するようにする。
+    audio_sample_rate = 48000
+
     # Chrome WebMはdurationを持たないことがあるため、その場合はナレーション終端まで確保する。
     max_audio_end = 0.0
     for seg in audio_segments_with_paths:
         audio_duration = _get_audio_duration_seconds(seg["local_path"])
         max_audio_end = max(max_audio_end, (int(seg["timestamp_ms"]) / 1000.0) + audio_duration)
     silence_dur = duration if duration > 0 else max(max_audio_end, 1.0)
-    logger.info(f"音声ミックス用の無音ベース長: {silence_dur:.2f}秒")
-    filter_parts = [f"anullsrc=r=44100:cl=stereo:d={silence_dur}[asilence]"]
+    logger.info(f"音声出力長: {silence_dur:.2f}秒")
 
-    # 2. 各音声セグメント: aformatで統一 → adelay:all=1 で全チャネルに遅延適用
-    for idx, seg in enumerate(audio_segments_with_paths):
+    # 音声フィルタ: TTSの端点クリックを抑えるため、ごく短いフェードを入れる。
+    filter_parts = []
+    num_audios = len(audio_segments_with_paths)
+    fade_dur = 0.015
+    if num_audios == 1:
+        seg = audio_segments_with_paths[0]
         ts_ms = int(seg["timestamp_ms"])
-        in_idx = audio_start_idx + idx
         remaining_seconds = max(0.001, silence_dur - (ts_ms / 1000.0))
         filter_parts.append(
-            f"[{in_idx}:a]aresample=44100:async=1:first_pts=0,"
-            f"aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+            f"[{audio_start_idx}:a]aresample={audio_sample_rate}:first_pts=0,"
+            f"aformat=sample_fmts=fltp:sample_rates={audio_sample_rate}:channel_layouts=stereo,"
             f"atrim=start=0:duration={remaining_seconds:.3f},asetpts=PTS-STARTPTS,"
-            f"apad=whole_dur={remaining_seconds:.3f},atrim=0:{remaining_seconds:.3f},"
-            f"adelay={ts_ms}:all=1[a{idx}]"
+            f"afade=t=in:st=0:d={fade_dur:.3f},"
+            f"afade=t=out:st={max(0.0, remaining_seconds - fade_dur):.3f}:d={fade_dur:.3f},"
+            f"adelay={ts_ms}:all=1,"
+            f"apad=whole_dur={silence_dur:.3f},atrim=0:{silence_dur:.3f}[aout]"
         )
-
-    # 3. ミキシング: 無音ベース + 全セグメント、duration=firstで無音長に合わせる
-    num_audios = len(audio_segments_with_paths)
-    amix_inputs = "[asilence]" + "".join(f"[a{i}]" for i in range(num_audios))
-    filter_parts.append(
-        f"{amix_inputs}amix=inputs={num_audios + 1}:duration=first:"
-        f"dropout_transition=0:normalize=0,aresample=async=1:first_pts=0[aout]"
-    )
+        logger.info("単一ナレーション音声: amixなしで直接音声トラックを生成")
+    else:
+        logger.info(f"複数ナレーション音声: {num_audios}本をミックス")
+        filter_parts.append(f"anullsrc=r={audio_sample_rate}:cl=stereo:d={silence_dur:.3f}[asilence]")
+        for idx, seg in enumerate(audio_segments_with_paths):
+            ts_ms = int(seg["timestamp_ms"])
+            in_idx = audio_start_idx + idx
+            remaining_seconds = max(0.001, silence_dur - (ts_ms / 1000.0))
+            filter_parts.append(
+                f"[{in_idx}:a]aresample={audio_sample_rate}:first_pts=0,"
+                f"aformat=sample_fmts=fltp:sample_rates={audio_sample_rate}:channel_layouts=stereo,"
+                f"atrim=start=0:duration={remaining_seconds:.3f},asetpts=PTS-STARTPTS,"
+                f"afade=t=in:st=0:d={fade_dur:.3f},"
+                f"afade=t=out:st={max(0.0, remaining_seconds - fade_dur):.3f}:d={fade_dur:.3f},"
+                f"apad=whole_dur={remaining_seconds:.3f},atrim=0:{remaining_seconds:.3f},"
+                f"adelay={ts_ms}:all=1[a{idx}]"
+            )
+        amix_inputs = "[asilence]" + "".join(f"[a{i}]" for i in range(num_audios))
+        filter_parts.append(
+            f"{amix_inputs}amix=inputs={num_audios + 1}:duration=first:"
+            f"dropout_transition=0:normalize=0[aout]"
+        )
 
     # 4. 映像フィルタ: fps固定（VFR→CFR）とyuv420p
     # stream_duration < duration の場合、最後のフレームを延長（QuickTimeの映像途切れ防止）
@@ -565,7 +585,7 @@ def _build_ffmpeg_merge_command(
         "-g", str(gop),
         "-c:a", "aac",
         "-b:a", "192k",
-        "-ar", "44100",
+        "-ar", str(audio_sample_rate),
         "-ac", "2",
         "-movflags", "+faststart",
         "-vsync", "cfr",
@@ -578,6 +598,6 @@ def _build_ffmpeg_merge_command(
         cmd.extend(["-t", f"{duration:.3f}"])
         logger.info(f"出力長を映像に合わせて固定: {duration:.2f}秒")
 
-    logger.info("QuickTime互換: anullsrcベース, aformat統一, high+4.0, fps固定")
+    logger.info("QuickTime互換: 48kHz/Stereo統一, high+4.0, fps固定")
     cmd.append(output_path)
     return cmd
