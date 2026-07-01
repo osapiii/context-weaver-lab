@@ -22,6 +22,15 @@ type OperationVideoDocumentParams = {
   transcriptText?: string;
   transcriptProvider?: string;
   transcriptSummary?: string;
+  transcriptSrt?: string;
+  transcriptSegments?: Array<{
+    id: string;
+    index: number;
+    startMs: number;
+    endMs: number;
+    text: string;
+  }>;
+  transcriptTimingStatus?: string;
   quickScan?: {
     title?: string;
     description?: string;
@@ -105,6 +114,9 @@ export const buildOperationVideoMetadataMarkdown = (
     params.transcriptSummary?.trim() ? "## Transcript Summary" : "",
     params.transcriptSummary?.trim() || "",
     params.transcriptSummary?.trim() ? "" : "",
+    params.transcriptSrt?.trim() ? "## Timestamped Transcript (SRT)" : "",
+    params.transcriptSrt?.trim() || "",
+    params.transcriptSrt?.trim() ? "" : "",
     params.transcriptText?.trim() ? "## Transcript" : "",
     params.transcriptText?.trim() || "",
     params.transcriptText?.trim() ? "" : "",
@@ -161,6 +173,9 @@ export const buildOperationVideoJourneyMarkdown = (
     params.transcriptSummary?.trim() ? "## Spoken Summary" : "",
     params.transcriptSummary?.trim() || "",
     params.transcriptSummary?.trim() ? "" : "",
+    params.transcriptSrt?.trim() ? "## Timestamped Spoken Transcript (SRT)" : "",
+    params.transcriptSrt?.trim() || "",
+    params.transcriptSrt?.trim() ? "" : "",
     params.transcriptText?.trim() ? "## Spoken Transcript" : "",
     params.transcriptText?.trim() || "",
     params.transcriptText?.trim() ? "" : "",

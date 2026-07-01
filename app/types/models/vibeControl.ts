@@ -81,6 +81,20 @@ export const VibeControlOperationVideoFrameSchema = z.object({
   height: z.number().min(0).optional(),
 });
 
+export const VibeControlTranscriptTimingStatusSchema = z.enum([
+  "timestamped",
+  "unavailable",
+]);
+
+export const VibeControlTranscriptCueSchema = z.object({
+  id: z.string(),
+  index: z.number().int().min(1),
+  startMs: z.number().min(0),
+  endMs: z.number().min(0),
+  text: z.string(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
 export const VibeControlOperationVideoQuickScanSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional(),
@@ -103,6 +117,11 @@ export const VibeControlOperationVideoClipSchema = z.object({
   transcriptText: z.string().optional(),
   transcriptProvider: z.string().optional(),
   transcriptSummary: z.string().optional(),
+  transcriptSegments: z.array(VibeControlTranscriptCueSchema).default([]),
+  transcriptSrt: z.string().optional(),
+  transcriptTimingStatus: VibeControlTranscriptTimingStatusSchema.default(
+    "unavailable"
+  ),
   quickScan: VibeControlOperationVideoQuickScanSchema.optional(),
   frameCaptures: z.array(VibeControlOperationVideoFrameSchema).default([]),
   metadataFileName: z.string().optional(),
@@ -410,6 +429,8 @@ export const VibeControlZappingAnalysisStoryCandidateSchema = z.object({
         tRange: z.array(z.number().min(0)).length(2),
         representativeScreenshotId: z.string().optional(),
         screenshotIds: z.array(z.string()).default([]),
+        transcriptCueIds: z.array(z.string()).min(1),
+        transcriptQuote: z.string().min(1),
       })
     )
     .min(1),
@@ -565,6 +586,11 @@ export const VibeControlOperationVideoSchema = z.object({
   transcriptText: z.string().optional(),
   transcriptProvider: z.string().optional(),
   transcriptSummary: z.string().optional(),
+  transcriptSegments: z.array(VibeControlTranscriptCueSchema).default([]),
+  transcriptSrt: z.string().optional(),
+  transcriptTimingStatus: VibeControlTranscriptTimingStatusSchema.default(
+    "unavailable"
+  ),
   quickScan: VibeControlOperationVideoQuickScanSchema.optional(),
   frameCaptures: z.array(VibeControlOperationVideoFrameSchema).default([]),
   clips: z.array(VibeControlOperationVideoClipSchema).default([]),
@@ -862,6 +888,12 @@ export type VibeControlOperationVideoFrame = z.infer<
 >;
 export type VibeControlOperationVideoQuickScan = z.infer<
   typeof VibeControlOperationVideoQuickScanSchema
+>;
+export type VibeControlTranscriptCue = z.infer<
+  typeof VibeControlTranscriptCueSchema
+>;
+export type VibeControlTranscriptTimingStatus = z.infer<
+  typeof VibeControlTranscriptTimingStatusSchema
 >;
 export type VibeControlOperationVideoClip = z.infer<
   typeof VibeControlOperationVideoClipSchema

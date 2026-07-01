@@ -13,6 +13,8 @@
 - Source assets: {{ source_assets|length }}
 - Video clips: {{ video.clips|default([])|length }}
 - Screenshots: {{ counts.screenshots|default(video.screenshots|default([])|length) }}
+- Story candidates: {{ video.storyCandidates|default([])|length }}
+- Timestamped transcript cues: {{ video.transcriptSegmentCount|default(video.transcriptSegments|default([])|length) }}
 - GitHub pull requests: {{ pull_requests|length }}
 - Knowledge documents: {{ knowledge_documents|length }}
 
@@ -25,6 +27,10 @@
 - GCS path: {{ video.gcsPath|text("n/a") }}
 - Download URL: {{ video.downloadUrl|text("n/a") }}
 - Transcript summary: {{ video.transcriptSummary|text("n/a") }}
+- Transcript provider: {{ video.transcriptProvider|text("n/a") }}
+- Transcript timing status: {{ video.transcriptTimingStatus|text("n/a") }}
+- Analysis status: {{ video.analysisStatus|text("n/a") }}
+- Story candidates: {{ video.storyCandidateCount|default(video.storyCandidates|default([])|length) }}
 
 ## Operation Clips
 {% for clip in video.clips|default([]) %}
@@ -35,9 +41,60 @@
 - Download URL: {{ clip.downloadUrl|text("n/a") }}
 - Screenshots: {{ clip.screenshots|default([])|length }}
 - Transcript summary: {{ clip.transcriptSummary|text("n/a") }}
+- Transcript provider: {{ clip.transcriptProvider|text("n/a") }}
+- Transcript timing status: {{ clip.transcriptTimingStatus|text("n/a") }}
+- Timestamped transcript cues: {{ clip.transcriptSegmentCount|default(clip.transcriptSegments|default([])|length) }}
 {% else %}
 - No clips.
 {% endfor %}
+
+## Extracted Story Candidates
+{% for candidate in video.storyCandidates|default([]) %}
+### {{ candidate.storyKey|text(candidate.id|text("story-candidate")) }}: {{ candidate.title|text("Untitled candidate") }}
+- Summary: {{ candidate.summary|text("n/a") }}
+- Who: {{ candidate.who|text("n/a") }}
+- What: {{ candidate.what|text("n/a") }}
+- Why: {{ candidate.why|text("n/a") }}
+- User story: {{ candidate.userStory|text("n/a") }}
+- Confidence: {{ candidate.confidenceScore|text("n/a") }}
+- Transcript cue IDs: {{ candidate.transcriptCueIds|default([])|join(", ") if candidate.transcriptCueIds else "n/a" }}
+- Evidence count: {{ candidate.evidenceCount|default(candidate.evidence|default([])|length) }}
+- Screenshots: {{ candidate.screenshotCount|default(0) }}
+
+#### Completion Criteria
+{% for criterion in candidate.acceptanceCriteria|default([]) -%}
+{{ loop.index }}. {{ criterion }}
+{% else -%}
+- No completion criteria recorded.
+{% endfor %}
+
+#### Timestamp Evidence
+{% for item in candidate.evidence|default([]) -%}
+- {{ item.title|text("Evidence") }} ({{ item.tRange|format_seconds_range }})
+  - Summary: {{ item.summary|text("n/a") }}
+  - Transcript quote: {{ item.transcriptQuote|text("n/a") }}
+  - Cue IDs: {{ item.transcriptCueIds|default([])|join(", ") if item.transcriptCueIds else "n/a" }}
+  - Screenshots: {% if item.screenshots %}{{ item.screenshots|map(attribute="id")|join(", ") }}{% else %}n/a{% endif %}
+{% else -%}
+- No timestamp evidence recorded.
+{% endfor %}
+{% else -%}
+- No extracted story candidates are recorded on this operation video.
+{% endfor %}
+
+## Timestamped Transcript
+- Provider: {{ video.transcriptProvider|text("n/a") }}
+- Timing status: {{ video.transcriptTimingStatus|text("n/a") }}
+- Cues: {{ video.transcriptSegmentCount|default(video.transcriptSegments|default([])|length) }}
+{% set transcript_cues = video.transcriptSegments|default([]) %}
+{% for cue in transcript_cues[:120] -%}
+- {{ cue.id|text("cue") }} / {{ cue.startMs|format_ms }} - {{ cue.endMs|format_ms }}: {{ cue.text|text("n/a") }}
+{% else -%}
+- No timestamped transcript cues.
+{% endfor %}
+{% if video.transcriptSegmentsTruncated -%}
+- Transcript cues were truncated for MCP response size. Use the original operation video record for the full transcript.
+{% endif %}
 
 ## Linked User Stories
 {% for story in linked_stories %}

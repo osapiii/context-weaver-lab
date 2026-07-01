@@ -3,10 +3,10 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold tracking-tight text-slate-950">
-          Repository一覧
+          Gitリポジトリ
         </h2>
         <p class="mt-1 text-sm text-slate-500">
-          GitHub 連携済み repository と Application 設定状況を確認します
+          GitHub の接続状態、PR参照元、アプリ設定との紐付けをまとめて確認します
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -19,7 +19,7 @@
           :disabled="!connection.connected"
           @click="loadRepositories"
         >
-          GitHub再読込
+          再読込
         </EnButton>
         <EnButton
           variant="outline"
@@ -29,7 +29,7 @@
           :loading="github.isLoading.value || repositoriesLoading"
           @click="connectGitHub"
         >
-          {{ connection.connected ? "別アカウントで接続" : "GitHub接続" }}
+          {{ connection.connected ? "接続を切り替え" : "GitHub接続" }}
         </EnButton>
       </div>
     </div>
@@ -46,7 +46,7 @@
         GitHub が未接続です
       </p>
       <p class="mt-1 text-xs text-slate-500">
-        Private repository を確認するには GitHub OAuth 接続が必要です。
+        PR一覧や private repository を確認するには GitHub OAuth 接続が必要です。
       </p>
       <EnButton
         class="mt-4"
@@ -64,23 +64,49 @@
       v-else
       class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
     >
-      <div class="border-b border-slate-100 p-4">
-        <label class="block">
-          <span class="text-xs font-semibold text-slate-500">Search</span>
+      <div class="border-b border-slate-100 bg-slate-50/60 p-4">
+        <div class="grid gap-3 md:grid-cols-3">
+          <div
+            v-for="item in repositoryOverview"
+            :key="item.label"
+            class="rounded-lg border border-slate-200 bg-white p-4"
+          >
+            <div class="flex items-center gap-2">
+              <span
+                class="inline-flex h-8 w-8 items-center justify-center rounded-lg"
+                :class="item.iconClass"
+              >
+                <UIcon :name="item.icon" class="h-4 w-4" />
+              </span>
+              <p class="text-xs font-bold text-slate-500">
+                {{ item.label }}
+              </p>
+            </div>
+            <p class="mt-3 truncate text-lg font-black text-slate-950">
+              {{ item.value }}
+            </p>
+            <p class="mt-1 truncate text-xs text-slate-500">
+              {{ item.description }}
+            </p>
+          </div>
+        </div>
+
+        <label class="mt-4 block">
+          <span class="text-xs font-semibold text-slate-500">リポジトリ検索</span>
           <div class="mt-1 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 focus-within:border-primary-400 focus-within:ring-2 focus-within:ring-primary-100">
             <UIcon name="material-symbols:search" class="h-4 w-4 text-slate-400" />
             <input
               v-model="searchQuery"
               type="search"
               class="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none"
-              placeholder="enostech / repo name ..."
+              placeholder="enostech / リポジトリ名 / 言語で検索"
             >
           </div>
         </label>
 
         <div class="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm">
           <p class="font-semibold text-slate-700">
-            Showing {{ filteredRepositories.length }} of {{ repositories.length }} repositories
+            {{ repositories.length }}件中 {{ filteredRepositories.length }}件を表示
           </p>
           <p class="flex items-center gap-2 text-slate-600">
             <span>GitHub: {{ connection.login || "GitHub" }}</span>
@@ -110,13 +136,13 @@
       </div>
       <div v-else class="overflow-x-auto">
         <table class="w-full min-w-[880px] text-sm">
-          <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <thead class="bg-slate-50 text-xs tracking-wide text-slate-500">
             <tr>
-              <th class="px-4 py-3 text-left font-bold">Repository</th>
-              <th class="px-4 py-3 text-left font-bold">Branch</th>
-              <th class="px-4 py-3 text-left font-bold">Lang</th>
-              <th class="px-4 py-3 text-left font-bold">Visibility</th>
-              <th class="px-4 py-3 text-left font-bold">Updated</th>
+              <th class="px-4 py-3 text-left font-bold">リポジトリ</th>
+              <th class="px-4 py-3 text-left font-bold">既定ブランチ</th>
+              <th class="px-4 py-3 text-left font-bold">言語</th>
+              <th class="px-4 py-3 text-left font-bold">公開範囲</th>
+              <th class="px-4 py-3 text-left font-bold">更新日時</th>
               <th class="px-4 py-3 text-right font-bold">App設定</th>
             </tr>
           </thead>
@@ -135,7 +161,7 @@
                       github.com/{{ repository.fullName }}
                     </p>
                     <p class="truncate text-xs text-slate-500">
-                      {{ repository.description || "No description" }}
+                      {{ repository.description || "説明なし" }}
                     </p>
                   </div>
                 </div>
@@ -148,7 +174,7 @@
               </td>
               <td class="px-4 py-3">
                 <EnBadge :color="repository.private ? 'warning' : 'neutral'" size="xs">
-                  {{ repository.private ? "Private" : "Public" }}
+                  {{ repository.private ? "非公開" : "公開" }}
                 </EnBadge>
               </td>
               <td class="px-4 py-3 text-xs text-slate-500">
@@ -197,8 +223,8 @@
         <div v-if="selectedRepository" class="flex h-full flex-col bg-white">
           <div class="flex items-start justify-between gap-3 border-b border-slate-200 p-5">
             <div class="min-w-0">
-              <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                Repository Details
+              <p class="text-xs font-bold tracking-wide text-slate-500">
+                リポジトリ詳細
               </p>
               <h3 class="mt-1 truncate text-lg font-bold text-slate-950">
                 {{ selectedRepository.fullName }}
@@ -217,7 +243,7 @@
             <div class="space-y-3">
               <div class="flex flex-wrap items-center gap-2">
                 <EnBadge :color="selectedRepository.private ? 'warning' : 'neutral'" size="xs">
-                  {{ selectedRepository.private ? "Private" : "Public" }}
+                  {{ selectedRepository.private ? "非公開" : "公開" }}
                 </EnBadge>
                 <EnBadge variant="tag" size="xs">
                   {{ selectedRepository.defaultBranch || "main" }}
@@ -235,7 +261,7 @@
                 rel="noopener noreferrer"
                 class="inline-flex items-center gap-1 text-sm font-bold text-primary-700 hover:text-primary-800"
               >
-                GitHub
+                GitHubで開く
                 <UIcon name="material-symbols:open-in-new-rounded" class="h-4 w-4" />
               </a>
             </div>
@@ -267,13 +293,13 @@
               <template v-if="selectedApplication">
                 <dl class="mt-3 space-y-2 text-sm">
                   <div class="flex justify-between gap-3">
-                    <dt class="text-slate-500">Name</dt>
+                    <dt class="text-slate-500">アプリ名</dt>
                     <dd class="min-w-0 truncate font-semibold text-slate-900">
                       {{ selectedApplication.name }}
                     </dd>
                   </div>
                   <div class="flex justify-between gap-3">
-                    <dt class="text-slate-500">Stories</dt>
+                    <dt class="text-slate-500">ストーリー</dt>
                     <dd class="font-semibold text-slate-900">
                       {{ storyCountFor(selectedApplication.id) }}
                     </dd>
@@ -349,6 +375,34 @@ const repositories = computed(() => github.repositories.value);
 const selectedApplication = computed(() =>
   selectedRepository.value ? applicationFor(selectedRepository.value) : null
 );
+const configuredRepositoryCount = computed(
+  () => repositories.value.filter((repository) => applicationFor(repository)).length
+);
+const repositoryOverview = computed(() => [
+  {
+    label: "接続状態",
+    value: connection.value.login || "GitHub",
+    description: connection.value.connected ? "OAuth接続済み" : "未接続",
+    icon: "i-simple-icons-github",
+    iconClass: connection.value.connected
+      ? "bg-emerald-50 text-emerald-700"
+      : "bg-slate-100 text-slate-500",
+  },
+  {
+    label: "取得リポジトリ",
+    value: `${repositories.value.length}件`,
+    description: "GitHubから取得した表示対象",
+    icon: "material-symbols:folder-managed-outline",
+    iconClass: "bg-cyan-50 text-cyan-700",
+  },
+  {
+    label: "アプリ設定済み",
+    value: `${configuredRepositoryCount.value}件`,
+    description: "Vibe Control アプリと紐付け済み",
+    icon: "material-symbols:conversion-path",
+    iconClass: "bg-violet-50 text-violet-700",
+  },
+]);
 
 const filteredRepositories = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();

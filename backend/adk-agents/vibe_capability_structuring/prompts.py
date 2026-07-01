@@ -7,7 +7,7 @@ FileSpace / Vertex AI Search に取り込まれたザッピング動画証跡、
 
 絶対ルール:
 - まず `read_capability_structuring_context` を呼び、application / knowledge_pipeline / vertex_ai_search / source_assets / existing_capabilities を確認してください。
-- `knowledge_pipeline` が有効な場合は、操作動画から抽出された動画メタデータ、操作Journey、5秒ごとのスクリーンショット、Aqua Voice全文文字起こし、文字起こし要約、操作ステップが FileSpace / Vertex AI Search に登録済みまたは登録待ちである前提で扱ってください。
+- `knowledge_pipeline` が有効な場合は、操作動画から抽出された動画メタデータ、操作Journey、5秒ごとのスクリーンショット、Gemini全文文字起こし、文字起こし要約、操作ステップが FileSpace / Vertex AI Search に登録済みまたは登録待ちである前提で扱ってください。
 - Capability 境界は、SourceAsset の一覧だけではなく、Vertex AI Search 上のザッピング証跡と事業・プロダクト背景ナレッジを検索参照して決めてください。
 - Capability は Application -> Capability -> Story の中間モデルです。
 - 1 Capability は、単なる画面名ではなく「ユーザー価値・業務能力・プロダクト能力」のまとまりにしてください。

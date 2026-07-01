@@ -40,6 +40,25 @@ def _format_ms(value: Any) -> str:
     return f"{seconds:.1f}s"
 
 
+def _format_seconds(value: Any) -> str:
+    try:
+        seconds = float(value)
+    except Exception:
+        return "n/a"
+    if seconds >= 60:
+        minutes = int(seconds // 60)
+        remainder = seconds % 60
+        return f"{minutes}:{remainder:04.1f}"
+    return f"{seconds:.1f}s"
+
+
+def _format_seconds_range(value: Any) -> str:
+    items = value if isinstance(value, list) else []
+    if len(items) < 2:
+        return "n/a"
+    return f"{_format_seconds(items[0])} - {_format_seconds(items[1])}"
+
+
 def _html_environment() -> Environment:
     env = Environment(
         loader=FileSystemLoader(str(_TEMPLATE_DIR)),
@@ -49,6 +68,8 @@ def _html_environment() -> Environment:
     )
     env.filters["text"] = _text
     env.filters["format_ms"] = _format_ms
+    env.filters["format_seconds"] = _format_seconds
+    env.filters["format_seconds_range"] = _format_seconds_range
     return env
 
 
@@ -61,6 +82,8 @@ def _text_environment() -> Environment:
     )
     env.filters["text"] = _text
     env.filters["format_ms"] = _format_ms
+    env.filters["format_seconds"] = _format_seconds
+    env.filters["format_seconds_range"] = _format_seconds_range
     return env
 
 

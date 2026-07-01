@@ -1,4 +1,5 @@
 import { useSpeechRecognition } from "@vueuse/core";
+import { ref } from "vue";
 
 /**
  * Web Speech API ベースの簡易音声入力ラッパ.
@@ -14,6 +15,7 @@ import { useSpeechRecognition } from "@vueuse/core";
  *   // toggle() で開始/停止. transcript (= 最終確定したテキスト) を v-model などへ.
  */
 export const useVoiceInput = () => {
+  const error = ref<unknown>(null);
   const { isSupported, isListening, result, start, stop, isFinal } =
     useSpeechRecognition({
       lang: "ja-JP",
@@ -43,6 +45,7 @@ export const useVoiceInput = () => {
     transcript: result,
     /** 直近の結果が確定済みか */
     isFinal,
+    error,
     start: startListening,
     stop: stopListening,
     toggle,

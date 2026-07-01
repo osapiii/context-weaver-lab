@@ -220,6 +220,30 @@ class FakeStore:
                 "title": "Demo operation video",
                 "downloadUrl": "https://storage.example.test/video.webm",
                 "clipCount": 2,
+                "transcriptProvider": "gemini-stt:gemini-2.5-flash",
+                "transcriptTimingStatus": "timestamped",
+                "transcriptSegmentCount": 1,
+                "transcriptSegments": [
+                    {
+                        "id": "cue-0001",
+                        "startMs": 8000,
+                        "endMs": 19000,
+                        "text": "請求書一覧画面では合計金額を確認できます。",
+                    }
+                ],
+                "storyCandidates": [
+                    {
+                        "id": "candidate-001",
+                        "storyKey": "US-01",
+                        "title": "請求書一覧の概要確認",
+                        "who": "請求書処理担当者",
+                        "what": "一覧で合計金額を確認したい",
+                        "why": "確認作業を早く終えられる",
+                        "transcriptCueIds": ["cue-0001"],
+                        "evidenceCount": 1,
+                        "screenshotCount": 1,
+                    }
+                ],
                 "clips": [
                     {
                         "id": "clip-001",
@@ -459,6 +483,8 @@ def test_tool_call_get_operation_video_context(monkeypatch):
     assert payload["schemaVersion"] == "vibe-control-operation-video-context-v1"
     assert payload["operationVideo"]["downloadUrl"] == "https://storage.example.test/video.webm"
     assert payload["operationVideo"]["clips"][1]["id"] == "clip-002"
+    assert payload["operationVideo"]["transcriptTimingStatus"] == "timestamped"
+    assert payload["operationVideo"]["storyCandidates"][0]["transcriptCueIds"] == ["cue-0001"]
     assert payload["videoGroup"]["name"] == "Existing operation videos"
     assert payload["linkedStories"][0]["storyKey"] == "APP-ST-001"
     assert payload["counts"]["linkedStories"] == 1

@@ -54,6 +54,8 @@ import type {
   VibeControlOperationVideoClip,
   VibeControlOperationVideoDisplaySurface,
   VibeControlOperationVideoQuickScan,
+  VibeControlTranscriptCue,
+  VibeControlTranscriptTimingStatus,
   VibeControlReviewState,
   VibeControlScanAuthMode,
   VibeControlRelatedContextResult,
@@ -154,6 +156,9 @@ export type VibeControlOperationVideoSaveInput = {
   transcriptText?: string;
   transcriptProvider?: string;
   transcriptSummary?: string;
+  transcriptSegments?: VibeControlTranscriptCue[];
+  transcriptSrt?: string;
+  transcriptTimingStatus?: VibeControlTranscriptTimingStatus;
   quickScan?: VibeControlOperationVideoQuickScan;
   frameCaptures?: Array<{
     timestampMs: number;
@@ -172,6 +177,27 @@ export type VibeControlOperationVideoAppendInput =
   VibeControlOperationVideoSaveInput & {
     videoId: string;
   };
+
+export type VibeControlOperationVideoClipAnalysisInput = {
+  videoId: string;
+  clipId?: string;
+  title?: string;
+  description?: string;
+  transcriptText: string;
+  transcriptProvider?: string;
+  transcriptSummary?: string;
+  transcriptSegments: VibeControlTranscriptCue[];
+  transcriptSrt: string;
+  transcriptTimingStatus: VibeControlTranscriptTimingStatus;
+  quickScan?: VibeControlOperationVideoQuickScan;
+  frameCaptures: Array<{
+    timestampMs: number;
+    blob: Blob;
+    contentType?: string;
+    width?: number;
+    height?: number;
+  }>;
+};
 
 export type VibeControlZappingVideoAnalysisInput = {
   applicationId: string;
@@ -236,6 +262,9 @@ const primaryOperationVideoClip = (
     transcriptText: video.transcriptText,
     transcriptProvider: video.transcriptProvider,
     transcriptSummary: video.transcriptSummary,
+    transcriptSegments: video.transcriptSegments ?? [],
+    transcriptSrt: video.transcriptSrt,
+    transcriptTimingStatus: video.transcriptTimingStatus ?? "unavailable",
     quickScan: video.quickScan,
     frameCaptures: video.frameCaptures ?? [],
     metadataFileName: video.metadataFileName,
@@ -281,6 +310,9 @@ const normalizeOperationVideo = (
     transcriptText: primary.transcriptText,
     transcriptProvider: primary.transcriptProvider,
     transcriptSummary: primary.transcriptSummary,
+    transcriptSegments: primary.transcriptSegments ?? [],
+    transcriptSrt: primary.transcriptSrt,
+    transcriptTimingStatus: primary.transcriptTimingStatus ?? "unavailable",
     quickScan: primary.quickScan,
     frameCaptures: primary.frameCaptures ?? [],
     fileSpaceRequestId: primary.fileSpaceRequestId ?? video.fileSpaceRequestId,
@@ -390,10 +422,16 @@ const extractRelatedContextResultCandidate = (
   if (direct.success) return direct.data;
 
   const candidates = [
+    record.related_context,
     record.related_context_result,
+    record.relatedContext,
     record.relatedContextResult,
+    record.vibe_related_context_result,
     record.vibe_related_context,
     record.vibeRelatedContext,
+    record.result,
+    record.response,
+    record.data,
     record.state,
     record.output,
   ];
@@ -403,6 +441,129 @@ const extractRelatedContextResultCandidate = (
     if (parsed) return parsed;
   }
   return undefined;
+};
+
+const transcriptCueIdForClip = (
+  clip: VibeControlOperationVideoClip,
+  cue: VibeControlTranscriptCue
+): string[] => [cue.id, `${clip.id}:${cue.id}`];
+
+const hasTimestampedTranscript = (
+  owner: Pick<
+    VibeControlOperationVideoClip,
+    "transcriptSegments" | "transcriptSrt" | "transcriptTimingStatus"
+  >
+): boolean =>
+  owner.transcriptTimingStatus === "timestamped" &&
+  (owner.transcriptSegments?.length ?? 0) > 0 &&
+  Boolean(owner.transcriptSrt?.trim());
+
+const assertTimestampedTranscript = (
+  clips: VibeControlOperationVideoClip[],
+  message = "ストーリー解析にはタイムスタンプ付き文字起こしが必要です"
+): void => {
+  const missing = clips.filter((clip) => !hasTimestampedTranscript(clip));
+  if (missing.length > 0) {
+    throw new Error(`${message}。Gemini文字起こし付きで録画を保存し直してください。`);
+  }
+};
+
+const normalizeZappingAnalysisResultEvidence = (params: {
+  result: VibeControlZappingAnalysisResult;
+  video: DecodedVibeControlOperationVideo;
+}): VibeControlZappingAnalysisResult => {
+  const video = normalizeOperationVideo(params.video);
+  const clips = normalizedOperationVideoClips(video);
+  const cueEntries = clips.flatMap((clip) =>
+    (clip.transcriptSegments ?? []).flatMap((cue) =>
+      transcriptCueIdForClip(clip, cue).map((id) => ({ id, clip, cue }))
+    )
+  );
+  const cueById = new Map(cueEntries.map((entry) => [entry.id, entry]));
+  const allFrames = clips.flatMap((clip) =>
+    (clip.frameCaptures ?? []).map((frame) => ({
+      id: `${clip.id}:${frame.id}`,
+      rawId: frame.id,
+      timestampMs: frame.timestampMs,
+    }))
+  );
+
+  return {
+    ...params.result,
+    notes: params.result.notes,
+    storyCandidates: params.result.storyCandidates.map((story) => ({
+      ...story,
+      unverified: story.unverified,
+      evidence: story.evidence.map((evidence) => {
+        const startSeconds = Math.max(0, evidence.tRange[0] ?? 0);
+        const endSeconds = Math.max(startSeconds, evidence.tRange[1] ?? startSeconds);
+        const citedCueIds = (evidence.transcriptCueIds ?? []).filter((id) =>
+          cueById.has(id)
+        );
+        const inferredCueIds =
+          citedCueIds.length > 0
+            ? citedCueIds
+            : cueEntries
+                .filter(({ cue }) => {
+                  const cueStart = cue.startMs / 1000;
+                  const cueEnd = cue.endMs / 1000;
+                  return cueEnd >= startSeconds - 0.5 && cueStart <= endSeconds + 0.5;
+                })
+                .map((entry) => entry.id)
+                .filter((id) => id.includes(":"));
+        const uniqueCueIds = Array.from(new Set(inferredCueIds));
+        const citedCues = uniqueCueIds
+          .map((id) => cueById.get(id))
+          .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+        const tRange =
+          citedCues.length > 0
+            ? [
+                Math.max(0, Math.floor(Math.min(...citedCues.map(({ cue }) => cue.startMs)) / 1000)),
+                Math.max(
+                  0,
+                  Math.ceil(Math.max(...citedCues.map(({ cue }) => cue.endMs)) / 1000)
+                ),
+              ]
+            : evidence.tRange;
+        const tRangeStart = tRange[0] ?? 0;
+        const tRangeEnd = tRange[1] ?? tRangeStart;
+        const frameIdsInRange = allFrames
+          .filter((frame) => {
+            const seconds = frame.timestampMs / 1000;
+            return seconds >= tRangeStart - 2 && seconds <= tRangeEnd + 2;
+          })
+          .map((frame) => frame.id);
+        const screenshotIds =
+          frameIdsInRange.length > 0
+            ? Array.from(
+                new Set(
+                  (evidence.screenshotIds ?? []).filter((id) => frameIdsInRange.includes(id))
+                )
+              )
+            : evidence.screenshotIds;
+        const fallbackScreenshotIds =
+          screenshotIds.length > 0 ? screenshotIds : frameIdsInRange.slice(0, 3);
+        return {
+          ...evidence,
+          tRange,
+          transcriptCueIds: uniqueCueIds,
+          transcriptQuote:
+            evidence.transcriptQuote ||
+            citedCues
+              .map(({ cue }) => cue.text)
+              .join(" ")
+              .slice(0, 240) ||
+            undefined,
+          screenshotIds: fallbackScreenshotIds,
+          representativeScreenshotId:
+            evidence.representativeScreenshotId &&
+            fallbackScreenshotIds.includes(evidence.representativeScreenshotId)
+              ? evidence.representativeScreenshotId
+              : fallbackScreenshotIds[0] ?? evidence.representativeScreenshotId,
+        };
+      }),
+    })),
+  };
 };
 
 const assignStoryKeysToZappingAnalysisResult = (params: {
@@ -2224,12 +2385,12 @@ export const useVibeControlStore = defineStore("vibeControl", {
           this.applications.find((item) => item.id === applicationId)?.fileSpaceId ??
           null,
         source_of_truth:
-          "操作動画から抽出したスクリーンショット、Aqua Voice全文文字起こし、Gemini要約、操作ステップをFileSpace/Vertex AI Searchへ登録し、Capability/Story ADKが検索参照します。",
+          "操作動画から抽出したスクリーンショット、Gemini全文文字起こし、文字起こし要約、操作ステップをFileSpace/Vertex AI Searchへ登録し、Capability/Story ADKが検索参照します。",
         included_evidence: [
           "operation_video_metadata",
           "operation_video_journey",
           "frame_captures",
-          "aqua_voice_transcript",
+          "gemini_transcript",
           "transcript_summary",
           "operation_steps",
           "zapping_analysis_result",
@@ -2569,6 +2730,10 @@ export const useVibeControlStore = defineStore("vibeControl", {
               transcriptText: primaryClip.transcriptText,
               transcriptProvider: primaryClip.transcriptProvider,
               transcriptSummary: primaryClip.transcriptSummary,
+              transcriptSegments: primaryClip.transcriptSegments ?? [],
+              transcriptSrt: primaryClip.transcriptSrt,
+              transcriptTimingStatus:
+                primaryClip.transcriptTimingStatus ?? "unavailable",
               fileName: primaryClip.fileName,
               bucketName: primaryClip.bucketName,
               storagePath: primaryClip.storagePath,
@@ -2735,7 +2900,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
               primary_sources: [
                 "operation_video_metadata",
                 "operation_video_journey",
-                "aqua_voice_transcript",
+                "gemini_transcript",
                 "transcript_summary",
                 "operation_steps",
                 "frame_captures",
@@ -2783,6 +2948,8 @@ export const useVibeControlStore = defineStore("vibeControl", {
       if (!fileSpaceId) {
         throw new Error("ザッピング解析に使うアプリ専用FileSpace IDを設定してください");
       }
+      const clips = normalizedOperationVideoClips(video);
+      assertTimestampedTranscript(clips);
 
       const orgId = useOrganizationStore().loggedInOrganizationInfo?.id ?? "";
       const spaceId = useSpaceStore().selectedSpace?.id ?? "";
@@ -2799,7 +2966,6 @@ export const useVibeControlStore = defineStore("vibeControl", {
         analysisSessionId,
         prompt: input.prompt,
       });
-      const clips = normalizedOperationVideoClips(video);
       const prompt =
         input.prompt?.trim() ||
         [
@@ -3252,7 +3418,7 @@ export const useVibeControlStore = defineStore("vibeControl", {
             ? [
                 `${application.name} のCapability構造案を作成してください。`,
                 "操作動画から抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
-                "参照対象は動画メタデータ、操作Journey、5秒ごとのスクリーンショット、Aqua Voice全文文字起こし、文字起こし要約、操作ステップです。",
+                "参照対象は動画メタデータ、操作Journey、5秒ごとのスクリーンショット、Gemini全文文字起こし、文字起こし要約、操作ステップです。",
                 "SourceAssetの生データだけで完結させず、Search Store上の文脈を検索して業務能力の境界を決めてください。",
               ].join("\n")
             : capability
@@ -3374,7 +3540,10 @@ export const useVibeControlStore = defineStore("vibeControl", {
       const keyedAnalysisResult = analysisResult
         ? assignStoryKeysToZappingAnalysisResult({
             applicationId: video.applicationId,
-            result: analysisResult,
+            result: normalizeZappingAnalysisResultEvidence({
+              result: analysisResult,
+              video,
+            }),
             stories: this.stories,
             operationVideos: this.operationVideos.filter(
               (item) => item.id !== video.id
@@ -3623,6 +3792,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
       transcriptText?: string;
       transcriptProvider?: string;
       transcriptSummary?: string;
+      transcriptSegments?: VibeControlTranscriptCue[];
+      transcriptSrt?: string;
+      transcriptTimingStatus?: VibeControlTranscriptTimingStatus;
       quickScan?: VibeControlOperationVideoSaveInput["quickScan"];
       frameCaptures?: NonNullable<
         DecodedVibeControlOperationVideo["frameCaptures"]
@@ -3666,6 +3838,14 @@ export const useVibeControlStore = defineStore("vibeControl", {
       const transcriptText = input.transcriptText?.trim() || undefined;
       const transcriptProvider = input.transcriptProvider?.trim() || undefined;
       const transcriptSummary = input.transcriptSummary?.trim() || undefined;
+      const transcriptSegments = input.transcriptSegments ?? [];
+      const transcriptSrt = input.transcriptSrt?.trim() || undefined;
+      const transcriptTimingStatus: VibeControlTranscriptTimingStatus =
+        input.transcriptTimingStatus === "timestamped" &&
+        transcriptSegments.length > 0 &&
+        Boolean(transcriptSrt)
+          ? "timestamped"
+          : "unavailable";
       const quickScan = input.quickScan;
       const requestErrors: string[] = [];
       const extension = contentType.includes("mp4") ? "mp4" : "webm";
@@ -3737,6 +3917,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
         transcriptText,
         transcriptProvider,
         transcriptSummary,
+          transcriptSegments,
+          transcriptSrt,
+          transcriptTimingStatus,
         quickScan,
         frameCaptures,
       });
@@ -3760,6 +3943,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
         transcriptText,
         transcriptProvider,
         transcriptSummary,
+        transcriptSegments,
+        transcriptSrt,
+        transcriptTimingStatus,
         quickScan,
         frameCaptures,
       });
@@ -3908,6 +4094,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
         transcriptText,
         transcriptProvider,
         transcriptSummary,
+        transcriptSegments,
+        transcriptSrt,
+        transcriptTimingStatus,
         quickScan,
         frameCaptures,
         metadataFileName,
@@ -3958,6 +4147,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
             transcriptProvider,
             transcriptText,
             transcriptSummary,
+            transcriptSegments,
+            transcriptSrt,
+            transcriptTimingStatus,
             quickScan,
             frameCaptures,
             tags,
@@ -3999,6 +4191,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
             transcriptProvider,
             transcriptText,
             transcriptSummary,
+            transcriptSegments,
+            transcriptSrt,
+            transcriptTimingStatus,
             tags,
             sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
             operationVideoGroupId: group.id,
@@ -4080,6 +4275,9 @@ export const useVibeControlStore = defineStore("vibeControl", {
           transcriptText: clip.transcriptText,
           transcriptProvider: clip.transcriptProvider,
           transcriptSummary: clip.transcriptSummary,
+          transcriptSegments: clip.transcriptSegments,
+          transcriptSrt: clip.transcriptSrt,
+          transcriptTimingStatus: clip.transcriptTimingStatus,
           quickScan: clip.quickScan,
           frameCaptures: clip.frameCaptures,
           clips: [clip],
@@ -4295,6 +4493,137 @@ export const useVibeControlStore = defineStore("vibeControl", {
         this.isSavingOperationVideo = false;
       }
     },
+    async updateOperationVideoClipAnalysis(
+      input: VibeControlOperationVideoClipAnalysisInput
+    ): Promise<DecodedVibeControlOperationVideo> {
+      const video = this.operationVideos.find((item) => item.id === input.videoId);
+      if (!video) {
+        throw new Error("更新対象のザッピング動画が見つかりません");
+      }
+      const application = this.applications.find(
+        (item) => item.id === video.applicationId
+      );
+      if (!application) {
+        throw new Error("対象アプリが見つかりません");
+      }
+      if (
+        input.transcriptTimingStatus !== "timestamped" ||
+        input.transcriptSegments.length === 0 ||
+        !input.transcriptSrt.trim()
+      ) {
+        throw new Error("動画解析にはGeminiのタイムスタンプ付き文字起こしが必要です");
+      }
+
+      const normalizedVideo = normalizeOperationVideo(video);
+      const targetClipId = input.clipId || normalizedVideo.clips[0]?.id || "clip-001";
+      const targetClip = normalizedVideo.clips.find((clip) => clip.id === targetClipId);
+      if (!targetClip) {
+        throw new Error("更新対象の動画クリップが見つかりません");
+      }
+
+      this.isSavingOperationVideo = true;
+      this.error = null;
+      try {
+        const contextStore = useContextStore();
+        const storageOps = useFirebaseStorageOperations();
+        const bucketName = targetClip.bucketName || resolveStorageBucketName(
+          useRuntimeConfig().public.firebase.storageBucket
+        );
+        const safeTitle = toDocId(input.title || normalizedVideo.title, "operation-video");
+        const timestamp = nowIso().replace(/[:.]/g, "-");
+        const frameCaptures: NonNullable<
+          DecodedVibeControlOperationVideo["frameCaptures"]
+        > = [];
+
+        for (const [index, frame] of input.frameCaptures.entries()) {
+          if (frame.blob.size <= 0) continue;
+          const frameId = `frame-${String(index + 1).padStart(3, "0")}`;
+          const frameContentType = frame.contentType || frame.blob.type || "image/jpeg";
+          const frameFileName = `${safeTitle}-${timestamp}-${targetClipId}-${frameId}.jpg`;
+          const frameStoragePath = contextStore.baseGcsPath(
+            `vibeControl/applications/${application.id}/operationVideos/${normalizedVideo.id}/clips/${targetClipId}/frames/${frameFileName}`
+          );
+          const uploaded = await storageOps.uploadPdfFile({
+            bucketName,
+            filePath: frameStoragePath,
+            rawData: frame.blob,
+            mimeType: frameContentType,
+          });
+          if (!uploaded) continue;
+          frameCaptures.push({
+            id: frameId,
+            timestampMs: Math.max(0, Math.round(frame.timestampMs)),
+            fileName: frameFileName,
+            bucketName,
+            storagePath: frameStoragePath,
+            contentType: frameContentType,
+            width: frame.width,
+            height: frame.height,
+          });
+        }
+
+        const nextClips = normalizedVideo.clips.map((clip) =>
+          clip.id === targetClipId
+            ? {
+                ...clip,
+                transcriptText: input.transcriptText.trim() || undefined,
+                transcriptProvider: input.transcriptProvider?.trim() || undefined,
+                transcriptSummary: input.transcriptSummary?.trim() || undefined,
+                transcriptSegments: input.transcriptSegments,
+                transcriptSrt: input.transcriptSrt.trim(),
+                transcriptTimingStatus: "timestamped" as const,
+                quickScan: input.quickScan,
+                frameCaptures,
+              }
+            : clip
+        );
+        const nextVideo = normalizeOperationVideo({
+          ...normalizedVideo,
+          title:
+            input.title?.trim() ||
+            input.quickScan?.title?.trim() ||
+            normalizedVideo.title,
+          description:
+            input.description?.trim() ||
+            input.quickScan?.description?.trim() ||
+            normalizedVideo.description,
+          clips: nextClips,
+          hasUnanalyzedClip: false,
+          analysisStaleReason: undefined,
+          analysisStatus: "not_analyzed",
+          analysisErrorMessage: undefined,
+          analysisResult: undefined,
+        });
+
+        const firestoreOps = useFirestoreDocOperation();
+        await firestoreOps.createDocument({
+          collectionName: this.operationVideoCollectionPath(),
+          docId: nextVideo.id,
+          docData: nextVideo,
+          converter: vibeControlOperationVideoConverter,
+          merge: true,
+        });
+        this.operationVideos = this.operationVideos.map((item) =>
+          item.id === nextVideo.id ? nextVideo : item
+        );
+        this.lastRunLog.unshift(
+          `Operation Video: ${nextVideo.title} の動画解析結果を保存`
+        );
+        return nextVideo;
+      } catch (err) {
+        log("ERROR", "VibeControl operation video analysis update failed", err);
+        reportDatadogError(err, {
+          feature: "vibe_control_zapping_video_analysis_update",
+          applicationId: video.applicationId,
+          videoId: video.id,
+        });
+        this.error =
+          err instanceof Error ? err.message : "動画解析結果の保存に失敗しました";
+        throw err;
+      } finally {
+        this.isSavingOperationVideo = false;
+      }
+    },
     async updateOperationVideoTitle(params: {
       videoId: string;
       title: string;
@@ -4367,6 +4696,141 @@ export const useVibeControlStore = defineStore("vibeControl", {
         });
         this.error =
           err instanceof Error ? err.message : "ザッピング動画タイトルの更新に失敗しました";
+        throw err;
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    async deleteOperationVideoClip(params: {
+      videoId: string;
+      clipId: string;
+    }): Promise<void> {
+      const video = this.operationVideos.find((item) => item.id === params.videoId);
+      if (!video) {
+        throw new Error("削除対象のザッピング動画が見つかりません");
+      }
+      const normalizedVideo = normalizeOperationVideo(video);
+      if (normalizedVideo.clips.length <= 1) {
+        throw new Error("最後のクリップは動画全体の削除から実行してください");
+      }
+      const targetClip = normalizedVideo.clips.find((clip) => clip.id === params.clipId);
+      if (!targetClip) {
+        throw new Error("削除対象の動画クリップが見つかりません");
+      }
+
+      this.isLoading = true;
+      this.error = null;
+      try {
+        const firestoreOps = useFirestoreDocOperation();
+        const storageTargets = [
+          {
+            bucketName: targetClip.bucketName,
+            storagePath: targetClip.storagePath,
+          },
+          ...targetClip.frameCaptures.map((frame) => ({
+            bucketName: frame.bucketName,
+            storagePath: frame.storagePath,
+          })),
+          targetClip.metadataStoragePath
+            ? {
+                bucketName: targetClip.bucketName,
+                storagePath: targetClip.metadataStoragePath,
+              }
+            : undefined,
+          targetClip.journeyStoragePath
+            ? {
+                bucketName: targetClip.bucketName,
+                storagePath: targetClip.journeyStoragePath,
+              }
+            : undefined,
+        ].filter(
+          (
+            target
+          ): target is { bucketName: string; storagePath: string } =>
+            Boolean(target?.bucketName && target.storagePath)
+        );
+
+        await Promise.all(
+          storageTargets.map(async (target) => {
+            try {
+              await deleteObject(
+                storageRefForBucketPath({
+                  bucketName: target.bucketName,
+                  filePath: target.storagePath,
+                })
+              );
+            } catch (err) {
+              const code =
+                typeof err === "object" && err !== null && "code" in err
+                  ? String((err as { code?: unknown }).code)
+                  : "";
+              if (code !== "storage/object-not-found") {
+                log("WARN", "Operation video clip storage delete skipped", {
+                  videoId: params.videoId,
+                  clipId: params.clipId,
+                  storagePath: target.storagePath,
+                  err,
+                });
+              }
+            }
+          })
+        );
+
+        const nextVideo = normalizeOperationVideo({
+          ...normalizedVideo,
+          clips: normalizedVideo.clips.filter((clip) => clip.id !== targetClip.id),
+          analysisStatus: "not_analyzed",
+          analysisRequestId: undefined,
+          analysisSessionId: undefined,
+          analysisOrganizationId: undefined,
+          analysisSpaceId: undefined,
+          analysisErrorMessage: undefined,
+          analyzedAt: undefined,
+          analysisResult: undefined,
+          hasUnanalyzedClip: true,
+          analysisStaleReason:
+            "動画クリップが削除されました。再解析すると最新の操作セットに反映されます。",
+        });
+        await firestoreOps.createDocument({
+          collectionName: this.operationVideoCollectionPath(),
+          docId: nextVideo.id,
+          docData: nextVideo,
+          converter: vibeControlOperationVideoConverter,
+          merge: true,
+        });
+
+        const sourceAssetIds = [
+          targetClip.sourceAssetId,
+          targetClip.journeySourceAssetId,
+        ].filter((id, index, arr): id is string => Boolean(id) && arr.indexOf(id) === index);
+        await Promise.all(
+          sourceAssetIds.map((assetId) =>
+            firestoreOps.deleteDocument({
+              collectionName: this.sourceAssetCollectionPath(),
+              docId: assetId,
+            })
+          )
+        );
+
+        this.operationVideos = this.operationVideos.map((item) =>
+          item.id === nextVideo.id ? nextVideo : item
+        );
+        this.sourceAssets = this.sourceAssets.filter(
+          (asset) => !sourceAssetIds.includes(asset.id)
+        );
+        this.lastRunLog.unshift(
+          `Operation Video: ${video.title} からクリップ ${targetClip.fileName} を削除`
+        );
+      } catch (err) {
+        log("ERROR", "VibeControl operation video clip delete failed", err);
+        reportDatadogError(err, {
+          feature: "vibe_control_zapping_video_clip_delete",
+          videoId: params.videoId,
+          clipId: params.clipId,
+          applicationId: video.applicationId,
+        });
+        this.error =
+          err instanceof Error ? err.message : "動画クリップの削除に失敗しました";
         throw err;
       } finally {
         this.isLoading = false;

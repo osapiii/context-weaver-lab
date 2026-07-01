@@ -1,9 +1,15 @@
 """Read-only tools for VibeControl Zapping Analysis Agent."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from common.tool_state import read_tool_state  # type: ignore
+
+SRT_TIME_RE = re.compile(
+    r"(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[,.](\d{1,3})\s*-->\s*"
+    r"(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[,.](\d{1,3})"
+)
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -49,6 +55,9 @@ def _metadata_from_assets(source_assets: list[Any]) -> dict[str, Any]:
         metadata = _as_dict(asset.get("metadata"))
         for key in (
             "transcriptText",
+            "transcriptSegments",
+            "transcriptSrt",
+            "transcriptTimingStatus",
             "transcriptProvider",
             "transcriptSummary",
             "quickScan",
@@ -76,6 +85,72 @@ def _compact_frames(value: Any, *, clip_id: str = "") -> list[dict[str, Any]]:
     return frames
 
 
+def _compact_transcript_segments(value: Any, *, clip_id: str = "") -> list[dict[str, Any]]:
+    segments: list[dict[str, Any]] = []
+    for raw in _as_list(value)[:240]:
+        if not isinstance(raw, dict):
+            continue
+        text = _clean_text(raw.get("text"))
+        if not text:
+            continue
+        cue_id = _clean_text(raw.get("id"), f"cue-{len(segments) + 1:04d}")
+        segment = {
+            "id": f"{clip_id}:{cue_id}" if clip_id else cue_id,
+            "clipId": clip_id or None,
+            "index": raw.get("index"),
+            "startMs": raw.get("startMs"),
+            "endMs": raw.get("endMs"),
+            "text": text,
+            "confidence": raw.get("confidence"),
+        }
+        segments.append({k: v for k, v in segment.items() if v is not None})
+    return segments
+
+
+def _parse_srt_part(
+    hour: str | None,
+    minute: str,
+    second: str,
+    millis: str,
+) -> int:
+    hours = int(hour or 0)
+    minutes = int(minute or 0)
+    seconds = int(second or 0)
+    ms = int((millis + "000")[:3])
+    return ((hours * 60 + minutes) * 60 + seconds) * 1000 + ms
+
+
+def _segments_from_srt(srt: Any) -> list[dict[str, Any]]:
+    text = _clean_text(srt)
+    if not text:
+        return []
+    segments: list[dict[str, Any]] = []
+    for block in re.split(r"\n\s*\n", text):
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        time_line_index = next(
+            (index for index, line in enumerate(lines) if SRT_TIME_RE.search(line)),
+            -1,
+        )
+        if time_line_index < 0:
+            continue
+        match = SRT_TIME_RE.search(lines[time_line_index])
+        if not match:
+            continue
+        segment_text = " ".join(lines[time_line_index + 1 :]).strip()
+        if not segment_text:
+            continue
+        segments.append(
+            {
+                "id": f"cue-{len(segments) + 1:04d}",
+                "index": len(segments) + 1,
+                "startMs": _parse_srt_part(match.group(1), match.group(2), match.group(3), match.group(4)),
+                "endMs": _parse_srt_part(match.group(5), match.group(6), match.group(7), match.group(8)),
+                "text": segment_text,
+            }
+        )
+    return segments
+
+
 def _operation_video_clips(operation_video: dict[str, Any]) -> list[dict[str, Any]]:
     clips = [clip for clip in _as_list(operation_video.get("clips")) if isinstance(clip, dict)]
     if clips:
@@ -90,6 +165,9 @@ def _operation_video_clips(operation_video: dict[str, Any]) -> list[dict[str, An
             "sizeBytes": operation_video.get("sizeBytes"),
             "durationMs": operation_video.get("durationMs"),
             "transcriptText": operation_video.get("transcriptText"),
+            "transcriptSegments": operation_video.get("transcriptSegments"),
+            "transcriptSrt": operation_video.get("transcriptSrt"),
+            "transcriptTimingStatus": operation_video.get("transcriptTimingStatus"),
             "transcriptProvider": operation_video.get("transcriptProvider"),
             "transcriptSummary": operation_video.get("transcriptSummary"),
             "quickScan": operation_video.get("quickScan"),
@@ -129,14 +207,44 @@ def _analysis_evidence(
     frame_captures = operation_video.get("frameCaptures") or metadata.get(
         "frameCaptures"
     )
-    clip_frames: list[dict[str, Any]] = []
-    for clip in clips:
-        clip_frames.extend(
-            _compact_frames(clip.get("frameCaptures"), clip_id=_clean_text(clip.get("id")))
+    transcript_segments = _compact_transcript_segments(
+        operation_video.get("transcriptSegments") or metadata.get("transcriptSegments")
+    )
+    if not transcript_segments:
+        transcript_segments = _compact_transcript_segments(
+            _segments_from_srt(operation_video.get("transcriptSrt") or metadata.get("transcriptSrt"))
         )
+    clip_frames: list[dict[str, Any]] = []
+    clip_segments: list[dict[str, Any]] = []
+    clip_srts: list[dict[str, Any]] = []
+    for clip in clips:
+        clip_id = _clean_text(clip.get("id"))
+        clip_frames.extend(_compact_frames(clip.get("frameCaptures"), clip_id=clip_id))
+        compact_clip_segments = _compact_transcript_segments(
+            clip.get("transcriptSegments"),
+            clip_id=clip_id,
+        )
+        transcript_srt = _clean_text(clip.get("transcriptSrt"))
+        if transcript_srt:
+            clip_srts.append({"clipId": clip_id, "srt": transcript_srt})
+            if not compact_clip_segments:
+                compact_clip_segments = _compact_transcript_segments(
+                    _segments_from_srt(transcript_srt),
+                    clip_id=clip_id,
+                )
+        clip_segments.extend(compact_clip_segments)
+    effective_segments = clip_segments or transcript_segments
     return {
         "has_video_file": any(_clean_text(clip.get("storagePath")) for clip in clips),
         "transcriptText": transcript_text,
+        "transcriptSegments": effective_segments,
+        "transcriptSrt": _first_text(operation_video.get("transcriptSrt"), metadata.get("transcriptSrt")),
+        "transcriptSrts": clip_srts,
+        "transcriptTimingStatus": _first_text(
+            operation_video.get("transcriptTimingStatus"),
+            metadata.get("transcriptTimingStatus"),
+        )
+        or ("timestamped" if effective_segments else "unavailable"),
         "transcriptSummary": transcript_summary,
         "transcriptProvider": _first_text(
             operation_video.get("transcriptProvider"),
@@ -151,6 +259,9 @@ def _analysis_evidence(
                 "durationMs": clip.get("durationMs"),
                 "recordedAt": clip.get("recordedAt"),
                 "hasTranscript": bool(_clean_text(clip.get("transcriptText")) or _clean_text(clip.get("transcriptSummary"))),
+                "hasTimestampedTranscript": bool(
+                    _as_list(clip.get("transcriptSegments")) or _segments_from_srt(clip.get("transcriptSrt"))
+                ),
                 "frameCount": len(_as_list(clip.get("frameCaptures"))),
             }
             for clip in clips

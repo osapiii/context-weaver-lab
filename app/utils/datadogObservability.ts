@@ -188,6 +188,20 @@ export const reportDatadogError = (
   });
 };
 
+export const reportDatadogInfo = (
+  message: string,
+  context: DatadogErrorContext = {}
+): void => {
+  if (!isDatadogObservabilityActive()) {
+    log("INFO", message, context);
+    return;
+  }
+
+  void import("@datadog/browser-logs").then(({ datadogLogs }) => {
+    datadogLogs.logger.info(message, context);
+  });
+};
+
 export const syncDatadogAuthenticatedContext = ({
   user,
   claims = {},

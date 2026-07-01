@@ -20,25 +20,24 @@ const isNotFoundNavigationError = (error: unknown): boolean => {
 export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.vueApp.config.errorHandler = (error, instance, info) => {
     if (isNotFoundNavigationError(error)) return;
-    // handle error, e.g. report to a service
-    log("ERROR", error, instance, info);
+    const component = resolveComponentName(instance);
+    log("ERROR", error, { source: "vue:errorHandler", info, component });
     reportDatadogError(error, {
       source: "vue:errorHandler",
       info,
-      component: resolveComponentName(instance),
+      component,
     });
   };
 
   // Also possible
   nuxtApp.hook("vue:error", (error, instance, info) => {
     if (isNotFoundNavigationError(error)) return;
-    // handle error, e.g. report to a service
-
-    log("ERROR", error, instance, info);
+    const component = resolveComponentName(instance);
+    log("ERROR", error, { source: "nuxt:vue:error", info, component });
     reportDatadogError(error, {
       source: "nuxt:vue:error",
       info,
-      component: resolveComponentName(instance),
+      component,
     });
   });
 

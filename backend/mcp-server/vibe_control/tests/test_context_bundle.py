@@ -1,4 +1,9 @@
-from context_bundle import build_story_context_html, build_story_context_markdown
+from context_bundle import (
+    build_operation_video_context_html,
+    build_operation_video_context_markdown,
+    build_story_context_html,
+    build_story_context_markdown,
+)
 
 
 def _bundle_kwargs():
@@ -109,3 +114,104 @@ def test_build_story_context_html_contains_visual_report_refs():
     assert "https://github.com/org/repo/pull/12" in html
     assert "Journey report" in html
     assert "submit_agent_plan" not in html
+
+
+def _operation_video_manifest():
+    return {
+        "schemaVersion": "vibe-control-operation-video-context-v1",
+        "applicationId": "app-1",
+        "application": {"id": "app-1", "name": "Demo App"},
+        "operationVideoId": "video-1",
+        "generatedAt": "2026-07-01T00:00:00Z",
+        "signedUrlExpiresAt": "2026-07-01T01:00:00Z",
+        "videoGroup": {"id": "group-1", "name": "Operation videos"},
+        "operationVideo": {
+            "id": "video-1",
+            "title": "Invoice scan demo",
+            "description": "Invoice workflow is recorded.",
+            "downloadUrl": "https://storage.example.test/video.webm",
+            "videoGroup": {"id": "group-1", "name": "Operation videos"},
+            "transcriptProvider": "gemini-stt:gemini-2.5-flash",
+            "transcriptTimingStatus": "timestamped",
+            "transcriptSegmentCount": 2,
+            "transcriptSegments": [
+                {
+                    "id": "cue-0001",
+                    "startMs": 8000,
+                    "endMs": 19000,
+                    "text": "請求書一覧画面では合計金額を確認できます。",
+                },
+                {
+                    "id": "cue-0002",
+                    "startMs": 19000,
+                    "endMs": 31000,
+                    "text": "詳細画面で明細を確認します。",
+                },
+            ],
+            "screenshots": [
+                {
+                    "id": "frame-001",
+                    "timestampMs": 10000,
+                    "downloadUrl": "https://storage.example.test/frame-001.jpg",
+                }
+            ],
+            "storyCandidates": [
+                {
+                    "id": "candidate-001",
+                    "storyKey": "US-01",
+                    "title": "請求書一覧の概要確認",
+                    "who": "請求書処理担当者",
+                    "what": "一覧で合計金額を確認したい",
+                    "why": "確認作業を早く終えられる",
+                    "acceptanceCriteria": ["合計金額が一覧で確認できること"],
+                    "confidenceScore": 95,
+                    "transcriptCueIds": ["cue-0001"],
+                    "evidenceCount": 1,
+                    "screenshotCount": 1,
+                    "evidence": [
+                        {
+                            "title": "請求書一覧画面での概要確認",
+                            "tRange": [8, 19],
+                            "transcriptCueIds": ["cue-0001"],
+                            "transcriptQuote": "請求書一覧画面では合計金額を確認できます。",
+                            "screenshots": [
+                                {
+                                    "id": "frame-001",
+                                    "timestampMs": 10000,
+                                    "downloadUrl": "https://storage.example.test/frame-001.jpg",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "clips": [],
+        },
+        "linkedStories": [],
+        "evidence": [],
+        "sourceAssets": [],
+        "githubPullRequests": [],
+        "knowledgeDocuments": [],
+        "counts": {"screenshots": 1},
+    }
+
+
+def test_build_operation_video_context_markdown_includes_timestamped_story_candidates():
+    markdown = build_operation_video_context_markdown(context_manifest=_operation_video_manifest())
+
+    assert "Extracted Story Candidates" in markdown
+    assert "Who: 請求書処理担当者" in markdown
+    assert "cue-0001" in markdown
+    assert "8.0s - 19.0s" in markdown
+    assert "https://storage.example.test/frame-001.jpg" in markdown
+
+
+def test_build_operation_video_context_html_includes_timestamped_story_candidates():
+    html = build_operation_video_context_html(context_manifest=_operation_video_manifest())
+
+    assert html.startswith("<!doctype html>")
+    assert "Extracted Story Candidates" in html
+    assert "Who / 誰が" in html
+    assert "請求書一覧画面では合計金額を確認できます。" in html
+    assert "https://storage.example.test/frame-001.jpg" in html
+    assert "gemini-stt:gemini-2.5-flash" in html

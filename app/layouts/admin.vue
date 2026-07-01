@@ -33,6 +33,10 @@
         </div>
 
         <div class="flex min-w-0 shrink-0 items-center gap-2">
+          <VibeControlE2EAuthSessionHeaderChip
+            v-if="showVibeControlSwitcher"
+            :selected-application="vibeControl.selectedApplication"
+          />
           <GoogleWorkspaceConnectionHeaderChip />
           <GoogleDriveSyncGlobalIndicator />
           <WorkflowExecutionGlobalIndicator />
@@ -191,6 +195,7 @@ import GoogleDriveImportProgressModal from "@components/dataSource/GoogleDriveIm
 import GoogleDriveSyncGlobalIndicator from "@components/GoogleDriveSyncGlobalIndicator.vue";
 import GoogleWorkspaceConnectionHeaderChip from "@components/GoogleWorkspaceConnectionHeaderChip.vue";
 import AdminPageContainer from "@components/layout/AdminPageContainer.vue";
+import VibeControlE2EAuthSessionHeaderChip from "@components/vibeControl/VibeControlE2EAuthSessionHeaderChip.vue";
 import { ADMIN_NAV_SIDEBAR_STORAGE_KEY } from "@constants/adminLayout";
 import {
   resolveAdminPageContainerVariant,
@@ -294,7 +299,7 @@ const currentMode = computed(() => {
       "application-scan": "stories",
       "application-capabilities": "stories",
       stories: "stories",
-      repositories: "settings",
+      repositories: "git-repositories",
       "application-detail": "settings",
     };
     return navModes.find((mode) => mode.key === (modeKeyByView[view] ?? "knowledge"));

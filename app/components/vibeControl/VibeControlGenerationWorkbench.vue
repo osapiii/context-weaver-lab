@@ -132,7 +132,7 @@
                     ザッピング証跡を Search Store から参照
                   </p>
                   <p class="mt-1 text-xs leading-relaxed text-slate-600">
-                    動画から抽出したスクリーンショット、Aqua Voice全文文字起こし、要約、操作ステップをFileSpaceへ取り込み、Capability境界の根拠にします。
+                    動画から抽出したスクリーンショット、Gemini全文文字起こし、要約、操作ステップをFileSpaceへ取り込み、Capability境界の根拠にします。
                   </p>
                   <div class="mt-2 flex flex-wrap gap-1.5">
                     <EnBadge variant="tag" size="xs">

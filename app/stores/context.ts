@@ -128,6 +128,9 @@ export const useContextStore = defineStore("context", {
     toggleFocusMode(): void {
       this.focusModeIsActive = !this.focusModeIsActive;
     },
+    setVideoEditorActive(active: boolean): void {
+      this.focusModeIsActive = active;
+    },
     /**
      * Space ID を設定
      * @param params.spaceId - Space ID

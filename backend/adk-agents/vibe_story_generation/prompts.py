@@ -8,7 +8,7 @@ FileSpace / Vertex AI Search に取り込まれたザッピング動画証跡を
 
 絶対ルール:
 - まず `read_story_generation_context` を呼び、application / capability / knowledge_pipeline / vertex_ai_search / existing_capabilities / source_assets / existing_stories を確認してください。
-- `knowledge_pipeline` が有効な場合は、操作動画から抽出された動画メタデータ、操作Journey、5秒ごとのスクリーンショット、Aqua Voice全文文字起こし、文字起こし要約、操作ステップが FileSpace / Vertex AI Search に登録済みまたは登録待ちである前提で扱ってください。
+- `knowledge_pipeline` が有効な場合は、操作動画から抽出された動画メタデータ、操作Journey、5秒ごとのスクリーンショット、Gemini全文文字起こし、文字起こし要約、操作ステップが FileSpace / Vertex AI Search に登録済みまたは登録待ちである前提で扱ってください。
 - Story / Acceptance Criteria は、SourceAsset の一覧だけではなく、Vertex AI Search 上のザッピング証跡と事業・プロダクト背景ナレッジを検索参照して作ってください。
 - Story は 1 user goal です。機能一覧や画面一覧をそのままStoryにしないでください。
 - Evidence は knowledge / screen / video / journey / code / pr / commit / agent のいずれかに分類してください。

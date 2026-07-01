@@ -25,6 +25,17 @@ def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _doc_to_dict(snap: Any) -> dict[str, Any]:
     data = snap.to_dict() or {}
     data["id"] = snap.id
@@ -910,6 +921,7 @@ class VibeControlStore:
         primary_clip = clips[0] if clips else {}
         bucket_name = _clean_text(primary_clip.get("bucketName") or item.get("bucketName"))
         storage_path = _clean_text(primary_clip.get("storagePath") or item.get("storagePath"))
+        analysis_result = _as_dict(item.get("analysisResult"))
         clip_refs = [
             self._operation_video_clip_ref(
                 clip,
@@ -918,6 +930,19 @@ class VibeControlStore:
             )
             for clip in clips
         ]
+        screenshots = [
+            frame
+            for clip_ref in clip_refs
+            for frame in _as_list(clip_ref.get("screenshots"))
+            if isinstance(frame, dict)
+        ]
+        transcript_source = primary_clip if _as_list(primary_clip.get("transcriptSegments")) else item
+        transcript_segments = self._transcript_segment_refs(transcript_source)
+        raw_transcript_segments = _as_list(transcript_source.get("transcriptSegments"))
+        story_candidates = self._story_candidate_refs(
+            analysis_result.get("storyCandidates"),
+            screenshots=screenshots,
+        )
         video_ref = {
             "id": item.get("id"),
             "kind": "operation_video",
@@ -931,7 +956,25 @@ class VibeControlStore:
             "storagePath": storage_path or None,
             "gcsPath": f"gs://{bucket_name}/{storage_path}" if bucket_name and storage_path else None,
             "transcriptSummary": primary_clip.get("transcriptSummary") or item.get("transcriptSummary"),
+            "transcriptProvider": primary_clip.get("transcriptProvider") or item.get("transcriptProvider"),
+            "transcriptTimingStatus": primary_clip.get("transcriptTimingStatus") or item.get("transcriptTimingStatus"),
+            "transcriptSegmentCount": len(raw_transcript_segments),
+            "transcriptSegments": transcript_segments,
+            "transcriptSegmentsTruncated": len(raw_transcript_segments) > len(transcript_segments),
             "quickScan": primary_clip.get("quickScan") or item.get("quickScan"),
+            "analysisStatus": item.get("analysisStatus"),
+            "analyzedAt": item.get("analyzedAt"),
+            "analysisResult": {
+                "generatedAt": analysis_result.get("generatedAt"),
+                "operationIntent": analysis_result.get("operationIntent"),
+                "productContextSummary": analysis_result.get("productContextSummary"),
+                "transcriptSummary": analysis_result.get("transcriptSummary"),
+                "notes": analysis_result.get("notes"),
+            }
+            if analysis_result
+            else None,
+            "storyCandidateCount": len(story_candidates),
+            "storyCandidates": story_candidates,
             "sourceAssetId": primary_clip.get("sourceAssetId") or item.get("sourceAssetId"),
             "journeySourceAssetId": primary_clip.get("journeySourceAssetId") or item.get("journeySourceAssetId"),
             "journeyStoragePath": primary_clip.get("journeyStoragePath") or item.get("journeyStoragePath"),
@@ -942,7 +985,7 @@ class VibeControlStore:
                 fallback_id=str(item.get("groupId") or ""),
                 fallback_name=str(item.get("groupNameSnapshot") or ""),
             ),
-            "screenshots": clip_refs[0].get("screenshots", []) if clip_refs else [],
+            "screenshots": screenshots,
         }
         self._attach_signed_url(video_ref, bucket_name, storage_path, include_signed_urls=include_signed_urls, expires_at=expires_at)
         return video_ref
@@ -967,6 +1010,9 @@ class VibeControlStore:
                 "journeySourceAssetId": item.get("journeySourceAssetId"),
                 "journeyStoragePath": item.get("journeyStoragePath"),
                 "frameCaptures": item.get("frameCaptures"),
+                "transcriptProvider": item.get("transcriptProvider"),
+                "transcriptTimingStatus": item.get("transcriptTimingStatus"),
+                "transcriptSegments": item.get("transcriptSegments"),
             }
         ]
 
@@ -979,6 +1025,8 @@ class VibeControlStore:
     ) -> dict[str, Any]:
         bucket_name = _clean_text(clip.get("bucketName"))
         storage_path = _clean_text(clip.get("storagePath"))
+        transcript_segments = self._transcript_segment_refs(clip)
+        raw_transcript_segments = _as_list(clip.get("transcriptSegments"))
         ref = {
             "id": clip.get("id"),
             "kind": "operation_video_clip",
@@ -991,6 +1039,11 @@ class VibeControlStore:
             "storagePath": storage_path or None,
             "gcsPath": f"gs://{bucket_name}/{storage_path}" if bucket_name and storage_path else None,
             "transcriptSummary": clip.get("transcriptSummary"),
+            "transcriptProvider": clip.get("transcriptProvider"),
+            "transcriptTimingStatus": clip.get("transcriptTimingStatus"),
+            "transcriptSegmentCount": len(raw_transcript_segments),
+            "transcriptSegments": transcript_segments,
+            "transcriptSegmentsTruncated": len(raw_transcript_segments) > len(transcript_segments),
             "quickScan": clip.get("quickScan"),
             "sourceAssetId": clip.get("sourceAssetId"),
             "journeySourceAssetId": clip.get("journeySourceAssetId"),
@@ -1008,6 +1061,164 @@ class VibeControlStore:
         }
         self._attach_signed_url(ref, bucket_name, storage_path, include_signed_urls=include_signed_urls, expires_at=expires_at)
         return ref
+
+    def _transcript_segment_refs(self, item: dict[str, Any], *, limit: int = 300) -> list[dict[str, Any]]:
+        segments: list[dict[str, Any]] = []
+        for cue in _as_list(item.get("transcriptSegments"))[:limit]:
+            if not isinstance(cue, dict):
+                continue
+            segments.append(
+                {
+                    "id": cue.get("id"),
+                    "index": cue.get("index"),
+                    "startMs": cue.get("startMs"),
+                    "endMs": cue.get("endMs"),
+                    "text": cue.get("text"),
+                    "confidence": cue.get("confidence"),
+                }
+            )
+        return segments
+
+    def _story_candidate_refs(
+        self,
+        candidates: Any,
+        *,
+        screenshots: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        refs: list[dict[str, Any]] = []
+        for index, candidate in enumerate(_as_list(candidates)):
+            if not isinstance(candidate, dict):
+                continue
+            refs.append(self._story_candidate_ref(candidate, index=index, screenshots=screenshots))
+        return refs
+
+    def _story_candidate_ref(
+        self,
+        candidate: dict[str, Any],
+        *,
+        index: int,
+        screenshots: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        role = _as_dict(candidate.get("role"))
+        who = _clean_text(role.get("value")) or _clean_text(candidate.get("asA"))
+        what = _clean_text(candidate.get("goal")) or _clean_text(candidate.get("iWant"))
+        why = _clean_text(candidate.get("benefit")) or _clean_text(candidate.get("soThat"))
+        evidence = [
+            self._story_candidate_evidence_ref(item, screenshots=screenshots)
+            for item in _as_list(candidate.get("evidence"))
+            if isinstance(item, dict)
+        ]
+        confidence = candidate.get("confidenceScore")
+        if confidence is None:
+            confidence = candidate.get("confidence")
+        return {
+            "id": candidate.get("id") or f"candidate-{index + 1:03d}",
+            "storyKey": candidate.get("storyKey"),
+            "title": candidate.get("title"),
+            "summary": candidate.get("summary"),
+            "userStory": candidate.get("userStory"),
+            "who": who or None,
+            "what": what or None,
+            "why": why or None,
+            "role": role or None,
+            "asA": candidate.get("asA"),
+            "iWant": candidate.get("iWant"),
+            "soThat": candidate.get("soThat"),
+            "goal": candidate.get("goal"),
+            "benefit": candidate.get("benefit"),
+            "acceptanceCriteria": [
+                str(item).strip()
+                for item in _as_list(candidate.get("acceptanceCriteria"))
+                if str(item).strip()
+            ],
+            "confidenceScore": confidence,
+            "unverified": candidate.get("unverified"),
+            "evidence": evidence,
+            "evidenceCount": len(evidence),
+            "transcriptCueIds": sorted(
+                {
+                    str(cue_id)
+                    for evidence_item in evidence
+                    for cue_id in _as_list(evidence_item.get("transcriptCueIds"))
+                    if str(cue_id).strip()
+                }
+            ),
+            "screenshotCount": sum(len(_as_list(evidence_item.get("screenshots"))) for evidence_item in evidence),
+        }
+
+    def _story_candidate_evidence_ref(
+        self,
+        evidence: dict[str, Any],
+        *,
+        screenshots: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return {
+            "videoId": evidence.get("videoId"),
+            "clipId": evidence.get("clipId"),
+            "title": evidence.get("title"),
+            "summary": evidence.get("summary"),
+            "tRange": evidence.get("tRange") if isinstance(evidence.get("tRange"), list) else [],
+            "transcriptCueIds": evidence.get("transcriptCueIds")
+            if isinstance(evidence.get("transcriptCueIds"), list)
+            else [],
+            "transcriptQuote": evidence.get("transcriptQuote"),
+            "representativeScreenshotId": evidence.get("representativeScreenshotId"),
+            "screenshotIds": evidence.get("screenshotIds") if isinstance(evidence.get("screenshotIds"), list) else [],
+            "screenshots": self._screenshots_for_story_evidence(evidence, screenshots=screenshots),
+        }
+
+    def _screenshots_for_story_evidence(
+        self,
+        evidence: dict[str, Any],
+        *,
+        screenshots: list[dict[str, Any]],
+        limit: int = 6,
+    ) -> list[dict[str, Any]]:
+        frames = [frame for frame in screenshots if isinstance(frame, dict)]
+        if not frames:
+            return []
+
+        ids = [
+            _clean_text(evidence.get("representativeScreenshotId")),
+            *[
+                _clean_text(item)
+                for item in _as_list(evidence.get("screenshotIds"))
+                if _clean_text(item)
+            ],
+        ]
+        ordered_ids = [item for item in ids if item]
+        if ordered_ids:
+            by_id = {str(frame.get("id")): frame for frame in frames if frame.get("id")}
+            matched = [by_id[item] for item in ordered_ids if item in by_id]
+            if matched:
+                return matched[:limit]
+
+        t_range = _as_list(evidence.get("tRange"))
+        start_seconds = _as_float(t_range[0]) if len(t_range) > 0 else None
+        end_seconds = _as_float(t_range[1]) if len(t_range) > 1 else None
+        if start_seconds is None:
+            return frames[: min(limit, 3)]
+
+        start_ms = start_seconds * 1000
+        end_ms = (end_seconds if end_seconds is not None else start_seconds) * 1000
+        within = [
+            frame
+            for frame in frames
+            if _as_float(frame.get("timestampMs")) is not None
+            and start_ms <= float(frame.get("timestampMs")) <= end_ms
+        ]
+        if within:
+            return sorted(within, key=lambda frame: float(frame.get("timestampMs") or 0))[:limit]
+
+        nearest = sorted(
+            [
+                frame
+                for frame in frames
+                if _as_float(frame.get("timestampMs")) is not None
+            ],
+            key=lambda frame: abs(float(frame.get("timestampMs") or 0) - start_ms),
+        )
+        return sorted(nearest[: min(limit, 3)], key=lambda frame: float(frame.get("timestampMs") or 0))
 
     def _frame_ref(
         self,

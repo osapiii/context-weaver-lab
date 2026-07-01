@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vibe Control Gemini Timestamp Transcription Report</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #102033; background: #f6f8fb; }
+    main { max-width: 1080px; margin: 0 auto; padding: 44px 28px 72px; }
+    h1 { margin: 0 0 12px; font-size: 34px; line-height: 1.2; }
+    h2 { margin: 34px 0 14px; font-size: 22px; }
+    p, li { line-height: 1.75; }
+    .hero { padding: 32px; border: 1px solid #d9e2ef; border-radius: 14px; background: white; box-shadow: 0 18px 48px rgba(31, 45, 61, .08); }
+    .meta { color: #637083; font-size: 14px; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .card { padding: 18px; border: 1px solid #dce5ef; border-radius: 12px; background: white; }
+    .ok { color: #087f5b; font-weight: 700; }
+    .warn { color: #a15c00; font-weight: 700; }
+    code { padding: 2px 5px; border-radius: 5px; background: #edf2f7; }
+    pre { overflow: auto; padding: 16px; border-radius: 10px; background: #0b1220; color: #dbeafe; }
+  </style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <p class="meta">作成日: 2026-07-01 / Project: vibe-control-dev</p>
+    <h1>Gemini タイムスタンプ付き文字起こし移行レポート</h1>
+    <p>
+      Aqua Voice の実 API では timestamped JSON / SRT が返らなかったため、Vibe Control のザッピング動画保存フローを
+      Gemini / Vertex AI によるタイムスタンプ付き文字起こしへ切り替えました。
+      ストーリー解析は <code>transcriptSegments</code> を第一情報源とし、根拠 cue のない story/evidence は受け付けません。
+    </p>
+  </section>
+
+  <h2>確認した API 仕様</h2>
+  <div class="grid">
+    <div class="card">
+      <p class="warn">Aqua Voice</p>
+      <p><code>verbose_json</code>、<code>timestamp_granularities[]=segment</code>、<code>timestamps=true</code> 等を実 API で確認しましたが、レスポンスは <code>text</code> / <code>usage</code> / <code>_request_id</code> のみでした。<code>response_format=srt</code> は 400 でした。</p>
+    </div>
+    <div class="card">
+      <p class="ok">Gemini / Vertex AI</p>
+      <p><code>audio/wav</code> を <code>gemini-2.5-flash</code> に渡し、<code>segments[{startMs,endMs,text}]</code> 形式の JSON が返ることを実 API で確認しました。</p>
+    </div>
+  </div>
+
+  <h2>実装内容</h2>
+  <ul>
+    <li>Firebase callable <code>transcribe_zapping_video_with_aqua</code> の中身を Gemini timestamp transcription に置換しました。関数名は既存フロント配線維持のため残しています。</li>
+    <li>録画保存時に <code>timingStatus === "timestamped"</code>、<code>transcriptSegments.length &gt; 0</code>、<code>transcriptSrt</code> を必須化しました。</li>
+    <li>ストーリー解析開始時も、全 clip が timestamped transcript を持たない場合は事前に停止します。</li>
+    <li>ADK の prompt/schema/tools から legacy fallback を削除し、<code>evidence.transcriptCueIds</code> と <code>evidence.transcriptQuote</code> を必須にしました。</li>
+    <li>SRT だけが渡った場合も ADK tools で cue ID 付き <code>transcriptSegments</code> に正規化します。</li>
+  </ul>
+
+  <h2>検証結果</h2>
+  <div class="grid">
+    <div class="card"><p class="ok">PASS</p><p><code>python3 -m py_compile</code>: 変更した Python ファイルの構文確認。</p></div>
+    <div class="card"><p class="ok">PASS</p><p><code>PYTHONPATH=backend/adk-agents python3 -m pytest ...</code>: 5 tests passed。</p></div>
+    <div class="card"><p class="ok">PASS</p><p><code>yarn test:run utils/transcriptTiming.spec.test.ts</code>: 2 tests passed。</p></div>
+    <div class="card"><p class="ok">PASS</p><p><code>yarn generate:hosting</code>: static hosting build succeeded。</p></div>
+  </div>
+
+  <h2>結合確認</h2>
+  <pre>{
+  "ADK smoke": "story_candidate_count: 1",
+  "evidence.transcriptCueIds": ["clip-001:cue-0001"],
+  "evidence.tRange": [20.0, 38.0],
+  "hosting": "https://vibe-control-dev.web.app/admin/vibe-control/ => 200",
+  "cloudFunctions": "transcribe_zapping_video_with_aqua ACTIVE",
+  "cloudRun": "vibe-zapping-analysis-agent latestReadyRevisionName=vibe-zapping-analysis-agent-00012-h22"
+}</pre>
+
+  <h2>デプロイ</h2>
+  <ul>
+    <li>Firebase Functions: <code>ui-backend:transcribe_zapping_video_with_aqua</code> deployed.</li>
+    <li>Cloud Run: <code>vibe-zapping-analysis-agent</code> deployed.</li>
+    <li>Firebase Hosting: <code>https://vibe-control-dev.web.app</code> deployed.</li>
+  </ul>
+
+  <h2>残リスク</h2>
+  <p>
+    <code>yarn typecheck</code> は既存の広範な型エラーで失敗しています。今回変更箇所は <code>generate:hosting</code> でビルド通過済みです。
+    既存動画は自動バックフィルしません。最新仕様では timestamped transcript がない動画はストーリー解析前に停止します。
+  </p>
+</main>
+</body>
+</html>

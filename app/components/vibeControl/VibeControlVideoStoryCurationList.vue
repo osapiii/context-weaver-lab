@@ -18,6 +18,107 @@
       />
     </EnModal>
 
+    <EnModal
+      v-model:open="evidencePreviewOpen"
+      title="根拠動画を再生"
+      subtitle="発話根拠のタイムスタンプ周辺を字幕と一緒に確認します。"
+      title-icon="material-symbols:play-circle-outline"
+      size="xl"
+    >
+      <div v-if="selectedEvidencePreview" class="space-y-4">
+        <div class="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:flex-row lg:items-start lg:justify-between">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="rounded-md bg-slate-950 px-2 py-1 font-mono text-xs font-bold text-white">
+                {{ displayStoryKey(selectedEvidencePreview.story, selectedEvidencePreview.storyIndex) }}
+              </span>
+              <EnBadge color="neutral" variant="soft" size="xs">
+                {{ selectedEvidencePreview.groupDisplayId }}
+              </EnBadge>
+              <EnBadge color="primary" variant="soft" size="xs">
+                {{ formatEvidenceRange(selectedEvidencePreview.evidence.tRange) }}
+              </EnBadge>
+            </div>
+            <h3 class="mt-2 text-base font-bold leading-snug text-slate-950">
+              {{ selectedEvidencePreview.story.title }}
+            </h3>
+            <p class="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-500">
+              {{ selectedEvidencePreview.evidence.summary || selectedEvidencePreview.evidence.title || displayVideoTitle(selectedEvidencePreview.video) }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+            @click="openStoryDetailFromEvidencePreview"
+          >
+            <UIcon name="material-symbols:open-in-new" class="h-4 w-4" />
+            詳細を開く
+          </button>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div class="overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+            <video
+              v-if="selectedEvidencePreviewUrl"
+              :key="selectedEvidencePreviewVideoKey"
+              ref="evidencePreviewVideo"
+              :src="selectedEvidencePreviewUrl"
+              controls
+              preload="metadata"
+              class="aspect-video w-full bg-slate-950"
+              @loadedmetadata="seekEvidencePreviewVideo($event, selectedEvidencePreview.evidence)"
+            />
+            <div
+              v-else
+              class="flex aspect-video w-full items-center justify-center text-xs font-semibold text-slate-300"
+            >
+              動画URLを取得中
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 text-xs font-bold text-slate-700">
+              <span class="truncate">発話区間の周辺動画</span>
+              <span class="shrink-0 font-mono text-slate-950">
+                {{ formatEvidencePreviewRange(selectedEvidencePreview.evidence.tRange) }}
+              </span>
+            </div>
+          </div>
+
+          <aside class="rounded-lg border border-slate-200 bg-white p-4">
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="flex items-center gap-1.5 text-sm font-bold text-slate-950">
+                <UIcon name="material-symbols:subtitles-outline" class="h-4 w-4 text-primary-600" />
+                発話字幕
+              </h4>
+              <EnBadge variant="tag" size="xs">
+                {{ selectedEvidenceTranscriptCues.length }}件
+              </EnBadge>
+            </div>
+            <div class="mt-3 max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+              <button
+                v-for="cue in selectedEvidenceTranscriptCues"
+                :key="cue.id"
+                type="button"
+                class="grid w-full grid-cols-[4.5rem_minmax(0,1fr)] gap-2 rounded-md border border-teal-100 bg-teal-50/70 px-3 py-2 text-left transition hover:border-teal-200 hover:bg-teal-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300"
+                @click="seekEvidencePreviewCue(cue.startMs)"
+              >
+                <span class="font-mono text-xs font-bold tabular-nums text-teal-700">
+                  {{ formatDuration(cue.startMs) }}
+                </span>
+                <span class="text-xs leading-relaxed text-slate-700">
+                  {{ cue.text }}
+                </span>
+              </button>
+              <div
+                v-if="selectedEvidenceTranscriptCues.length === 0"
+                class="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-500"
+              >
+                {{ selectedEvidencePreview.evidence.transcriptQuote || "この根拠に紐づく字幕が見つかりませんでした。" }}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </EnModal>
+
     <div :class="toolbarClass">
       <div class="flex min-w-0 flex-1 flex-col gap-3 xl:flex-row xl:items-center">
         <div class="flex min-w-0 items-center gap-2 xl:w-[18rem]">
@@ -217,10 +318,7 @@
             <thead class="bg-slate-50 text-[11px] font-bold tracking-normal text-slate-500">
               <tr>
                 <th class="w-28 border-b border-slate-200 px-4 py-3">キー</th>
-                <th class="border-b border-slate-200 px-4 py-3">ストーリー</th>
-                <th class="w-40 border-b border-slate-200 px-4 py-3">キャプチャ</th>
-                <th class="w-36 border-b border-slate-200 px-4 py-3">根拠</th>
-                <th class="w-24 border-b border-slate-200 px-4 py-3">信頼度</th>
+                <th class="border-b border-slate-200 px-4 py-3" colspan="4">ストーリーと価値</th>
               </tr>
             </thead>
             <tbody>
@@ -286,89 +384,81 @@
                         </span>
                       </div>
                     </td>
-                    <td class="border-b border-slate-200 px-4 py-5">
-                      <div class="flex min-w-0 items-start gap-3">
-                        <span class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
-                          <UIcon name="material-symbols:bookmark-outline" class="h-4 w-4" />
-                        </span>
-                        <div class="min-w-0">
-                          <p class="line-clamp-1 text-base font-bold leading-snug text-slate-950">
-                            {{ story.title }}
-                          </p>
-                          <p class="mt-2 line-clamp-1 text-xs font-semibold text-slate-500">
-                            {{ story.role?.value || story.asA || story.goal || story.iWant || "対象ユーザー未生成" }}
-                          </p>
-                          <p
-                            v-if="story.acceptanceCriteria.length > 0"
-                            class="mt-2 line-clamp-1 text-xs leading-relaxed text-slate-500"
-                          >
-                            {{ story.acceptanceCriteria[0] }}
-                          </p>
+                    <td class="border-b border-slate-200 px-4 py-5" colspan="4">
+                      <div class="grid gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(15rem,3fr)]">
+                        <div class="space-y-3">
+                          <div class="flex min-w-0 items-start gap-3">
+                            <span class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+                              <UIcon name="material-symbols:bookmark-outline" class="h-4 w-4" />
+                            </span>
+                            <div class="min-w-0">
+                              <p class="line-clamp-1 text-xl font-bold leading-snug text-slate-950">
+                                {{ story.title }}
+                              </p>
+                              <div
+                                v-if="story.acceptanceCriteria.length > 0"
+                                class="mt-2 flex min-w-0 items-center gap-2"
+                              >
+                                <EnBadge color="neutral" variant="soft" size="xs">
+                                  完了条件
+                                </EnBadge>
+                                <p class="line-clamp-1 min-w-0 text-sm leading-relaxed text-slate-500">
+                                  {{ story.acceptanceCriteria[0] }}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <VibeControlStoryValueCards
+                            :story="story"
+                            :video="group.video"
+                            compact
+                          />
                         </div>
-                      </div>
-                    </td>
-                    <td class="border-b border-slate-200 px-4 py-5">
-                      <figure
-                        v-if="storyThumbnailUrl(group.video, story)"
-                        class="overflow-hidden rounded-md border border-slate-200 bg-slate-100 shadow-sm"
-                      >
-                        <img
-                          :src="storyThumbnailUrl(group.video, story)"
-                          class="aspect-video w-full object-cover"
-                          :alt="`${displayStoryKey(story, storyIndex)} のキャプチャ`"
+                        <button
+                          type="button"
+                          class="group/preview flex h-full min-h-[8.25rem] flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-left shadow-sm transition hover:border-primary-200 hover:bg-white hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+                          @click.stop="openEvidencePreview(group, story, storyIndex)"
+                          @keydown.enter.stop
+                          @keydown.space.stop
                         >
-                        <figcaption class="truncate bg-white px-2 py-1 font-mono text-[11px] font-bold text-slate-950">
-                          {{ formatEvidenceRange(primaryEvidence(story)?.tRange ?? [0, 0]) }}
-                        </figcaption>
-                      </figure>
-                      <div
-                        v-else
-                        class="flex aspect-video items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 text-slate-300"
-                      >
-                        <UIcon name="material-symbols:image-not-supported-outline" class="h-5 w-5" />
-                      </div>
-                    </td>
-                    <td class="border-b border-slate-200 px-4 py-5">
-                      <div class="flex flex-wrap items-center gap-1.5">
-                        <EnBadge color="neutral" variant="soft" size="xs">
-                          {{ story.evidence.length }}件
-                        </EnBadge>
-                        <EnBadge
-                          v-if="story.role"
-                          :color="story.role.grounding === 'explicit' ? 'success' : 'warning'"
-                          variant="soft"
-                          size="xs"
-                        >
-                          {{ story.role.grounding === "explicit" ? "発話" : "推定" }}
-                        </EnBadge>
-                      </div>
-                      <p
-                        v-if="primaryEvidence(story)"
-                        class="mt-2 line-clamp-1 text-xs leading-relaxed text-slate-500"
-                      >
-                        {{ primaryEvidence(story)?.title || primaryEvidence(story)?.summary || "動画根拠" }}
-                      </p>
-                    </td>
-                    <td class="border-b border-slate-200 px-4 py-5">
-                      <div class="flex items-center gap-2">
-                        <span class="text-sm font-bold tabular-nums" :class="confidenceTextClass(storyConfidence(story))">
-                          {{ storyConfidence(story) }}%
-                        </span>
-                        <EnBadge
-                          v-if="story.unverified"
-                          color="warning"
-                          variant="soft"
-                          size="xs"
-                        >
-                          未検証
-                        </EnBadge>
-                      </div>
-                      <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          class="h-full rounded-full"
-                          :class="confidenceBarClass(storyConfidence(story))"
-                          :style="{ width: `${storyConfidence(story)}%` }"
-                        />
+                          <div class="relative aspect-video w-full overflow-hidden bg-slate-950">
+                            <img
+                              v-if="storyThumbnailUrl(group.video, story)"
+                              :src="storyThumbnailUrl(group.video, story)"
+                              :alt="`${story.title} の根拠動画サムネイル`"
+                              class="h-full w-full object-cover transition duration-200 group-hover/preview:scale-[1.02]"
+                            >
+                            <video
+                              v-else-if="operationVideoUrl(group.video)"
+                              :key="`${group.video.id}-${story.id}-preview-video`"
+                              :src="operationVideoUrl(group.video)"
+                              muted
+                              playsinline
+                              preload="metadata"
+                              class="h-full w-full object-cover transition duration-200 group-hover/preview:scale-[1.02]"
+                              @loadedmetadata="seekStoryPreviewVideo($event, story)"
+                            />
+                            <div
+                              v-else
+                              class="flex h-full w-full items-center justify-center text-slate-500"
+                            >
+                              <UIcon name="material-symbols:image-not-supported-outline" class="h-8 w-8" />
+                            </div>
+                            <span class="absolute inset-0 flex items-center justify-center bg-slate-950/20 transition group-hover/preview:bg-slate-950/10">
+                              <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-slate-950 shadow-lg">
+                                <UIcon name="material-symbols:play-arrow-rounded" class="h-6 w-6" />
+                              </span>
+                            </span>
+                          </div>
+                          <div class="flex w-full items-center justify-between gap-2 px-3 py-2">
+                            <span class="line-clamp-1 text-xs font-bold text-slate-700">
+                              {{ primaryEvidence(story)?.title || "根拠動画" }}
+                            </span>
+                            <span class="shrink-0 rounded-md bg-white px-2 py-1 font-mono text-[11px] font-bold tabular-nums text-slate-700 ring-1 ring-slate-200">
+                              {{ formatEvidenceRange(primaryEvidence(story)?.tRange ?? [0, 0]) }}
+                            </span>
+                          </div>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -383,7 +473,7 @@
     <USlideover
       v-model:open="storyDetailOpen"
       side="right"
-      :ui="{ content: 'w-full sm:max-w-[620px]' }"
+      :ui="{ content: 'w-full sm:max-w-[960px]' }"
     >
       <template #content>
         <div v-if="selectedStoryDetail" class="flex h-full flex-col bg-white">
@@ -469,26 +559,10 @@
               </figcaption>
             </figure>
 
-            <div class="grid gap-3 sm:grid-cols-3">
-              <section class="rounded-lg border border-slate-200 bg-white p-4">
-                <p class="text-xs font-bold text-slate-500">誰が</p>
-                <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-900">
-                  {{ selectedStoryDetail.story.role?.value || selectedStoryDetail.story.asA || "未生成" }}
-                </p>
-              </section>
-              <section class="rounded-lg border border-slate-200 bg-white p-4">
-                <p class="text-xs font-bold text-slate-500">何をしたいか</p>
-                <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-900">
-                  {{ selectedStoryDetail.story.goal || selectedStoryDetail.story.iWant || "未生成" }}
-                </p>
-              </section>
-              <section class="rounded-lg border border-slate-200 bg-white p-4">
-                <p class="text-xs font-bold text-slate-500">何がうれしいか</p>
-                <p class="mt-2 text-sm font-semibold leading-relaxed text-slate-900">
-                  {{ selectedStoryDetail.story.benefit || selectedStoryDetail.story.soThat || selectedStoryDetail.story.summary || "未生成" }}
-                </p>
-              </section>
-            </div>
+            <VibeControlStoryValueCards
+              :story="selectedStoryDetail.story"
+              :video="selectedStoryDetail.video"
+            />
 
             <section
               v-if="selectedStoryDetail.story.acceptanceCriteria.length > 0"
@@ -538,6 +612,95 @@
                       {{ formatEvidenceRange(evidence.tRange) }}
                     </span>
                   </div>
+                  <div
+                    v-if="evidence.transcriptQuote || evidence.transcriptCueIds.length > 0"
+                    class="mt-3 rounded-md border border-teal-100 bg-teal-50/80 p-3"
+                  >
+                    <p class="flex flex-wrap items-center gap-2 text-[11px] font-bold text-teal-900">
+                      <UIcon name="material-symbols:subtitles-outline" class="h-4 w-4" />
+                      発話根拠
+                    </p>
+                    <p
+                      v-if="evidence.transcriptQuote"
+                      class="mt-2 text-xs leading-relaxed text-slate-700"
+                    >
+                      {{ evidence.transcriptQuote }}
+                    </p>
+                    <p
+                      v-if="evidence.transcriptCueIds.length > 0"
+                      class="mt-2 font-mono text-[11px] text-teal-700"
+                    >
+                      {{ evidence.transcriptCueIds.join(", ") }}
+                    </p>
+                  </div>
+                  <div
+                    v-if="evidenceCaptureFrames(selectedStoryDetail.video, evidence).length > 0"
+                    class="mt-3 rounded-md border border-slate-200 bg-white p-3"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <p class="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                        <UIcon name="material-symbols:image-search-outline" class="h-4 w-4 text-slate-500" />
+                        関連スクリーンキャプチャ
+                      </p>
+                      <EnBadge variant="tag" size="xs">
+                        {{ evidenceCaptureFrames(selectedStoryDetail.video, evidence).length }}件
+                      </EnBadge>
+                    </div>
+                    <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <figure
+                        v-for="frame in evidenceCaptureFrames(selectedStoryDetail.video, evidence)"
+                        :key="`${selectedStoryDetail.video.id}-${evidenceIndex}-${frame.id}`"
+                        class="overflow-hidden rounded-md border border-slate-200 bg-slate-100"
+                      >
+                        <img
+                          v-if="savedFrameUrl(selectedStoryDetail.video, frame.id)"
+                          :src="savedFrameUrl(selectedStoryDetail.video, frame.id)"
+                          :alt="`${evidence.title || `根拠 ${evidenceIndex + 1}`} の関連キャプチャ ${formatDuration(frame.timestampMs)}`"
+                          class="aspect-video w-full object-cover"
+                        >
+                        <div
+                          v-else
+                          class="flex aspect-video w-full items-center justify-center text-slate-300"
+                        >
+                          <UIcon name="material-symbols:image-outline" class="h-5 w-5" />
+                        </div>
+                        <figcaption class="flex items-center justify-between gap-2 bg-white px-2 py-1 text-[11px] font-bold text-slate-600">
+                          <span class="font-mono tabular-nums text-slate-950">
+                            {{ formatDuration(frame.timestampMs) }}
+                          </span>
+                          <span
+                            v-if="frame.id === evidence.representativeScreenshotId"
+                            class="rounded bg-primary-50 px-1.5 py-0.5 text-primary-700"
+                          >
+                            代表
+                          </span>
+                        </figcaption>
+                      </figure>
+                    </div>
+                  </div>
+                  <div class="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
+                    <video
+                      v-if="operationVideoUrl(selectedStoryDetail.video)"
+                      :key="`${selectedStoryDetail.video.id}-${selectedStoryDetail.story.id}-${evidenceIndex}`"
+                      :src="operationVideoUrl(selectedStoryDetail.video)"
+                      controls
+                      preload="metadata"
+                      class="aspect-video w-full bg-slate-950"
+                      @loadedmetadata="seekEvidencePreviewVideo($event, evidence)"
+                    />
+                    <div
+                      v-else
+                      class="flex aspect-video w-full items-center justify-center text-xs font-semibold text-slate-300"
+                    >
+                      動画URLを取得中
+                    </div>
+                    <div class="flex items-center justify-between gap-2 bg-white px-3 py-2 text-xs font-bold text-slate-700">
+                      <span class="truncate">発話区間の周辺動画</span>
+                      <span class="shrink-0 font-mono text-slate-950">
+                        {{ formatEvidencePreviewRange(evidence.tRange) }}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -553,6 +716,7 @@ import { getDownloadURL } from "firebase/storage";
 import { storageRefForBucketPath } from "@composables/firebase-storage-operations";
 import type {
   DecodedVibeControlOperationVideo,
+  VibeControlTranscriptCue,
   VibeControlZappingAnalysisStatus,
   VibeControlZappingAnalysisStoryCandidate,
 } from "@models/vibeControl";
@@ -580,6 +744,10 @@ type StoryDetailSelection = {
   storyIndex: number;
 };
 
+type EvidencePreviewSelection = StoryDetailSelection & {
+  evidence: VibeControlZappingAnalysisStoryCandidate["evidence"][number];
+};
+
 const props = defineProps<{
   applicationId?: string;
   videos: DecodedVibeControlOperationVideo[];
@@ -594,7 +762,11 @@ const focusMode = ref(false);
 const storyDetailOpen = ref(false);
 const mcpTestChatOpen = ref(false);
 const selectedStoryDetail = ref<StoryDetailSelection | null>(null);
+const evidencePreviewOpen = ref(false);
+const selectedEvidencePreview = ref<EvidencePreviewSelection | null>(null);
+const evidencePreviewVideo = ref<HTMLVideoElement | null>(null);
 const frameUrls = reactive<Record<string, string>>({});
+const videoUrls = reactive<Record<string, string>>({});
 
 const statusOptions: Array<{ label: string; value: StatusFilter }> = [
   { label: "すべて", value: "all" },
@@ -754,6 +926,23 @@ const selectedStoryThumbnailUrl = computed(() => {
   return detail ? storyThumbnailUrl(detail.video, detail.story) : "";
 });
 
+const selectedEvidencePreviewUrl = computed(() => {
+  const detail = selectedEvidencePreview.value;
+  return detail ? operationVideoUrl(detail.video) : "";
+});
+
+const selectedEvidencePreviewVideoKey = computed(() => {
+  const detail = selectedEvidencePreview.value;
+  if (!detail) return "evidence-preview-empty";
+  const rangeKey = detail.evidence.tRange.join("-");
+  return `${detail.video.id}-${detail.story.id}-${rangeKey}`;
+});
+
+const selectedEvidenceTranscriptCues = computed<VibeControlTranscriptCue[]>(() => {
+  const detail = selectedEvidencePreview.value;
+  return detail ? evidenceTranscriptCues(detail.video, detail.evidence) : [];
+});
+
 watch(filteredVideoGroups, (groups) => {
   if (!selectedVideoId.value) return;
   if (groups.some((group) => group.video.id === selectedVideoId.value)) return;
@@ -764,6 +953,7 @@ watch(
   () => props.videos,
   (videos) => {
     void resolveFrameUrls(videos);
+    void resolveVideoUrls(videos);
   },
   { immediate: true, deep: true }
 );
@@ -778,6 +968,10 @@ onBeforeUnmount(() => {
 
 function handleKeydown(event: KeyboardEvent): void {
   if (event.key !== "Escape") return;
+  if (evidencePreviewOpen.value) {
+    evidencePreviewOpen.value = false;
+    return;
+  }
   if (storyDetailOpen.value) {
     storyDetailOpen.value = false;
     return;
@@ -796,6 +990,36 @@ function openStoryDetail(
     story,
     storyIndex,
   };
+  storyDetailOpen.value = true;
+}
+
+function openEvidencePreview(
+  group: VideoGroup,
+  story: VibeControlZappingAnalysisStoryCandidate,
+  storyIndex: number
+): void {
+  const evidence = primaryEvidence(story);
+  if (!evidence) return;
+  selectedEvidencePreview.value = {
+    video: group.video,
+    groupDisplayId: group.displayId,
+    story,
+    storyIndex,
+    evidence,
+  };
+  evidencePreviewOpen.value = true;
+}
+
+function openStoryDetailFromEvidencePreview(): void {
+  const detail = selectedEvidencePreview.value;
+  if (!detail) return;
+  selectedStoryDetail.value = {
+    video: detail.video,
+    groupDisplayId: detail.groupDisplayId,
+    story: detail.story,
+    storyIndex: detail.storyIndex,
+  };
+  evidencePreviewOpen.value = false;
   storyDetailOpen.value = true;
 }
 
@@ -895,14 +1119,16 @@ function buildMcpVideoContext(group: VideoGroup): Record<string, unknown> {
       userStory: story.userStory || "",
       confidence: story.confidence ?? story.confidenceScore ?? null,
       acceptanceCriteria: story.acceptanceCriteria,
-      evidence: story.evidence.map((item) => ({
-        id: item.id,
+      evidence: story.evidence.map((item, evidenceIndex) => ({
+        id: `${story.id}-evidence-${evidenceIndex + 1}`,
         title: item.title,
         summary: item.summary,
         videoId: item.videoId,
         tRange: item.tRange,
         representativeScreenshotId: item.representativeScreenshotId,
         screenshotIds: item.screenshotIds ?? [],
+        transcriptCueIds: item.transcriptCueIds ?? [],
+        transcriptQuote: item.transcriptQuote,
       })),
     })),
     screenshots: video.frameCaptures.slice(0, 30).map((frame) => ({
@@ -1016,6 +1242,10 @@ function savedFrameUrl(
   return frameUrls[frameKey(video.id, frameId)] ?? "";
 }
 
+function operationVideoUrl(video: DecodedVibeControlOperationVideo): string {
+  return videoUrls[video.id] ?? "";
+}
+
 function storyThumbnailFrame(
   video: DecodedVibeControlOperationVideo,
   story: VibeControlZappingAnalysisStoryCandidate
@@ -1056,7 +1286,14 @@ function storyEvidenceFrames(
   const withinRange = video.frameCaptures.filter(
     (frame) => frame.timestampMs >= startMs && frame.timestampMs <= endMs
   );
-  return withinRange.length > 0 ? withinRange : nearestFrames(video, startMs, 1);
+  return withinRange.length > 0 ? withinRange : nearestFrames(video, startMs, 3);
+}
+
+function evidenceCaptureFrames(
+  video: DecodedVibeControlOperationVideo,
+  evidence: VibeControlZappingAnalysisStoryCandidate["evidence"][number]
+): DecodedVibeControlOperationVideo["frameCaptures"] {
+  return storyEvidenceFrames(video, evidence).slice(0, 6);
 }
 
 function nearestFrames(
@@ -1093,6 +1330,26 @@ async function resolveFrameUrls(
         }
       })
     )
+  );
+}
+
+async function resolveVideoUrls(
+  videos: DecodedVibeControlOperationVideo[]
+): Promise<void> {
+  await Promise.all(
+    videos.map(async (video) => {
+      if (!video.storagePath || !video.bucketName) return;
+      if (videoUrls[video.id] !== undefined) return;
+      try {
+        const storageRef = storageRefForBucketPath({
+          bucketName: video.bucketName,
+          filePath: video.storagePath,
+        });
+        videoUrls[video.id] = await getDownloadURL(storageRef);
+      } catch {
+        videoUrls[video.id] = "";
+      }
+    })
   );
 }
 
@@ -1148,6 +1405,61 @@ function storyMatchesQuery(
 function formatEvidenceRange(range: [number, number] | number[]): string {
   const [start, end] = range;
   return `${formatDuration(start * 1000)} - ${formatDuration(end * 1000)}`;
+}
+
+function formatEvidencePreviewRange(range: [number, number] | number[]): string {
+  const [start, end] = evidencePreviewRangeSeconds(range);
+  return `${formatDuration(start * 1000)} - ${formatDuration(end * 1000)}`;
+}
+
+function evidencePreviewRangeSeconds(range: [number, number] | number[]): [number, number] {
+  const start = Math.max(0, (range[0] ?? 0) - 2);
+  const end = Math.max(start, (range[1] ?? range[0] ?? 0) + 2);
+  return [start, end];
+}
+
+function seekEvidencePreviewVideo(
+  event: Event,
+  evidence: VibeControlZappingAnalysisStoryCandidate["evidence"][number]
+): void {
+  if (!(event.currentTarget instanceof HTMLVideoElement)) return;
+  const [start] = evidencePreviewRangeSeconds(evidence.tRange);
+  event.currentTarget.currentTime = start;
+}
+
+function seekStoryPreviewVideo(
+  event: Event,
+  story: VibeControlZappingAnalysisStoryCandidate
+): void {
+  if (!(event.currentTarget instanceof HTMLVideoElement)) return;
+  const evidence = primaryEvidence(story);
+  if (!evidence) return;
+  const [start] = evidencePreviewRangeSeconds(evidence.tRange);
+  event.currentTarget.currentTime = start;
+}
+
+function seekEvidencePreviewCue(startMs: number): void {
+  const video = evidencePreviewVideo.value;
+  if (!video) return;
+  video.currentTime = Math.max(0, startMs / 1000);
+  void video.play().catch(() => undefined);
+}
+
+function evidenceTranscriptCues(
+  video: DecodedVibeControlOperationVideo,
+  evidence: VibeControlZappingAnalysisStoryCandidate["evidence"][number]
+): VibeControlTranscriptCue[] {
+  const cues = video.transcriptSegments ?? [];
+  if (cues.length === 0) return [];
+
+  const evidenceCueIds = new Set(evidence.transcriptCueIds ?? []);
+  const matchedById = cues.filter((cue) => evidenceCueIds.has(cue.id));
+  if (matchedById.length > 0) return matchedById;
+
+  const [startSeconds, endSeconds] = evidence.tRange;
+  const startMs = Math.max(0, (startSeconds ?? 0) * 1000);
+  const endMs = Math.max(startMs, (endSeconds ?? startSeconds ?? 0) * 1000);
+  return cues.filter((cue) => cue.endMs >= startMs && cue.startMs <= endMs);
 }
 
 function formatDuration(durationMs?: number): string {

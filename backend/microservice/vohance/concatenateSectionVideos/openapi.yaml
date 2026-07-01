@@ -1,0 +1,313 @@
+openapi: 3.0.3
+info:
+  title: Video Concatenation API
+  version: 1.0.0
+  description: |
+    複数のセクション動画を連結して1つの動画を生成するマイクロサービス
+
+    このAPIは、Google Cloud Storage上の複数のセクション動画を連結して1つの動画を生成し、
+    連結動画を再度GCSにアップロードします。
+
+    ## 主な機能
+    - GCSから各セクション動画をダウンロード
+    - MoviePyを使用して動画を連結
+    - 連結動画をGCSにアップロード
+    - Firestoreへのリアルタイム進捗ログ記録（オプション）
+
+  contact:
+    name: Vohance Development Team
+    url: https://github.com/vohance
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://concatenate-section-videos-328416367800.asia-northeast1.run.app
+    description: Cloud Run本番環境
+
+tags:
+  - name: video
+    description: 動画処理関連のエンドポイント
+  - name: system
+    description: システム管理関連のエンドポイント
+
+paths:
+  /concatenate:
+    post:
+      tags:
+        - video
+      summary: セクション動画を連結
+      description: |
+        複数のセクション動画を連結して1つの動画を生成します。
+
+        ## 処理フロー
+        1. GCSから各セクション動画をダウンロード
+        2. MoviePyを使用して動画を連結
+        3. 連結動画をGCSにアップロード
+        4. 結果をレスポンスとして返却
+
+      operationId: concatenateSectionVideos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConcatenateRequest"
+      responses:
+        "200":
+          description: 動画連結が正常に完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: リクエスト検証エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "422":
+          description: 処理エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessingErrorResponse"
+        "500":
+          description: 内部サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalErrorResponse"
+
+  /health:
+    get:
+      tags:
+        - system
+      summary: ヘルスチェック
+      description: サービスの稼働状態を確認します
+      operationId: healthCheck
+      responses:
+        "200":
+          description: サービスは正常に稼働中
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                  service_info:
+                    type: object
+                  api_status:
+                    type: object
+
+components:
+  schemas:
+    ConcatenateRequest:
+      type: object
+      required:
+        - request_id
+        - input
+        - systemMetadata
+      properties:
+        request_id:
+          type: string
+          description: リクエストID
+          example: concatenateSectionVideosRequest_1234567890
+        input:
+          $ref: "#/components/schemas/ConcatenateRequestInput"
+        systemMetadata:
+          $ref: "#/components/schemas/SystemMetadata"
+
+    ConcatenateRequestInput:
+      type: object
+      required:
+        - sectionVideoPaths
+        - outputBucketName
+        - outputFilePath
+        - videoId
+        - projectId
+      properties:
+        sectionVideoPaths:
+          type: array
+          description: 連結するセクション動画のパス情報の配列
+          items:
+            $ref: "#/components/schemas/SectionVideoPath"
+        outputBucketName:
+          type: string
+          description: 出力動画のGCSバケット名
+          example: vohance-sandbox
+        outputFilePath:
+          type: string
+          description: 出力動画のGCSファイルパス
+          example: projects/project_789/final_merged_video.mp4
+        videoId:
+          type: string
+          description: 動画ID
+          example: video_456
+        projectId:
+          type: string
+          description: プロジェクトID
+          example: project_789
+
+    SectionVideoPath:
+      type: object
+      required:
+        - bucketName
+        - filePath
+      properties:
+        bucketName:
+          type: string
+          description: セクション動画のGCSバケット名
+          example: vohance-sandbox
+        filePath:
+          type: string
+          description: セクション動画のGCSファイルパス
+          example: sections/section-0/merged_video.mp4
+
+    SystemMetadata:
+      type: object
+      required:
+        - organizationId
+        - spaceId
+        - loggingCollectionId
+        - loggingDocumentId
+        - requestedBy
+        - isCommand
+        - isOouiCrud
+        - isLlmCall
+        - isAdminCrud
+      properties:
+        organizationId:
+          type: string
+          description: 組織ID
+        spaceId:
+          type: string
+          description: スペースID
+        loggingCollectionId:
+          type: string
+          description: ログ保存先Collection ID
+        loggingDocumentId:
+          type: string
+          description: ログ保存先Document ID
+        requestedBy:
+          type: object
+          description: リクエスト実行者情報
+        isCommand:
+          type: boolean
+          description: コマンド実行フラグ
+        isOouiCrud:
+          type: boolean
+          description: OOUI CRUDフラグ
+        isLlmCall:
+          type: boolean
+          description: LLM呼び出しフラグ
+        isAdminCrud:
+          type: boolean
+          description: 管理者CRUDフラグ
+
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        request_id:
+          type: string
+        output:
+          $ref: "#/components/schemas/ConcatenateOutput"
+        processing_time:
+          type: number
+          description: 処理時間（秒）
+
+    ConcatenateOutput:
+      type: object
+      properties:
+        mergedVideoPath:
+          type: object
+          properties:
+            bucketName:
+              type: string
+            filePath:
+              type: string
+        totalDurationSeconds:
+          type: number
+          description: 連結動画の総時間（秒）
+        outputFileSizeBytes:
+          type: number
+          description: 出力ファイルサイズ（バイト）
+        processingTime:
+          type: number
+          description: 処理時間（秒）
+        fps:
+          type: number
+          description: フレームレート
+        width:
+          type: number
+          description: 動画の幅
+        height:
+          type: number
+          description: 動画の高さ
+        hasAudio:
+          type: boolean
+          description: 音声の有無
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        request_id:
+          type: string
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+              example: ValidationError
+            message:
+              type: string
+            details:
+              type: object
+
+    ProcessingErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        request_id:
+          type: string
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+              example: ProcessingError
+            message:
+              type: string
+            details:
+              type: object
+
+    InternalErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        request_id:
+          type: string
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+              example: InternalError
+            message:
+              type: string
+            details:
+              type: object

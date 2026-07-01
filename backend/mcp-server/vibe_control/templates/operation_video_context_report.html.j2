@@ -15,6 +15,9 @@
       --accent: #0f9aa7;
       --soft: #ecfeff;
       --ok: #047857;
+      --blue: #0ea5e9;
+      --green: #10b981;
+      --amber: #f59e0b;
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -53,6 +56,20 @@
     .frames { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .frame p { margin-top: 5px; color: var(--muted); font-size: 12px; }
     .story { border-left: 4px solid var(--accent); }
+    .value-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+    .value-card { border: 1px solid var(--line); border-top: 5px solid var(--accent); border-radius: 8px; padding: 14px; background: #fff; min-height: 120px; }
+    .value-card.who { border-top-color: var(--blue); }
+    .value-card.what { border-top-color: var(--green); }
+    .value-card.why { border-top-color: var(--amber); }
+    .value-card span { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; font-weight: 900; }
+    .value-card strong { display: block; margin-top: 8px; font-size: 18px; line-height: 1.45; }
+    .evidence-card { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--panel); margin-top: 10px; }
+    .quote { border: 1px solid #bae6fd; border-radius: 8px; background: #f0f9ff; padding: 10px; color: #164e63; }
+    .time { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 800; color: #0f766e; }
+    .transcript-list { display: grid; gap: 7px; }
+    .transcript-cue { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #fff; }
+    .mini-frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .mini-frames img { max-height: 120px; }
     .criteria { margin: 10px 0 0; padding: 0; list-style: none; }
     .criteria li { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 10px; border-top: 1px solid var(--line); padding: 10px 0; }
     .criteria li:first-child { border-top: 0; }
@@ -64,6 +81,7 @@
       .sidebar { position: static; height: auto; }
       .content { padding: 22px 16px 44px; }
       .cols-5, .cols-3, .cols-2, .frames { grid-template-columns: 1fr; }
+      .value-grid, .mini-frames, .transcript-cue { grid-template-columns: 1fr; }
       .kv, .criteria li { grid-template-columns: 1fr; gap: 4px; }
     }
   </style>
@@ -81,6 +99,8 @@
         <a href="#overview">Overview</a>
         <a href="#video">Operation Video</a>
         <a href="#clips">Operation Clips</a>
+        <a href="#story-candidates">Story Candidates</a>
+        <a href="#transcript">Timestamped Transcript</a>
         <a href="#stories">Linked User Stories</a>
         <a href="#evidence">Evidence</a>
         <a href="#assets">Source Assets</a>
@@ -106,6 +126,8 @@
           <div class="metric"><span>Assets</span><strong>{{ source_assets|length }}</strong></div>
           <div class="metric"><span>Clips</span><strong>{{ video.clips|default([])|length }}</strong></div>
           <div class="metric"><span>Screenshots</span><strong>{{ counts.screenshots|default(video.screenshots|default([])|length) }}</strong></div>
+          <div class="metric"><span>Story Candidates</span><strong>{{ video.storyCandidates|default([])|length }}</strong></div>
+          <div class="metric"><span>Transcript Cues</span><strong>{{ video.transcriptSegmentCount|default(video.transcriptSegments|default([])|length) }}</strong></div>
           <div class="metric"><span>PRs</span><strong>{{ pull_requests|length }}</strong></div>
           <div class="metric"><span>Knowledge</span><strong>{{ knowledge_documents|length }}</strong></div>
         </div>
@@ -123,6 +145,10 @@
             <div class="kv"><b>Group</b><span>{{ video.videoGroup.name|text(video_group.name|text("n/a")) }}</span></div>
             <div class="kv"><b>Recorded at</b><span>{{ video.recordedAt|text("n/a") }}</span></div>
             <div class="kv"><b>Duration</b><span>{{ video.durationMs|format_ms }}</span></div>
+            <div class="kv"><b>Transcript provider</b><span>{{ video.transcriptProvider|text("n/a") }}</span></div>
+            <div class="kv"><b>Transcript timing</b><span>{{ video.transcriptTimingStatus|text("n/a") }}</span></div>
+            <div class="kv"><b>Analysis status</b><span>{{ video.analysisStatus|text("n/a") }}</span></div>
+            <div class="kv"><b>Story candidates</b><span>{{ video.storyCandidateCount|default(video.storyCandidates|default([])|length) }}</span></div>
             <div class="kv"><b>GCS path</b><span>{{ video.gcsPath|text("n/a") }}</span></div>
           </div>
           {% if video_group.description %}
@@ -150,6 +176,9 @@
                 <div class="kv"><b>Recorded at</b><span>{{ clip.recordedAt|text("n/a") }}</span></div>
                 <div class="kv"><b>Duration</b><span>{{ clip.durationMs|format_ms }}</span></div>
                 <div class="kv"><b>Screenshots</b><span>{{ clip.screenshots|default([])|length }}</span></div>
+                <div class="kv"><b>Transcript provider</b><span>{{ clip.transcriptProvider|text("n/a") }}</span></div>
+                <div class="kv"><b>Transcript timing</b><span>{{ clip.transcriptTimingStatus|text("n/a") }}</span></div>
+                <div class="kv"><b>Transcript cues</b><span>{{ clip.transcriptSegmentCount|default(clip.transcriptSegments|default([])|length) }}</span></div>
                 <div class="kv"><b>GCS path</b><span>{{ clip.gcsPath|text("n/a") }}</span></div>
               </div>
               {% if clip.transcriptSummary %}
@@ -160,6 +189,76 @@
           {% else %}
             <div class="panel"><p class="muted">No clips.</p></div>
           {% endfor %}
+        </div>
+      </section>
+
+      <section id="story-candidates">
+        <h2>Extracted Story Candidates</h2>
+        <div class="grid">
+          {% for candidate in video.storyCandidates|default([]) %}
+            <article class="panel story">
+              <h3>{{ candidate.storyKey|text(candidate.id|text("story-candidate")) }}: {{ candidate.title|text("Untitled candidate") }}</h3>
+              <p class="muted">{{ candidate.summary|text(candidate.userStory|text("No summary recorded.")) }}</p>
+              <div class="value-grid">
+                <div class="value-card who"><span>Who / 誰が</span><strong>{{ candidate.who|text("n/a") }}</strong></div>
+                <div class="value-card what"><span>What / 何をしたいか</span><strong>{{ candidate.what|text("n/a") }}</strong></div>
+                <div class="value-card why"><span>Why / 何がうれしいか</span><strong>{{ candidate.why|text("n/a") }}</strong></div>
+              </div>
+              <div class="chips">
+                <span class="chip">根拠 {{ candidate.evidenceCount|default(candidate.evidence|default([])|length) }}</span>
+                <span class="chip">字幕 {{ candidate.transcriptCueIds|default([])|length }}</span>
+                <span class="chip">キャプチャ {{ candidate.screenshotCount|default(0) }}</span>
+                {% if candidate.confidenceScore %}<span class="chip">信頼度 {{ candidate.confidenceScore }}</span>{% endif %}
+              </div>
+              <ol class="criteria">
+                {% for criterion in candidate.acceptanceCriteria|default([]) %}
+                  <li><span class="state">完了条件</span><span>{{ criterion }}</span></li>
+                {% else %}
+                  <li><span class="state">n/a</span><span>No completion criteria recorded.</span></li>
+                {% endfor %}
+              </ol>
+              {% for item in candidate.evidence|default([]) %}
+                <div class="evidence-card">
+                  <h3>{{ item.title|text("Timestamp evidence") }} <span class="time">{{ item.tRange|format_seconds_range }}</span></h3>
+                  <p>{{ item.summary|text("No evidence summary recorded.") }}</p>
+                  {% if item.transcriptQuote %}<p class="quote">{{ item.transcriptQuote }}</p>{% endif %}
+                  {% if item.transcriptCueIds %}<p class="muted">Cue IDs: {{ item.transcriptCueIds|join(", ") }}</p>{% endif %}
+                  <div class="mini-frames">
+                    {% for frame in item.screenshots|default([]) %}
+                      {% if frame.downloadUrl %}
+                        <a href="{{ frame.downloadUrl }}" target="_blank" rel="noopener noreferrer"><img src="{{ frame.downloadUrl }}" alt="{{ frame.id|text('evidence screenshot') }}"></a>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endfor %}
+            </article>
+          {% else %}
+            <div class="panel"><p class="muted">No extracted story candidates are recorded on this operation video.</p></div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section id="transcript">
+        <h2>Timestamped Transcript</h2>
+        <div class="panel">
+          <div class="grid cols-3">
+            <div class="metric"><span>Provider</span><strong>{{ video.transcriptProvider|text("n/a") }}</strong></div>
+            <div class="metric"><span>Timing</span><strong>{{ video.transcriptTimingStatus|text("n/a") }}</strong></div>
+            <div class="metric"><span>Cues</span><strong>{{ video.transcriptSegmentCount|default(video.transcriptSegments|default([])|length) }}</strong></div>
+          </div>
+          <div class="transcript-list" style="margin-top: 14px;">
+            {% set transcript_cues = video.transcriptSegments|default([]) %}
+            {% for cue in transcript_cues[:120] %}
+              <div class="transcript-cue">
+                <span class="time">{{ cue.startMs|format_ms }} - {{ cue.endMs|format_ms }}</span>
+                <span>{{ cue.text|text("n/a") }}</span>
+              </div>
+            {% else %}
+              <p class="muted">No timestamped transcript cues.</p>
+            {% endfor %}
+          </div>
+          {% if video.transcriptSegmentsTruncated %}<p class="muted">Transcript cues were truncated for MCP response size. Use the original operation video record for the full transcript.</p>{% endif %}
         </div>
       </section>
 

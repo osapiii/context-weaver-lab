@@ -1,0 +1,32 @@
+# Flask Web Framework
+flask==2.3.3
+flask-cors==4.0.0
+gunicorn==21.2.0
+
+# MoviePy for video processing
+moviepy==1.0.3
+
+# Google Cloud Services
+google-cloud-storage==2.10.0
+google-cloud-firestore==2.13.1
+ddtrace>=3.17.0
+
+# Environment and configuration
+python-dotenv==1.0.0
+
+# Request validation (RequestDoc architecture)
+pydantic==2.5.0
+
+# MoviePy dependencies (will be installed automatically, but listed for clarity)
+imageio==2.31.3
+imageio-ffmpeg==0.4.9
+numpy==1.24.3
+
+# Additional utilities
+Pillow==10.0.0
+tqdm==4.66.1
+decorator==4.4.2  # MoviePy 1.0.3 requires decorator<5.0
+
+# Development dependencies (optional)
+pytest==7.4.2
+pytest-cov==4.1.0

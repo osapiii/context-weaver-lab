@@ -1,0 +1,605 @@
+openapi: 3.0.3
+info:
+  title: Video Split API
+  version: 1.0.0
+  description: |
+    動画をタイムスタンプで分割するマイクロサービス
+
+    このAPIは、Google Cloud Storage上の動画ファイルを指定されたタイムスタンプで複数のセグメントに分割し、
+    分割された動画を再度GCSにアップロードします。
+
+    ## 主な機能
+    - GCSから動画をダウンロード
+    - 指定されたタイムスタンプで動画を分割
+    - 分割された動画セグメントをGCSにアップロード
+    - Firestoreへのリアルタイム進捗ログ記録（オプション）
+
+  contact:
+    name: Vohance Development Team
+    url: https://github.com/vohance
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://split-video-by-timestamps-328416367800.asia-northeast1.run.app
+    description: Cloud Run本番環境
+
+tags:
+  - name: video
+    description: 動画処理関連のエンドポイント
+  - name: system
+    description: システム管理関連のエンドポイント
+
+paths:
+  /split:
+    post:
+      tags:
+        - video
+      summary: 動画をタイムスタンプで分割
+      description: |
+        指定されたタイムスタンプで動画を複数のセグメントに分割します。
+
+        ## 処理フロー
+        1. GCSから元動画をダウンロード
+        2. MoviePyを使用してタイムスタンプで分割
+        3. 分割されたセグメントをGCSにアップロード
+        4. 結果をレスポンスとして返却
+
+        ## タイムスタンプ分割ロジック
+        `cutoffSeconds: [10, 30, 60]` を指定した場合:
+        - segment_001.mp4: 0秒 → 10秒
+        - segment_002.mp4: 10秒 → 30秒
+        - segment_003.mp4: 30秒 → 60秒
+        - segment_004.mp4: 60秒 → 動画の終端
+
+      operationId: splitVideo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SplitVideoRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  request_id: splitVideoRequest_1234567890
+                  input:
+                    sourceBucketName: vohance-dev.firebasestorage.app
+                    sourceFilePath: organizations/ryAAh2lQ8uu8MU6zfzIE/videos/video_1759982268781/file/744_1280x720.mp4
+                    outputBucketName: vohance-sandbox
+                    outputFilePath:
+                      - splitVideoTest/segment-1.mp4
+                      - splitVideoTest/segment-2.mp4
+                      - splitVideoTest/segment-3.mp4
+                      - splitVideoTest/segment-4.mp4
+                    cutoffSeconds: [0, 13, 30]
+                    videoId: video_456
+                    projectId: project_789
+                  systemMetadata:
+                    organizationId: org_123
+                    spaceId: space_456
+                    loggingCollectionId: requestLogs
+                    loggingDocumentId: splitVideoLogs_1234567890
+                    requestedBy:
+                      email: system@example.com
+                      role: 2
+                    isCommand: false
+                    isOouiCrud: true
+                    isLlmCall: false
+                    isAdminCrud: false
+      responses:
+        "200":
+          description: 動画分割が正常に完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 成功レスポンス例
+                  value:
+                    status: success
+                    request_id: splitVideoRequest_1234567890
+                    output:
+                      segments:
+                        - segmentNumber: 1
+                          startTime: 0
+                          endTime: 10
+                          outputPath: gs://vohance-videos/output/sections/segment_001.mp4
+                          duration: 10.0
+                          sizeBytes: 1234567
+                          bucketName: vohance-videos
+                          gcsFilePath: output/sections/segment_001.mp4
+                          gcsPath: gs://vohance-videos/output/sections/segment_001.mp4
+                        - segmentNumber: 2
+                          startTime: 10
+                          endTime: 30
+                          outputPath: gs://vohance-videos/output/sections/segment_002.mp4
+                          duration: 20.0
+                          sizeBytes: 2345678
+                          bucketName: vohance-videos
+                          gcsFilePath: output/sections/segment_002.mp4
+                          gcsPath: gs://vohance-videos/output/sections/segment_002.mp4
+                      totalSegments: 4
+                      apiRequestId: splitVideoRequest_1234567890
+                      processingTime: 12.5
+        "400":
+          description: リクエストパラメータのバリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  summary: バリデーションエラー
+                  value:
+                    status: error
+                    request_id: splitVideoRequest_1234567890
+                    error:
+                      type: ValidationError
+                      message: Request validation failed
+                      details:
+                        endpoint: /split
+                        validation_errors:
+                          - field: input.cutoffSeconds
+                            message: Field required
+                            type: missing
+        "422":
+          description: 処理エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                processing_error:
+                  summary: 処理エラー
+                  value:
+                    status: error
+                    request_id: splitVideoRequest_1234567890
+                    error:
+                      type: ProcessingError
+                      message: Processing failed at step2_split_video
+                      details:
+                        step: step2_split_video
+                        reason: Invalid timestamp exceeds video duration
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                storage_error:
+                  summary: ストレージエラー
+                  value:
+                    status: error
+                    request_id: splitVideoRequest_1234567890
+                    error:
+                      type: StorageError
+                      message: GCS download operation failed
+                      details:
+                        resource: GCS
+                        operation: download
+                        reason: Blob not found
+                internal_error:
+                  summary: 内部エラー
+                  value:
+                    status: error
+                    request_id: splitVideoRequest_1234567890
+                    error:
+                      type: InternalError
+                      message: Unexpected server error occurred
+                      details:
+                        exception: AttributeError
+                        message: "'NoneType' object has no attribute 'duration'"
+
+  /health:
+    get:
+      tags:
+        - system
+      summary: ヘルスチェック
+      description: |
+        サービスの稼働状態とAPIクライアントの接続状態を確認します。
+
+        ## チェック項目
+        - サービス基本情報
+        - Google Cloud Storage接続状態
+        - Firestore接続状態
+        - MoviePyライブラリの利用可能性
+        - アクティブなリクエスト数
+
+      operationId: healthCheck
+      responses:
+        "200":
+          description: サービスが正常に稼働中
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+              examples:
+                healthy:
+                  summary: 正常状態
+                  value:
+                    status: healthy
+                    timestamp: "2024-01-05T12:00:00.000Z"
+                    service_info:
+                      name: split-video-by-timestamps
+                      version: 1.0.0
+                      description: 動画タイムスタンプ分割マイクロサービス
+                    environment:
+                      python_version: 3.11.5
+                      debug_mode: false
+                      moviepy_version: 1.0.3
+                    configuration:
+                      max_video_size_mb: 1000
+                      temp_dir: /tmp/video_processing
+                      supported_formats: [mp4, mov, avi, mkv]
+                    api_status:
+                      storage: connected
+                      firestore: connected
+                      moviepy: available
+                    active_requests: 2
+        "503":
+          description: サービスが劣化状態（一部APIが利用不可）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+              examples:
+                degraded:
+                  summary: 劣化状態
+                  value:
+                    status: degraded
+                    timestamp: "2024-01-05T12:00:00.000Z"
+                    service_info:
+                      name: split-video-by-timestamps
+                      version: 1.0.0
+                    api_status:
+                      storage: "error: Connection timeout"
+                      firestore: connected
+                      moviepy: available
+
+components:
+  schemas:
+    SplitVideoRequest:
+      type: object
+      description: RequestDoc黄金テンプレート準拠（input/systemMetadata構造）
+      required:
+        - request_id
+        - input
+        - systemMetadata
+      properties:
+        request_id:
+          type: string
+          description: リクエストID（Firebase Background関数で生成）
+          example: splitVideoRequest_1234567890
+        input:
+          type: object
+          description: 入力パラメータ（Command）
+          required:
+            - sourceBucketName
+            - sourceFilePath
+            - outputBucketName
+            - outputFilePath
+            - cutoffSeconds
+            - videoId
+            - projectId
+          properties:
+            sourceBucketName:
+              type: string
+              description: ソース動画のGCSバケット名
+              example: vohance-videos
+              pattern: "^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$|^[a-z0-9][a-z0-9_-]{1,61}[a-z0-9]\\.firebasestorage\\.app$"
+            sourceFilePath:
+              type: string
+              description: ソース動画のGCSファイルパス
+              example: videos/abc123/original.mp4
+              minLength: 1
+            outputBucketName:
+              type: string
+              description: 出力動画のGCSバケット名
+              example: vohance-videos
+              pattern: "^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$|^[a-z0-9][a-z0-9_-]{1,61}[a-z0-9]\\.firebasestorage\\.app$"
+            outputFilePath:
+              type: array
+              description: 各セグメントの出力先GCSファイルパス配列
+              items:
+                type: string
+              example:
+                - videos/abc123/sections/segment-1.mp4
+                - videos/abc123/sections/segment-2.mp4
+            cutoffSeconds:
+              type: array
+              description: 分割するタイムスタンプの配列（秒単位、昇順）
+              items:
+                type: number
+                format: float
+                minimum: 0
+              example: [10, 30, 60, 90]
+              minItems: 1
+              maxItems: 100
+            videoId:
+              type: string
+              description: 動画ID
+              example: video_456
+            projectId:
+              type: string
+              description: プロジェクトID
+              example: project_789
+        systemMetadata:
+          type: object
+          description: システムメタデータ
+          required:
+            - organizationId
+            - spaceId
+            - loggingCollectionId
+            - loggingDocumentId
+            - requestedBy
+            - isCommand
+            - isOouiCrud
+            - isLlmCall
+            - isAdminCrud
+          properties:
+            organizationId:
+              type: string
+              description: 組織ID（マルチテナント対応）
+              example: org_123
+            spaceId:
+              type: string
+              description: スペースID（マルチテナント対応）
+              example: space_456
+            loggingCollectionId:
+              type: string
+              description: ログ保存先Collection ID
+              example: requestLogs
+            loggingDocumentId:
+              type: string
+              description: ログ保存先Document ID
+              example: splitVideoLogs
+            requestedBy:
+              type: object
+              description: リクエスト実行者情報
+              properties:
+                email:
+                  type: string
+                  example: system@example.com
+                role:
+                  type: integer
+                  example: 2
+            isCommand:
+              type: boolean
+              example: false
+            isOouiCrud:
+              type: boolean
+              example: true
+            isLlmCall:
+              type: boolean
+              example: false
+            isAdminCrud:
+              type: boolean
+              example: false
+
+    SuccessResponse:
+      type: object
+      required:
+        - status
+        - request_id
+        - output
+      properties:
+        status:
+          type: string
+          enum: [success]
+          description: 処理結果のステータス
+          example: success
+        request_id:
+          type: string
+          description: リクエストID（エコーバック）
+          example: splitVideoRequest_1234567890
+        output:
+          type: object
+          description: 出力データ（エンドポイント固有）
+          required:
+            - segments
+            - totalSegments
+            - apiRequestId
+            - processingTime
+          properties:
+            segments:
+              type: array
+              description: 分割された動画セグメント情報の配列
+              items:
+                $ref: "#/components/schemas/VideoSegment"
+            totalSegments:
+              type: integer
+              description: 分割されたセグメントの総数
+              example: 4
+              minimum: 1
+            apiRequestId:
+              type: string
+              description: APIリクエストID（エコーバック）
+              example: splitVideoRequest_1234567890
+            processingTime:
+              type: number
+              format: float
+              description: 処理時間（秒）
+              example: 12.5
+              minimum: 0
+
+    VideoSegment:
+      type: object
+      required:
+        - segmentNumber
+        - startTime
+        - endTime
+        - outputPath
+        - duration
+        - sizeBytes
+        - bucketName
+        - gcsFilePath
+        - gcsPath
+      properties:
+        segmentNumber:
+          type: integer
+          description: セグメント番号（1から開始）
+          example: 1
+          minimum: 1
+        startTime:
+          type: number
+          format: float
+          description: セグメント開始時刻（秒）
+          example: 0
+          minimum: 0
+        endTime:
+          type: number
+          format: float
+          description: セグメント終了時刻（秒）
+          example: 10
+          minimum: 0
+        outputPath:
+          type: string
+          description: GCS上の出力ファイルパス（gs://形式）
+          example: gs://vohance-videos/output/sections/segment_001.mp4
+        duration:
+          type: number
+          format: float
+          description: セグメントの長さ（秒）
+          example: 10.0
+          minimum: 0
+        sizeBytes:
+          type: integer
+          description: ファイルサイズ（バイト）
+          example: 1234567
+          minimum: 0
+        bucketName:
+          type: string
+          description: GCSバケット名
+          example: vohance-videos
+        gcsFilePath:
+          type: string
+          description: GCSファイルパス（バケット名除く）
+          example: output/sections/segment_001.mp4
+        gcsPath:
+          type: string
+          description: GCS上の完全パス（gs://形式）
+          example: gs://vohance-videos/output/sections/segment_001.mp4
+
+    HealthCheckResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+        - service_info
+        - api_status
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: サービスの健全性ステータス
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+          description: ヘルスチェック実行時刻（ISO 8601形式）
+          example: "2024-01-05T12:00:00.000Z"
+        service_info:
+          type: object
+          description: サービス基本情報
+          properties:
+            name:
+              type: string
+              example: split-video-by-timestamps
+            version:
+              type: string
+              example: 1.0.0
+            description:
+              type: string
+              example: 動画タイムスタンプ分割マイクロサービス
+        environment:
+          type: object
+          description: 実行環境情報
+          properties:
+            python_version:
+              type: string
+              example: 3.11.5
+            debug_mode:
+              type: boolean
+              example: false
+            moviepy_version:
+              type: string
+              example: 1.0.3
+        configuration:
+          type: object
+          description: サービス設定情報
+          properties:
+            max_video_size_mb:
+              type: integer
+              example: 1000
+            temp_dir:
+              type: string
+              example: /tmp/video_processing
+            supported_formats:
+              type: array
+              items:
+                type: string
+              example: [mp4, mov, avi, mkv]
+        api_status:
+          type: object
+          description: 各APIクライアントの接続状態
+          properties:
+            storage:
+              type: string
+              example: connected
+            firestore:
+              type: string
+              example: connected
+            moviepy:
+              type: string
+              example: available
+        active_requests:
+          type: integer
+          description: 現在処理中のリクエスト数
+          example: 2
+          minimum: 0
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - request_id
+        - error
+      properties:
+        status:
+          type: string
+          enum: [error]
+          description: 処理結果のステータス
+          example: error
+        request_id:
+          type: string
+          description: リクエストID（エコーバック）
+          example: splitVideoRequest_1234567890
+        error:
+          type: object
+          required:
+            - type
+            - message
+          properties:
+            type:
+              type: string
+              enum:
+                [
+                  ValidationError,
+                  ProcessingError,
+                  StorageError,
+                  InternalError,
+                  NotFoundError,
+                ]
+              description: エラータイプ
+              example: ValidationError
+            message:
+              type: string
+              description: 人間可読なエラーメッセージ
+              example: Request validation failed
+            details:
+              type: object
+              description: エラー種別固有の詳細情報

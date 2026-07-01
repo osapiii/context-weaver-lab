@@ -19,9 +19,9 @@
     <template v-else>
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="min-w-0">
-          <h2 class="text-lg font-bold tracking-tight text-slate-950">Git</h2>
+          <h2 class="text-lg font-bold tracking-tight text-slate-950">Gitリポジトリ</h2>
           <p class="mt-1 text-sm text-slate-500">
-            Repository の状態と直近のマージ済みPRを確認します
+            接続済みリポジトリの基本情報と直近のマージ済みPRを確認します
           </p>
         </div>
         <EnButton
@@ -32,7 +32,7 @@
           :loading="githubLoading"
           @click="loadGitHubData"
         >
-          GitHub再読込
+          再読込
         </EnButton>
       </div>
 
@@ -57,7 +57,7 @@
           <div class="border-b border-slate-100 p-5 lg:border-b-0 lg:border-r">
             <div class="flex flex-wrap items-center gap-2">
               <EnBadge :color="repository.private ? 'warning' : 'neutral'" size="xs">
-                {{ repository.private ? "Private" : "Public" }}
+                {{ repository.private ? "非公開" : "公開" }}
               </EnBadge>
               <EnBadge variant="tag" size="xs">
                 {{ repository.defaultBranch || "main" }}
@@ -102,7 +102,7 @@
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
           <div>
             <h3 class="text-sm font-bold text-slate-950">マージ済みPR</h3>
-            <p class="mt-1 text-xs text-slate-500">最新30件をGitHubからLive取得します</p>
+              <p class="mt-1 text-xs text-slate-500">最新30件をGitHubから取得します</p>
           </div>
           <EnBadge size="xs" color="neutral">
             {{ mergedPullRequests.length }} 件
@@ -123,13 +123,13 @@
         </div>
         <div v-else class="overflow-x-auto">
           <table class="w-full min-w-[960px] text-sm">
-            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead class="bg-slate-50 text-xs tracking-wide text-slate-500">
               <tr>
                 <th class="px-4 py-3 text-left font-bold">PR</th>
-                <th class="px-4 py-3 text-left font-bold">Author</th>
-                <th class="px-4 py-3 text-left font-bold">Branches</th>
-                <th class="px-4 py-3 text-left font-bold">Merged</th>
-                <th class="px-4 py-3 text-right font-bold">Diff</th>
+                <th class="px-4 py-3 text-left font-bold">作成者</th>
+                <th class="px-4 py-3 text-left font-bold">ブランチ</th>
+                <th class="px-4 py-3 text-left font-bold">マージ日時</th>
+                <th class="px-4 py-3 text-right font-bold">差分</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
@@ -207,10 +207,10 @@ const githubLoading = ref(false);
 const githubError = ref("");
 
 const repositoryStats = computed(() => [
-  { label: "Stars", value: repository.value?.stargazersCount ?? 0 },
-  { label: "Forks", value: repository.value?.forksCount ?? 0 },
-  { label: "Watchers", value: repository.value?.watchersCount ?? 0 },
-  { label: "Updated", value: formatDate(repository.value?.updatedAt) || "-" },
+  { label: "スター", value: repository.value?.stargazersCount ?? 0 },
+  { label: "フォーク", value: repository.value?.forksCount ?? 0 },
+  { label: "ウォッチ", value: repository.value?.watchersCount ?? 0 },
+  { label: "更新日時", value: formatDate(repository.value?.updatedAt) || "-" },
 ]);
 
 watch(

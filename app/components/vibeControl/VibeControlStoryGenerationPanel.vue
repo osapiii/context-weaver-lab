@@ -79,7 +79,7 @@
                 動画由来の根拠からStory化
               </p>
               <p class="mt-1 text-[11px] leading-relaxed text-slate-600">
-                5秒ごとのスクリーンショット、Aqua Voice全文文字起こし、要約、操作ステップをFileSpace/Vertex AI Searchで参照します。
+                5秒ごとのスクリーンショット、Gemini全文文字起こし、要約、操作ステップをFileSpace/Vertex AI Searchで参照します。
               </p>
               <div class="mt-2 flex flex-wrap gap-1.5">
                 <EnBadge variant="tag" size="xs">

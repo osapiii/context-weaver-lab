@@ -42,6 +42,7 @@ export type NavMode = {
   key:
     | "knowledge"
     | "operation-videos"
+    | "git-repositories"
     | "stories"
     | "settings";
   navGroup: NavGroupId;
@@ -82,6 +83,18 @@ export const useNavigationModeRegistry = () => {
       homeRouteName: "admin-vibe-control",
       homeRouteQuery: { view: "application-zapping" },
       accent: "purple",
+      ownedRouteNamePrefixes: ["admin-vibe-control"],
+      groups: [],
+    },
+    {
+      key: "git-repositories",
+      navGroup: "input",
+      label: "Gitリポジトリ",
+      subtitle: "接続済みリポジトリ、PR、アプリ紐付けを確認",
+      icon: "i-simple-icons-github",
+      homeRouteName: "admin-vibe-control",
+      homeRouteQuery: { view: "repositories" },
+      accent: "neutral",
       ownedRouteNamePrefixes: ["admin-vibe-control"],
       groups: [],
     },

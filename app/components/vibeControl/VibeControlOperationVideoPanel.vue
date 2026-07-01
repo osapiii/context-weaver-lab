@@ -373,7 +373,7 @@
             :loading="isSaving || isExtractingFrames"
             @click="saveRecording"
           >
-            解析して保存
+            保存して次へ
           </EnButton>
         </div>
       </div>
@@ -492,72 +492,229 @@
       title="ザッピング動画を保存中"
       subtitle="録画データと動画解析メモを保存しています。"
       title-icon="material-symbols:cloud-upload-outline"
-      size="sm"
+      size="full"
       :close-on-backdrop="false"
-      :hide-close="saveProgressPhase !== 'error'"
+      :hide-close="isSaveWorkflowBusy"
+      :ui="{ content: 'w-[92vw] max-w-[1560px]' }"
     >
-      <div class="space-y-4">
+      <div class="space-y-5">
+        <div class="rounded-xl border border-slate-200 bg-white p-4">
+          <EnStepper
+            :model-value="saveWorkflowActiveIndex"
+            :items="saveWorkflowStepperItems"
+            size="sm"
+            color="primary"
+            custom-class="pointer-events-none"
+          />
+        </div>
+
         <div
-          class="rounded-lg border p-3"
-          :class="saveProgressPhase === 'error' ? 'border-red-200 bg-red-50' : 'border-primary-100 bg-primary-50'"
+          class="overflow-hidden rounded-xl border"
+          :class="saveProgressPhase === 'error' ? 'border-red-200 bg-red-50' : 'border-cyan-100 bg-cyan-50'"
         >
-          <div class="flex items-start gap-3">
-            <UIcon
-              :name="saveProgressPhase === 'error' ? 'material-symbols:error-outline' : saveProgressPhase === 'done' ? 'material-symbols:check-circle-outline' : 'material-symbols:sync'"
-              class="mt-0.5 h-5 w-5"
-              :class="saveProgressPhase === 'error' ? 'text-red-600' : saveProgressPhase === 'done' ? 'text-primary-600' : 'animate-spin text-primary-600'"
-            />
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-slate-900">
-                {{ saveProgressTitle }}
-              </p>
-              <p class="mt-1 text-xs leading-relaxed text-slate-600">
-                {{ saveProgressDescription }}
-              </p>
+          <div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-start gap-3">
+              <span
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+                :class="saveProgressPhase === 'error' ? 'bg-red-100 text-red-600' : saveProgressPhase === 'done' ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-cyan-700 shadow-sm ring-1 ring-cyan-100'"
+              >
+                <UIcon
+                  :name="saveProgressPhase === 'error' ? 'material-symbols:error-outline' : saveProgressPhase === 'done' ? 'material-symbols:check-circle-outline' : 'material-symbols:smart-toy-outline'"
+                  class="h-6 w-6"
+                />
+              </span>
+              <div class="min-w-0">
+                <p class="text-base font-bold text-slate-950">
+                  {{ saveProgressTitle }}
+                </p>
+                <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                  {{ saveProgressDescription }}
+                </p>
+              </div>
+            </div>
+            <div class="min-w-[180px] rounded-lg bg-white/80 p-3 ring-1 ring-white">
+              <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                <span>理解中</span>
+                <span>{{ saveProgressCompletion }}%</span>
+              </div>
+              <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  class="h-full rounded-full bg-cyan-500 transition-all duration-500"
+                  :style="{ width: `${saveProgressCompletion}%` }"
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        <ol class="space-y-2">
-          <li
-            v-for="step in saveProgressSteps"
-            :key="step.key"
-            class="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2"
-          >
-            <span
-              class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
-              :class="step.status === 'done' ? 'bg-primary-100 text-primary-700' : step.status === 'active' ? 'bg-primary-100 text-primary-700' : step.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'"
+        <div class="grid gap-5 2xl:grid-cols-[minmax(390px,0.78fr)_minmax(680px,1.22fr)]">
+          <ol class="space-y-2">
+            <li
+              v-for="step in saveProgressSteps"
+              :key="step.key"
+              class="flex items-start gap-3 rounded-xl border bg-white px-3 py-3 transition"
+              :class="step.status === 'active' ? 'border-cyan-200 shadow-sm shadow-cyan-100' : step.status === 'done' ? 'border-emerald-100' : step.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-200'"
             >
-              <UIcon
-                v-if="step.status === 'done'"
-                name="material-symbols:check-small"
-                class="h-4 w-4"
-              />
-              <UIcon
-                v-else-if="step.status === 'active'"
-                name="material-symbols:progress-activity"
-                class="h-4 w-4 animate-spin"
-              />
-              <UIcon
-                v-else-if="step.status === 'error'"
-                name="material-symbols:close-small"
-                class="h-4 w-4"
-              />
-              <span v-else>{{ step.index }}</span>
-            </span>
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-slate-800">
-                {{ step.label }}
-              </p>
-              <p class="mt-0.5 text-xs text-slate-500">
-                {{ step.description }}
-              </p>
+              <span
+                class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                :class="step.status === 'done' ? 'bg-emerald-100 text-emerald-700' : step.status === 'active' ? 'bg-cyan-100 text-cyan-700' : step.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'"
+              >
+                <UIcon
+                  v-if="step.status === 'done'"
+                  name="material-symbols:check-small"
+                  class="h-5 w-5"
+                />
+                <UIcon
+                  v-else-if="step.status === 'active'"
+                  name="material-symbols:progress-activity"
+                  class="h-5 w-5 animate-spin"
+                />
+                <UIcon
+                  v-else-if="step.status === 'error'"
+                  name="material-symbols:close-small"
+                  class="h-5 w-5"
+                />
+                <span v-else>{{ step.index }}</span>
+              </span>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-bold text-slate-900">
+                    {{ step.label }}
+                  </p>
+                  <span
+                    class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
+                    :class="step.status === 'done' ? 'bg-emerald-50 text-emerald-700' : step.status === 'active' ? 'bg-cyan-50 text-cyan-700' : step.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-slate-50 text-slate-400'"
+                  >
+                    {{ step.statusLabel }}
+                  </span>
+                </div>
+                <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                  {{ step.description }}
+                </p>
+              </div>
+            </li>
+          </ol>
+
+          <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white">
+                  <UIcon
+                    name="material-symbols:smart-toy-outline"
+                    class="h-5 w-5"
+                  />
+                </span>
+                <div class="min-w-0">
+                  <p class="text-sm font-bold text-slate-950">
+                    {{ saveProgressInsight.heading }}
+                  </p>
+                  <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                    {{ saveProgressInsight.subheading }}
+                  </p>
+                </div>
+              </div>
+              <span class="rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-700">
+                {{ saveProgressInsight.badge }}
+              </span>
             </div>
-          </li>
-        </ol>
+
+            <div class="mt-4 grid gap-3 md:grid-cols-3">
+              <div class="rounded-lg bg-slate-50 p-3">
+                <p class="text-[11px] font-bold text-slate-400">スクリーンショット</p>
+                <p class="mt-1 text-xl font-black text-slate-950">{{ frameCaptures.length }}</p>
+              </div>
+              <div class="rounded-lg bg-slate-50 p-3">
+                <p class="text-[11px] font-bold text-slate-400">文字起こし</p>
+                <p class="mt-1 text-xl font-black text-slate-950">{{ transcriptText.length }}</p>
+              </div>
+              <div class="rounded-lg bg-slate-50 p-3">
+                <p class="text-[11px] font-bold text-slate-400">解析メモ</p>
+                <p class="mt-1 text-xl font-black text-slate-950">{{ saveProgressInsight.noteCount }}</p>
+              </div>
+            </div>
+
+            <div class="mt-4 space-y-3">
+              <div class="rounded-lg border border-slate-200 p-3">
+                <div class="mb-3 flex items-center justify-between">
+                  <p class="text-xs font-bold text-slate-500">読み取り中の内容</p>
+                  <UIcon
+                    name="material-symbols:neurology-outline"
+                    class="h-4 w-4 text-cyan-600"
+                  />
+                </div>
+                <template v-if="saveProgressInsight.lines.length > 0">
+                  <div class="space-y-2">
+                    <p
+                      v-for="line in saveProgressInsight.lines"
+                      :key="line"
+                      class="rounded-md bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700"
+                    >
+                      {{ line }}
+                    </p>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="space-y-2">
+                    <div class="h-3 w-11/12 animate-pulse rounded-full bg-slate-100" />
+                    <div class="h-3 w-8/12 animate-pulse rounded-full bg-slate-100" />
+                    <div class="h-3 w-10/12 animate-pulse rounded-full bg-slate-100" />
+                  </div>
+                </template>
+              </div>
+
+              <div class="grid gap-3 xl:grid-cols-[1fr_1.1fr]">
+                <div class="rounded-lg border border-slate-200 p-3">
+                  <p class="mb-3 text-xs font-bold text-slate-500">画面の根拠</p>
+                  <div
+                    v-if="saveProgressFramePreview.length > 0"
+                    class="grid grid-cols-3 gap-2"
+                  >
+                    <img
+                      v-for="frame in saveProgressFramePreview"
+                      :key="frame.id"
+                      :src="frame.previewUrl"
+                      class="aspect-video rounded-md object-cover ring-1 ring-slate-200"
+                      :alt="`${Math.round(frame.timestampMs / 1000)}秒のスクリーンショット`"
+                    >
+                  </div>
+                  <div
+                    v-else
+                    class="grid grid-cols-3 gap-2"
+                  >
+                    <div
+                      v-for="i in 6"
+                      :key="`frame-skeleton-${i}`"
+                      class="aspect-video animate-pulse rounded-md bg-slate-100"
+                    />
+                  </div>
+                </div>
+
+                <div class="rounded-lg border border-slate-200 p-3">
+                  <p class="mb-3 text-xs font-bold text-slate-500">作成中のメモ</p>
+                  <div class="space-y-2">
+                    <div
+                      v-for="item in saveProgressInsight.artifacts"
+                      :key="item.label"
+                      class="flex items-start gap-2 rounded-md bg-slate-50 p-2"
+                    >
+                      <UIcon
+                        :name="item.icon"
+                        class="mt-0.5 h-4 w-4 shrink-0 text-cyan-600"
+                      />
+                      <div class="min-w-0">
+                        <p class="text-[11px] font-bold text-slate-500">{{ item.label }}</p>
+                        <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-700">{{ item.value }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div
-          v-if="saveProgressPhase === 'error'"
+          v-if="saveProgressPhase === 'error' || saveProgressPhase === 'done'"
           class="flex justify-end"
         >
           <EnButton
@@ -566,7 +723,7 @@
             size="sm"
             @click="saveProgressOpen = false"
           >
-            閉じる
+            {{ saveProgressPhase === 'done' ? '完了して閉じる' : '閉じる' }}
           </EnButton>
         </div>
       </div>
@@ -577,8 +734,8 @@
       title="動画解析メモ"
       subtitle="タイトル、説明、操作ステップ、文字起こしをまとめて確認します。"
       title-icon="material-symbols:fact-check-outline"
-      size="xl"
-      :ui="{ content: 'max-w-[1040px]' }"
+      size="full"
+      :ui="{ content: 'w-[88vw] max-w-[1360px]' }"
     >
       <div
         v-if="quickScanPreviewVideo"
@@ -618,7 +775,7 @@
               </p>
             </div>
             <EnBadge color="success" variant="soft">
-              {{ quickScanPreviewVideo.transcriptProvider || "aqua-voice" }}
+              {{ quickScanPreviewVideo.transcriptProvider || "gemini-stt" }}
             </EnBadge>
           </div>
           <div class="grid gap-3 md:grid-cols-2">
@@ -671,13 +828,31 @@
         </details>
 
         <details
-          v-if="quickScanPreviewVideo.transcriptText"
+          v-if="hasTranscriptContent(quickScanPreviewVideo)"
           class="rounded-xl border border-slate-200 bg-white p-4"
         >
           <summary class="cursor-pointer text-sm font-semibold text-slate-800">
-            Aqua Voice 文字起こし全文
+            Gemini文字起こし全文
           </summary>
-          <p class="mt-3 max-h-80 overflow-auto whitespace-pre-line rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+          <div
+            v-if="transcriptCueRows(quickScanPreviewVideo).length > 0"
+            class="mt-3 max-h-80 space-y-2 overflow-auto rounded-lg bg-slate-50 p-3"
+          >
+            <div
+              v-for="cue in transcriptCueRows(quickScanPreviewVideo)"
+              :key="`${quickScanPreviewVideo.id}-preview-${cue.id}`"
+              class="grid grid-cols-[72px_minmax(0,1fr)] gap-2 rounded-lg bg-white px-2 py-1.5 text-xs"
+            >
+              <span class="font-mono font-semibold text-teal-700">
+                {{ formatTranscriptCueTime(cue.startMs) }}
+              </span>
+              <span class="leading-relaxed text-slate-600">{{ cue.text }}</span>
+            </div>
+          </div>
+          <p
+            v-else
+            class="mt-3 max-h-80 overflow-auto whitespace-pre-line rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-600"
+          >
             {{ quickScanPreviewVideo.transcriptText }}
           </p>
         </details>
@@ -735,6 +910,385 @@
       </template>
     </EnModal>
 
+    <EnModal
+      v-model:open="deleteClipConfirmOpen"
+      title="動画クリップを削除しますか?"
+      subtitle="選択したクリップとスクリーンショットを削除します。"
+      header-variant="warning"
+      title-icon="material-symbols:delete-outline"
+      size="md"
+    >
+      <div
+        v-if="deleteTargetClip"
+        class="space-y-3"
+      >
+        <div class="rounded-lg border border-red-100 bg-red-50 p-3">
+          <p class="text-sm font-semibold text-slate-900">
+            {{ clipTitle(deleteTargetClip.clip, deleteTargetClip.index) }}
+          </p>
+          <p class="mt-1 text-xs text-slate-600">
+            {{ formatRecordedAt(deleteTargetClip.clip.recordedAt) }} / {{ formatDuration(deleteTargetClip.clip.durationMs) }} / {{ formatBytes(deleteTargetClip.clip.sizeBytes) }}
+          </p>
+        </div>
+        <p class="text-xs leading-relaxed text-slate-500">
+          削除後、このVIDの解析結果は未解析状態に戻ります。必要であれば再解析してください。
+        </p>
+      </div>
+      <template #footer>
+        <EnButton
+          variant="ghost"
+          color="neutral"
+          size="sm"
+          @click="deleteClipConfirmOpen = false"
+        >
+          キャンセル
+        </EnButton>
+        <EnButton
+          variant="soft"
+          color="error"
+          size="sm"
+          leading-icon="material-symbols:delete-outline"
+          @click="deleteConfirmedClip"
+        >
+          削除
+        </EnButton>
+      </template>
+    </EnModal>
+
+    <Teleport to="body">
+      <div
+        v-if="contextMapOpen && contextMapVideo"
+        class="fixed inset-0 z-[260] bg-slate-950/70 p-4 backdrop-blur-md"
+        @click.self="closeContextMap"
+      >
+        <section class="mx-auto flex h-[calc(100vh-2rem)] max-w-[min(1720px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl">
+          <header class="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-slate-950 px-6 py-5 text-white">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-400/15 text-cyan-200 ring-1 ring-cyan-300/25">
+                  <UIcon
+                    name="material-symbols:hub-outline"
+                    class="h-5 w-5"
+                  />
+                </span>
+                <p class="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
+                  コンテキストマップ
+                </p>
+              </div>
+              <h2 class="mt-3 truncate text-2xl font-black tracking-normal text-white">
+                {{ displayVideoTitle(contextMapVideo) }}
+              </h2>
+              <p class="mt-1 max-w-3xl text-sm leading-relaxed text-slate-300">
+                動画から生まれた文字起こし、画面証跡、ユーザーストーリー、関連ナレッジをひとつの構造として表示します。
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <div
+                v-for="stat in contextMapHeroStats"
+                :key="stat.label"
+                class="inline-flex min-h-12 items-center gap-2 rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10"
+              >
+                <span
+                  class="h-2.5 w-2.5 shrink-0 rounded-full"
+                  :class="stat.dotClass"
+                />
+                <span class="text-[11px] font-black tracking-normal text-slate-300">
+                  {{ stat.label }}
+                </span>
+                <span class="text-lg font-black leading-none text-white">
+                  {{ stat.value }}
+                </span>
+              </div>
+              <button
+                type="button"
+                class="ml-2 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-slate-200 transition hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                aria-label="コンテキストマップを閉じる"
+                @click="closeContextMap"
+              >
+                <UIcon
+                  name="material-symbols:close-rounded"
+                  class="h-5 w-5"
+                />
+              </button>
+            </div>
+          </header>
+
+          <div class="grid min-h-0 flex-1 grid-cols-1 bg-slate-100 lg:grid-cols-[minmax(0,1fr)_390px]">
+            <div
+              ref="contextMapGraphSurface"
+              class="relative min-h-[580px] overflow-hidden bg-slate-950"
+              @click="clearContextMapSelection"
+              @wheel="handleContextMapWheel"
+            >
+              <div class="absolute inset-0 opacity-70 [background-image:linear-gradient(rgba(148,163,184,0.13)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.13)_1px,transparent_1px)] [background-size:38px_38px]" />
+              <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(34,211,238,0.22),transparent_34%),radial-gradient(circle_at_78%_18%,rgba(16,185,129,0.16),transparent_26%),radial-gradient(circle_at_18%_82%,rgba(251,191,36,0.12),transparent_24%)]" />
+              <div
+                class="absolute left-5 right-5 top-5 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-xs text-slate-300 shadow-xl backdrop-blur"
+                @click.stop
+              >
+                <div class="flex flex-wrap gap-2">
+                  <span
+                    v-for="legend in contextMapLegend"
+                    :key="legend.label"
+                    class="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 font-bold"
+                  >
+                    <span
+                      class="h-2 w-2 rounded-full"
+                      :class="legend.dotClass"
+                    />
+                    {{ legend.label }}
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-slate-200 transition hover:bg-white/20"
+                    aria-label="縮小"
+                    @click.stop="zoomContextMap(-0.12)"
+                  >
+                    <UIcon
+                      name="material-symbols:zoom-out"
+                      class="h-4 w-4"
+                    />
+                  </button>
+                  <span class="min-w-[3.5rem] text-center font-black text-white">
+                    {{ Math.round(contextMapZoom * 100) }}%
+                  </span>
+                  <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 text-slate-200 transition hover:bg-white/20"
+                    aria-label="拡大"
+                    @click.stop="zoomContextMap(0.12)"
+                  >
+                    <UIcon
+                      name="material-symbols:zoom-in"
+                      class="h-4 w-4"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex h-8 items-center gap-1 rounded-lg bg-white/10 px-2 text-slate-200 transition hover:bg-white/20"
+                    @click.stop="resetContextMapView"
+                  >
+                    <UIcon
+                      name="material-symbols:center-focus-strong-outline"
+                      class="h-4 w-4"
+                    />
+                    <span class="text-[11px] font-bold">リセット</span>
+                  </button>
+                </div>
+              </div>
+
+              <div
+                class="absolute inset-0 transition-transform duration-200"
+                :style="{ transform: `scale(${contextMapZoom})`, transformOrigin: '50% 50%' }"
+              >
+                <svg
+                  class="pointer-events-none absolute inset-0 h-full w-full"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                >
+                  <line
+                    v-for="edge in contextMapEdgesWithPoints"
+                    :key="edge.id"
+                    :x1="edge.x1"
+                    :y1="edge.y1"
+                    :x2="edge.x2"
+                    :y2="edge.y2"
+                    stroke="currentColor"
+                    :stroke-width="contextMapEdgeIsActive(edge) ? 0.5 : 0.22"
+                    stroke-linecap="round"
+                    :class="contextMapEdgeClass(edge)"
+                  />
+                </svg>
+
+                <button
+                  v-for="node in contextMapData.nodes"
+                  :key="node.id"
+                  type="button"
+                  class="absolute w-[min(190px,16vw)] min-w-[140px] -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-2xl border p-3 text-left shadow-2xl transition duration-200 hover:scale-[1.02] active:cursor-grabbing focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                  :class="[
+                    contextMapNodeClass(node),
+                    contextMapNodeIsActive(node) ? '' : 'opacity-35 grayscale',
+                    selectedContextMapNode?.id === node.id ? 'z-10 ring-2 ring-cyan-300 ring-offset-2 ring-offset-slate-950' : ''
+                  ]"
+                  :style="{ left: `${node.x}%`, top: `${node.y}%` }"
+                  @pointerdown.stop="startContextMapNodeDrag($event, node)"
+                  @click.stop="selectContextMapNode(node)"
+                >
+                  <span class="flex items-start gap-3">
+                    <span
+                      class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                      :class="contextMapNodeIconClass(node)"
+                    >
+                      <UIcon
+                        :name="node.icon"
+                        class="h-5 w-5"
+                      />
+                    </span>
+                    <span class="min-w-0">
+                      <span class="block text-[10px] font-black uppercase tracking-[0.14em] opacity-70">
+                        {{ node.label }}
+                      </span>
+                      <span class="mt-1 line-clamp-2 block text-sm font-black leading-snug tracking-normal">
+                        {{ node.title }}
+                      </span>
+                      <span class="mt-1 line-clamp-2 block text-xs leading-relaxed opacity-75">
+                        {{ node.subtitle }}
+                      </span>
+                    </span>
+                  </span>
+                  <span class="mt-3 inline-flex rounded-full bg-white/75 px-2 py-1 text-[11px] font-black text-slate-800">
+                    {{ node.value }}
+                  </span>
+                </button>
+              </div>
+
+              <div
+                class="absolute bottom-5 left-5 right-5 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-xs text-slate-300 shadow-xl backdrop-blur"
+                @click.stop
+              >
+                <p class="font-bold">
+                  ノードをドラッグして配置を調整できます。command + スクロールで拡大縮小します。
+                </p>
+              </div>
+            </div>
+
+            <aside class="min-h-0 overflow-y-auto border-l border-slate-200 bg-white">
+              <div
+                v-if="selectedContextMapNode"
+                class="space-y-4 p-5"
+              >
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div class="flex items-start gap-3">
+                    <span
+                      class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                      :class="contextMapNodeIconClass(selectedContextMapNode)"
+                    >
+                      <UIcon
+                        :name="selectedContextMapNode.icon"
+                        class="h-5 w-5"
+                      />
+                    </span>
+                    <div class="min-w-0">
+                      <p class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
+                        {{ selectedContextMapNode.label }}
+                      </p>
+                      <h3 class="mt-1 text-xl font-black leading-snug tracking-normal text-slate-950">
+                        {{ selectedContextMapNode.title }}
+                      </h3>
+                      <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                        {{ selectedContextMapNode.subtitle }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4 rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-900 ring-1 ring-slate-200">
+                    {{ selectedContextMapNode.value }}
+                  </div>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p class="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    読み取れる内容
+                  </p>
+                  <div class="mt-3 space-y-2">
+                    <div
+                      v-for="detail in selectedContextMapNode.details"
+                      :key="detail"
+                      class="rounded-xl bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-700 ring-1 ring-slate-100"
+                    >
+                      {{ detail }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p class="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    周辺ノード
+                  </p>
+                  <div class="mt-3 grid gap-2">
+                    <button
+                      v-for="neighbor in selectedContextMapNeighbors"
+                      :key="neighbor.id"
+                      type="button"
+                      class="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-left transition hover:border-cyan-200 hover:bg-cyan-50/70"
+                      @click="selectedContextMapNodeId = neighbor.id"
+                    >
+                      <UIcon
+                        :name="neighbor.icon"
+                        class="h-4 w-4 shrink-0 text-cyan-600"
+                      />
+                      <span class="min-w-0">
+                        <span class="block truncate text-sm font-black text-slate-900">
+                          {{ neighbor.title }}
+                        </span>
+                        <span class="block truncate text-xs text-slate-500">
+                          {{ neighbor.label }}
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div
+                v-else
+                class="space-y-4 p-5"
+              >
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div class="flex items-start gap-3">
+                    <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cyan-500 text-white">
+                      <UIcon
+                        name="material-symbols:hub-outline"
+                        class="h-5 w-5"
+                      />
+                    </span>
+                    <div class="min-w-0">
+                      <p class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
+                        全体表示
+                      </p>
+                      <h3 class="mt-1 text-xl font-black leading-snug tracking-normal text-slate-950">
+                        コンテキスト全体
+                      </h3>
+                      <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                        すべてのノードと接続を表示しています。ノードを選択すると、右側に紐づく情報だけを絞り込みます。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p class="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    ノード一覧
+                  </p>
+                  <div class="mt-3 grid gap-2">
+                    <button
+                      v-for="node in contextMapData.nodes"
+                      :key="node.id"
+                      type="button"
+                      class="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-left transition hover:border-cyan-200 hover:bg-cyan-50/70"
+                      @click="selectedContextMapNodeId = node.id"
+                    >
+                      <UIcon
+                        :name="node.icon"
+                        class="h-4 w-4 shrink-0 text-cyan-600"
+                      />
+                      <span class="min-w-0">
+                        <span class="block truncate text-sm font-black text-slate-900">
+                          {{ node.title }}
+                        </span>
+                        <span class="block truncate text-xs text-slate-500">
+                          {{ node.label }} / {{ node.value }}
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
     <div
       v-if="detailVideo"
       class="pt-1"
@@ -785,6 +1339,15 @@
                 </span>
               </button>
               <VibeControlAnalysisStatusTip :status="detailVideo.analysisStatus" />
+              <EnButton
+                variant="soft"
+                color="info"
+                size="xs"
+                leading-icon="material-symbols:hub-outline"
+                @click="openContextMap(detailVideo)"
+              >
+                コンテキストマップ
+              </EnButton>
             </div>
           </div>
         </div>
@@ -797,6 +1360,17 @@
             追加あり
           </EnBadge>
           <EnButton
+            v-if="canResumeVideoWorkflow(detailVideo)"
+            variant="ai"
+            size="xs"
+            leading-icon="material-symbols:resume-outline"
+            :loading="isWorkflowRunningFor(detailVideo)"
+            :disabled="props.isSaving || detailVideo.analysisStatus === 'queued' || detailVideo.analysisStatus === 'running'"
+            @click="resumeVideoWorkflow(detailVideo)"
+          >
+            解析を続きから再開
+          </EnButton>
+          <EnButton
             variant="outline"
             color="neutral"
             size="xs"
@@ -805,6 +1379,16 @@
             @click="openAppendRecordingModal(detailVideo)"
           >
             動画を追加
+          </EnButton>
+          <EnButton
+            variant="soft"
+            color="error"
+            size="xs"
+            leading-icon="material-symbols:delete-outline"
+            :disabled="props.isSaving"
+            @click="openVideoDeleteConfirm(detailVideo)"
+          >
+            動画を削除
           </EnButton>
           <EnButton
             variant="ai"
@@ -850,7 +1434,7 @@
       </div>
 
       <div class="mb-5 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
-        <div class="grid gap-1 sm:grid-cols-2 lg:grid-cols-6">
+        <div class="grid gap-1 sm:grid-cols-2 lg:grid-cols-7">
           <button
             type="button"
             class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
@@ -902,6 +1486,21 @@
           <button
             type="button"
             class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
+            :class="detailTab === 'videoGeneration' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
+            @click="detailTab = 'videoGeneration'"
+          >
+            <UIcon name="material-symbols:movie-edit-outline" class="h-4 w-4 shrink-0" />
+            <span>動画生成</span>
+            <span
+              class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              :class="detailTab === 'videoGeneration' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-700'"
+            >
+              音声 / 字幕
+            </span>
+          </button>
+          <button
+            type="button"
+            class="flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition"
             :class="detailTab === 'relatedContext' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'"
             @click="openRelatedContextTab"
           >
@@ -911,7 +1510,7 @@
               class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
               :class="detailTab === 'relatedContext' ? 'bg-white/15 text-white' : relatedContextCount(detailVideo) > 0 ? 'bg-slate-200 text-slate-800' : 'bg-slate-100 text-slate-600'"
             >
-              ボルトナレッジ {{ relatedKnowledgeDocumentCount(detailVideo) }} / PR {{ relatedGithubPullRequestCount(detailVideo) }} / Slack {{ relatedSlackMessageCount(detailVideo) }}
+              {{ relatedContextCount(detailVideo) }}件
             </span>
           </button>
           <button
@@ -951,165 +1550,341 @@
         v-if="detailTab === 'video'"
         class="space-y-4"
       >
-        <div class="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside class="relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div class="pointer-events-none absolute inset-0 opacity-[0.24] [background-image:linear-gradient(#e5e7eb_1px,transparent_1px),linear-gradient(90deg,#e5e7eb_1px,transparent_1px)] [background-size:28px_28px]" />
-            <div class="relative space-y-3">
-              <div class="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                  操作で見えた意図
-                </p>
-                <p class="mt-3 text-sm leading-relaxed text-slate-800">
-                  {{ detailVideo.analysisResult?.operationIntent || detailVideo.quickScan?.description || "未生成" }}
-                </p>
-              </div>
-              <div class="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                  背景として参照した知識
-                </p>
-                <p class="mt-3 text-sm leading-relaxed text-slate-800">
-                  {{ detailVideo.analysisResult?.productContextSummary || "FileSpace文脈は解析後に表示されます" }}
+        <div
+          class="grid gap-4"
+          :class="clipNavigatorCollapsed ? 'xl:grid-cols-[92px_minmax(0,1fr)]' : 'xl:grid-cols-[340px_minmax(0,1fr)]'"
+        >
+          <aside class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex items-center justify-between gap-2 border-b border-slate-100 p-3">
+              <div
+                v-if="!clipNavigatorCollapsed"
+                class="min-w-0"
+              >
+                <h4 class="flex items-center gap-2 text-sm font-bold text-slate-950">
+                  <UIcon name="material-symbols:video-library-outline" class="h-4 w-4 text-slate-500" />
+                  動画クリップ
+                </h4>
+                <p class="mt-1 truncate text-xs text-slate-500">
+                  {{ videoClipCount(detailVideo) }}本 / {{ formatDuration(videoTotalDurationMs(detailVideo)) }}
                 </p>
               </div>
-              <div class="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm">
-                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                  話していた内容
-                </p>
-                <p class="mt-3 text-sm leading-relaxed text-slate-800">
-                  {{ detailVideo.analysisResult?.transcriptSummary || detailVideo.transcriptSummary || detailVideo.quickScan?.transcriptSummary || "未生成" }}
-                </p>
-              </div>
+              <EnButton
+                variant="ghost"
+                color="neutral"
+                size="xs"
+                :leading-icon="clipNavigatorCollapsed ? 'material-symbols:keyboard-double-arrow-right' : 'material-symbols:keyboard-double-arrow-left'"
+                @click="clipNavigatorCollapsed = !clipNavigatorCollapsed"
+              >
+                <span class="sr-only">{{ clipNavigatorCollapsed ? "クリップ一覧を開く" : "クリップ一覧を閉じる" }}</span>
+              </EnButton>
+            </div>
+
+            <div class="max-h-[calc(100vh-18rem)] space-y-2 overflow-auto p-2">
+              <article
+                v-for="(clip, clipIndex) in detailVideoClips"
+                :key="clip.id"
+                role="button"
+                tabindex="0"
+                class="group w-full rounded-xl border text-left transition"
+                :class="selectedDetailClip?.id === clip.id ? 'border-slate-950 bg-slate-950 text-white shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'"
+                @click="selectedClipId = clip.id"
+                @keydown.enter.prevent="selectedClipId = clip.id"
+                @keydown.space.prevent="selectedClipId = clip.id"
+              >
+                <div
+                  class="grid gap-2 p-2"
+                  :class="clipNavigatorCollapsed ? 'grid-cols-1' : 'grid-cols-[96px_minmax(0,1fr)]'"
+                >
+                  <div class="relative overflow-hidden rounded-lg bg-slate-900">
+                    <img
+                      v-if="clipThumbnailUrl(detailVideo, clip)"
+                      :src="clipThumbnailUrl(detailVideo, clip)"
+                      class="aspect-video w-full object-cover"
+                      :alt="`${clip.fileName} のサムネイル`"
+                    >
+                    <div
+                      v-else
+                      class="flex aspect-video w-full items-center justify-center text-slate-300"
+                    >
+                      <UIcon name="material-symbols:movie-outline" class="h-5 w-5" />
+                    </div>
+                    <span class="absolute left-1.5 top-1.5 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {{ clipIndex + 1 }}
+                    </span>
+                    <button
+                      v-if="clipNavigatorCollapsed"
+                      type="button"
+                      class="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-black/55 text-white transition hover:bg-red-500"
+                      title="このクリップを削除"
+                      @click.stop="openClipDeleteConfirm(detailVideo, clip)"
+                    >
+                      <UIcon name="material-symbols:delete-outline" class="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div
+                    v-if="!clipNavigatorCollapsed"
+                    class="min-w-0 py-0.5"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <p class="min-w-0 truncate text-xs font-bold" :class="selectedDetailClip?.id === clip.id ? 'text-white' : 'text-slate-950'">
+                        {{ clipTitle(clip, clipIndex) }}
+                      </p>
+                      <div class="flex shrink-0 items-center gap-1">
+                        <EnBadge
+                          v-if="clipIndex === 0"
+                          color="neutral"
+                          variant="soft"
+                        >
+                          メイン
+                        </EnBadge>
+                        <button
+                          type="button"
+                          class="inline-flex h-7 w-7 items-center justify-center rounded-lg transition"
+                          :class="selectedDetailClip?.id === clip.id ? 'text-slate-300 hover:bg-white/10 hover:text-white' : 'text-slate-400 hover:bg-red-50 hover:text-red-600'"
+                          title="このクリップを削除"
+                          @click.stop="openClipDeleteConfirm(detailVideo, clip)"
+                        >
+                          <UIcon name="material-symbols:delete-outline" class="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <p class="mt-1 truncate text-[11px]" :class="selectedDetailClip?.id === clip.id ? 'text-slate-300' : 'text-slate-500'">
+                      {{ formatRecordedAt(clip.recordedAt) }}
+                    </p>
+                    <div class="mt-2 flex flex-wrap gap-1 text-[10px] font-bold" :class="selectedDetailClip?.id === clip.id ? 'text-slate-200' : 'text-slate-500'">
+                      <span>{{ formatDuration(clip.durationMs) }}</span>
+                      <span>{{ clip.frameCaptures.length }}枚</span>
+                      <span>{{ formatBytes(clip.sizeBytes) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
             </div>
           </aside>
 
-          <div class="rounded-2xl border border-slate-200 bg-slate-950 p-3 shadow-sm">
-            <video
-              v-if="videoUrls[detailVideo.id]"
-              :src="videoUrls[detailVideo.id]"
-              controls
-              preload="metadata"
-              class="aspect-video w-full rounded-xl bg-slate-950"
-            />
-          </div>
-        </div>
-
-        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
-                <UIcon name="material-symbols:video-library-outline" class="h-4 w-4 text-slate-500" />
-                動画クリップ
-              </h4>
-              <p class="mt-1 text-xs text-slate-500">
-                追加順にまとめています
-              </p>
-            </div>
-            <div class="flex flex-wrap gap-1">
-              <EnBadge color="neutral" variant="soft">
-                {{ videoClipCount(detailVideo) }}本
-              </EnBadge>
-              <EnBadge color="neutral" variant="soft">
-                {{ formatDuration(videoTotalDurationMs(detailVideo)) }}
-              </EnBadge>
-              <EnBadge color="neutral" variant="soft">
-                {{ formatBytes(videoTotalSizeBytes(detailVideo)) }}
-              </EnBadge>
-            </div>
-          </div>
-          <div class="space-y-3">
-            <article
-              v-for="(clip, clipIndex) in videoClips(detailVideo)"
-              :key="clip.id"
-              class="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]"
-            >
-              <div>
-                <div class="mb-2 flex items-center justify-between gap-2">
-                  <div class="flex min-w-0 items-center gap-2">
-                    <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-xs font-bold text-slate-700 ring-1 ring-slate-200">
-                      {{ clipIndex + 1 }}
-                    </span>
-                    <p class="min-w-0 truncate text-sm font-bold text-slate-950">
-                      {{ clip.fileName }}
+          <section
+            v-if="selectedDetailClip"
+            class="min-w-0 space-y-4"
+          >
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <header class="border-b border-slate-100 bg-white p-4">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div class="min-w-0 flex-1">
+                    <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      選択中のクリップ
+                    </p>
+                    <h4 class="mt-1 text-xl font-black leading-tight text-slate-950">
+                      {{ clipTitle(selectedDetailClip, selectedDetailClipIndex) }}
+                    </h4>
+                    <p class="mt-1 truncate text-xs font-semibold text-slate-500">
+                      {{ selectedDetailClip.fileName }}
                     </p>
                   </div>
+                  <dl class="grid w-full grid-cols-2 gap-2 text-xs sm:w-auto sm:min-w-[360px] sm:grid-cols-4">
+                    <div class="rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+                      <dt class="font-semibold text-slate-500">時間</dt>
+                      <dd class="mt-1 font-bold text-slate-900">{{ formatDuration(selectedDetailClip.durationMs) }}</dd>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+                      <dt class="font-semibold text-slate-500">スクショ</dt>
+                      <dd class="mt-1 font-bold text-slate-900">{{ selectedDetailClip.frameCaptures.length }}枚</dd>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+                      <dt class="font-semibold text-slate-500">文字起こし</dt>
+                      <dd class="mt-1 font-bold text-slate-900">{{ hasTranscriptContent(selectedDetailClip) ? "あり" : "なし" }}</dd>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-100">
+                      <dt class="font-semibold text-slate-500">サイズ</dt>
+                      <dd class="mt-1 font-bold text-slate-900">{{ formatBytes(selectedDetailClip.sizeBytes) }}</dd>
+                    </div>
+                  </dl>
+                </div>
+                <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    概要
+                  </p>
+                  <p class="mt-2 text-sm leading-relaxed text-slate-800">
+                    {{ selectedDetailClip.quickScan?.description || selectedDetailClip.quickScan?.operationMemo || detailVideo.analysisResult?.operationIntent || detailVideo.quickScan?.description || "未生成" }}
+                  </p>
+                </div>
+              </header>
+
+              <div class="bg-slate-950 p-3">
+                <div class="mb-3 flex flex-wrap items-center justify-end gap-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-slate-400">表示</span>
+                    <div class="flex rounded-xl bg-white/10 p-1">
+                      <button
+                        v-for="mode in selectedClipLayoutModes"
+                        :key="mode.value"
+                        type="button"
+                        class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+                        :class="selectedClipLayoutMode === mode.value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-white'"
+                        @click="selectedClipLayoutMode = mode.value"
+                      >
+                        {{ mode.label }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-slate-400">再生速度</span>
+                    <div class="flex rounded-xl bg-white/10 p-1">
+                      <button
+                        v-for="rate in selectedClipPlaybackRates"
+                        :key="rate.value"
+                        type="button"
+                        class="rounded-lg px-3 py-1.5 text-xs font-bold transition"
+                        :class="selectedClipPlaybackRate === rate.value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-300 hover:bg-white/10 hover:text-white'"
+                        @click="setSelectedClipPlaybackRate(rate.value)"
+                      >
+                        {{ rate.label }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="grid gap-3"
+                  :class="selectedClipLayoutMode === 'split' ? 'xl:grid-cols-[minmax(0,1fr)_430px] 2xl:grid-cols-[minmax(0,1fr)_500px]' : 'grid-cols-1'"
+                >
+                  <div class="min-w-0">
+                    <video
+                      v-if="clipVideoUrl(detailVideo, selectedDetailClip)"
+                      ref="selectedClipVideo"
+                      :src="clipVideoUrl(detailVideo, selectedDetailClip)"
+                      controls
+                      preload="metadata"
+                      class="aspect-video w-full rounded-xl bg-slate-950"
+                      @timeupdate="updateSelectedClipPlaybackTime"
+                      @seeked="updateSelectedClipPlaybackTime"
+                      @loadedmetadata="handleSelectedClipVideoLoadedMetadata"
+                    />
+                    <div
+                      v-else
+                      class="flex aspect-video w-full items-center justify-center rounded-xl bg-slate-950 text-xs font-semibold text-slate-300"
+                    >
+                      動画URLを取得中
+                    </div>
+                  </div>
+
+                  <div
+                    class="min-w-0 rounded-2xl bg-white p-4"
+                    :class="selectedClipLayoutMode === 'split' ? 'xl:max-h-[calc(100vh-360px)] xl:min-h-[420px] xl:overflow-hidden' : ''"
+                  >
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div class="flex rounded-xl bg-slate-100 p-1">
+                    <button
+                      type="button"
+                      class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition"
+                      :class="selectedClipContentTab === 'transcript' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-950'"
+                      @click="selectedClipContentTab = 'transcript'"
+                    >
+                      <UIcon name="material-symbols:subtitles-outline" class="h-4 w-4" />
+                      字幕一覧
+                    </button>
+                    <button
+                      type="button"
+                      class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition"
+                      :class="selectedClipContentTab === 'summary' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-950'"
+                      @click="selectedClipContentTab = 'summary'"
+                    >
+                      <UIcon name="material-symbols:summarize-outline" class="h-4 w-4" />
+                      要約
+                    </button>
+                  </div>
                   <EnBadge
-                    v-if="clipIndex === 0"
+                    v-if="selectedClipContentTab === 'transcript'"
                     color="neutral"
                     variant="soft"
                   >
-                    メイン
+                    {{ transcriptProviderBadge(selectedDetailClip) }}
                   </EnBadge>
                 </div>
-                <video
-                  v-if="clipVideoUrl(detailVideo, clip)"
-                  :src="clipVideoUrl(detailVideo, clip)"
-                  controls
-                  preload="metadata"
-                  class="aspect-video w-full rounded-lg bg-slate-950"
-                />
-                <div
-                  v-else
-                  class="flex aspect-video w-full items-center justify-center rounded-lg bg-slate-950 text-xs font-semibold text-slate-300"
-                >
-                  動画URLを取得中
+                    <div v-if="selectedClipContentTab === 'transcript'">
+                      <div
+                        v-if="transcriptCueRows(selectedDetailClip).length > 0"
+                        ref="selectedClipTranscriptScroller"
+                        class="space-y-2 overflow-auto rounded-2xl border border-slate-100 bg-slate-50 p-3"
+                        :class="selectedClipLayoutMode === 'split' ? 'max-h-[calc(100vh-450px)] min-h-[340px]' : 'max-h-[520px] min-h-[320px]'"
+                      >
+                        <button
+                          v-for="cue in transcriptCueRows(selectedDetailClip)"
+                          :key="`${selectedDetailClip.id}-${cue.id}`"
+                          :ref="(element) => setSelectedClipTranscriptCueElement(cue.id, element)"
+                          type="button"
+                          class="grid w-full grid-cols-[82px_minmax(0,1fr)] gap-3 rounded-xl border px-3 py-2 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-teal-200"
+                          :class="activeSelectedClipCueId === cue.id ? 'border-teal-300 bg-teal-50 shadow-sm ring-1 ring-teal-100' : 'border-transparent bg-white hover:border-teal-200 hover:bg-teal-50'"
+                          @click="seekSelectedClipTo(cue.startMs)"
+                        >
+                          <span
+                            class="font-mono text-xs font-bold"
+                            :class="activeSelectedClipCueId === cue.id ? 'text-teal-800' : 'text-teal-700'"
+                          >
+                            {{ formatTranscriptCueTime(cue.startMs) }}
+                          </span>
+                          <span
+                            class="leading-6"
+                            :class="activeSelectedClipCueId === cue.id ? 'font-semibold text-slate-950' : 'text-slate-700'"
+                          >{{ cue.text }}</span>
+                        </button>
+                      </div>
+                      <p
+                        v-else
+                        class="overflow-auto whitespace-pre-line rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm leading-7 text-slate-700"
+                        :class="selectedClipLayoutMode === 'split' ? 'max-h-[calc(100vh-450px)] min-h-[340px]' : 'max-h-[520px] min-h-[320px]'"
+                      >
+                        {{ selectedDetailClip.transcriptText }}
+                      </p>
+                    </div>
+                    <div
+                      v-else
+                      class="overflow-auto rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                      :class="selectedClipLayoutMode === 'split' ? 'max-h-[calc(100vh-450px)] min-h-[340px]' : ''"
+                    >
+                      <EnMarkdown
+                        class="text-sm leading-relaxed text-slate-800"
+                        :markdown-text="selectedClipSummaryMarkdown(selectedDetailClip, detailVideo)"
+                        variant="analysis"
+                        compact
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div class="flex min-w-0 flex-col justify-between gap-3">
-                <div class="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4">
-                  <div class="rounded-md bg-white px-2 py-2 ring-1 ring-slate-100">
-                    <p class="font-semibold text-slate-500">時間</p>
-                    <p class="mt-1 font-bold text-slate-900">{{ formatDuration(clip.durationMs) }}</p>
-                  </div>
-                  <div class="rounded-md bg-white px-2 py-2 ring-1 ring-slate-100">
-                    <p class="font-semibold text-slate-500">スクショ</p>
-                    <p class="mt-1 font-bold text-slate-900">{{ clip.frameCaptures.length }}枚</p>
-                  </div>
-                  <div class="rounded-md bg-white px-2 py-2 ring-1 ring-slate-100">
-                    <p class="font-semibold text-slate-500">文字起こし</p>
-                    <p class="mt-1 font-bold text-slate-900">{{ clip.transcriptSummary ? "あり" : "なし" }}</p>
-                  </div>
-                  <div class="rounded-md bg-white px-2 py-2 ring-1 ring-slate-100">
-                    <p class="font-semibold text-slate-500">サイズ</p>
-                    <p class="mt-1 font-bold text-slate-900">{{ formatBytes(clip.sizeBytes) }}</p>
-                  </div>
-                </div>
-                <p class="truncate text-xs font-semibold text-slate-500">
-                  {{ formatRecordedAt(clip.recordedAt) }}
-                </p>
-              </div>
-            </article>
-          </div>
-        </div>
+            </div>
 
-        <div
-          v-if="detailVideo.frameCaptures.length > 0"
-          class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-        >
-          <div class="mb-2 flex items-center justify-between gap-2">
-            <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
-              <UIcon name="material-symbols:photo-library-outline" class="h-4 w-4 text-slate-500" />
-              操作スクリーンショット
-            </h4>
-            <EnBadge color="neutral" variant="soft">
-              {{ detailVideo.frameCaptures.length }}
-            </EnBadge>
-          </div>
-          <div class="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
-            <figure
-              v-for="frame in detailVideo.frameCaptures"
-              :key="frame.id"
-              class="overflow-hidden rounded-md border border-slate-100 bg-slate-50"
+            <div
+              v-if="selectedDetailClip.frameCaptures.length > 0"
+              class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
             >
-              <img
-                :src="savedFrameUrl(detailVideo, frame.id)"
-                class="aspect-video w-full object-cover"
-                :alt="`${formatDuration(frame.timestampMs)} のスクリーンショット`"
-              >
-              <figcaption class="bg-white px-2 py-1 text-[11px] font-semibold text-slate-500">
-                {{ formatDuration(frame.timestampMs) }}
-              </figcaption>
-            </figure>
-          </div>
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
+                  <UIcon name="material-symbols:photo-library-outline" class="h-4 w-4 text-slate-500" />
+                  選択クリップのスクリーンショット
+                </h4>
+                <EnBadge color="neutral" variant="soft">
+                  {{ selectedDetailClip.frameCaptures.length }}
+                </EnBadge>
+              </div>
+              <div class="grid grid-cols-3 gap-2 lg:grid-cols-4 xl:grid-cols-5">
+                <figure
+                  v-for="frame in selectedDetailClip.frameCaptures"
+                  :key="frame.id"
+                  class="overflow-hidden rounded-md border border-slate-100 bg-slate-50"
+                >
+                  <img
+                    :src="clipSavedFrameUrl(detailVideo, selectedDetailClip, frame.id)"
+                    class="aspect-video w-full object-cover"
+                    :alt="`${formatDuration(frame.timestampMs)} のスクリーンショット`"
+                  >
+                  <figcaption class="bg-white px-2 py-1 text-[11px] font-semibold text-slate-500">
+                    {{ formatDuration(frame.timestampMs) }}
+                  </figcaption>
+                </figure>
+              </div>
+            </div>
+
+          </section>
         </div>
       </div>
 
@@ -1220,7 +1995,7 @@
             </div>
 
             <div
-              v-if="detailVideo.transcriptText"
+              v-if="hasTranscriptContent(detailVideo)"
               class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
             >
               <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -1229,10 +2004,28 @@
                   文字起こし全文
                 </h4>
                 <EnBadge color="neutral" variant="soft">
-                  {{ detailVideo.transcriptProvider || "transcript" }}
+                  {{ transcriptProviderBadge(detailVideo) }}
                 </EnBadge>
               </div>
-              <p class="max-h-[420px] overflow-auto whitespace-pre-line rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm leading-7 text-slate-700">
+              <div
+                v-if="transcriptCueRows(detailVideo).length > 0"
+                class="max-h-[420px] space-y-2 overflow-auto rounded-2xl border border-slate-100 bg-slate-50 p-3"
+              >
+                <div
+                  v-for="cue in transcriptCueRows(detailVideo)"
+                  :key="`${detailVideo.id}-${cue.id}`"
+                  class="grid grid-cols-[80px_minmax(0,1fr)] gap-3 rounded-xl bg-white px-3 py-2 text-sm"
+                >
+                  <span class="font-mono text-xs font-semibold text-teal-700">
+                    {{ formatTranscriptCueTime(cue.startMs) }}
+                  </span>
+                  <span class="leading-6 text-slate-700">{{ cue.text }}</span>
+                </div>
+              </div>
+              <p
+                v-else
+                class="max-h-[420px] overflow-auto whitespace-pre-line rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm leading-7 text-slate-700"
+              >
                 {{ detailVideo.transcriptText }}
               </p>
             </div>
@@ -1343,6 +2136,13 @@
           :video="detailVideo"
           :context-json="mcpTestContextJson"
         />
+      </div>
+
+      <div
+        v-else-if="detailTab === 'videoGeneration'"
+        class="space-y-3"
+      >
+        <VibeControlVideoGenerationPanel :video="detailVideo" />
       </div>
 
       <div
@@ -1509,35 +2309,10 @@
                   </div>
                   </div>
 
-                  <div
-                    v-if="selectedAnalysisStory.role || selectedAnalysisStory.goal || selectedAnalysisStory.benefit"
-                    class="grid gap-3 md:grid-cols-3"
-                  >
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                        誰が
-                      </p>
-                      <p class="mt-2 text-sm leading-relaxed text-slate-800">
-                        {{ selectedAnalysisStory.role?.value || selectedAnalysisStory.asA || "未生成" }}
-                      </p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                        何をしたいか
-                      </p>
-                      <p class="mt-2 text-sm leading-relaxed text-slate-800">
-                        {{ selectedAnalysisStory.goal || selectedAnalysisStory.iWant || "未生成" }}
-                      </p>
-                    </div>
-                    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                        何がうれしいか
-                      </p>
-                      <p class="mt-2 text-sm leading-relaxed text-slate-800">
-                        {{ selectedAnalysisStory.benefit || selectedAnalysisStory.soThat || "未生成" }}
-                      </p>
-                    </div>
-                  </div>
+                  <VibeControlStoryValueCards
+                    :story="selectedAnalysisStory"
+                    :video="detailVideo"
+                  />
 
                   <p
                     v-if="selectedAnalysisStory.userStory"
@@ -1582,6 +2357,28 @@
                           <EnBadge color="neutral" variant="soft">
                             {{ formatEvidenceRange(item.tRange) }}
                           </EnBadge>
+                        </div>
+
+                        <div
+                          v-if="item.transcriptQuote || item.transcriptCueIds.length > 0"
+                          class="mt-3 rounded-lg border border-teal-100 bg-teal-50/70 p-3"
+                        >
+                          <p class="flex flex-wrap items-center gap-2 text-xs font-semibold text-teal-900">
+                            <UIcon name="material-symbols:subtitles-outline" class="h-4 w-4" />
+                            発話根拠
+                          </p>
+                          <p
+                            v-if="item.transcriptQuote"
+                            class="mt-2 text-xs leading-relaxed text-slate-700"
+                          >
+                            {{ item.transcriptQuote }}
+                          </p>
+                          <p
+                            v-if="item.transcriptCueIds.length > 0"
+                            class="mt-2 font-mono text-[11px] text-teal-700"
+                          >
+                            {{ item.transcriptCueIds.join(", ") }}
+                          </p>
                         </div>
 
                         <video
@@ -1823,10 +2620,10 @@
               leading-icon="material-symbols:travel-explore"
               :loading="isRelatedContextProviderRunning(detailVideo, 'knowledge')"
               :global-loading="false"
-              :disabled="!application?.fileSpaceId || isRelatedContextBusy(detailVideo)"
+              :disabled="!application?.fileSpaceId || isRelatedContextProviderRunning(detailVideo, 'knowledge')"
               @click="$emit('fetch-related-context', detailVideo.id, 'knowledge')"
             >
-              ナレッジ取得
+              {{ detailVideo.relatedContexts?.knowledge ? "ナレッジ再取得" : "ナレッジ取得" }}
             </EnButton>
           </div>
 
@@ -1979,10 +2776,10 @@
               leading-icon="i-simple-icons-github"
               :loading="isRelatedContextProviderRunning(detailVideo, 'github')"
               :global-loading="false"
-              :disabled="!application?.repoFullName || isRelatedContextBusy(detailVideo)"
+              :disabled="!application?.repoFullName || isRelatedContextProviderRunning(detailVideo, 'github')"
               @click="$emit('fetch-related-context', detailVideo.id, 'github')"
             >
-              PR一覧を取得
+              {{ detailVideo.relatedContexts?.github ? "PR一覧を再取得" : "PR一覧を取得" }}
             </EnButton>
           </div>
 
@@ -2469,10 +3266,17 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
-import { getDownloadURL } from "firebase/storage";
+import type { ComponentPublicInstance } from "vue";
+import { getBlob, getDownloadURL } from "firebase/storage";
 import { storageRefForBucketPath } from "@composables/firebase-storage-operations";
 import { reportDatadogError } from "@utils/datadogObservability";
 import { formatUserStoryKey } from "@utils/vibeControlStoryKeys";
+import {
+  formatTranscriptTime,
+  normalizeTranscriptCues,
+  parseSrtTranscript,
+  transcriptCuesToSrt,
+} from "@utils/transcriptTiming";
 import KnowledgeDocumentCompactCard from "@components/knowledge/KnowledgeDocumentCompactCard.vue";
 import type {
   DecodedVibeControlApplication,
@@ -2482,11 +3286,14 @@ import type {
   VibeControlOperationVideoDiscoveryStatus,
   VibeControlOperationVideoDisplaySurface,
   VibeControlOperationVideoClip,
+  VibeControlTranscriptCue,
+  VibeControlTranscriptTimingStatus,
   VibeControlZappingAnalysisStoryCandidate,
   VibeControlZappingAnalysisStatus,
 } from "@models/vibeControl";
 import type { Document } from "@models/document";
 import type {
+  VibeControlOperationVideoClipAnalysisInput,
   VibeControlOperationVideoAppendInput,
   VibeControlOperationVideoSaveInput,
 } from "@stores/vibeControl";
@@ -2498,6 +3305,15 @@ type OperationVideoSaveCallbacks = {
 
 type OperationVideoTitleUpdateCallbacks = {
   onSuccess?: () => void;
+  onError?: (message: string) => void;
+};
+
+type OperationVideoAnalyzeOptions = {
+  inline?: boolean;
+};
+
+type OperationVideoAnalyzeCallbacks = {
+  onStarted?: () => void;
   onError?: (message: string) => void;
 };
 
@@ -2532,30 +3348,57 @@ type LocalFrameCapture = {
 
 type SaveProgressPhase =
   | "idle"
+  | "saving"
   | "extracting"
   | "transcribing"
   | "summarizing"
   | "scanning"
+  | "analysisSaving"
+  | "storyQueued"
+  | "storyRunning"
   | "uploading"
   | "done"
   | "error";
+
+type SaveWorkflowStep = "save" | "videoAnalysis" | "storyAnalysis";
 
 type SaveProgressStep = {
   key: string;
   index: number;
   label: string;
   description: string;
-  status: "pending" | "active" | "done" | "error";
+  status: SaveProgressStepStatus;
+  statusLabel: string;
+};
+
+type SaveProgressStepStatus = "pending" | "active" | "done" | "error";
+
+type SaveProgressInsightArtifact = {
+  label: string;
+  value: string;
+  icon: string;
+};
+
+type SaveProgressInsight = {
+  heading: string;
+  subheading: string;
+  badge: string;
+  noteCount: number;
+  lines: string[];
+  artifacts: SaveProgressInsightArtifact[];
 };
 type DetailTab =
   | "video"
   | "videoAnalysis"
   | "storyAnalysis"
+  | "videoGeneration"
   | "relatedContext"
   | "report"
   | "mcpTest";
 type ReportMode = "html" | "markdown" | "json";
 type RelatedContextProviderTab = "knowledge" | "github" | "slack" | "jira";
+type SelectedClipContentTab = "transcript" | "summary";
+type SelectedClipLayoutMode = "split" | "stack";
 
 type RichTranscriptSummarySection = {
   title: string;
@@ -2564,6 +3407,64 @@ type RichTranscriptSummarySection = {
 
 type ZappingAnalysisEvidence =
   VibeControlZappingAnalysisStoryCandidate["evidence"][number];
+type TranscriptOwner = Pick<
+  DecodedVibeControlOperationVideo,
+  "transcriptText" | "transcriptProvider" | "transcriptSegments" | "transcriptSrt" | "transcriptTimingStatus"
+>;
+
+type ContextMapNodeKind =
+  | "video"
+  | "transcript"
+  | "screen"
+  | "analysis"
+  | "story"
+  | "knowledge"
+  | "github"
+  | "slack"
+  | "generation";
+
+type ContextMapNode = {
+  id: string;
+  kind: ContextMapNodeKind;
+  label: string;
+  title: string;
+  subtitle: string;
+  value: string;
+  icon: string;
+  x: number;
+  y: number;
+  tone: "cyan" | "emerald" | "amber" | "rose" | "violet" | "slate";
+  details: string[];
+};
+
+type ContextMapEdge = {
+  id: string;
+  from: string;
+  to: string;
+  tone: ContextMapNode["tone"];
+};
+
+type ContextMapEdgeWithPoints = ContextMapEdge & {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+type ContextMapData = {
+  nodes: ContextMapNode[];
+  edges: ContextMapEdge[];
+};
+
+type ContextMapNodePosition = {
+  x: number;
+  y: number;
+};
+
+type ContextMapDragState = {
+  nodeId: string;
+  moved: boolean;
+};
 
 declare global {
   interface Window {
@@ -2590,7 +3491,15 @@ const emit = defineEmits<{
     input: VibeControlOperationVideoAppendInput,
     callbacks?: OperationVideoSaveCallbacks,
   ];
-  analyze: [videoId: string];
+  "update-clip-analysis": [
+    input: VibeControlOperationVideoClipAnalysisInput,
+    callbacks?: OperationVideoSaveCallbacks,
+  ];
+  analyze: [
+    videoId: string,
+    options?: OperationVideoAnalyzeOptions,
+    callbacks?: OperationVideoAnalyzeCallbacks,
+  ];
   "update-title": [
     videoId: string,
     title: string,
@@ -2600,6 +3509,7 @@ const emit = defineEmits<{
   "create-group": [input: { applicationId: string; name: string; description?: string }];
   "update-group": [input: { groupId: string; name: string; description?: string }];
   "delete-group": [groupId: string];
+  "delete-clip": [videoId: string, clipId: string];
   "apply-organization-plan": [
     plan: OperationVideoGroupAssistantPlan,
     callbacks?: OperationVideoOrganizationCallbacks,
@@ -2622,6 +3532,11 @@ const recordedBlob = ref<Blob | null>(null);
 const recordedAudioBlob = ref<Blob | null>(null);
 const previewUrl = ref("");
 const livePreviewVideo = ref<HTMLVideoElement | null>(null);
+const selectedClipVideo = ref<HTMLVideoElement | null>(null);
+const selectedClipPlaybackMs = ref(0);
+const selectedClipTranscriptScroller = ref<HTMLElement | null>(null);
+const selectedClipTranscriptCueElements = new Map<string, HTMLElement>();
+const lastScrolledSelectedClipCueId = ref("");
 const microphoneActive = ref(false);
 const waveformBars = ref(Array.from({ length: 40 }, () => 0.06));
 const audioLevel = ref(0);
@@ -2631,11 +3546,29 @@ const quickScan = ref<DecodedVibeControlOperationVideo["quickScan"]>();
 const transcriptText = ref("");
 const transcriptProvider = ref("");
 const transcriptSummary = ref("");
+const transcriptSegments = ref<VibeControlTranscriptCue[]>([]);
+const transcriptSrt = ref("");
+const transcriptTimingStatus = ref<VibeControlTranscriptTimingStatus>("unavailable");
 const transcriptErrorMessage = ref("");
 const saveProgressOpen = ref(false);
 const saveProgressPhase = ref<SaveProgressPhase>("idle");
+const saveWorkflowStep = ref<SaveWorkflowStep>("save");
+const workflowVideoId = ref("");
+const workflowClipId = ref("");
+const workflowStoryRequested = ref(false);
 const selectedVideoId = ref("");
 const detailVideoId = ref("");
+const selectedClipId = ref("");
+const selectedClipContentTab = ref<SelectedClipContentTab>("transcript");
+const selectedClipLayoutMode = ref<SelectedClipLayoutMode>("split");
+const clipNavigatorCollapsed = ref(false);
+const contextMapOpen = ref(false);
+const contextMapVideoId = ref("");
+const selectedContextMapNodeId = ref("");
+const contextMapZoom = ref(1);
+const contextMapNodePositions = reactive<Record<string, ContextMapNodePosition>>({});
+const contextMapGraphSurface = ref<HTMLElement | null>(null);
+const contextMapDragState = ref<ContextMapDragState | null>(null);
 const selectedVideoGroupId = ref("");
 const detailTab = ref<DetailTab>("video");
 const reportMode = ref<ReportMode>("html");
@@ -2655,15 +3588,28 @@ const deleteTargetGroup = ref<DecodedVibeControlOperationVideoGroup | null>(null
 const deleteGroupConfirmOpen = ref(false);
 const deleteTargetVideoId = ref("");
 const deleteVideoConfirmOpen = ref(false);
+const deleteTargetClipVideoId = ref("");
+const deleteTargetClipId = ref("");
+const deleteClipConfirmOpen = ref(false);
 const editingVideoTitleId = ref("");
 const editingVideoTitleDraft = ref("");
 const updatingVideoTitleId = ref("");
 const videoTitleInput = ref<HTMLInputElement | null>(null);
+const selectedClipPlaybackRates = [
+  { label: "等速", value: 1 },
+  { label: "2倍", value: 2 },
+  { label: "3倍", value: 3 },
+] as const;
+const selectedClipPlaybackRate = ref<(typeof selectedClipPlaybackRates)[number]["value"]>(1);
+const selectedClipLayoutModes = [
+  { label: "2列", value: "split" },
+  { label: "1列", value: "stack" },
+] as const;
 const videoUrls = reactive<Record<string, string>>({});
 const clipVideoUrls = reactive<Record<string, string>>({});
 const frameUrls = reactive<Record<string, string>>({});
 const clipFrameUrls = reactive<Record<string, string>>({});
-const AQUA_AUDIO_MAX_BYTES = 8 * 1024 * 1024;
+const GEMINI_TRANSCRIPTION_AUDIO_MAX_BYTES = 18 * 1024 * 1024;
 const route = useRoute();
 const reportModes = [
   { value: "html", label: "HTML" },
@@ -3002,6 +3948,94 @@ const reportExtension = computed(() => {
 const detailVideo = computed(
   () => props.videos.find((video) => video.id === detailVideoId.value) ?? null
 );
+const contextMapVideo = computed(
+  () =>
+    props.videos.find((video) => video.id === contextMapVideoId.value) ??
+    detailVideo.value
+);
+const contextMapData = computed<ContextMapData>(() =>
+  contextMapVideo.value
+    ? applyContextMapNodePositions(buildContextMapData(contextMapVideo.value))
+    : { nodes: [], edges: [] }
+);
+const contextMapEdgesWithPoints = computed<ContextMapEdgeWithPoints[]>(() => {
+  const nodes = new Map(contextMapData.value.nodes.map((node) => [node.id, node]));
+  return contextMapData.value.edges.flatMap((edge) => {
+    const from = nodes.get(edge.from);
+    const to = nodes.get(edge.to);
+    if (!from || !to) return [];
+    return [{ ...edge, x1: from.x, y1: from.y, x2: to.x, y2: to.y }];
+  });
+});
+const selectedContextMapNode = computed(() => {
+  if (!selectedContextMapNodeId.value) return null;
+  const nodes = contextMapData.value.nodes;
+  return nodes.find((node) => node.id === selectedContextMapNodeId.value) ?? null;
+});
+const selectedContextMapNeighbors = computed(() => {
+  const selected = selectedContextMapNode.value;
+  if (!selected) return [];
+  const neighborIds = new Set<string>();
+  for (const edge of contextMapData.value.edges) {
+    if (edge.from === selected.id) neighborIds.add(edge.to);
+    if (edge.to === selected.id) neighborIds.add(edge.from);
+  }
+  return contextMapData.value.nodes.filter((node) => neighborIds.has(node.id));
+});
+const activeContextMapNodeIds = computed(() => {
+  const selected = selectedContextMapNode.value;
+  if (!selected) return new Set<string>();
+  return new Set([selected.id, ...selectedContextMapNeighbors.value.map((node) => node.id)]);
+});
+const activeContextMapEdgeIds = computed(() => {
+  const selected = selectedContextMapNode.value;
+  if (!selected) return new Set<string>();
+  return new Set(
+    contextMapData.value.edges
+      .filter((edge) => edge.from === selected.id || edge.to === selected.id)
+      .map((edge) => edge.id)
+  );
+});
+const contextMapHeroStats = computed(() => {
+  const video = contextMapVideo.value;
+  if (!video) return [];
+  return [
+    { label: "ストーリー", value: storyCandidateCount(video), dotClass: "bg-amber-300" },
+    { label: "画面", value: video.frameCaptures.length, dotClass: "bg-emerald-300" },
+    { label: "文字起こし", value: transcriptCueRows(video).length, dotClass: "bg-emerald-300" },
+    { label: "関連情報", value: relatedContextCount(video), dotClass: "bg-violet-300" },
+  ];
+});
+const contextMapLegend = [
+  { label: "動画", dotClass: "bg-cyan-300" },
+  { label: "根拠", dotClass: "bg-emerald-300" },
+  { label: "ストーリー", dotClass: "bg-amber-300" },
+  { label: "関連情報", dotClass: "bg-violet-300" },
+];
+const detailVideoClips = computed(() =>
+  detailVideo.value ? videoClips(detailVideo.value) : []
+);
+const selectedDetailClip = computed(() => {
+  const clips = detailVideoClips.value;
+  return (
+    clips.find((clip) => clip.id === selectedClipId.value) ??
+    clips[0] ??
+    null
+  );
+});
+const selectedDetailClipIndex = computed(() => {
+  const clip = selectedDetailClip.value;
+  if (!clip) return 0;
+  return Math.max(0, detailVideoClips.value.findIndex((item) => item.id === clip.id));
+});
+const activeSelectedClipCueId = computed(() => {
+  const clip = selectedDetailClip.value;
+  if (!clip) return "";
+  return activeTranscriptCueId(
+    transcriptCueRows(clip),
+    selectedClipPlaybackMs.value
+  );
+});
 const quickScanPreviewVideo = computed(
   () => props.videos.find((video) => video.id === quickScanPreviewVideoId.value) ?? null
 );
@@ -3025,33 +4059,86 @@ const quickScanPreviewOpen = computed({
 const deleteTargetVideo = computed(
   () => props.videos.find((video) => video.id === deleteTargetVideoId.value) ?? null
 );
+const deleteTargetClip = computed(() => {
+  const video = props.videos.find((item) => item.id === deleteTargetClipVideoId.value);
+  if (!video) return null;
+  const clips = videoClips(video);
+  const index = clips.findIndex((clip) => clip.id === deleteTargetClipId.value);
+  const clip = clips[index];
+  return clip ? { video, clip, index } : null;
+});
 const surfaceWarning = computed(() => {
   if (!isRecording.value && !recordedBlob.value) return "";
   if (sourceDisplaySurface.value === "window") return "";
   if (sourceDisplaySurface.value === "unknown") return "";
   return "Window以外が選択されている可能性があります";
 });
+const workflowVideo = computed(
+  () => props.videos.find((video) => video.id === workflowVideoId.value) ?? null
+);
+const saveWorkflowActiveIndex = computed(() => {
+  if (saveWorkflowStep.value === "videoAnalysis") return 1;
+  if (saveWorkflowStep.value === "storyAnalysis") return 2;
+  return 0;
+});
+const isSaveWorkflowBusy = computed(() =>
+  !["idle", "done", "error"].includes(saveProgressPhase.value)
+);
+const saveWorkflowStepperItems = computed(() => [
+  {
+    title: "1. 保存",
+    description: workflowVideoId.value ? "動画を保存済み" : "動画本体を先に保存",
+    icon: workflowVideoId.value ? "material-symbols:check-circle-outline" : "material-symbols:save-outline",
+  },
+  {
+    title: "2. 動画解析",
+    description: hasVideoAnalysis(workflowVideo.value)
+      ? "文字起こしと解析メモを保存済み"
+      : "スクショ・文字起こし・解析メモ",
+    icon: hasVideoAnalysis(workflowVideo.value)
+      ? "material-symbols:check-circle-outline"
+      : "material-symbols:movie-info-outline",
+  },
+  {
+    title: "3. ストーリー解析",
+    description: workflowVideo.value?.analysisStatus === "completed"
+      ? "ストーリー候補を反映済み"
+      : workflowVideo.value?.analysisStatus === "running" || workflowVideo.value?.analysisStatus === "queued"
+        ? "ADKで解析中"
+        : "ユーザーのやりたいことを抽出",
+    icon: workflowVideo.value?.analysisStatus === "completed"
+      ? "material-symbols:check-circle-outline"
+      : "material-symbols:psychology-outline",
+  },
+]);
 const saveProgressTitle = computed(() => {
   if (saveProgressPhase.value === "done") return "保存が完了しました";
   if (saveProgressPhase.value === "error") return "保存に失敗しました";
+  if (saveProgressPhase.value === "saving") return "ザッピング動画を保存しています";
   if (saveProgressPhase.value === "extracting") return "スクリーンショットを抽出しています";
-  if (saveProgressPhase.value === "transcribing") return "Aqua Voiceで文字起こししています";
+  if (saveProgressPhase.value === "transcribing") return "Geminiで文字起こししています";
   if (saveProgressPhase.value === "summarizing") return "文字起こしを要約しています";
   if (saveProgressPhase.value === "scanning") return "AIで動画解析しています";
-  return "動画と動画解析メモを保存しています";
+  if (saveProgressPhase.value === "analysisSaving") return "動画解析結果を保存しています";
+  if (saveProgressPhase.value === "storyQueued") return "ユーザーストーリー解析を開始しています";
+  if (saveProgressPhase.value === "storyRunning") return "ユーザーストーリーを抽出しています";
+  return "動画を保存しています";
 });
 const saveProgressDescription = computed(() => {
   if (saveProgressPhase.value === "done") {
-    return "詳細画面へ移動します。";
+    return "動画・動画解析・ユーザーストーリー解析まで完了しました。";
   }
   if (saveProgressPhase.value === "error") {
     return errorMessage.value || "保存処理を完了できませんでした。";
+  }
+  if (saveProgressPhase.value === "saving") {
+    return "解析に失敗しても録画が残るよう、まず動画本体を保存しています。";
   }
   if (saveProgressPhase.value === "extracting") {
     return "録画動画から約5秒ごとの操作スクリーンショットを作っています。";
   }
   if (saveProgressPhase.value === "transcribing") {
-    return "録画音声をAqua Voice APIへ送信し、文字起こし全文を取得しています。";
+    return "録画音声をGeminiへ送信し、タイムコード付きの文字起こしを取得しています。";
   }
   if (saveProgressPhase.value === "summarizing") {
     return "文字起こし全文から、操作意図をGeminiで短く整理しています。";
@@ -3059,46 +4146,241 @@ const saveProgressDescription = computed(() => {
   if (saveProgressPhase.value === "scanning") {
     return "動画、スクリーンショット、文字起こし全文、要約からタイトル・説明・操作ステップを生成しています。";
   }
-  return "動画本体、スクリーンショット、文字起こし、AI簡易スキャンの結果をまとめて登録しています。";
+  if (saveProgressPhase.value === "analysisSaving") {
+    return "タイムスタンプ付き文字起こしと動画解析メモを保存済み動画へ反映しています。";
+  }
+  if (saveProgressPhase.value === "storyQueued") {
+    return "保存済みの動画解析結果を使って、ADKのユーザーストーリー解析を開始しています。";
+  }
+  if (saveProgressPhase.value === "storyRunning") {
+    return "文字起こしタイムコードと画面根拠から、ユーザーストーリー候補を抽出しています。";
+  }
+  return "録画データをVIDとして先に登録しています。";
 });
+const saveProgressCompletion = computed(() => {
+  if (saveProgressPhase.value === "done") return 100;
+  if (saveProgressPhase.value === "storyRunning") return 92;
+  if (saveProgressPhase.value === "storyQueued") return 84;
+  if (saveProgressPhase.value === "analysisSaving") return 78;
+  if (saveProgressPhase.value === "uploading") return 22;
+  if (saveProgressPhase.value === "scanning") return 74;
+  if (saveProgressPhase.value === "summarizing") return 56;
+  if (saveProgressPhase.value === "transcribing") return 38;
+  if (saveProgressPhase.value === "extracting") return 30;
+  if (saveProgressPhase.value === "saving") return 14;
+  return saveProgressPhase.value === "error" ? 100 : 8;
+});
+const saveProgressFramePreview = computed(() => frameCaptures.value.slice(0, 6));
+const saveProgressInsight = computed<SaveProgressInsight>(() => {
+  const scanTitle = quickScan.value?.title?.trim();
+  const scanDescription = quickScan.value?.description?.trim();
+  const operationMemo = quickScan.value?.operationMemo?.trim();
+  const operationSteps = (quickScan.value?.operationSteps ?? [])
+    .map((step) => String(step).trim())
+    .filter(Boolean);
+  const transcriptSnippet = compactPreviewText(transcriptText.value, 130);
+  const summarySnippet = compactPreviewText(transcriptSummary.value, 150);
+  const noteCount = [
+    scanTitle,
+    scanDescription,
+    operationMemo,
+    summarySnippet,
+    ...operationSteps,
+  ].filter(Boolean).length;
+  const artifacts: SaveProgressInsightArtifact[] = [
+    {
+      label: "操作タイトル",
+      value: scanTitle || "画面遷移と発話内容からタイトル候補を組み立てています。",
+      icon: "material-symbols:title",
+    },
+    {
+      label: "理解メモ",
+      value:
+        operationMemo ||
+        scanDescription ||
+        summarySnippet ||
+        "ユーザーの操作意図、確認対象、結果の変化を照合しています。",
+      icon: "material-symbols:psychology-outline",
+    },
+    {
+      label: "操作ステップ",
+      value:
+        operationSteps[0] ||
+        "スクリーンショット列と音声文脈から、再現できる手順へ分解しています。",
+      icon: "material-symbols:format-list-numbered",
+    },
+  ];
+
+  if (saveProgressPhase.value === "extracting") {
+    return {
+      heading: "画面の流れを読み取っています",
+      subheading: "5秒ごとのスクリーンショットから、どの画面で何が起きたかを並べています。",
+      badge: "視覚解析",
+      noteCount,
+      lines:
+        frameCaptures.value.length > 0
+          ? [
+              `${frameCaptures.value.length}枚の操作画面を抽出済みです。`,
+              "後続のAI解析で画面変化と発話を照合します。",
+            ]
+          : [],
+      artifacts,
+    };
+  }
+
+  if (saveProgressPhase.value === "transcribing") {
+    return {
+      heading: "発話内容を聞き取っています",
+      subheading: "Geminiの文字起こしをタイムコード付きで受け取り、動画の意図を説明できる材料にしています。",
+      badge: "音声理解",
+      noteCount,
+      lines: transcriptSnippet
+        ? [transcriptSnippet, `${transcriptText.value.length}文字の発話テキストを処理中です。`]
+        : transcriptSegments.value.length > 0
+          ? [`${transcriptSegments.value.length}件のタイムスタンプ付き発話を取得しました。`]
+        : [],
+      artifacts,
+    };
+  }
+
+  if (saveProgressPhase.value === "summarizing") {
+    return {
+      heading: "話していた意図を短く整理しています",
+      subheading: "長い文字起こしから、操作目的、確認した対象、結果の変化を抽出しています。",
+      badge: "要約中",
+      noteCount,
+      lines: summarySnippet
+        ? [summarySnippet]
+        : transcriptSnippet
+          ? [transcriptSnippet, "この発話から操作意図の骨子を作っています。"]
+          : [],
+      artifacts,
+    };
+  }
+
+  if (saveProgressPhase.value === "scanning") {
+    return {
+      heading: "動画の意味を組み立てています",
+      subheading: "映像、スクリーンショット、発話、要約を合わせて、タイトル・説明・手順へ変換しています。",
+      badge: "AI解析",
+      noteCount,
+      lines: [
+        scanTitle ? `タイトル候補: ${scanTitle}` : "",
+        scanDescription || operationMemo || summarySnippet,
+        operationSteps[0] ? `最初の操作: ${operationSteps[0]}` : "",
+      ].filter(Boolean),
+      artifacts,
+    };
+  }
+
+  if (saveProgressPhase.value === "uploading") {
+    return {
+      heading: "理解した内容を保存しています",
+      subheading: "動画、スクリーンショット、文字起こし、AI解析メモをあとから検索できる形にしています。",
+      badge: "保存中",
+      noteCount,
+      lines: [
+        `${frameCaptures.value.length}枚のスクリーンショットを保存対象に含めています。`,
+        summarySnippet || scanDescription || "解析メモとメタデータをFirestoreへ登録しています。",
+      ].filter(Boolean),
+      artifacts,
+    };
+  }
+
+  if (saveProgressPhase.value === "done") {
+    return {
+      heading: "動画メモの保存が完了しました",
+      subheading: "このあと詳細画面で、動画・文字起こし・操作ステップをまとめて確認できます。",
+      badge: "完了",
+      noteCount,
+      lines: [
+        scanTitle ? `保存タイトル: ${scanTitle}` : "保存済みの動画詳細へ移動します。",
+        summarySnippet || scanDescription || "",
+      ].filter(Boolean),
+      artifacts,
+    };
+  }
+
+  if (saveProgressPhase.value === "error") {
+    return {
+      heading: "保存処理を確認しています",
+      subheading: errorMessage.value || "途中結果を確認し、再実行できる状態に戻しています。",
+      badge: "要確認",
+      noteCount,
+      lines: [errorMessage.value || transcriptErrorMessage.value].filter(Boolean),
+      artifacts,
+    };
+  }
+
+  return {
+    heading: "動画の理解を準備しています",
+    subheading: "録画データを受け取り、画面と発話を合わせて読める形に整えています。",
+    badge: "準備中",
+    noteCount,
+    lines: [],
+    artifacts,
+  };
+});
+function compactPreviewText(text: string, maxLength: number): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function saveProgressStatusLabel(status: SaveProgressStepStatus): string {
+  if (status === "done") return "完了";
+  if (status === "active") return "実行中";
+  if (status === "error") return "確認";
+  return "待機";
+}
+
 const saveProgressSteps = computed<SaveProgressStep[]>(() => {
   const phase = saveProgressPhase.value;
-  const extractStatus =
+  const extractStatus: SaveProgressStepStatus =
     phase === "extracting"
       ? "active"
-      : ["transcribing", "summarizing", "scanning", "uploading", "done"].includes(phase)
+      : ["transcribing", "summarizing", "scanning", "analysisSaving", "storyQueued", "storyRunning", "done"].includes(phase)
         ? "done"
         : phase === "error" && frameCaptures.value.length === 0
           ? "error"
-          : "done";
-  const transcribeStatus =
+          : "pending";
+  const transcribeStatus: SaveProgressStepStatus =
     phase === "transcribing"
       ? "active"
       : transcriptErrorMessage.value
         ? "error"
-      : ["summarizing", "scanning", "uploading", "done"].includes(phase)
+      : ["summarizing", "scanning", "analysisSaving", "storyQueued", "storyRunning", "done"].includes(phase)
         ? "done"
         : phase === "error" && frameCaptures.value.length > 0
           ? "error"
           : "pending";
-  const summarizeStatus =
+  const summarizeStatus: SaveProgressStepStatus =
     phase === "summarizing"
       ? "active"
-      : ["scanning", "uploading", "done"].includes(phase)
+      : ["scanning", "analysisSaving", "storyQueued", "storyRunning", "done"].includes(phase)
         ? "done"
         : phase === "error" && Boolean(transcriptText.value)
           ? "error"
           : "pending";
-  const scanStatus =
+  const scanStatus: SaveProgressStepStatus =
     phase === "scanning"
       ? "active"
-      : ["uploading", "done"].includes(phase)
+      : ["analysisSaving", "storyQueued", "storyRunning", "done"].includes(phase)
         ? "done"
         : phase === "error" && frameCaptures.value.length > 0
           ? "error"
           : "pending";
-  const uploadingStatus =
-    phase === "uploading" ? "active" : phase === "error" ? "error" : phase === "done" ? "done" : "pending";
+  const uploadingStatus: SaveProgressStepStatus =
+    phase === "saving"
+      ? "active"
+      : ["extracting", "transcribing", "summarizing", "scanning", "analysisSaving", "storyQueued", "storyRunning", "done"].includes(phase)
+        ? "done"
+        : phase === "error" && workflowVideoId.value
+          ? "done"
+          : phase === "error"
+            ? "error"
+            : "pending";
   return [
     {
       key: "frames",
@@ -3106,17 +4388,19 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
       label: "スクリーンショットを抽出",
       description: `${frameCaptures.value.length}枚の操作スクリーンショットを準備しています。`,
       status: extractStatus,
+      statusLabel: saveProgressStatusLabel(extractStatus),
     },
     {
       key: "transcript",
       index: 2,
-      label: "Aqua Voice文字起こし",
+      label: "Gemini文字起こし",
       description: transcriptErrorMessage.value
         ? transcriptErrorMessage.value
         : transcriptText.value
-        ? `${transcriptText.value.length}文字の文字起こしを取得しました。`
+        ? `${transcriptText.value.length}文字 / ${transcriptSegments.value.length}件のタイムコードを取得しました。`
         : "同時録音したマイク音声から文字起こし全文を取得します。",
       status: transcribeStatus,
+      statusLabel: saveProgressStatusLabel(transcribeStatus),
     },
     {
       key: "summary",
@@ -3126,6 +4410,7 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
         ? "文字起こしの要約を作成しました。"
         : "Geminiで操作意図を短く整理します。",
       status: summarizeStatus,
+      statusLabel: saveProgressStatusLabel(summarizeStatus),
     },
     {
       key: "scan",
@@ -3135,13 +4420,17 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
         ? "簡易スキャンは失敗しましたが、動画保存は継続します。"
         : "4種類の入力からタイトル、説明、操作ステップをFirebase AI Logicで生成します。",
       status: scanStatus,
+      statusLabel: saveProgressStatusLabel(scanStatus),
     },
     {
       key: "upload",
       index: 5,
-      label: "Storage / Firestoreへ保存",
-      description: "動画ファイル、スクリーンショット、メタデータを永続化しています。",
+      label: "動画を保存",
+      description: workflowVideoId.value
+        ? "動画本体は保存済みです。"
+        : "まず動画ファイルを永続化しています。",
       status: uploadingStatus,
+      statusLabel: saveProgressStatusLabel(uploadingStatus),
     },
   ];
 });
@@ -3184,6 +4473,16 @@ watch(
       detailVideoId.value = "";
     }
     const activeDetail = videos.find((video) => video.id === detailVideoId.value);
+    const activeClips = activeDetail ? videoClips(activeDetail) : [];
+    if (
+      activeClips.length > 0 &&
+      !activeClips.some((clip) => clip.id === selectedClipId.value)
+    ) {
+      selectedClipId.value = activeClips[0]?.id ?? "";
+    }
+    if (activeClips.length === 0) {
+      selectedClipId.value = "";
+    }
     const activeStories = activeDetail?.analysisResult?.storyCandidates ?? [];
     if (
       selectedAnalysisStoryId.value &&
@@ -3204,10 +4503,38 @@ watch(
       deleteTargetVideoId.value = "";
       deleteVideoConfirmOpen.value = false;
     }
+    if (deleteTargetClipVideoId.value) {
+      const deleteTargetVideo = videos.find((video) => video.id === deleteTargetClipVideoId.value);
+      const deleteTargetClips = deleteTargetVideo ? videoClips(deleteTargetVideo) : [];
+      if (!deleteTargetVideo || !deleteTargetClips.some((clip) => clip.id === deleteTargetClipId.value)) {
+        deleteTargetClipVideoId.value = "";
+        deleteTargetClipId.value = "";
+        deleteClipConfirmOpen.value = false;
+      }
+    }
     applyRouteDetailTarget(videos);
     void resolveVideoUrls(videos);
   },
   { immediate: true, deep: true }
+);
+
+watch(
+  workflowVideo,
+  (video) => {
+    if (!saveProgressOpen.value || !video || saveWorkflowStep.value !== "storyAnalysis") {
+      return;
+    }
+    if (video.analysisStatus === "completed") {
+      saveProgressPhase.value = "done";
+    } else if (video.analysisStatus === "error") {
+      errorMessage.value =
+        video.analysisErrorMessage || "ユーザーストーリー解析に失敗しました";
+      saveProgressPhase.value = "error";
+    } else if (video.analysisStatus === "queued" || video.analysisStatus === "running") {
+      saveProgressPhase.value = "storyRunning";
+    }
+  },
+  { deep: true }
 );
 
 watch(
@@ -3228,6 +4555,42 @@ watch(
 );
 
 watch(
+  contextMapData,
+  (data) => {
+    if (!contextMapOpen.value) return;
+    if (!selectedContextMapNodeId.value) return;
+    if (data.nodes.some((node) => node.id === selectedContextMapNodeId.value)) return;
+    selectedContextMapNodeId.value =
+      data.nodes.find((node) => node.kind === "video")?.id ?? data.nodes[0]?.id ?? "";
+  },
+  { deep: true }
+);
+
+watch(
+  () => selectedDetailClip.value?.id ?? "",
+  () => {
+    selectedClipPlaybackMs.value = 0;
+    selectedClipContentTab.value = "transcript";
+    lastScrolledSelectedClipCueId.value = "";
+    selectedClipTranscriptCueElements.clear();
+  }
+);
+
+watch(
+  activeSelectedClipCueId,
+  (cueId) => {
+    if (!cueId || cueId === lastScrolledSelectedClipCueId.value) return;
+    lastScrolledSelectedClipCueId.value = cueId;
+    void nextTick(() => {
+      const element = selectedClipTranscriptCueElements.get(cueId);
+      const scroller = selectedClipTranscriptScroller.value;
+      if (!element || !scroller) return;
+      element.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
+);
+
+watch(
   reportHtml,
   () => {
     refreshReportHtmlUrl();
@@ -3242,6 +4605,7 @@ watch(reportMode, () => {
 onBeforeUnmount(() => {
   stopElapsedTimer();
   stopTracks();
+  stopContextMapNodeDrag();
   revokePreviewUrl();
   revokeFramePreviewUrls();
   revokeReportHtmlUrl();
@@ -3297,6 +4661,24 @@ function deleteConfirmedGroup(): void {
   deleteGroupConfirmOpen.value = false;
   deleteTargetGroup.value = null;
   emit("delete-group", group.id);
+}
+
+function openVideoDeleteConfirm(video: DecodedVibeControlOperationVideo): void {
+  deleteTargetVideoId.value = video.id;
+  deleteVideoConfirmOpen.value = true;
+}
+
+function openClipDeleteConfirm(
+  video: DecodedVibeControlOperationVideo,
+  clip: VibeControlOperationVideoClip
+): void {
+  if (videoClips(video).length <= 1) {
+    openVideoDeleteConfirm(video);
+    return;
+  }
+  deleteTargetClipVideoId.value = video.id;
+  deleteTargetClipId.value = clip.id;
+  deleteClipConfirmOpen.value = true;
 }
 
 function applyOrganizationPlan(
@@ -3466,6 +4848,9 @@ function resetRecording(): void {
   transcriptText.value = "";
   transcriptProvider.value = "";
   transcriptSummary.value = "";
+  transcriptSegments.value = [];
+  transcriptSrt.value = "";
+  transcriptTimingStatus.value = "unavailable";
   transcriptErrorMessage.value = "";
   revokeFramePreviewUrls();
   elapsedMs.value = 0;
@@ -3485,29 +4870,119 @@ async function saveRecording(): Promise<void> {
     return;
   }
   saveProgressOpen.value = true;
+  saveWorkflowStep.value = "save";
+  workflowVideoId.value = "";
+  workflowClipId.value = "";
+  workflowStoryRequested.value = false;
   errorMessage.value = "";
+  saveProgressPhase.value = "saving";
+
+  try {
+    const savedVideo = await persistRecordedVideoShell(group);
+    workflowVideoId.value = savedVideo.id;
+    workflowClipId.value = savedVideo.clips[0]?.id || "clip-001";
+    selectedVideoGroupId.value = savedVideo.groupId || group.id;
+    selectedVideoId.value = savedVideo.id;
+    detailVideoId.value = savedVideo.id;
+    appendTargetVideoId.value = "";
+
+    await runVideoAnalysisWorkflow({
+      video: savedVideo,
+      videoBlob: recordedBlob.value,
+      transcriptionBlob: resolveTranscriptionAudioBlob() || recordedBlob.value,
+      durationMs: recordedDurationMs.value ?? elapsedMs.value,
+      closeRecordingWhenDone: true,
+    });
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : "ザッピング動画の保存に失敗しました";
+    saveProgressPhase.value = "error";
+    isExtractingFrames.value = false;
+  }
+}
+
+function persistRecordedVideoShell(
+  group: DecodedVibeControlOperationVideoGroup
+): Promise<DecodedVibeControlOperationVideo> {
+  if (!props.application || !recordedBlob.value) {
+    return Promise.reject(new Error("保存する録画がありません"));
+  }
+  const resolvedTitle = title.value.trim() || buildFallbackRecordingTitle();
+  const payload: VibeControlOperationVideoSaveInput = {
+    applicationId: props.application.id,
+    groupId: group.id,
+    title: resolvedTitle,
+    description: undefined,
+    blob: recordedBlob.value,
+    durationMs: recordedDurationMs.value ?? elapsedMs.value,
+    contentType: recordedBlob.value.type || "video/webm",
+    sourceDisplaySurface: sourceDisplaySurface.value,
+    transcriptTimingStatus: "unavailable",
+    frameCaptures: [],
+    tags: [],
+  };
+  const targetVideoId = appendTargetVideoId.value;
+  return new Promise((resolve, reject) => {
+    const callbacks: OperationVideoSaveCallbacks = {
+      onSuccess: resolve,
+      onError: (message) => reject(new Error(message)),
+    };
+    if (targetVideoId) {
+      emit("append-clip", { ...payload, videoId: targetVideoId }, callbacks);
+    } else {
+      emit("save", payload, callbacks);
+    }
+  });
+}
+
+function persistVideoAnalysis(
+  input: VibeControlOperationVideoClipAnalysisInput
+): Promise<DecodedVibeControlOperationVideo> {
+  return new Promise((resolve, reject) => {
+    emit("update-clip-analysis", input, {
+      onSuccess: resolve,
+      onError: (message) => reject(new Error(message)),
+    });
+  });
+}
+
+async function runVideoAnalysisWorkflow(params: {
+  video: DecodedVibeControlOperationVideo;
+  videoBlob: Blob | null;
+  transcriptionBlob: Blob | null;
+  transcriptionGcsUri?: string;
+  durationMs?: number;
+  closeRecordingWhenDone?: boolean;
+}): Promise<void> {
+  if (!props.application) return;
+  saveWorkflowStep.value = "videoAnalysis";
   isExtractingFrames.value = true;
   try {
     saveProgressPhase.value = "extracting";
-    frameCaptures.value = await extractVideoFrames(
-      recordedBlob.value,
-      recordedDurationMs.value ?? elapsedMs.value
-    );
+    frameCaptures.value = params.videoBlob
+      ? await extractVideoFrames(
+          params.videoBlob,
+          params.durationMs ?? params.video.durationMs ?? 0
+        )
+      : [];
     saveProgressPhase.value = "transcribing";
-    const transcription = await transcribeRecordingWithAqua(
-      resolveTranscriptionAudioBlob()
+    const transcription = await transcribeRecordingWithGemini(
+      params.transcriptionBlob,
+      params.transcriptionGcsUri
+        ? {
+            gcsUri: params.transcriptionGcsUri,
+            contentType: params.video.contentType || "video/webm",
+            fileName: params.video.fileName || "zapping-video.webm",
+          }
+        : undefined
     );
     transcriptText.value = transcription.text;
     transcriptProvider.value = transcription.provider;
-    transcriptErrorMessage.value = transcription.errorMessage || "";
-    if (transcription.errorMessage) {
-      reportDatadogError(new Error(transcription.errorMessage), {
-        feature: "vibe_control_zapping_audio_transcription",
-        applicationId: props.application.id,
-        audioSizeBytes: recordedAudioBlob.value?.size ?? 0,
-        videoSizeBytes: recordedBlob.value.size,
-      });
-    }
+    transcriptSegments.value = transcription.segments;
+    transcriptSrt.value = transcription.srt;
+    transcriptTimingStatus.value = transcription.timingStatus;
+    transcriptErrorMessage.value = "";
+
     saveProgressPhase.value = "summarizing";
     transcriptSummary.value = await summarizeTranscriptWithGemini(
       transcriptText.value
@@ -3515,76 +4990,172 @@ async function saveRecording(): Promise<void> {
     saveProgressPhase.value = "scanning";
     quickScan.value = await generateQuickScanFromContext({
       frames: frameCaptures.value,
-      videoBlob: recordedBlob.value,
+      videoBlob: params.videoBlob,
       transcriptText: transcriptText.value,
       transcriptSummary: transcriptSummary.value,
     });
-    if (quickScan.value?.title && title.value.trim().length === 0) {
-      title.value = quickScan.value.title;
+
+    saveProgressPhase.value = "analysisSaving";
+    const analyzedVideo = await persistVideoAnalysis({
+      videoId: params.video.id,
+      clipId: workflowClipId.value || params.video.clips[0]?.id,
+      title:
+        quickScan.value?.title?.trim() ||
+        params.video.title ||
+        buildFallbackRecordingTitle(),
+      description: quickScan.value?.description?.trim(),
+      transcriptText: transcriptText.value,
+      transcriptProvider: transcriptProvider.value,
+      transcriptSummary: transcriptSummary.value,
+      transcriptSegments: transcriptSegments.value,
+      transcriptSrt: transcriptSrt.value,
+      transcriptTimingStatus: "timestamped",
+      quickScan: quickScan.value,
+      frameCaptures: frameCaptures.value.map((frame) => ({
+        timestampMs: frame.timestampMs,
+        blob: frame.blob,
+        contentType: frame.contentType,
+        width: frame.width,
+        height: frame.height,
+      })),
+    });
+    workflowVideoId.value = analyzedVideo.id;
+    workflowClipId.value = analyzedVideo.clips[0]?.id || workflowClipId.value;
+    selectedVideoId.value = analyzedVideo.id;
+    detailVideoId.value = analyzedVideo.id;
+    isExtractingFrames.value = false;
+
+    await startInlineStoryAnalysis(analyzedVideo.id);
+    if (params.closeRecordingWhenDone) {
+      window.setTimeout(() => {
+        recordingModalOpen.value = false;
+        saveProgressOpen.value = false;
+        saveProgressPhase.value = "idle";
+        saveWorkflowStep.value = "save";
+        workflowVideoId.value = "";
+        workflowClipId.value = "";
+        workflowStoryRequested.value = false;
+        resetRecording();
+      }, 900);
     }
   } catch (error) {
+    isExtractingFrames.value = false;
     errorMessage.value =
       error instanceof Error
         ? `動画解析に失敗しました: ${error.message}`
         : "動画解析に失敗しました";
     saveProgressPhase.value = "error";
-    isExtractingFrames.value = false;
+    throw error;
+  }
+}
+
+async function startInlineStoryAnalysis(videoId: string): Promise<void> {
+  saveWorkflowStep.value = "storyAnalysis";
+  saveProgressPhase.value = "storyQueued";
+  workflowStoryRequested.value = true;
+  await new Promise<void>((resolve, reject) => {
+    emit("analyze", videoId, { inline: true }, {
+      onStarted: resolve,
+      onError: (message) => reject(new Error(message)),
+    });
+  });
+  const video = props.videos.find((item) => item.id === videoId);
+  if (video?.analysisStatus === "completed") {
+    saveProgressPhase.value = "done";
     return;
   }
-  isExtractingFrames.value = false;
-  saveProgressPhase.value = "uploading";
-  const resolvedTitle =
-    quickScan.value?.title?.trim() ||
-    title.value.trim() ||
-    buildFallbackRecordingTitle();
-  const resolvedDescription = quickScan.value?.description?.trim() || undefined;
-  const payload: VibeControlOperationVideoSaveInput = {
-    applicationId: props.application.id,
-    groupId: group.id,
-    title: resolvedTitle,
-    description: resolvedDescription,
-    blob: recordedBlob.value,
-    durationMs: recordedDurationMs.value ?? elapsedMs.value,
-    contentType: recordedBlob.value.type || "video/webm",
-    sourceDisplaySurface: sourceDisplaySurface.value,
-    quickScan: quickScan.value,
-    transcriptText: transcriptText.value || undefined,
-    transcriptProvider: transcriptProvider.value || undefined,
-    transcriptSummary: transcriptSummary.value || undefined,
-    frameCaptures: frameCaptures.value.map((frame) => ({
-      timestampMs: frame.timestampMs,
-      blob: frame.blob,
-      contentType: frame.contentType,
-      width: frame.width,
-      height: frame.height,
-    })),
-    tags: [],
-  };
-  const targetVideoId = appendTargetVideoId.value;
-  const callbacks: OperationVideoSaveCallbacks = {
-    onSuccess: (video: DecodedVibeControlOperationVideo) => {
-        saveProgressPhase.value = "done";
-        selectedVideoGroupId.value = video.groupId || group.id;
-        selectedVideoId.value = video.id;
-        detailVideoId.value = video.id;
-        appendTargetVideoId.value = "";
-        window.setTimeout(() => {
-          recordingModalOpen.value = false;
-          saveProgressOpen.value = false;
-          saveProgressPhase.value = "idle";
-          resetRecording();
-        }, 650);
-      },
-      onError: (message: string) => {
-        errorMessage.value = message;
-        saveProgressPhase.value = "error";
-      },
-  };
-  if (targetVideoId) {
-    emit("append-clip", { ...payload, videoId: targetVideoId }, callbacks);
-  } else {
-    emit("save", payload, callbacks);
+  saveProgressPhase.value = "storyRunning";
+}
+
+async function resumeVideoWorkflow(video: DecodedVibeControlOperationVideo): Promise<void> {
+  errorMessage.value = "";
+  workflowVideoId.value = video.id;
+  workflowClipId.value = video.clips[0]?.id || "clip-001";
+  saveProgressOpen.value = true;
+  try {
+    if (!hasVideoAnalysis(video)) {
+      const blob = await fetchSavedVideoBlob(video).catch((error) => {
+        reportDatadogError(error, {
+          feature: "vibe_control_resume_video_workflow_saved_blob_optional",
+          videoId: video.id,
+        });
+        return null;
+      });
+      await runVideoAnalysisWorkflow({
+        video,
+        videoBlob: blob,
+        transcriptionBlob: blob,
+        transcriptionGcsUri: `gs://${video.bucketName}/${video.storagePath}`,
+        durationMs: video.durationMs,
+        closeRecordingWhenDone: false,
+      });
+      return;
+    }
+    await startInlineStoryAnalysis(video.id);
+  } catch (error) {
+    isExtractingFrames.value = false;
+    errorMessage.value =
+      error instanceof Error
+        ? `途中からの解析再開に失敗しました: ${error.message}`
+        : "途中からの解析再開に失敗しました";
+    saveProgressPhase.value = "error";
+    reportDatadogError(error, {
+      feature: "vibe_control_resume_video_workflow",
+      videoId: video.id,
+      clipCount: video.clips.length,
+      hasVideoAnalysis: hasVideoAnalysis(video),
+    });
   }
+}
+
+async function fetchSavedVideoBlob(video: DecodedVibeControlOperationVideo): Promise<Blob> {
+  const primary = videoClips(video)[0];
+  const bucketName = primary?.bucketName || video.bucketName;
+  const storagePath = primary?.storagePath || video.storagePath;
+  if (!bucketName || !storagePath) {
+    throw new Error("保存済み動画のStorageパスを取得できませんでした");
+  }
+  const fileRef = storageRefForBucketPath({
+    bucketName,
+    filePath: storagePath,
+  });
+  try {
+    const blob = await getBlob(fileRef);
+    return blob.type ? blob : new Blob([blob], { type: primary?.contentType || video.contentType || "video/webm" });
+  } catch (error) {
+    reportDatadogError(error, {
+      feature: "vibe_control_fetch_saved_video_blob",
+      videoId: video.id,
+      bucketName,
+      storagePath,
+    });
+    throw new Error(
+      error instanceof Error
+        ? `保存済み動画の取得に失敗しました: ${error.message}`
+        : "保存済み動画の取得に失敗しました"
+    );
+  }
+}
+
+function hasVideoAnalysis(video: DecodedVibeControlOperationVideo | null): boolean {
+  if (!video) return false;
+  return (
+    video.transcriptTimingStatus === "timestamped" &&
+    video.transcriptSegments.length > 0 &&
+    Boolean(video.transcriptSrt?.trim()) &&
+    Boolean(video.quickScan || video.transcriptSummary)
+  );
+}
+
+function canResumeVideoWorkflow(video: DecodedVibeControlOperationVideo): boolean {
+  if (video.analysisStatus === "queued" || video.analysisStatus === "running") {
+    return false;
+  }
+  return !hasVideoAnalysis(video) || video.analysisStatus !== "completed";
+}
+
+function isWorkflowRunningFor(video: DecodedVibeControlOperationVideo): boolean {
+  return saveProgressOpen.value && workflowVideoId.value === video.id;
 }
 
 function displayVideoTitle(video: DecodedVibeControlOperationVideo): string {
@@ -3652,7 +5223,22 @@ function commitVideoTitleEdit(video: DecodedVibeControlOperationVideo): void {
 
 function openVideoDetail(video: DecodedVibeControlOperationVideo): void {
   detailVideoId.value = video.id;
+  selectedClipId.value = videoClips(video)[0]?.id ?? "";
   detailTab.value = "video";
+}
+
+function openContextMap(video: DecodedVibeControlOperationVideo): void {
+  contextMapVideoId.value = video.id;
+  resetContextMapView();
+  const data = buildContextMapData(video);
+  selectedContextMapNodeId.value =
+    data.nodes.find((node) => node.kind === "video")?.id ?? data.nodes[0]?.id ?? "";
+  contextMapOpen.value = true;
+}
+
+function closeContextMap(): void {
+  contextMapOpen.value = false;
+  stopContextMapNodeDrag();
 }
 
 function applyRouteDetailTarget(
@@ -3675,6 +5261,7 @@ function routeDetailTab(): DetailTab {
     tab === "video" ||
     tab === "videoAnalysis" ||
     tab === "storyAnalysis" ||
+    tab === "videoGeneration" ||
     tab === "relatedContext" ||
     tab === "report" ||
     tab === "mcpTest"
@@ -3789,6 +5376,8 @@ function hasQuickScanSummary(
       video.quickScan?.operationMemo ||
       video.quickScan?.operationSteps?.length ||
       video.transcriptText ||
+      video.transcriptSegments?.length ||
+      video.transcriptSrt ||
       video.transcriptSummary ||
       video.quickScan?.transcriptSummary ||
       video.quickScan?.errorMessage
@@ -3813,6 +5402,109 @@ function transcriptSummaryText(video: DecodedVibeControlOperationVideo): string 
     video.quickScan?.transcriptSummary?.trim() ||
     ""
   );
+}
+
+function selectedClipSummaryMarkdown(
+  clip: VibeControlOperationVideoClip,
+  video: DecodedVibeControlOperationVideo
+): string {
+  return (
+    clip.transcriptSummary?.trim() ||
+    clip.quickScan?.transcriptSummary?.trim() ||
+    video.transcriptSummary?.trim() ||
+    video.quickScan?.transcriptSummary?.trim() ||
+    "未生成"
+  );
+}
+
+function transcriptCueRows(owner: TranscriptOwner): VibeControlTranscriptCue[] {
+  const fromSegments = normalizeTranscriptCues(owner.transcriptSegments ?? []);
+  const cues = fromSegments.length > 0
+    ? fromSegments
+    : parseSrtTranscript(owner.transcriptSrt);
+  return cues as VibeControlTranscriptCue[];
+}
+
+function hasTranscriptContent(owner: TranscriptOwner): boolean {
+  return transcriptCueRows(owner).length > 0;
+}
+
+function transcriptProviderBadge(owner: TranscriptOwner): string {
+  const timing = owner.transcriptTimingStatus === "timestamped" ? "SRT" : "";
+  return [owner.transcriptProvider?.trim() || "transcript", timing]
+    .filter(Boolean)
+    .join(" / ");
+}
+
+function formatTranscriptCueTime(ms: number): string {
+  return formatTranscriptTime(ms);
+}
+
+function activeTranscriptCueId(
+  cues: VibeControlTranscriptCue[],
+  playbackMs: number
+): string {
+  if (cues.length === 0) return "";
+  const normalizedPlaybackMs = Math.max(0, playbackMs);
+  const containingCue = cues.find((cue) => {
+    const endMs = Math.max(cue.endMs, cue.startMs + 500);
+    return normalizedPlaybackMs >= cue.startMs && normalizedPlaybackMs < endMs;
+  });
+  if (containingCue) return containingCue.id;
+  if (normalizedPlaybackMs < cues[0].startMs) return "";
+
+  const previousCue = [...cues]
+    .reverse()
+    .find((cue) => cue.startMs <= normalizedPlaybackMs);
+  return previousCue?.id ?? "";
+}
+
+function updateSelectedClipPlaybackTime(event?: Event): void {
+  const video = event?.currentTarget instanceof HTMLVideoElement
+    ? event.currentTarget
+    : selectedClipVideo.value;
+  if (!video) return;
+  selectedClipPlaybackMs.value = Math.max(0, video.currentTime * 1000);
+}
+
+function handleSelectedClipVideoLoadedMetadata(event?: Event): void {
+  updateSelectedClipPlaybackTime(event);
+  applySelectedClipPlaybackRate();
+}
+
+function applySelectedClipPlaybackRate(): void {
+  const video = selectedClipVideo.value;
+  if (!video) return;
+  video.playbackRate = selectedClipPlaybackRate.value;
+}
+
+function setSelectedClipPlaybackRate(
+  rate: (typeof selectedClipPlaybackRates)[number]["value"]
+): void {
+  selectedClipPlaybackRate.value = rate;
+  applySelectedClipPlaybackRate();
+}
+
+function setSelectedClipTranscriptCueElement(
+  cueId: string,
+  element: Element | ComponentPublicInstance | null
+): void {
+  if (!element) {
+    selectedClipTranscriptCueElements.delete(cueId);
+    return;
+  }
+  const htmlElement = "$el" in element ? element.$el : element;
+  if (htmlElement instanceof HTMLElement) {
+    selectedClipTranscriptCueElements.set(cueId, htmlElement);
+  }
+}
+
+function seekSelectedClipTo(startMs: number): void {
+  const video = selectedClipVideo.value;
+  if (!video) return;
+  video.currentTime = Math.max(0, startMs / 1000);
+  selectedClipPlaybackMs.value = Math.max(0, startMs);
+  void video.play().catch(() => undefined);
 }
 
 function richTranscriptSummarySections(
@@ -3875,6 +5567,15 @@ function deleteConfirmedVideo(): void {
   emit("delete", videoId);
 }
 
+function deleteConfirmedClip(): void {
+  const target = deleteTargetClip.value;
+  if (!target) return;
+  deleteClipConfirmOpen.value = false;
+  deleteTargetClipVideoId.value = "";
+  deleteTargetClipId.value = "";
+  emit("delete-clip", target.video.id, target.clip.id);
+}
+
 function openRelatedContextTab(): void {
   detailTab.value = "relatedContext";
   relatedContextProviderTab.value = "knowledge";
@@ -3933,6 +5634,371 @@ function relatedContextCount(video: DecodedVibeControlOperationVideo): number {
     relatedSlackMessageCount(video) +
     relatedKnowledgeDocumentCount(video)
   );
+}
+
+function applyContextMapNodePositions(data: ContextMapData): ContextMapData {
+  return {
+    edges: data.edges,
+    nodes: data.nodes.map((node) => {
+      const position = contextMapNodePositions[node.id];
+      return position ? { ...node, x: position.x, y: position.y } : node;
+    }),
+  };
+}
+
+function selectContextMapNode(node: ContextMapNode): void {
+  if (contextMapDragState.value?.moved) return;
+  selectedContextMapNodeId.value = node.id;
+}
+
+function clearContextMapSelection(): void {
+  if (contextMapDragState.value?.moved) return;
+  selectedContextMapNodeId.value = "";
+}
+
+function contextMapNodeIsActive(node: ContextMapNode): boolean {
+  return activeContextMapNodeIds.value.size === 0 || activeContextMapNodeIds.value.has(node.id);
+}
+
+function contextMapEdgeIsActive(edge: ContextMapEdge): boolean {
+  return activeContextMapEdgeIds.value.size === 0 || activeContextMapEdgeIds.value.has(edge.id);
+}
+
+function zoomContextMap(delta: number): void {
+  contextMapZoom.value = Math.min(1.8, Math.max(0.72, Number((contextMapZoom.value + delta).toFixed(2))));
+}
+
+function handleContextMapWheel(event: WheelEvent): void {
+  if (!event.metaKey && !event.ctrlKey) return;
+  event.preventDefault();
+  zoomContextMap(event.deltaY > 0 ? -0.08 : 0.08);
+}
+
+function resetContextMapView(): void {
+  contextMapZoom.value = 1;
+  for (const key of Object.keys(contextMapNodePositions)) {
+    delete contextMapNodePositions[key];
+  }
+}
+
+function startContextMapNodeDrag(
+  event: PointerEvent,
+  node: ContextMapNode
+): void {
+  selectedContextMapNodeId.value = node.id;
+  contextMapDragState.value = { nodeId: node.id, moved: false };
+  window.addEventListener("pointermove", handleContextMapNodeDrag);
+  window.addEventListener("pointerup", stopContextMapNodeDrag, { once: true });
+}
+
+function handleContextMapNodeDrag(event: PointerEvent): void {
+  const nodeId = contextMapDragState.value?.nodeId;
+  if (!nodeId) return;
+  contextMapDragState.value.moved = true;
+  moveContextMapNode(event, nodeId);
+}
+
+function stopContextMapNodeDrag(): void {
+  window.removeEventListener("pointermove", handleContextMapNodeDrag);
+  contextMapDragState.value = null;
+}
+
+function moveContextMapNode(event: PointerEvent, nodeId: string): void {
+  const surface = contextMapGraphSurface.value;
+  if (!surface) return;
+  const rect = surface.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  const visibleX = ((event.clientX - rect.left) / rect.width) * 100;
+  const visibleY = ((event.clientY - rect.top) / rect.height) * 100;
+  const zoom = contextMapZoom.value || 1;
+  const x = 50 + (visibleX - 50) / zoom;
+  const y = 50 + (visibleY - 50) / zoom;
+  contextMapNodePositions[nodeId] = {
+    x: Math.min(94, Math.max(6, x)),
+    y: Math.min(92, Math.max(10, y)),
+  };
+}
+
+function buildContextMapData(
+  video: DecodedVibeControlOperationVideo
+): ContextMapData {
+  const nodes: ContextMapNode[] = [];
+  const edges: ContextMapEdge[] = [];
+  const transcriptCues = transcriptCueRows(video);
+  const stories = video.analysisResult?.storyCandidates ?? [];
+  const quickScanSteps = operationSteps(video);
+  const videoGroup = videoGroupForVideo(video);
+  const addEdge = (
+    from: string,
+    to: string,
+    tone: ContextMapNode["tone"] = "cyan"
+  ): void => {
+    edges.push({ id: `${from}:${to}`, from, to, tone });
+  };
+
+  nodes.push({
+    id: "video",
+    kind: "video",
+    label: videoDisplayId(video),
+    title: displayVideoTitle(video),
+    subtitle: `${videoGroup.name} / ${videoClipCount(video)}本 / ${formatDuration(videoTotalDurationMs(video))}`,
+    value: video.analysisStatus === "completed" ? "解析済み" : videoAnalysisTabStatus(video),
+    icon: "material-symbols:play-circle-outline",
+    x: 50,
+    y: 50,
+    tone: "cyan",
+    details: [
+      displayVideoDescription(video) || video.analysisResult?.operationIntent || "操作動画の中心ノードです。",
+      `録画時間: ${formatDuration(videoTotalDurationMs(video))}`,
+      `登録クリップ: ${videoClipCount(video)}本`,
+    ],
+  });
+
+  nodes.push({
+    id: "transcript",
+    kind: "transcript",
+    label: "文字起こし",
+    title: "発話と字幕の根拠",
+    subtitle: transcriptCues.length > 0
+      ? `${transcriptCues.length}件のタイムスタンプ付き発話`
+      : "文字起こしはまだありません",
+    value: transcriptCues.length > 0 ? `${transcriptCues.length} cues` : "未生成",
+    icon: "material-symbols:subtitles-outline",
+    x: 24,
+    y: 21,
+    tone: "emerald",
+    details: contextMapTranscriptDetails(video, transcriptCues),
+  });
+  addEdge("video", "transcript", "emerald");
+
+  nodes.push({
+    id: "screens",
+    kind: "screen",
+    label: "画面証跡",
+    title: "スクリーンショット",
+    subtitle: "操作の見た目と変化を時系列で保持",
+    value: `${video.frameCaptures.length}枚`,
+    icon: "material-symbols:image-outline",
+    x: 74,
+    y: 20,
+    tone: "emerald",
+    details: contextMapFrameDetails(video),
+  });
+  addEdge("video", "screens", "emerald");
+
+  nodes.push({
+    id: "analysis",
+    kind: "analysis",
+    label: "動画解析",
+    title: contextMapCompactTitle(video.analysisResult?.operationIntent || video.quickScan?.title || "操作意図の整理", 34),
+    subtitle: "要点を短く整理",
+    value: quickScanSteps.length > 0 ? `${quickScanSteps.length} steps` : "要約",
+    icon: "material-symbols:psychology-outline",
+    x: 22,
+    y: 68,
+    tone: "cyan",
+    details: [
+      video.analysisResult?.productContextSummary ||
+        video.quickScan?.operationMemo ||
+        video.transcriptSummary ||
+        "動画解析の結果がここに集約されます。",
+      ...quickScanSteps.slice(0, 4).map((step, index) => `${index + 1}. ${step}`),
+    ],
+  });
+  addEdge("video", "analysis", "cyan");
+  addEdge("analysis", "transcript", "cyan");
+  addEdge("analysis", "screens", "cyan");
+
+  if (stories.length > 0) {
+    const storyPositions = [
+      [50, 13],
+      [83, 42],
+      [70, 84],
+      [35, 86],
+      [15, 43],
+      [50, 86],
+    ];
+    stories.slice(0, 6).forEach((story, index) => {
+      const position = storyPositions[index] ?? [50, 50];
+      const storyId = `story:${story.id || index}`;
+      const evidenceRange = story.evidence[0]?.tRange
+        ? formatEvidenceRange(story.evidence[0].tRange)
+        : "根拠範囲なし";
+      nodes.push({
+        id: storyId,
+        kind: "story",
+        label: contextMapStoryKey(story, index),
+        title: story.title || story.userStory || "ユーザーストーリー候補",
+        subtitle: story.goal || story.summary || story.benefit || "動画から抽出された価値仮説",
+        value: `${story.confidenceScore ?? story.confidence ?? 0}`,
+        icon: "material-symbols:route-outline",
+        x: position[0],
+        y: position[1],
+        tone: "amber",
+        details: [
+          story.userStory || story.summary || story.goal || "ストーリー本文は未設定です。",
+          story.role?.value ? `誰が: ${story.role.value}` : "",
+          story.goal ? `何をしたいか: ${story.goal}` : "",
+          story.benefit ? `うれしいこと: ${story.benefit}` : "",
+          `根拠シーン: ${evidenceRange}`,
+          ...story.acceptanceCriteria.slice(0, 3).map((criterion) => `受入条件: ${criterion}`),
+        ].filter(Boolean),
+      });
+      addEdge("analysis", storyId, "amber");
+      addEdge(storyId, "transcript", "amber");
+      addEdge(storyId, "screens", "amber");
+    });
+  } else {
+    nodes.push({
+      id: "story-empty",
+      kind: "story",
+      label: "Story",
+      title: "ストーリー候補は未生成",
+      subtitle: "解析を実行するとここに価値仮説が接続されます",
+      value: "0件",
+      icon: "material-symbols:route-outline",
+      x: 50,
+      y: 86,
+      tone: "amber",
+      details: ["この動画にはまだユーザーストーリー候補が紐づいていません。"],
+    });
+    addEdge("analysis", "story-empty", "amber");
+  }
+
+  if (relatedKnowledgeDocumentCount(video) > 0) {
+    nodes.push({
+      id: "knowledge",
+      kind: "knowledge",
+      label: "ナレッジ",
+      title: "FileSpaceナレッジ",
+      subtitle: "動画理解を補強する資料",
+      value: `${relatedKnowledgeDocumentCount(video)}件`,
+      icon: "material-symbols:folder-managed-outline",
+      x: 86,
+      y: 66,
+      tone: "violet",
+      details: (video.relatedContexts?.knowledge?.documents ?? [])
+        .slice(0, 5)
+        .map((doc) => `${doc.displayName || doc.documentId || doc.name || "Knowledge"}: ${doc.reason || doc.description || "関連資料"}`),
+    });
+    addEdge("analysis", "knowledge", "violet");
+    addEdge("video", "knowledge", "violet");
+  }
+
+  if (relatedGithubPullRequestCount(video) > 0) {
+    nodes.push({
+      id: "github",
+      kind: "github",
+      label: "GitHub",
+      title: "関連Pull Request",
+      subtitle: video.relatedContexts?.github?.repoFullName || "コード変更との接続",
+      value: `${relatedGithubPullRequestCount(video)}件`,
+      icon: "mdi:github",
+      x: 81,
+      y: 82,
+      tone: "violet",
+      details: (video.relatedContexts?.github?.pullRequests ?? [])
+        .slice(0, 5)
+        .map((pr) => `#${pr.number} ${pr.title}`),
+    });
+    addEdge("analysis", "github", "violet");
+    addEdge("video", "github", "violet");
+  }
+
+  if (relatedSlackMessageCount(video) > 0) {
+    nodes.push({
+      id: "slack",
+      kind: "slack",
+      label: "Slack",
+      title: "関連会話",
+      subtitle: "意思決定や背景の会話ログ",
+      value: `${relatedSlackMessageCount(video)}件`,
+      icon: "mdi:slack",
+      x: 65,
+      y: 90,
+      tone: "violet",
+      details: (video.relatedContexts?.slack?.messages ?? [])
+        .slice(0, 5)
+        .map((message) => `${message.channelName || "channel"}: ${message.text || message.reason || "関連メッセージ"}`),
+    });
+    addEdge("analysis", "slack", "violet");
+    addEdge("video", "slack", "violet");
+  }
+
+  return { nodes, edges };
+}
+
+function contextMapCompactTitle(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength)}...`;
+}
+
+function contextMapStoryKey(
+  story: VibeControlZappingAnalysisStoryCandidate,
+  index: number
+): string {
+  return story.storyKey?.trim() || formatUserStoryKey(index + 1);
+}
+
+function contextMapTranscriptDetails(
+  video: DecodedVibeControlOperationVideo,
+  cues: VibeControlTranscriptCue[]
+): string[] {
+  const summary = transcriptSummaryText(video);
+  if (cues.length === 0) {
+    return [summary || "タイムスタンプ付き文字起こしはまだ生成されていません。"];
+  }
+  return [
+    summary || "動画内の発話をタイムスタンプ付きで保持しています。",
+    ...cues.slice(0, 4).map((cue) => `${formatTranscriptCueTime(cue.startMs)} ${cue.text}`),
+  ];
+}
+
+function contextMapFrameDetails(
+  video: DecodedVibeControlOperationVideo
+): string[] {
+  if (video.frameCaptures.length === 0) {
+    return ["スクリーンショットはまだ抽出されていません。"];
+  }
+  return video.frameCaptures
+    .slice(0, 5)
+    .map((frame) => `${formatDuration(frame.timestampMs)} の画面キャプチャ`);
+}
+
+function contextMapNodeClass(node: ContextMapNode): string {
+  if (node.kind === "video") return "border-cyan-200/70 bg-cyan-50/95 text-slate-950";
+  if (node.kind === "story") return "border-amber-200/80 bg-amber-50/95 text-slate-950";
+  if (node.kind === "knowledge" || node.kind === "github" || node.kind === "slack") {
+    return "border-violet-200/80 bg-violet-50/95 text-slate-950";
+  }
+  if (node.kind === "transcript" || node.kind === "screen") {
+    return "border-emerald-200/80 bg-emerald-50/95 text-slate-950";
+  }
+  return "border-slate-200/80 bg-white/95 text-slate-950";
+}
+
+function contextMapNodeIconClass(node: ContextMapNode): string {
+  if (node.kind === "video") return "bg-cyan-500 text-white";
+  if (node.kind === "story") return "bg-amber-400 text-slate-950";
+  if (node.kind === "knowledge" || node.kind === "github" || node.kind === "slack") {
+    return "bg-violet-500 text-white";
+  }
+  if (node.kind === "transcript" || node.kind === "screen") {
+    return "bg-emerald-500 text-white";
+  }
+  return "bg-slate-900 text-white";
+}
+
+function contextMapEdgeClass(edge: ContextMapEdge): string {
+  if (!contextMapEdgeIsActive(edge)) return "text-slate-500/15";
+  const tone = edge.tone;
+  if (tone === "emerald") return "text-emerald-300/65";
+  if (tone === "amber") return "text-amber-300/65";
+  if (tone === "rose") return "text-rose-300/65";
+  if (tone === "violet") return "text-violet-300/65";
+  if (tone === "slate") return "text-slate-300/45";
+  return "text-cyan-300/70";
 }
 
 function isRelatedContextBusy(video: DecodedVibeControlOperationVideo): boolean {
@@ -4155,28 +6221,27 @@ function canvasToBlob(
   });
 }
 
-type AquaTranscriptionResult = {
+type GeminiTranscriptionResult = {
   text: string;
   provider: string;
+  segments: VibeControlTranscriptCue[];
+  srt: string;
+  timingStatus: VibeControlTranscriptTimingStatus;
   errorMessage?: string;
 };
 
-async function transcribeRecordingWithAqua(
-  blob: Blob | null
-): Promise<AquaTranscriptionResult> {
-  if (!blob || blob.size <= 0) {
-    return {
-      text: "",
-      provider: "aqua-voice",
-      errorMessage: "文字起こし用のマイク音声が保存されていませんでした",
-    };
+async function transcribeRecordingWithGemini(
+  blob: Blob | null,
+  options?: { gcsUri?: string; contentType?: string; fileName?: string }
+): Promise<GeminiTranscriptionResult> {
+  const gcsUri = options?.gcsUri?.trim() || "";
+  if (!gcsUri && (!blob || blob.size <= 0)) {
+    throw new Error("文字起こし用のマイク音声が保存されていませんでした");
   }
-  if (blob.size > AQUA_AUDIO_MAX_BYTES) {
-    return {
-      text: "",
-      provider: "aqua-voice",
-      errorMessage: `マイク音声が大きすぎるためAqua Voice文字起こしをスキップしました (${formatBytes(blob.size)})`,
-    };
+  if (!gcsUri && blob && blob.size > GEMINI_TRANSCRIPTION_AUDIO_MAX_BYTES) {
+    throw new Error(
+      `マイク音声が大きすぎるためGemini文字起こしを実行できません (${formatBytes(blob.size)})`
+    );
   }
   try {
     const [{ getApp }, { getFunctions, httpsCallable }] = await Promise.all([
@@ -4184,12 +6249,15 @@ async function transcribeRecordingWithAqua(
       import("firebase/functions"),
     ]);
     const callable = httpsCallable<
-      { audioBase64: string; contentType: string; fileName: string },
+      { audioBase64?: string; gcsUri?: string; contentType: string; fileName: string },
       {
         ok?: boolean;
         provider?: string;
         model?: string;
         text?: string;
+        segments?: Array<Partial<VibeControlTranscriptCue>>;
+        srt?: string;
+        timingStatus?: VibeControlTranscriptTimingStatus;
         skipped?: boolean;
         error?: string;
       }
@@ -4197,37 +6265,41 @@ async function transcribeRecordingWithAqua(
       getFunctions(getApp(), "asia-northeast1"),
       "transcribe_zapping_video_with_aqua"
     );
-    const audioBase64 = await blobToBase64(blob);
+    const audioBase64 = gcsUri || !blob ? undefined : await blobToBase64(blob);
+    const contentType = options?.contentType || blob?.type || "audio/webm";
     const res = await callable({
       audioBase64,
-      contentType: blob.type || "audio/webm",
-      fileName: `zapping-audio.${audioExtensionForMime(blob.type)}`,
+      gcsUri: gcsUri || undefined,
+      contentType,
+      fileName: options?.fileName || `zapping-audio.${audioExtensionForMime(contentType)}`,
     });
     const provider = res.data.model
-      ? `${res.data.provider || "aqua-voice"}:${res.data.model}`
-      : res.data.provider || "aqua-voice";
+      ? `${res.data.provider || "gemini-stt"}:${res.data.model}`
+      : res.data.provider || "gemini-stt";
     if (!res.data.ok || res.data.skipped) {
-      return {
-        text: "",
-        provider,
-        errorMessage:
-          res.data.error ||
-          "Aqua Voice文字起こしは未設定のためスキップされました",
-      };
+      throw new Error(res.data.error || "Gemini文字起こしを実行できませんでした");
+    }
+    const srt = res.data.srt?.trim() || "";
+    const segments = normalizeTranscriptCues(
+      res.data.segments?.length ? res.data.segments : parseSrtTranscript(srt)
+    ) as VibeControlTranscriptCue[];
+    const normalizedSrt = srt || transcriptCuesToSrt(segments);
+    if (res.data.timingStatus !== "timestamped" || segments.length === 0 || !normalizedSrt) {
+      throw new Error("Gemini文字起こしでタイムスタンプ付きセグメントを取得できませんでした");
     }
     return {
       text: res.data.text?.trim() || "",
       provider,
+      segments,
+      srt: normalizedSrt,
+      timingStatus: "timestamped",
     };
   } catch (error) {
-    return {
-      text: "",
-      provider: "aqua-voice",
-      errorMessage:
-        error instanceof Error
-          ? `Aqua Voice文字起こしに失敗しました: ${error.message}`
-          : "Aqua Voice文字起こしに失敗しました",
-    };
+    throw new Error(
+      error instanceof Error
+        ? `Gemini文字起こしに失敗しました: ${error.message}`
+        : "Gemini文字起こしに失敗しました"
+    );
   }
 }
 
@@ -4261,7 +6333,7 @@ async function summarizeTranscriptWithGemini(text: string): Promise<string> {
 
 async function generateQuickScanFromContext(params: {
   frames: LocalFrameCapture[];
-  videoBlob: Blob;
+  videoBlob: Blob | null;
   transcriptText: string;
   transcriptSummary: string;
 }): Promise<DecodedVibeControlOperationVideo["quickScan"] | undefined> {
@@ -4291,7 +6363,7 @@ async function generateQuickScanFromContext(params: {
       }))
     );
     const videoParts =
-      videoBlob.size <= 7 * 1024 * 1024
+      videoBlob && videoBlob.size <= 7 * 1024 * 1024
         ? [
             {
               inlineData: {
@@ -4304,16 +6376,16 @@ async function generateQuickScanFromContext(params: {
     const result = await model.generateContent([
       [
         "VibeControlのザッピング動画を動画解析します。",
-        "入力には、動画本体、5秒ごとの操作スクリーンショット、Aqua Voice文字起こし全文、文字起こし要約が含まれます。",
+        "入力には、動画本体、5秒ごとの操作スクリーンショット、Gemini文字起こし全文、文字起こし要約が含まれます。",
         "これらを総合して、タイトル、説明、操作ステップを日本語で作成してください。",
         "操作ステップは実際の操作順序がわかる短い文の配列にしてください。",
         "JSONだけを返してください。",
         '形式: {"title":"短いタイトル","description":"1文の説明","operationSteps":["操作1","操作2"],"operationMemo":"操作1\\n操作2","transcriptSummary":"文字起こし要約"}',
         "",
-        "## Aqua Voice 文字起こし要約",
+        "## Gemini文字起こし要約",
         transcriptSummary.trim() || "なし",
         "",
-        "## Aqua Voice 文字起こし全文",
+        "## Gemini文字起こし全文",
         transcriptText.trim().slice(0, 14000) || "なし",
       ].join("\n"),
       ...videoParts,
@@ -4331,10 +6403,10 @@ async function generateQuickScanFromContext(params: {
       feature: "vibe_control_zapping_quick_scan",
       frameCount: frames.length,
       sampledFrameCount: Math.min(frames.length, 6),
-      videoSizeBytes: videoBlob.size,
+      videoSizeBytes: videoBlob?.size ?? 0,
       transcriptLength: transcriptText.length,
       transcriptSummaryLength: transcriptSummary.length,
-      videoIncluded: videoBlob.size <= 7 * 1024 * 1024,
+      videoIncluded: Boolean(videoBlob && videoBlob.size <= 7 * 1024 * 1024),
     });
     return {
       provider: "firebase-ai-vertex",
@@ -4546,6 +6618,9 @@ function videoClips(
           transcriptText: video.transcriptText,
           transcriptProvider: video.transcriptProvider,
           transcriptSummary: video.transcriptSummary,
+          transcriptSegments: video.transcriptSegments ?? [],
+          transcriptSrt: video.transcriptSrt,
+          transcriptTimingStatus: video.transcriptTimingStatus ?? "unavailable",
           quickScan: video.quickScan,
           frameCaptures: video.frameCaptures ?? [],
           metadataFileName: video.metadataFileName,
@@ -4589,6 +6664,35 @@ function clipVideoUrl(
   clip: VibeControlOperationVideoClip
 ): string {
   return clipVideoUrls[clipKey(video.id, clip.id)] ?? "";
+}
+
+function clipTitle(clip: VibeControlOperationVideoClip, index: number): string {
+  return (
+    clip.quickScan?.title?.trim() ||
+    clip.quickScan?.description?.trim() ||
+    `Clip ${String(index + 1).padStart(2, "0")}`
+  );
+}
+
+function clipThumbnailUrl(
+  video: DecodedVibeControlOperationVideo,
+  clip: VibeControlOperationVideoClip
+): string {
+  const firstFrame = clip.frameCaptures[0];
+  if (!firstFrame) return "";
+  return clipSavedFrameUrl(video, clip, firstFrame.id);
+}
+
+function clipSavedFrameUrl(
+  video: DecodedVibeControlOperationVideo,
+  clip: VibeControlOperationVideoClip,
+  frameId: string
+): string {
+  return (
+    clipFrameUrls[clipFrameKey(video.id, clip.id, frameId)] ??
+    frameUrls[frameKey(video.id, frameId)] ??
+    ""
+  );
 }
 
 function savedFrameUrl(

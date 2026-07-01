@@ -17,22 +17,30 @@ class ZappingAnalysisEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     videoId: str = Field(min_length=1)
-    title: str | None = Field(
-        default=None,
+    title: str = Field(
+        min_length=1,
         description="Short label for this evidence segment.",
     )
-    summary: str | None = Field(
-        default=None,
+    summary: str = Field(
+        min_length=1,
         description="What is happening in this video segment.",
     )
     tRange: list[float] = Field(
         description="Two numbers in seconds: [start, end].",
     )
-    representativeScreenshotId: str | None = Field(
-        default=None,
+    representativeScreenshotId: str = Field(
+        min_length=1,
         description="The single best screenshot id for this segment.",
     )
-    screenshotIds: list[str] = Field(default_factory=list)
+    screenshotIds: list[str] = Field(min_length=1)
+    transcriptCueIds: list[str] = Field(
+        min_length=1,
+        description="Timestamped transcript cue ids that ground this evidence.",
+    )
+    transcriptQuote: str = Field(
+        min_length=1,
+        description="Short quote from the timestamped transcript for this evidence.",
+    )
 
     @field_validator("tRange")
     @classmethod
@@ -56,13 +64,13 @@ class ZappingAnalysisStoryCandidate(BaseModel):
     role: ZappingAnalysisRole
     goal: str = Field(min_length=1)
     benefit: str = Field(min_length=1)
-    acceptanceCriteria: list[str] = Field(default_factory=list, min_length=1)
+    acceptanceCriteria: list[str] = Field(min_length=1)
     summary: str | None = None
     userStory: str | None = None
     asA: str | None = None
     iWant: str | None = None
     soThat: str | None = None
-    evidence: list[ZappingAnalysisEvidence] = Field(default_factory=list, min_length=1)
+    evidence: list[ZappingAnalysisEvidence] = Field(min_length=1)
     unverified: bool = False
     confidenceScore: int = Field(ge=0, le=100)
     confidence: int | None = Field(default=None, ge=0, le=100)
