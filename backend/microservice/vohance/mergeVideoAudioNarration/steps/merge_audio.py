@@ -6,11 +6,17 @@ MoviePy は高解像度動画で 8GB 超のメモリを消費するため、ス�
 """
 
 import json
+import math
 import os
 import shutil
 import subprocess
 from typing import List, Dict, Tuple, Optional
 from localPackages.common.logger import logger
+
+try:
+    import audioop
+except ImportError:  # pragma: no cover - Python 3.13以降の保険
+    audioop = None
 
 
 def _resolve_media_binary(name: str) -> str:
@@ -415,6 +421,168 @@ def _assert_audio_segments_not_truncated(
         )
 
 
+def _decode_audio_pcm_s16le(
+    path: str,
+    *,
+    start_seconds: float = 0.0,
+    duration_seconds: float,
+    sample_rate: int = 16000,
+) -> bytes:
+    if duration_seconds <= 0:
+        return b""
+
+    cmd = ["ffmpeg", "-v", "error"]
+    if start_seconds > 0:
+        cmd.extend(["-ss", f"{start_seconds:.3f}"])
+    cmd.extend([
+        "-i", path,
+        "-map", "0:a:0",
+        "-t", f"{duration_seconds:.3f}",
+        "-ac", "1",
+        "-ar", str(sample_rate),
+        "-f", "s16le",
+        "-",
+    ])
+    command = [_resolve_media_binary(cmd[0]), *cmd[1:]]
+    logger.info("ffmpeg-audio-pcm-decode command start", executable=command[0], timeout_seconds=180)
+    try:
+        result = subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=180,
+            close_fds=False,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("ffmpeg-audio-pcm-decode timed out after 180s") from e
+    if result.returncode != 0:
+        stderr = (result.stderr or b"").decode("utf-8", errors="replace").strip()
+        stdout = (result.stdout or b"").decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"audio PCM decode failed (code={result.returncode}): {stderr or stdout or 'no output'}")
+    return result.stdout or b""
+
+
+def _pcm_window_rms_db(
+    pcm: bytes,
+    *,
+    sample_rate: int,
+    window_seconds: float = 0.1,
+) -> List[float]:
+    if not pcm:
+        return []
+    sample_width = 2
+    bytes_per_sample = sample_width
+    window_bytes = max(sample_width, int(sample_rate * window_seconds) * bytes_per_sample)
+    window_bytes -= window_bytes % sample_width
+    if window_bytes <= 0:
+        return []
+
+    values: List[float] = []
+    for offset in range(0, len(pcm) - sample_width + 1, window_bytes):
+        chunk = pcm[offset:offset + window_bytes]
+        if len(chunk) < window_bytes * 0.5:
+            break
+        if audioop is not None:
+            rms = audioop.rms(chunk, sample_width)
+        else:
+            # audioopがない環境向けの最小実装。little-endian s16leのみ扱う。
+            total = 0
+            count = len(chunk) // sample_width
+            for i in range(0, count * sample_width, sample_width):
+                value = int.from_bytes(chunk[i:i + sample_width], byteorder="little", signed=True)
+                total += value * value
+            rms = math.sqrt(total / count) if count else 0
+        if rms <= 0:
+            values.append(-120.0)
+        else:
+            values.append(20.0 * math.log10(rms / 32768.0))
+    return values
+
+
+def _assert_audio_energy_preserved(
+    output_path: str,
+    audio_segments_with_paths: List[dict],
+    output_duration_seconds: float,
+) -> None:
+    """
+    元音声が鳴っている窓で、合成後だけ大きく無音化していないことを検査する。
+
+    silencedetectは「終端まで何か音がある」ケースを通してしまうため、今回のような
+    途中だけブツ切れになる不良を、元MP3との短時間RMS比較で検出する。
+    """
+    if not audio_segments_with_paths or output_duration_seconds <= 0:
+        return
+
+    sample_rate = 16000
+    window_seconds = 0.1
+    source_active_threshold_db = -45.0
+    output_floor_db = -58.0
+    max_relative_drop_db = 22.0
+
+    for idx, seg in enumerate(audio_segments_with_paths):
+        start_seconds = max(0.0, int(seg.get("timestamp_ms", 0)) / 1000.0)
+        remaining_seconds = max(0.0, output_duration_seconds - start_seconds)
+        if remaining_seconds <= 0:
+            continue
+
+        source_duration = min(_get_audio_duration_seconds(seg["local_path"]), remaining_seconds)
+        if source_duration <= 0:
+            continue
+
+        source_pcm = _decode_audio_pcm_s16le(
+            seg["local_path"],
+            duration_seconds=source_duration,
+            sample_rate=sample_rate,
+        )
+        output_pcm = _decode_audio_pcm_s16le(
+            output_path,
+            start_seconds=start_seconds,
+            duration_seconds=source_duration,
+            sample_rate=sample_rate,
+        )
+        source_db = _pcm_window_rms_db(source_pcm, sample_rate=sample_rate, window_seconds=window_seconds)
+        output_db = _pcm_window_rms_db(output_pcm, sample_rate=sample_rate, window_seconds=window_seconds)
+        comparable = min(len(source_db), len(output_db))
+        if comparable == 0:
+            raise RuntimeError(f"merged output audio energy could not be inspected for segment {idx + 1}")
+
+        active_windows = 0
+        failed_windows = []
+        for win_idx in range(comparable):
+            src = source_db[win_idx]
+            out = output_db[win_idx]
+            if src <= source_active_threshold_db:
+                continue
+            active_windows += 1
+            if out < output_floor_db or (src - out) > max_relative_drop_db:
+                failed_windows.append((win_idx, src, out))
+
+        if active_windows == 0:
+            logger.info(f"音声エネルギー検査: segment={idx + 1} active windowなしのためスキップ")
+            continue
+
+        allowed_failures = max(3, int(active_windows * 0.08))
+        logger.info(
+            "音声エネルギー検査: "
+            f"segment={idx + 1} active_windows={active_windows} "
+            f"failed_windows={len(failed_windows)} allowed={allowed_failures}"
+        )
+        if len(failed_windows) > allowed_failures:
+            examples = [
+                {
+                    "at_seconds": round(win_idx * window_seconds, 2),
+                    "source_db": round(src, 1),
+                    "output_db": round(out, 1),
+                }
+                for win_idx, src, out in failed_windows[:8]
+            ]
+            raise RuntimeError(
+                "merged output audio has intermittent dropouts: "
+                f"segment={idx + 1} failed_windows={len(failed_windows)}/{active_windows} examples={examples}"
+            )
+
+
 def merge_audio_with_video(params: dict) -> dict:
     """
     動画と音声セグメントをタイムスタンプベースで合成（ffmpeg 実装）
@@ -516,6 +684,8 @@ def merge_audio_with_video(params: dict) -> dict:
     )
     actual_duration = _assert_duration_close(output_path, duration) if duration > 0 else _media_duration_seconds(output_path)
     _assert_audio_segments_not_truncated(output_path, audio_segments_with_paths, actual_duration)
+    logger.info("音声品質検査 v2: 元音声との短時間RMS比較を開始します")
+    _assert_audio_energy_preserved(output_path, audio_segments_with_paths, actual_duration)
     return {'output_path': output_path, 'duration_seconds': actual_duration}
 
 
