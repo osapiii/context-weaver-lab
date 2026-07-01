@@ -5793,11 +5793,13 @@ const saveEditorSections = async (): Promise<void> => {
   await updateEditorProjectSections((freshSections) =>
     currentSections.map((section, index) => {
       const freshSection = freshSections.find((item) => item.id === section.id);
+      const mergedVideoOutput = section.mergedVideoOutput ?? freshSection?.mergedVideoOutput;
       return {
         ...freshSection,
         ...section,
         index,
         isFixed: Boolean(section.isFixed || freshSection?.isFixed),
+        ...(mergedVideoOutput ? { mergedVideoOutput } : {}),
         finalyNarrations: section.finalyNarrations.map((segment, segmentIndex) => {
           const freshSegment = freshSection?.finalyNarrations[segmentIndex];
           const requestOutput = segment.requestOutput ?? freshSegment?.requestOutput;
@@ -6621,17 +6623,18 @@ const requestExport = async (): Promise<void> => {
         sectionId: section.id,
         sectionIndex,
       });
+      const mergedVideoOutput = {
+        resultBucketName: mergedOutput.bucketName,
+        resultFilePath: mergedOutput.filePath,
+        processingTime: Number(output.processingTime ?? 0),
+        ...(isRecord(output.statistics) ? { statistics: output.statistics } : {}),
+        requestId,
+      };
       await updateEditorProjectSections((sections) => sections.map((item) =>
         item.id === section.id
           ? {
               ...item,
-              mergedVideoOutput: {
-                resultBucketName: mergedOutput.bucketName,
-                resultFilePath: mergedOutput.filePath,
-                processingTime: Number(output.processingTime ?? 0),
-                ...(isRecord(output.statistics) ? { statistics: output.statistics } : {}),
-                requestId,
-              },
+              mergedVideoOutput,
             }
           : item
       ));
@@ -6683,6 +6686,7 @@ const requestExport = async (): Promise<void> => {
       setExportProgressItemStatus("final", "error");
       throw new Error("最終動画の出力パスが返ってきませんでした。");
     }
+    await store.openProject(video.id, project.id);
     const finalOutput = {
       resultBucketName: finalStoragePath.bucketName,
       resultFilePath: finalStoragePath.filePath,
