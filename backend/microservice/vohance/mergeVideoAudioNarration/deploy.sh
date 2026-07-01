@@ -5,14 +5,14 @@
 set -e
 
 # Configuration
-SERVICE_NAME="mergevideoaudionarration"
+SERVICE_NAME="${SERVICE_NAME:-vohance-merge-video-audio-narration}"
 REGION="asia-northeast1"
-PROJECT_ID="vohance-dev"
+PROJECT_ID="${PROJECT_ID:-vibe-control-dev}"
 MEMORY="16Gi"  # 高解像度動画のマージ処理高速化のため8Gi→16Giに増強
 CPU="8"        # 動画・音声マージ処理のパフォーマンス向上（Cloud Run最大値）
-TIMEOUT="600s"  # ガイドライン推奨値（Cloud Runマイクロサービス標準）
+TIMEOUT="1200s"  # 長尺セクションの合成もCloud Run側で待てるようにする
 MAX_INSTANCES="10"
-CONCURRENCY="5"
+CONCURRENCY="1"
 
 echo "🚀 Deploying $SERVICE_NAME to Cloud Run..."
 echo "   Project: $PROJECT_ID"

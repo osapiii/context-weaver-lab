@@ -281,6 +281,50 @@ def _assert_audible_output(path: str, *, required: bool) -> None:
         raise RuntimeError(f"merged output audio is silent or too quiet: max_volume={max_volume} dB")
 
 
+def _assert_output_audio_encoding(path: str, *, required: bool) -> None:
+    if not required:
+        return
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-select_streams", "a:0",
+        "-show_entries", "stream=codec_name,sample_rate,channels",
+        "-print_format", "json",
+        path,
+    ]
+    result = _run_media_command(cmd, timeout=30, label="ffprobe-output-audio-encoding")
+    if result.returncode != 0:
+        raise RuntimeError(
+            "merged output audio encoding could not be inspected: "
+            f"{(result.stderr or result.stdout or '').strip()[-1000:]}"
+        )
+    try:
+        data = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"ffprobe returned invalid audio encoding JSON: {(result.stdout or '')[:500]}") from e
+
+    streams = data.get("streams") or []
+    if not streams:
+        raise RuntimeError("merged output has no inspectable audio stream")
+
+    audio = streams[0]
+    codec_name = str(audio.get("codec_name") or "")
+    sample_rate = str(audio.get("sample_rate") or "")
+    channels = int(audio.get("channels") or 0)
+    logger.info(
+        "出力音声codec検査",
+        codec_name=codec_name,
+        sample_rate=sample_rate,
+        channels=channels,
+    )
+    if codec_name != "aac" or sample_rate != "48000" or channels < 2:
+        raise RuntimeError(
+            "merged output audio encoding mismatch: "
+            f"codec={codec_name or 'unknown'} sample_rate={sample_rate or 'unknown'} channels={channels}; "
+            "expected AAC 48000Hz stereo"
+        )
+
+
 def _last_non_silent_end_seconds(path: str, *, noise_db: int = -40, min_silence_seconds: float = 0.15) -> Optional[float]:
     cmd = [
         "ffmpeg",
@@ -463,6 +507,10 @@ def merge_audio_with_video(params: dict) -> dict:
 
     logger.success(f"MP4出力完了: {output_path}")
     _assert_audible_output(
+        output_path,
+        required=len(audio_segments_with_paths) > 0 or has_input_audio,
+    )
+    _assert_output_audio_encoding(
         output_path,
         required=len(audio_segments_with_paths) > 0 or has_input_audio,
     )
