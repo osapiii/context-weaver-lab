@@ -5,7 +5,10 @@
       :message="globalLoading.loadingText"
     />
 
-    <header class="fixed left-0 top-0 z-30 w-full border-b border-slate-200 bg-white/95 backdrop-blur">
+    <header
+      v-if="!hideAdminHeaderForVideoEditor"
+      class="fixed left-0 top-0 z-30 w-full border-b border-slate-200 bg-white/95 backdrop-blur"
+    >
       <div class="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
         <div class="flex min-w-0 items-center gap-3">
           <button
@@ -75,7 +78,14 @@
       </div>
     </header>
 
-    <div class="mt-14 flex h-[calc(100vh-3.5rem-1.75rem)] min-h-0 overflow-hidden bg-slate-50">
+    <div
+      :class="[
+        'flex min-h-0 overflow-hidden bg-slate-50',
+        hideAdminHeaderForVideoEditor
+          ? 'h-[calc(100vh-1.75rem)]'
+          : 'mt-14 h-[calc(100vh-3.5rem-1.75rem)]',
+      ]"
+    >
       <AdminModeActivitySidebar
         :grouped-nav-modes="groupedNavModes"
         :current-mode-key="currentModeKey"
@@ -221,6 +231,7 @@ const organization = useOrganizationStore();
 const globalLoading = useGlobalLoadingStore();
 const spaceStore = useSpaceStore();
 const vibeControl = useVibeControlStore();
+const videoStudio = useVideoStudioStore();
 const workflowExecutions = useWorkflowExecutionsStore();
 const notifications = useWorkflowNotificationsStore();
 
@@ -327,6 +338,12 @@ useSeoMeta({
 
 const currentModeKey = computed(() => currentMode.value?.key);
 const showVibeControlSwitcher = computed(() => isVibeControlRoute.value);
+const hideAdminHeaderForVideoEditor = computed(
+  () =>
+    isVibeControlRoute.value &&
+    videoStudio.view === "editor" &&
+    Boolean(videoStudio.selectedProject)
+);
 const isWorkflowExecutionsPage = computed(
   () => routeName.value === "admin-workflow-executions"
 );
