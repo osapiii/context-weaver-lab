@@ -65,6 +65,54 @@ def _run_media_command(cmd: List[str], *, timeout: int, label: str) -> subproces
         raise RuntimeError(f"{label} timed out after {timeout}s") from e
 
 
+def _parse_rate(value: object) -> float:
+    if value is None:
+        return 0.0
+    try:
+        text = str(value)
+        if "/" in text:
+            num, den = text.split("/", 1)
+            denominator = float(den)
+            if denominator == 0:
+                return 0.0
+            return float(num) / denominator
+        return float(text)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return 0.0
+
+
+def _normalise_video_fps(raw_fps: float) -> float:
+    """Chrome WebM can report r_frame_rate=1000/1; cap it to a sane export FPS."""
+    if raw_fps <= 0:
+        return 30.0
+    if raw_fps > 120:
+        logger.info(f"入力fpsが高すぎるため30fpsへ正規化します: raw_fps={raw_fps:.2f}")
+        return 30.0
+    return max(1.0, min(raw_fps, 60.0))
+
+
+def _get_audio_duration_seconds(audio_path: str) -> float:
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=nokey=1:noprint_wrappers=1",
+        audio_path,
+    ]
+    result = _run_media_command(cmd, timeout=20, label="ffprobe-audio-duration")
+    if result.returncode != 0:
+        logger.warning(
+            "音声duration取得に失敗しました",
+            return_code=result.returncode,
+            stderr=(result.stderr or "").strip()[-1000:],
+        )
+        return 0.0
+    try:
+        return max(0.0, float((result.stdout or "0").strip() or 0))
+    except ValueError:
+        return 0.0
+
+
 def _get_has_video_and_size(video_path: str) -> Tuple[bool, int, int, float, float, float, float]:
     """ffprobeで映像ストリームの有無とサイズ・duration・start_time・fpsを取得。
     durationは stream.duration と format.duration の長い方を採用（短い方が誤っている場合の途切れを防止）。
@@ -104,25 +152,13 @@ def _get_has_video_and_size(video_path: str) -> Tuple[bool, int, int, float, flo
                     pass
             # fps取得（VFR対策のfps固定に使用）
             rf = s.get("r_frame_rate")
-            if rf:
-                try:
-                    if "/" in str(rf):
-                        num, den = rf.split("/")
-                        fps = float(num) / float(den)
-                    else:
-                        fps = float(rf)
-                    if fps <= 0:
-                        fps = 30.0
-                except (TypeError, ValueError, ZeroDivisionError):
-                    pass
+            avg_fps = _parse_rate(s.get("avg_frame_rate"))
+            raw_fps = avg_fps or _parse_rate(rf)
+            fps = _normalise_video_fps(raw_fps)
             if not stream_duration and s.get("nb_frames") and rf:
                 try:
                     nf = int(s["nb_frames"])
-                    if "/" in str(rf):
-                        num, den = rf.split("/")
-                        f = float(num) / float(den)
-                    else:
-                        f = float(rf)
+                    f = _normalise_video_fps(_parse_rate(rf))
                     if f > 0:
                         stream_duration = nf / f
                 except (TypeError, ValueError, ZeroDivisionError, KeyError):
@@ -263,8 +299,14 @@ def _build_ffmpeg_merge_command(
     for seg in audio_segments_with_paths:
         cmd.extend(["-i", seg["local_path"]])
 
-    # 1. 無音ベース: 動画長の無音をamixの最初に入れ、0秒から音声ストリームが存在するようにする
-    silence_dur = duration if duration > 0 else 1.0
+    # 1. 無音ベース: 動画長の無音をamixの最初に入れ、0秒から音声ストリームが存在するようにする。
+    # Chrome WebMはdurationを持たないことがあるため、その場合はナレーション終端まで確保する。
+    max_audio_end = 0.0
+    for seg in audio_segments_with_paths:
+        audio_duration = _get_audio_duration_seconds(seg["local_path"])
+        max_audio_end = max(max_audio_end, (int(seg["timestamp_ms"]) / 1000.0) + audio_duration)
+    silence_dur = duration if duration > 0 else max(max_audio_end, 1.0)
+    logger.info(f"音声ミックス用の無音ベース長: {silence_dur:.2f}秒")
     filter_parts = [f"anullsrc=r=44100:cl=stereo:d={silence_dur}[asilence]"]
 
     # 2. 各音声セグメント: aformatで統一 → adelay:all=1 で全チャネルに遅延適用

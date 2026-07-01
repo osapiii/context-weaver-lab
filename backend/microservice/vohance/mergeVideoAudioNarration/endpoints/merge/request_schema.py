@@ -4,7 +4,11 @@ RequestDoc黄金テンプレート準拠
 """
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from pathlib import Path
 from typing import List, Optional
+
+
+SUPPORTED_VIDEO_INPUT_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v", ".mkv"}
 
 
 class AudioSegmentInput(BaseModel):
@@ -70,9 +74,11 @@ class MergeInput(BaseModel):
     @field_validator("videoFilePath")
     @classmethod
     def validate_video_file_path(cls, v: str) -> str:
-        """動画ファイルパスのバリデーション（.mp4拡張子）"""
-        if not v.endswith(".mp4"):
-            raise ValueError("Video file path must end with .mp4")
+        """動画ファイルパスのバリデーション（ffmpegで入力可能な動画拡張子）"""
+        suffix = Path(v).suffix.lower()
+        if suffix not in SUPPORTED_VIDEO_INPUT_EXTENSIONS:
+            allowed = ", ".join(sorted(SUPPORTED_VIDEO_INPUT_EXTENSIONS))
+            raise ValueError(f"Video file path must end with one of: {allowed}")
         return v
 
     @field_validator("outputFilePath")

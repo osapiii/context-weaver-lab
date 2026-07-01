@@ -615,24 +615,43 @@
             </button>
           </div>
           <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-            <button
+            <article
               v-for="(section, index) in editorSections"
               :key="section.id"
-              type="button"
+              role="button"
+              tabindex="0"
               class="w-full rounded-lg border p-2 text-left transition"
-              :class="selectedSectionIndex === index ? 'border-indigo-400 bg-indigo-500/15' : 'border-gray-700 bg-gray-800 hover:bg-gray-750'"
+              :class="[
+                selectedSectionIndex === index ? 'border-indigo-400 bg-indigo-500/15' : 'border-gray-700 bg-gray-800 hover:bg-gray-750',
+                section.isFixed ? 'ring-1 ring-emerald-400/40' : ''
+              ]"
               @click="selectSection(index)"
+              @keydown.enter.prevent="selectSection(index)"
+              @keydown.space.prevent="selectSection(index)"
             >
-              <div class="aspect-video overflow-hidden rounded bg-gray-950">
+              <div class="relative aspect-video overflow-hidden rounded bg-gray-950">
                 <img v-if="timelineThumbnail(section.id, 'start')?.kind === 'image'" :src="timelineThumbnail(section.id, 'start')?.url" alt="" class="h-full w-full object-cover">
                 <video v-else-if="timelineThumbnail(section.id, 'start')?.kind === 'video'" :src="timelineThumbnail(section.id, 'start')?.url" class="h-full w-full object-cover" muted playsinline preload="metadata" @loadedmetadata="handleTimelineThumbnailVideoReady($event, timelineThumbnail(section.id, 'start'), 'loadedmetadata')" @loadeddata="handleTimelineThumbnailVideoReady($event, timelineThumbnail(section.id, 'start'), 'loadeddata')" @canplay="handleTimelineThumbnailVideoReady($event, timelineThumbnail(section.id, 'start'), 'canplay')" @error="handleTimelineThumbnailVideoError($event, section.id, 'start')" />
                 <div v-else class="flex h-full items-center justify-center">
                   <UIcon name="i-heroicons-film" class="h-8 w-8 text-gray-600" />
                 </div>
+                <div v-if="section.isFixed" class="absolute inset-0 flex items-center justify-center bg-gray-950/65 backdrop-grayscale">
+                  <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-400 text-gray-950 shadow-lg shadow-emerald-500/30">
+                    <UIcon name="i-heroicons-check-solid" class="h-7 w-7" />
+                  </div>
+                </div>
               </div>
               <div class="mt-2 flex items-center justify-between gap-2">
                 <span class="truncate text-sm font-bold text-gray-100">{{ section.title || `セクション ${index + 1}` }}</span>
                 <span class="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300">{{ formatDuration(section.startTime) }}</span>
+              </div>
+              <div class="mt-2 grid grid-cols-2 gap-1 text-[10px] font-bold">
+                <span class="rounded bg-gray-950 px-2 py-1 text-gray-300">
+                  文字 {{ sectionTranscriptionCompleted(section) ? "完了" : "未完了" }}
+                </span>
+                <span class="rounded px-2 py-1" :class="sectionHasGeneratedAudio(section) ? 'bg-emerald-500/15 text-emerald-200' : 'bg-gray-950 text-gray-400'">
+                  AI音声 {{ generatedNarrationCount(section) }}/{{ section.finalyNarrations.length }}
+                </span>
               </div>
               <div class="mt-2 flex items-center justify-between gap-2">
                 <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold" :class="section.isFixed ? 'bg-emerald-500/15 text-emerald-200' : sectionFixable(section) ? 'bg-indigo-500/15 text-indigo-200' : 'bg-gray-700 text-gray-400'">
@@ -660,7 +679,7 @@
                   />
                 </div>
               </div>
-            </button>
+            </article>
             <div v-if="editorSections.length === 0" class="rounded-lg border border-dashed border-gray-600 p-4 text-sm leading-6 text-gray-400">
               自動セクション化の結果がここに表示されます。
             </div>
@@ -751,7 +770,18 @@
                   読み上げ音声
                   <span class="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] text-gray-300">{{ currentVoiceInfo.displayName }}</span>
                 </button>
-                <button v-if="aiNarrationMode === 'narration'" class="rounded-lg border border-gray-600 px-3 py-1.5 text-xs font-bold text-gray-200 hover:bg-gray-700" @click="addNarrationSegment(selectedSectionIndex)">
+                <button
+                  v-if="aiNarrationMode === 'narration'"
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-purple-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="isBulkTtsProcessing || pendingTtsSegmentsCount === 0 || activeRequest === 'export'"
+                  @click="void requestBulkTts()"
+                >
+                  <UIcon :name="isBulkTtsProcessing ? 'i-heroicons-arrow-path' : 'i-heroicons-sparkles'" class="h-4 w-4" :class="isBulkTtsProcessing ? 'animate-spin' : ''" />
+                  全セクションAI音声
+                  <span class="rounded bg-white/20 px-1.5 py-0.5 text-[10px]">{{ pendingTtsSegmentsCount }}</span>
+                </button>
+                <button v-if="aiNarrationMode === 'narration'" class="rounded-lg border border-gray-600 px-3 py-1.5 text-xs font-bold text-gray-200 hover:bg-gray-700" @click="void addNarrationSegment(selectedSectionIndex)">
                   セクションを追加
                 </button>
               </div>
@@ -2089,7 +2119,7 @@
           <button class="rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-200" @click="narrationEditConfirm.open = false">
             キャンセル
           </button>
-          <button class="rounded-xl bg-yellow-500 px-4 py-2 text-sm font-bold text-white hover:bg-yellow-600" @click="confirmNarrationEdit">
+          <button class="rounded-xl bg-yellow-500 px-4 py-2 text-sm font-bold text-white hover:bg-yellow-600" @click="void confirmNarrationEdit()">
             編集を続ける
           </button>
         </div>
@@ -2383,6 +2413,7 @@ const addedLanguages = ref<string[]>([]);
 const activeRequest = ref<"section" | "transcription" | "tts" | "export" | "subtitle" | "silenceCut" | null>(null);
 const requestNotice = ref<{ kind: "success" | "error"; message: string } | null>(null);
 const activeTtsRequestKeys = ref<Record<string, boolean>>({});
+const isBulkTtsProcessing = ref(false);
 const ttsAudioUrlCache = ref<Record<string, string>>({});
 const ttsWaveformCache = ref<Record<string, number[]>>({});
 const playingTtsKey = ref<string | null>(null);
@@ -3152,6 +3183,17 @@ const completedNarrationSections = computed(
 );
 const completedTtsSections = computed(
   () => editorSections.value.filter((section) => sectionHasGeneratedAudio(section)).length
+);
+const pendingTtsSegmentsCount = computed(() =>
+  editorSections.value.reduce(
+    (total, section) =>
+      total +
+      section.finalyNarrations.filter((segment) => {
+        const text = (segment.rewrittenText || segment.originalText || "").trim();
+        return text && (!segment.isTtsGenerated || !ttsSegmentOutputPath(segment));
+      }).length,
+    0
+  )
 );
 const fixedSectionsCount = computed(
   () => editorSections.value.filter((section) => section.isFixed).length
@@ -5450,19 +5492,29 @@ const handleWorkflowNext = async (): Promise<void> => {
   });
 };
 
-const addNarrationSegment = (sectionIndex = selectedSectionIndex.value): void => {
+const addNarrationSegment = async (sectionIndex = selectedSectionIndex.value): Promise<void> => {
   const section = editorSections.value[sectionIndex];
   if (!section) return;
-  section.finalyNarrations.push({
-    id: createNarrationSegmentId(),
-    originalText: "",
-    rewrittenText: "",
-    start: formatDuration(sectionStartSeconds(section)),
-    startSeconds: 0,
-    characterCount: 0,
-    isTtsGenerated: false,
+  const nextSections = editorSections.value.map((item, index) => {
+    if (index !== sectionIndex) return item;
+    return {
+      ...item,
+      isFixed: false,
+      finalyNarrations: [
+        ...item.finalyNarrations,
+        {
+          id: createNarrationSegmentId(),
+          originalText: "",
+          rewrittenText: "",
+          start: formatDuration(sectionStartSeconds(item)),
+          startSeconds: 0,
+          characterCount: 0,
+          isTtsGenerated: false,
+        },
+      ],
+    };
   });
-  section.isFixed = false;
+  await store.saveSections(nextSections);
 };
 
 const deleteNarrationSegment = async (
@@ -5653,14 +5705,26 @@ const handleNarrationEditFocus = (
   narrationEditConfirm.sectionTitle = section.title || `AIナレーション${sectionIndex + 1}`;
 };
 
-const confirmNarrationEdit = (): void => {
-  const section = editorSections.value[narrationEditConfirm.sectionIndex];
-  const segment = section?.finalyNarrations[narrationEditConfirm.paragraphIndex];
-  if (segment) {
-    segment.isTtsGenerated = false;
-    segment.requestOutput = undefined;
-    section.isFixed = false;
-  }
+const confirmNarrationEdit = async (): Promise<void> => {
+  const sectionIndex = narrationEditConfirm.sectionIndex;
+  const paragraphIndex = narrationEditConfirm.paragraphIndex;
+  const nextSections = editorSections.value.map((section, index) => {
+    if (index !== sectionIndex) return section;
+    return {
+      ...section,
+      isFixed: false,
+      finalyNarrations: section.finalyNarrations.map((segment, itemIndex) => {
+        if (itemIndex !== paragraphIndex) return segment;
+        clearTtsSegmentPreview(section.id, itemIndex, segment);
+        return {
+          ...segment,
+          isTtsGenerated: false,
+          requestOutput: undefined,
+        };
+      }),
+    };
+  });
+  await store.saveSections(nextSections);
   narrationEditConfirm.open = false;
 };
 
@@ -6286,14 +6350,14 @@ const selectVoiceName = async (voiceName: string): Promise<void> => {
 const requestSingleTts = async (
   sectionId: string,
   segmentIndex: number
-): Promise<void> => {
+): Promise<boolean> => {
   const project = store.selectedProject;
   const video = store.selectedVideo;
   const section = editorSections.value.find((item) => item.id === sectionId);
   const segment = section?.finalyNarrations[segmentIndex];
   const text = (segment?.rewrittenText || segment?.originalText || "").trim();
-  if (!project || !video || !section || !segment || !text) return;
-  if (isTtsSegmentProcessing(section.id, segmentIndex)) return;
+  if (!project || !video || !section || !segment || !text) return false;
+  if (isTtsSegmentProcessing(section.id, segmentIndex)) return false;
   await saveEditorSections();
   setTtsSegmentProcessing(section.id, segmentIndex, true);
   requestNotice.value = null;
@@ -6339,14 +6403,58 @@ const requestSingleTts = async (
       description: `${section.title || "選択中セクション"} / AIナレーション${segmentIndex + 1}`,
       color: "success",
     });
+    return true;
   } catch (error) {
     toast.add({
       title: "AI音声生成に失敗しました",
       description: error instanceof Error ? error.message : undefined,
       color: "error",
     });
+    return false;
   } finally {
     setTtsSegmentProcessing(section.id, segmentIndex, false);
+  }
+};
+
+const requestBulkTts = async (): Promise<void> => {
+  if (isBulkTtsProcessing.value) return;
+  const targets = editorSections.value.flatMap((section) =>
+    section.finalyNarrations
+      .map((segment, segmentIndex) => ({
+        sectionId: section.id,
+        segmentIndex,
+        text: (segment.rewrittenText || segment.originalText || "").trim(),
+        hasOutput: segment.isTtsGenerated && Boolean(ttsSegmentOutputPath(segment)),
+      }))
+      .filter((target) => target.text && !target.hasOutput)
+  );
+  if (targets.length === 0) {
+    requestNotice.value = {
+      kind: "success",
+      message: "すべてのAI音声が生成済みです。",
+    };
+    return;
+  }
+  isBulkTtsProcessing.value = true;
+  requestNotice.value = {
+    kind: "success",
+    message: `${targets.length}件のAI音声生成を開始しました。`,
+  };
+  try {
+    let successCount = 0;
+    for (const target of targets) {
+      const succeeded = await requestSingleTts(target.sectionId, target.segmentIndex);
+      if (succeeded) successCount += 1;
+    }
+    requestNotice.value = {
+      kind: successCount === targets.length ? "success" : "error",
+      message:
+        successCount === targets.length
+          ? "未生成だったAI音声をすべて生成しました。"
+          : `${successCount}/${targets.length}件のAI音声生成が完了しました。失敗した項目は個別に再実行してください。`,
+    };
+  } finally {
+    isBulkTtsProcessing.value = false;
   }
 };
 
@@ -8262,6 +8370,11 @@ const sectionHasGeneratedAudio = (section: VideoStudioSection): boolean =>
   section.finalyNarrations.every(
     (segment) => segment.isTtsGenerated && Boolean(ttsSegmentOutputPath(segment))
   );
+
+const generatedNarrationCount = (section: VideoStudioSection): number =>
+  section.finalyNarrations.filter(
+    (segment) => segment.isTtsGenerated && Boolean(ttsSegmentOutputPath(segment))
+  ).length;
 
 const sectionFixable = (section: VideoStudioSection): boolean =>
   sectionTranscriptionCompleted(section) && sectionHasGeneratedAudio(section);

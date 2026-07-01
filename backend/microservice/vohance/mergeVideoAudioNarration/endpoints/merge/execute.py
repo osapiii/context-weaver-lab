@@ -6,7 +6,6 @@ RequestDoc黄金テンプレート準拠
 """
 
 import time
-import json
 from flask import request, jsonify, g
 from pydantic import ValidationError
 from localPackages.common.logger import logger
@@ -16,6 +15,16 @@ from .request_schema import ProcessRequest, ProcessResponse, MergeOutput, MergeS
 from steps.download import download_files
 from steps.merge_audio import merge_audio_with_video
 from steps.upload import upload_to_gcs
+
+
+def _log_final_response(label: str, response_tuple) -> None:
+    """Flask Response tupleをJSON化しようとして二次エラーを起こさないための軽量ログ。"""
+    try:
+        response, status_code = response_tuple
+        payload = response.get_json(silent=True) if hasattr(response, "get_json") else None
+        logger.info(f"🔍 {label}: status={status_code}, payload={payload}")
+    except Exception as log_error:
+        logger.warning(f"⚠️ {label} のログ出力に失敗しました: {str(log_error)}")
 
 
 def handle(flask_request):
@@ -45,7 +54,7 @@ def handle(flask_request):
                 status_code=400,
                 request_id=request_id
             )
-            logger.info(f"🔍 Final Response: {json.dumps(empty_body_response, ensure_ascii=False, indent=2)}")
+            _log_final_response("Final Response", empty_body_response)
             return empty_body_response
 
         try:
@@ -77,7 +86,7 @@ def handle(flask_request):
                 status_code=400,
                 request_id=request_id
             )
-            logger.info(f"🔍 Final Response: {json.dumps(validation_response, ensure_ascii=False, indent=2)}")
+            _log_final_response("Final Response", validation_response)
             return validation_response
 
         # 2. ダウンロードステップ
@@ -214,7 +223,7 @@ def handle(flask_request):
             request_id=request_id,
             output=output_data
         )
-        logger.info(f"🔍 Final Response: {json.dumps(output_data, ensure_ascii=False, indent=2)}")
+        logger.info(f"🔍 Final Response output: {output_data}")
 
         return final_response
 
@@ -237,7 +246,7 @@ def handle(flask_request):
             request_id=request_id,
             error_type="FileNotFoundError"
         )
-        logger.info(f"🔍 Final Response (tuple): {file_not_found_response}")
+        _log_final_response("Final Response", file_not_found_response)
 
         return file_not_found_response
 
@@ -260,6 +269,6 @@ def handle(flask_request):
             request_id=request_id,
             error_type="ProcessingError"
         )
-        logger.info(f"🔍 Final Response (tuple): {processing_error_response}")
+        _log_final_response("Final Response", processing_error_response)
 
         return processing_error_response
