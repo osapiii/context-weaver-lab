@@ -14,7 +14,10 @@ export const videoAudioTypeSchema = z
   .enum(["with_audio", "without_audio"])
   .default("without_audio");
 
-const finiteNumberSchema = z.coerce.number().catch(0);
+const finiteNumberSchema = z.coerce.number().finite().catch(0);
+const optionalFiniteNumberSchema = z
+  .preprocess((value) => (value === undefined ? undefined : value), z.coerce.number().finite().optional())
+  .catch(undefined);
 
 const transcriptSegmentSchema = z.object({
   id: z.string(),
@@ -22,7 +25,7 @@ const transcriptSegmentSchema = z.object({
   startMs: finiteNumberSchema,
   endMs: finiteNumberSchema,
   text: z.string(),
-  confidence: z.number().optional(),
+  confidence: optionalFiniteNumberSchema,
 });
 
 const parseTimestampLikeObject = (value: unknown): Timestamp | unknown => {
@@ -73,7 +76,7 @@ export const videoSchema = z.object({
       })
     )
     .default([]),
-  duration: z.number().optional(),
+  duration: optionalFiniteNumberSchema,
   status: videoStatusSchema.default("pending"),
   transcriptionStatus: videoStatusSchema.default("pending"),
   transcriptionResult: z.string().optional(),
@@ -117,8 +120,8 @@ export const narrationSegmentSchema = z.object({
   originalText: z.string().default(""),
   rewrittenText: z.string().default(""),
   start: z.string().default("0:00"),
-  startSeconds: z.number().optional(),
-  endSeconds: z.number().optional(),
+  startSeconds: optionalFiniteNumberSchema,
+  endSeconds: optionalFiniteNumberSchema,
   characterCount: z.number().default(0),
   isTtsGenerated: z.boolean().default(false),
   requestOutput: z.record(z.string(), z.unknown()).optional(),
@@ -155,11 +158,11 @@ export const splitVideoInfoSchema = z.object({
 
 export const videoSectionSchema = z.object({
   id: z.string(),
-  index: z.number(),
+  index: finiteNumberSchema,
   title: z.string().optional(),
   memo: z.string().optional(),
-  startTime: z.number(),
-  endTime: z.number(),
+  startTime: finiteNumberSchema,
+  endTime: finiteNumberSchema,
   splitVideo: splitVideoInfoSchema.optional(),
   splitVideoConverted: splitVideoInfoSchema.optional(),
   videoSegment: splitVideoInfoSchema.optional(),
@@ -174,7 +177,7 @@ export const videoSectionSchema = z.object({
     .object({
       resultBucketName: z.string().optional(),
       resultFilePath: z.string().optional(),
-      processingTime: z.number().nullable().optional(),
+      processingTime: finiteNumberSchema.nullable().optional(),
       statistics: z.record(z.string(), z.unknown()).optional(),
       requestId: z.string().optional(),
     })
@@ -244,12 +247,12 @@ export const silenceCutOutputSchema = z
   .nullable();
 
 export const timelineStateSchema = z.object({
-  currentTime: z.number().default(0),
-  duration: z.number().default(0),
+  currentTime: finiteNumberSchema.default(0),
+  duration: finiteNumberSchema.default(0),
   isPlaying: z.boolean().default(false),
-  playbackRate: z.number().default(1),
-  zoomLevel: z.number().default(5),
-  scrollPosition: z.number().default(0),
+  playbackRate: finiteNumberSchema.default(1),
+  zoomLevel: finiteNumberSchema.default(5),
+  scrollPosition: finiteNumberSchema.default(0),
 });
 
 export const editorStateSchema = z.object({

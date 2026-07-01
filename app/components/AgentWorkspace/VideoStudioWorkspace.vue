@@ -954,13 +954,13 @@
                       @click="handleTimingTimelineClick"
                     >
                       <div class="sticky top-0 z-20 h-10 border-b border-gray-700 bg-gray-900">
-                        <span v-for="tick in selectedTimingTicks" :key="tick" class="absolute top-0 h-full border-l border-gray-700 text-[10px] text-gray-500" :style="{ left: `${timingTrackLabelWidth + tick * timelineZoom}px` }">
+                        <span v-for="tick in selectedTimingTicks" :key="tick" class="absolute top-0 h-full border-l border-gray-700 text-[10px] text-gray-500" :style="{ left: `${timingTrackLabelWidth + tick * safeTimelineZoom}px` }">
                           <span class="ml-1">{{ formatDuration(tick) }}</span>
                         </span>
                       </div>
                       <div
                         class="pointer-events-none absolute bottom-0 top-10 z-30 w-0.5 bg-rose-400 shadow-[0_0_18px_rgba(251,113,133,0.7)]"
-                        :style="{ left: `${timingTrackLabelWidth + timingRelativeCurrentTime * timelineZoom}px` }"
+                        :style="{ left: `${timingTrackLabelWidth + timingRelativeCurrentTime * safeTimelineZoom}px` }"
                       >
                         <span class="absolute -top-3 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full border-2 border-rose-200 bg-rose-400" />
                       </div>
@@ -1694,7 +1694,7 @@
                 @lostpointercapture="handleTimelinePointerUp"
               >
                 <div class="absolute left-0 right-0 top-0 h-8 border-b border-gray-700 bg-gray-850">
-                  <span v-for="tick in timelineTicks" :key="tick" class="absolute top-0 h-full border-l border-gray-700 text-[10px] text-gray-500" :style="{ left: `${tick * timelineZoom}px` }">
+                  <span v-for="tick in timelineTicks" :key="tick" class="absolute top-0 h-full border-l border-gray-700 text-[10px] text-gray-500" :style="{ left: `${tick * safeTimelineZoom}px` }">
                     <span class="ml-1">{{ formatDuration(tick) }}</span>
                   </span>
                 </div>
@@ -1703,7 +1703,7 @@
                   :key="section.id"
                   class="absolute top-12 h-24 overflow-hidden rounded border text-left text-xs font-bold shadow-sm transition"
                   :class="selectedSectionIndex === index ? 'border-indigo-300 bg-indigo-500 text-white' : 'border-gray-600 bg-gray-700 text-gray-200'"
-                  :style="{ left: `${section.startTime * timelineZoom}px`, width: `${Math.max(48, (section.endTime - section.startTime) * timelineZoom)}px` }"
+                  :style="{ left: `${sectionStartSeconds(section) * safeTimelineZoom}px`, width: `${Math.max(48, sectionDurationSeconds(section) * safeTimelineZoom)}px` }"
                   @click="selectSection(index)"
                 >
                   <div class="flex h-14 border-b border-white/10 bg-gray-950">
@@ -1731,7 +1731,7 @@
                 </button>
                 <div
                   class="absolute bottom-0 top-0 z-20 w-1 -translate-x-1/2 cursor-grab rounded-full bg-red-400 shadow-[0_0_0_1px_rgba(255,255,255,0.35),0_0_18px_rgba(248,113,113,0.75)] active:cursor-grabbing"
-                  :style="{ left: `${currentTime * timelineZoom}px` }"
+                  :style="{ left: `${safeNonNegativeSeconds(currentTime) * safeTimelineZoom}px` }"
                   @pointerdown.stop="handlePlayheadPointerDown"
                 >
                   <div class="absolute -top-1 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-red-300 ring-2 ring-red-100/80" />
@@ -2456,6 +2456,42 @@ const timingSegmentDrag = reactive({
 let bodyOverflowBeforeEditor: string | null = null;
 let focusModeBeforeEditor: boolean | null = null;
 
+const safeFiniteNumber = (value: unknown, fallback = 0): number => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+};
+
+const safeNonNegativeSeconds = (value: unknown, fallback = 0): number =>
+  Math.max(0, safeFiniteNumber(value, fallback));
+
+const safeTimelineZoom = computed(() =>
+  Math.max(1, Math.min(500, safeFiniteNumber(timelineZoom.value, 10)))
+);
+
+const sectionStartSeconds = (section: Pick<VideoStudioSection, "startTime">): number =>
+  safeNonNegativeSeconds(section.startTime);
+
+const sectionEndSeconds = (section: Pick<VideoStudioSection, "startTime" | "endTime">): number => {
+  const start = sectionStartSeconds(section);
+  return Math.max(start, safeNonNegativeSeconds(section.endTime, start));
+};
+
+const sectionDurationSeconds = (section: Pick<VideoStudioSection, "startTime" | "endTime">): number =>
+  Math.max(0, sectionEndSeconds(section) - sectionStartSeconds(section));
+
+const buildBoundedTicks = (totalSeconds: number, minimumSeconds: number, maxTicks = 2000): number[] => {
+  const total = Math.min(
+    Math.max(safeNonNegativeSeconds(totalSeconds, minimumSeconds), minimumSeconds),
+    24 * 60 * 60
+  );
+  const step = total > 600 ? 60 : total > 180 ? 30 : total > 60 ? 10 : 5;
+  const ticks: number[] = [];
+  for (let tick = 0; tick <= total && ticks.length < maxTicks; tick += step) {
+    ticks.push(tick);
+  }
+  return ticks;
+};
+
 const workflowStepDefinitions: Record<WorkflowStepKey, { key: WorkflowStepKey; title: string }> = {
   section_split: { key: "section_split", title: "セクション分割" },
   recording: { key: "recording", title: "録音・文字起こし" },
@@ -2838,21 +2874,21 @@ const screenRecordingLiveInterpretationLines = computed(() => {
     },
   ];
 });
+const lastSectionEndSeconds = computed(() =>
+  editorSections.value.reduce((maxEnd, section) => Math.max(maxEnd, sectionEndSeconds(section)), 0)
+);
+const timelineDurationSeconds = computed(() =>
+  Math.max(safeNonNegativeSeconds(duration.value), lastSectionEndSeconds.value)
+);
 const timelineWidth = computed(() =>
-  Math.max(900, Math.max(duration.value, editorSections.value.at(-1)?.endTime ?? 0) * timelineZoom.value)
+  Math.max(900, timelineDurationSeconds.value * safeTimelineZoom.value)
 );
 const timingTrackLabelWidth = 160;
-const timelineTicks = computed(() => {
-  const total = Math.max(duration.value, editorSections.value.at(-1)?.endTime ?? 0, 60);
-  const step = total > 600 ? 60 : total > 180 ? 30 : 10;
-  const ticks: number[] = [];
-  for (let tick = 0; tick <= total; tick += step) ticks.push(tick);
-  return ticks;
-});
+const timelineTicks = computed(() => buildBoundedTicks(timelineDurationSeconds.value, 60));
 const timelineWaveformSegments = computed<TimelineWaveformSegment[]>(() =>
   editorSections.value
     .map((section, index) => {
-      const width = Math.max(48, (section.endTime - section.startTime) * timelineZoom.value);
+      const width = Math.max(48, sectionDurationSeconds(section) * safeTimelineZoom.value);
       const bars = sectionRecordingWaveformBars(
         section,
         Math.max(8, Math.min(360, Math.floor(width / 5)))
@@ -2860,7 +2896,7 @@ const timelineWaveformSegments = computed<TimelineWaveformSegment[]>(() =>
       if (bars.length === 0) return null;
       return {
         key: section.id,
-        left: section.startTime * timelineZoom.value,
+        left: sectionStartSeconds(section) * safeTimelineZoom.value,
         width,
         selected: selectedSectionIndex.value === index,
         bars,
@@ -2959,7 +2995,7 @@ const sectionTranscriptionSource = (
         filePath: audioSource.filePath,
         contentType: "audio/mp4",
         sourceId: `source-audio-${section.id}`,
-        durationSeconds: Math.max(0, section.endTime - section.startTime),
+        durationSeconds: sectionDurationSeconds(section),
         waveform: sectionRecordingWaveform(section),
       };
     }
@@ -2972,7 +3008,7 @@ const sectionTranscriptionSource = (
       filePath: videoSource.filePath,
       contentType: "video/mp4",
       sourceId: `source-video-${section.id}`,
-      durationSeconds: Math.max(0, section.endTime - section.startTime),
+      durationSeconds: sectionDurationSeconds(section),
       waveform: sectionRecordingWaveform(section),
     };
   }
@@ -2985,7 +3021,7 @@ const sectionTranscriptionSource = (
     filePath: recording.audioFilePath,
     contentType: recording.audioContentType || "audio/webm",
     sourceId: recording.recordingId,
-    durationSeconds: recording.durationSeconds || Math.max(0, section.endTime - section.startTime),
+    durationSeconds: safeNonNegativeSeconds(recording.durationSeconds, sectionDurationSeconds(section)),
     waveform: recording.waveform,
   };
 };
@@ -3043,35 +3079,30 @@ const transcriptionProgressItems = computed(() =>
 );
 const selectedTimingTimelineWidth = computed(() => {
   const section = selectedSectionForRecording.value;
-  const sectionDuration = section ? section.endTime - section.startTime : 0;
-  return Math.max(900, timingTrackLabelWidth + sectionDuration * timelineZoom.value);
+  const sectionDuration = section ? sectionDurationSeconds(section) : 0;
+  return Math.max(900, timingTrackLabelWidth + sectionDuration * safeTimelineZoom.value);
 });
 const timingRelativeCurrentTime = computed(() => {
   const section = selectedSectionForRecording.value;
   if (!section) return 0;
+  const sectionStart = sectionStartSeconds(section);
+  const sectionDuration = sectionDurationSeconds(section);
   return Math.max(
     0,
-    Math.min(section.endTime - section.startTime, currentTime.value - section.startTime)
+    Math.min(sectionDuration, safeNonNegativeSeconds(currentTime.value) - sectionStart)
   );
 });
 const selectedTimingTicks = computed(() => {
   const section = selectedSectionForRecording.value;
-  const sectionDuration = section ? section.endTime - section.startTime : 0;
-  const total = Math.max(sectionDuration, 10);
-  const step = total > 120 ? 20 : total > 60 ? 10 : 5;
-  const ticks: number[] = [];
-  for (let tick = 0; tick <= total; tick += step) ticks.push(tick);
-  return ticks;
+  const sectionDuration = section ? sectionDurationSeconds(section) : 0;
+  return buildBoundedTicks(sectionDuration, 10);
 });
 const selectedNarrationTimingSegments = computed(() => {
   const section = selectedSectionForRecording.value;
   if (!section) return [];
   return section.finalyNarrations
     .map((segment, index) => {
-      const startSeconds = Math.max(
-        0,
-        Number(segment.startSeconds ?? index * 0.1)
-      );
+      const startSeconds = safeNonNegativeSeconds(segment.startSeconds, index * 0.1);
       const durationSeconds = narrationDurationSeconds(segment);
       return {
         key: segment.id || `${section.id}-${index}`,
@@ -3079,7 +3110,7 @@ const selectedNarrationTimingSegments = computed(() => {
         model: segment,
         startSeconds,
         durationSeconds,
-        width: Math.max(48, durationSeconds * timelineZoom.value),
+        width: Math.max(48, durationSeconds * safeTimelineZoom.value),
         text: (segment.rewrittenText || segment.originalText || `AIナレーション${index + 1}`).trim(),
       };
     })
@@ -3092,7 +3123,7 @@ const activeRecordingSection = computed(() => {
 const recordingRemaining = computed(() => {
   const section = activeRecordingSection.value ?? selectedSectionForRecording.value;
   if (!section) return 0;
-  return Math.max(0, section.endTime - section.startTime - recordingElapsed.value);
+  return Math.max(0, sectionDurationSeconds(section) - safeNonNegativeSeconds(recordingElapsed.value));
 });
 const formattedRecordingRemaining = computed(() =>
   formatDuration(recordingRemaining.value)
@@ -5343,7 +5374,10 @@ const selectAutoSectionPreview = async (index: number): Promise<void> => {
 const openEditor = async (projectId: string): Promise<void> => {
   if (!store.selectedVideo) return;
   await store.openProject(store.selectedVideo.id, projectId);
-  duration.value = store.selectedProject?.editorState.timeline.duration || store.selectedVideo.duration || 0;
+  duration.value = safeNonNegativeSeconds(
+    store.selectedProject?.editorState.timeline.duration,
+    safeNonNegativeSeconds(store.selectedVideo.duration)
+  );
 };
 
 const setWorkflowIndex = async (index: number): Promise<void> => {
@@ -5423,7 +5457,7 @@ const addNarrationSegment = (sectionIndex = selectedSectionIndex.value): void =>
     id: createNarrationSegmentId(),
     originalText: "",
     rewrittenText: "",
-    start: formatDuration(section.startTime),
+    start: formatDuration(sectionStartSeconds(section)),
     startSeconds: 0,
     characterCount: 0,
     isTtsGenerated: false,
@@ -5465,9 +5499,9 @@ function clampNarrationStart(
   segment: VideoStudioSection["finalyNarrations"][number],
   startSeconds: number
 ): number {
-  const sectionDuration = Math.max(0, section.endTime - section.startTime);
+  const sectionDuration = sectionDurationSeconds(section);
   const maxStart = Math.max(0, sectionDuration - narrationDurationSeconds(segment));
-  return Math.max(0, Math.min(Number(startSeconds) || 0, maxStart));
+  return Math.max(0, Math.min(safeNonNegativeSeconds(startSeconds), maxStart));
 }
 
 const updateNarrationTiming = async (
@@ -5508,7 +5542,7 @@ const adjustNarrationTiming = (
   const segment = section?.finalyNarrations[segmentIndex];
   if (!section || !segment) return;
   selectedTimingSegmentIndex.value = segmentIndex;
-  const currentStart = Number(segment.startSeconds ?? 0);
+  const currentStart = safeNonNegativeSeconds(segment.startSeconds);
   void updateNarrationTiming(sectionIndex, segmentIndex, currentStart + deltaSeconds);
 };
 
@@ -5530,7 +5564,7 @@ const timingSegmentStyle = (
   const dragOffset =
     timingSegmentDrag.segmentIndex === segment.index ? timingSegmentDrag.deltaX : 0;
   return {
-    left: `${timingTrackLabelWidth + segment.startSeconds * timelineZoom.value}px`,
+    left: `${timingTrackLabelWidth + segment.startSeconds * safeTimelineZoom.value}px`,
     width: `${segment.width}px`,
     transform: dragOffset ? `translateX(${dragOffset}px)` : "translateX(0)",
     transition: dragOffset ? "none" : "transform 120ms ease, left 120ms ease",
@@ -5541,8 +5575,8 @@ const timingSegmentStyle = (
 const seekTimingTo = (relativeSeconds: number): void => {
   const section = selectedSectionForRecording.value;
   if (!section) return;
-  const sectionDuration = Math.max(0, section.endTime - section.startTime);
-  seekTo(section.startTime + Math.max(0, Math.min(relativeSeconds, sectionDuration)));
+  const sectionDuration = sectionDurationSeconds(section);
+  seekTo(sectionStartSeconds(section) + Math.max(0, Math.min(safeNonNegativeSeconds(relativeSeconds), sectionDuration)));
 };
 
 const timingSecondsFromPointer = (event: MouseEvent | PointerEvent): number | null => {
@@ -5550,11 +5584,11 @@ const timingSecondsFromPointer = (event: MouseEvent | PointerEvent): number | nu
   const section = selectedSectionForRecording.value;
   if (!element || !section) return null;
   const rect = element.getBoundingClientRect();
-  const sectionDuration = Math.max(0, section.endTime - section.startTime);
+  const sectionDuration = sectionDurationSeconds(section);
   const localX = event.clientX - rect.left + element.scrollLeft - timingTrackLabelWidth;
   return Math.max(
     0,
-    Math.min(localX / Math.max(1, timelineZoom.value), sectionDuration)
+    Math.min(localX / safeTimelineZoom.value, sectionDuration)
   );
 };
 
@@ -5590,7 +5624,7 @@ const handleTimingSegmentDragMove = (event: PointerEvent): void => {
 const stopTimingSegmentDrag = (event?: PointerEvent): void => {
   const segmentIndex = timingSegmentDrag.segmentIndex;
   if (segmentIndex !== null && event) {
-    const deltaSeconds = timingSegmentDrag.deltaX / Math.max(1, timelineZoom.value);
+    const deltaSeconds = timingSegmentDrag.deltaX / safeTimelineZoom.value;
     void updateNarrationTiming(
       selectedSectionIndex.value,
       segmentIndex,
@@ -5737,15 +5771,15 @@ const onEditorKeydown = (event: KeyboardEvent): void => {
 const splitAtCurrentPosition = async (): Promise<void> => {
   if (!store.selectedProject) return;
   const sections = [...editorSections.value];
-  const split = currentTime.value;
+  const split = safeNonNegativeSeconds(currentTime.value);
   const selected = sections[selectedSectionIndex.value];
-  if (selected && split > selected.startTime && split < selected.endTime) {
+  if (selected && split > sectionStartSeconds(selected) && split < sectionEndSeconds(selected)) {
     const first: VideoStudioSection = { ...selected, endTime: split };
     const second: VideoStudioSection = {
       ...store.createDraftSection({
         index: selectedSectionIndex.value + 1,
         startTime: split,
-        endTime: selected.endTime,
+        endTime: sectionEndSeconds(selected),
       }),
       title: `セクション ${selectedSectionIndex.value + 2}`,
     };
@@ -5755,7 +5789,7 @@ const splitAtCurrentPosition = async (): Promise<void> => {
       store.createDraftSection({
         index: sections.length,
         startTime: split,
-        endTime: Math.max(split + 30, duration.value || split + 30),
+        endTime: Math.max(split + 30, timelineDurationSeconds.value || split + 30),
       })
     );
   }
@@ -6490,7 +6524,7 @@ const requestExport = async (): Promise<void> => {
 };
 
 const syncCurrentTime = (): void => {
-  currentTime.value = editorVideo.value?.currentTime ?? 0;
+  currentTime.value = safeNonNegativeSeconds(editorVideo.value?.currentTime);
   isPlaying.value = !editorVideo.value?.paused;
   if (isTimingPreviewActive()) {
     void syncTimingNarrationAudio({ play: isPlaying.value });
@@ -6502,7 +6536,10 @@ const syncCurrentTime = (): void => {
 };
 
 const syncDuration = (): void => {
-  duration.value = editorVideo.value?.duration || duration.value;
+  const videoDuration = editorVideo.value?.duration;
+  if (Number.isFinite(videoDuration) && Number(videoDuration) > 0) {
+    duration.value = Number(videoDuration);
+  }
 };
 
 const handleEditorVideoPlay = (): void => {
@@ -6568,7 +6605,7 @@ const syncTimingNarrationAudio = async (
   const section = selectedSectionForRecording.value;
   if (!video || !audio || !section || !isTimingPreviewActive()) return;
 
-  const relativeTime = Math.max(0, video.currentTime - section.startTime);
+  const relativeTime = Math.max(0, safeNonNegativeSeconds(video.currentTime) - sectionStartSeconds(section));
   const segment = selectedNarrationTimingSegments.value.find((item) => {
     const end = item.startSeconds + item.durationSeconds;
     return relativeTime >= item.startSeconds && relativeTime < end;
@@ -6620,8 +6657,10 @@ const syncTimingNarrationAudio = async (
 
 const seekTo = (time: number): void => {
   if (!editorVideo.value) return;
-  editorVideo.value.currentTime = Math.max(0, Math.min(time, editorVideo.value.duration || time));
-  currentTime.value = editorVideo.value.currentTime;
+  const safeTime = safeNonNegativeSeconds(time);
+  const maxDuration = safeNonNegativeSeconds(editorVideo.value.duration, timelineDurationSeconds.value || safeTime);
+  editorVideo.value.currentTime = Math.max(0, Math.min(safeTime, maxDuration || safeTime));
+  currentTime.value = safeNonNegativeSeconds(editorVideo.value.currentTime, safeTime);
   if (isTimingPreviewActive()) {
     void syncTimingNarrationAudio({ play: !editorVideo.value.paused, force: true });
   } else {
@@ -6630,7 +6669,7 @@ const seekTo = (time: number): void => {
 };
 
 const seekBy = (delta: number): void => {
-  seekTo(currentTime.value + delta);
+  seekTo(safeNonNegativeSeconds(currentTime.value) + safeFiniteNumber(delta));
 };
 
 const selectSection = (index: number): void => {
@@ -6638,7 +6677,7 @@ const selectSection = (index: number): void => {
   if (!section) return;
   selectedSectionIndex.value = index;
   if (isRecording.value || isPreparingRecording.value) return;
-  seekTo(section.startTime);
+  seekTo(sectionStartSeconds(section));
 };
 
 const timelineTimeFromPointer = (event: PointerEvent): number | null => {
@@ -6648,20 +6687,21 @@ const timelineTimeFromPointer = (event: PointerEvent): number | null => {
   if (rect.width <= 0) return null;
   const localX = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
   const unscaledX = (localX / rect.width) * timelineWidth.value;
-  const maxTime = Math.max(duration.value, editorSections.value.at(-1)?.endTime ?? 0, 0);
-  return Math.max(0, Math.min(unscaledX / Math.max(1, timelineZoom.value), maxTime || 0));
+  const maxTime = timelineDurationSeconds.value;
+  return Math.max(0, Math.min(unscaledX / safeTimelineZoom.value, maxTime || 0));
 };
 
 const selectSectionAtTime = (time: number): void => {
+  const safeTime = safeNonNegativeSeconds(time);
   const index = editorSections.value.findIndex(
-    (section) => time >= section.startTime && time <= section.endTime
+    (section) => safeTime >= sectionStartSeconds(section) && safeTime <= sectionEndSeconds(section)
   );
   if (index >= 0) selectedSectionIndex.value = index;
 };
 
 const sectionAtPlaybackTime = (time: number): VideoStudioSection | null =>
   editorSections.value.find(
-    (section) => time >= section.startTime && time < section.endTime
+    (section) => safeNonNegativeSeconds(time) >= sectionStartSeconds(section) && safeNonNegativeSeconds(time) < sectionEndSeconds(section)
   ) ?? null;
 
 const pauseRecordingPlaybackAudio = (): void => {
@@ -6699,8 +6739,8 @@ const syncRecordingPlaybackAudio = async (
   const targetTime = Math.max(
     0,
     Math.min(
-      section.recording.durationSeconds || section.endTime - section.startTime,
-      video.currentTime - section.startTime
+      safeNonNegativeSeconds(section.recording.durationSeconds, sectionDurationSeconds(section)),
+      safeNonNegativeSeconds(video.currentTime) - sectionStartSeconds(section)
     )
   );
   if (Math.abs(audio.currentTime - targetTime) > 0.18) {
@@ -7148,7 +7188,10 @@ const prepareVideoForRecording = async (
 
   const startTime = Math.max(
     0,
-    Math.min(section.startTime, Math.max(0, (video.duration || section.startTime) - 0.05))
+    Math.min(
+      sectionStartSeconds(section),
+      Math.max(0, safeNonNegativeSeconds(video.duration, sectionStartSeconds(section)) - 0.05)
+    )
   );
   if (Math.abs(video.currentTime - startTime) > 0.05) {
     const seeked = waitForVideoEvent(video, "seeked", 3000);
