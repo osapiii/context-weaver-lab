@@ -539,7 +539,7 @@
 
     <div
       v-else-if="store.view === 'editor' && store.selectedProject"
-      class="video-editor-light fixed inset-0 z-[90] flex h-dvh min-h-0 w-screen flex-col overflow-hidden bg-gray-900 text-white"
+      class="video-editor-light fixed inset-0 z-[1000] flex h-dvh min-h-0 w-screen flex-col overflow-hidden bg-gray-900 text-white"
       data-testid="video-studio-fullscreen-editor"
     >
       <header class="relative z-[140] flex shrink-0 items-center justify-between border-b border-gray-700 bg-gray-800 px-4 py-2">
