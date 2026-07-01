@@ -133,7 +133,10 @@ def handle(flask_request):
         merge_result = merge_audio_with_video({
             'video_path': download_result['video_local_path'],
             'audio_segments_with_paths': download_result['audio_segments_with_paths'],
-            'output_path': download_result['output_local_path']
+            'output_path': download_result['output_local_path'],
+            'expected_duration_seconds': process_request.input.expectedDurationSeconds,
+            'section_start_seconds': process_request.input.sectionStartSeconds,
+            'section_end_seconds': process_request.input.sectionEndSeconds,
         })
         logger.success(f"✅ マージ完了: {merge_result['output_path']}")
 
@@ -182,7 +185,7 @@ def handle(flask_request):
         
         statistics = MergeStatistics(
             totalAudioSegments=len(process_request.input.audioSegments),
-            totalDurationSeconds=None,  # 動画の長さを取得する場合は追加
+            totalDurationSeconds=merge_result.get('duration_seconds'),
             outputFileSizeBytes=output_file_size
         )
 

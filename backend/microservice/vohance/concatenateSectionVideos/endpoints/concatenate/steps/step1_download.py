@@ -4,14 +4,14 @@ Step 1: ダウンロード処理
 各セクション動画をGCSからダウンロードし、一時ディレクトリに保存します。
 """
 
-from typing import List
+from typing import Any, Dict, List
 from localPackages.common.context import RequestContext
 from localPackages.common.logger import logger
 from localPackages.common import gcs_storage
 from localPackages.common import firestore_client
 
 
-def execute(ctx: RequestContext) -> List[str]:
+def execute(ctx: RequestContext) -> List[Dict[str, Any]]:
     """
     Step 1: 各セクション動画をGCSからダウンロード
 
@@ -19,7 +19,7 @@ def execute(ctx: RequestContext) -> List[str]:
         ctx: RequestContext - リクエストコンテキスト
     }
 
-    returns: List[str] - ダウンロードした動画ファイルのパスのリスト
+    returns: List[Dict[str, Any]] - ダウンロードした動画ファイルとセクションメタ情報
     """
     logger.start_operation("Step 1: セクション動画ダウンロード")
 
@@ -41,7 +41,7 @@ def execute(ctx: RequestContext) -> List[str]:
 
     logger.info(f"ダウンロード対象: {len(section_video_paths)}個のセクション動画")
 
-    downloaded_paths = []
+    downloaded_sections = []
 
     for i, section_path in enumerate(section_video_paths):
         bucket_name = section_path.get('bucketName')
@@ -90,7 +90,10 @@ def execute(ctx: RequestContext) -> List[str]:
 
         # ダウンロード実行
         blob.download_to_filename(temp_path)
-        downloaded_paths.append(temp_path)
+        downloaded_sections.append({
+            **section_path,
+            "localPath": temp_path,
+        })
 
         # Firestoreに進捗を記録
         if ctx.collection_name and ctx.document_id:
@@ -106,12 +109,12 @@ def execute(ctx: RequestContext) -> List[str]:
             )
 
     # コンテキストにダウンロードパスを保存
-    ctx.downloaded_video_paths = downloaded_paths
+    ctx.downloaded_video_paths = [section["localPath"] for section in downloaded_sections]
 
     # Firestoreに全ダウンロード完了を記録
     if ctx.collection_name and ctx.document_id:
         total_size_mb = sum(
-            os.path.getsize(path) for path in downloaded_paths
+            os.path.getsize(section["localPath"]) for section in downloaded_sections
         ) / (1024 * 1024)
         firestore_client.log_processing_status(
             ctx,
@@ -122,4 +125,4 @@ def execute(ctx: RequestContext) -> List[str]:
 
     logger.complete_operation("Step 1: セクション動画ダウンロード")
 
-    return downloaded_paths
+    return downloaded_sections

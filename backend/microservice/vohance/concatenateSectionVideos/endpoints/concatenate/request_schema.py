@@ -23,6 +23,15 @@ class SectionVideoPath(BaseModel):
         min_length=1,
         examples=["sections/section-0/merged_video.mp4"]
     )
+    expectedDurationSeconds: Optional[float] = Field(
+        default=None,
+        ge=0.1,
+        description="セクション定義上の正しい長さ。指定時は連結前にこの長さへ正規化する"
+    )
+    sectionId: Optional[str] = Field(default=None, description="セクションID")
+    sectionIndex: Optional[int] = Field(default=None, ge=0, description="セクション順序")
+    sectionStartSeconds: Optional[float] = Field(default=None, ge=0, description="元動画上の開始秒")
+    sectionEndSeconds: Optional[float] = Field(default=None, ge=0, description="元動画上の終了秒")
 
 
 class ConcatenateRequestInput(BaseModel):
@@ -63,6 +72,11 @@ class ConcatenateRequestInput(BaseModel):
     projectId: str = Field(
         ...,
         description="プロジェクトID"
+    )
+    expectedTotalDurationSeconds: Optional[float] = Field(
+        default=None,
+        ge=0.1,
+        description="全セクション合計の期待再生時間"
     )
 
 

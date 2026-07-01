@@ -86,6 +86,70 @@ def _get_video_metadata_ffprobe(video_path: str) -> Dict[str, Any]:
     }
 
 
+def _get_audio_max_volume_db(video_path: str) -> Optional[float]:
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostats",
+        "-i",
+        video_path,
+        "-map",
+        "0:a:0",
+        "-af",
+        "volumedetect",
+        "-f",
+        "null",
+        "-",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if result.returncode != 0:
+        logger.warning(f"音声音量検査に失敗しました: {result.stderr[-1200:]}")
+        return None
+    for line in (result.stderr or "").splitlines():
+        if "max_volume:" not in line:
+            continue
+        raw_value = line.split("max_volume:", 1)[1].strip().split(" ", 1)[0]
+        if raw_value == "-inf":
+            return float("-inf")
+        try:
+            return float(raw_value)
+        except ValueError:
+            return None
+    return None
+
+
+def _assert_audible_output(video_path: str, *, required: bool) -> None:
+    if not required:
+        return
+    metadata = _get_video_metadata_ffprobe(video_path)
+    if not metadata["has_audio"]:
+        raise RuntimeError("concatenated output has no audio stream")
+    max_volume = _get_audio_max_volume_db(video_path)
+    if max_volume is None:
+        logger.warning("音声音量検査をスキップしました: max_volumeが取得できません")
+        return
+    logger.info(f"連結出力音声 max_volume: {max_volume:.2f} dB")
+    if max_volume == float("-inf") or max_volume < -60:
+        raise RuntimeError(f"concatenated output audio is silent or too quiet: max_volume={max_volume} dB")
+
+
+def _assert_duration_close(video_path: str, expected_duration: float, label: str) -> float:
+    actual_duration = _get_video_metadata_ffprobe(video_path)["duration"]
+    if expected_duration <= 0:
+        return actual_duration
+    tolerance = max(0.35, min(1.0, expected_duration * 0.03))
+    logger.info(
+        f"{label} duration検査: actual={actual_duration:.3f}s expected={expected_duration:.3f}s tolerance={tolerance:.3f}s"
+    )
+    if actual_duration <= 0:
+        raise RuntimeError(f"{label} duration could not be determined")
+    if abs(actual_duration - expected_duration) > tolerance:
+        raise RuntimeError(
+            f"{label} duration mismatch: actual={actual_duration:.3f}s expected={expected_duration:.3f}s"
+        )
+    return actual_duration
+
+
 def _normalize_for_concat(
     input_path: str,
     output_path: str,
@@ -97,12 +161,9 @@ def _normalize_for_concat(
     fps: float = 30.0,
 ) -> None:
     """
-    連結用に動画を標準形式に正規化する。
-    concat demuxerは全入力のコーデック・パラメータが完全に同一である必要がある。
-    各セクションはmergeVideoAudioNarration由来。mergeはCANONICAL_FPS(30)で統一して
-    出力するため、映像は-c:v copyで高速連結可能。音声のみサンプルレート統一で再エンコード。
-
-    出力形式: 映像 copy, 音声 stereo 48kHz AAC 192k
+    連結用に動画を標準形式へ正規化する。
+    入力ファイルのPTS/durationメタデータは信用せず、セクション定義のdurationを優先して
+    映像・音声を同じ長さへ再構成する。
 
     Args:
         input_path: 入力動画パス
@@ -114,37 +175,55 @@ def _normalize_for_concat(
         height: 映像サイズ高さ
         fps: フレームレート（lavfi用）
     """
+    target_duration = duration if duration and duration > 0 else 1.0
+    fps_value = 30.0
+    if fps and fps > 0:
+        fps_value = min(max(float(fps), 1.0), 60.0)
+    fps_text = str(int(round(fps_value))) if abs(fps_value - round(fps_value)) < 0.01 else f"{fps_value:.2f}"
+    gop = max(24, min(60, int(round(fps_value))))
+
     if not has_video:
         # 音声のみ: lavfiのcolorで黒映像を生成し、音声と結合
-        d = duration or 1.0  # 0の場合は1秒
-        r = int(fps) if abs(fps - round(fps)) < 0.01 else round(fps, 2)
         cmd = [
             "ffmpeg", "-y",
-            "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={r}:d={d}",
+            "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps_text}:d={target_duration:.3f}",
             "-i", input_path,
-            "-map", "0:v", "-map", "1:a",
-            "-c:v", "libx264", "-c:a", "aac", "-b:a", "192k",
-            "-shortest", "-avoid_negative_ts", "make_zero",
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-vf", f"setpts=PTS-STARTPTS,fps={fps_text},format=yuv420p",
+            "-af", "asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-pix_fmt", "yuv420p", "-profile:v", "high", "-level:v", "4.0", "-g", str(gop),
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            "-t", f"{target_duration:.3f}",
+            "-movflags", "+faststart", "-avoid_negative_ts", "make_zero",
             output_path,
         ]
     elif has_audio:
-        # 音声あり: 映像はcopy（mergeがCANONICAL_FPSで統一済み）、音声のみ標準形式に再エンコード
+        # 音声あり: PTSをリセットして、映像・音声を期待秒数で切る。
         cmd = [
             "ffmpeg", "-y", "-fflags", "+genpts", "-i", input_path,
-            "-c:v", "copy",
-            "-ac", "2", "-ar", "48000", "-c:a", "aac", "-b:a", "192k",
-            "-map", "0:v", "-map", "0:a",
-            "-avoid_negative_ts", "make_zero",
+            "-map", "0:v:0", "-map", "0:a:0",
+            "-vf", f"setpts=PTS-STARTPTS,fps={fps_text},format=yuv420p",
+            "-af", f"asetpts=PTS-STARTPTS,atrim=0:{target_duration:.3f},aresample=async=1:first_pts=0",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-pix_fmt", "yuv420p", "-profile:v", "high", "-level:v", "4.0", "-g", str(gop),
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            "-t", f"{target_duration:.3f}",
+            "-movflags", "+faststart", "-avoid_negative_ts", "make_zero",
             output_path,
         ]
     else:
-        # 音声なし: 無音トラックを付与、映像はcopy
+        # 音声なし: 無音トラックを付与し、期待秒数で切る。
         cmd = [
             "ffmpeg", "-y", "-fflags", "+genpts", "-i", input_path,
-            "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
-            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-            "-shortest", "-map", "0:v", "-map", "1:a",
-            "-avoid_negative_ts", "make_zero",
+            "-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate=48000:d={target_duration:.3f}",
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-vf", f"setpts=PTS-STARTPTS,fps={fps_text},format=yuv420p",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-pix_fmt", "yuv420p", "-profile:v", "high", "-level:v", "4.0", "-g", str(gop),
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            "-t", f"{target_duration:.3f}",
+            "-movflags", "+faststart", "-avoid_negative_ts", "make_zero",
             output_path,
         ]
 
@@ -152,6 +231,7 @@ def _normalize_for_concat(
     if result.returncode != 0:
         logger.error(f"正規化エラー: {result.stderr}")
         raise RuntimeError(f"動画正規化失敗: {result.stderr}")
+    _assert_duration_close(output_path, target_duration, "normalized section")
 
 
 def _concatenate_with_ffmpeg(
@@ -160,8 +240,8 @@ def _concatenate_with_ffmpeg(
     temp_dir: str,
 ) -> None:
     """
-    FFmpeg concat demuxerで動画を連結する。
-    MoviePyのconcatenate_videoclipsで発生する音声ループバグを回避する。
+    FFmpeg filter_complex concatで動画を連結する。
+    copy連結で残るPTS/duration不整合を避け、映像と音声を再構成する。
     全入力は事前に映像+音声の同一構成にそろえておくこと。
 
     Args:
@@ -169,31 +249,43 @@ def _concatenate_with_ffmpeg(
         output_path: 出力ファイルパス
         temp_dir: 一時ディレクトリ（concat listファイル用）
     """
-    # concat listファイルを作成（FFmpeg concat demuxer形式）
-    concat_list_path = os.path.join(temp_dir, "concat_list.txt")
-    with open(concat_list_path, "w", encoding="utf-8") as f:
-        for path in downloaded_paths:
-            # 絶対パスに正規化し、シングルクォートをエスケープ
-            abs_path = os.path.abspath(path)
-            escaped_path = abs_path.replace("'", "'\\''")
-            f.write(f"file '{escaped_path}'\n")
+    if not downloaded_paths:
+        raise ValueError("連結対象がありません")
 
-    logger.info(f"FFmpeg concat demuxerで連結開始: {len(downloaded_paths)}個の動画")
+    logger.info(f"FFmpeg filter_complex concatで連結開始: {len(downloaded_paths)}個の動画")
 
-    # 全入力は正規化済みで同一形式のため -c copy で高速連結（PTS正規化で先頭黒化を防止）
-    cmd = [
-        "ffmpeg",
-        "-y",  # 出力ファイルを上書き
-        "-fflags", "+genpts",
-        "-f", "concat",
-        "-safe", "0",  # 絶対パスを許可
-        "-i", concat_list_path,
-        "-map", "0:v",
-        "-map", "0:a",
-        "-c", "copy",  # 正規化済みのため再エンコード不要
+    cmd = ["ffmpeg", "-y", "-fflags", "+genpts"]
+    for path in downloaded_paths:
+        cmd.extend(["-i", path])
+
+    filter_parts: List[str] = []
+    concat_inputs: List[str] = []
+    for index in range(len(downloaded_paths)):
+        filter_parts.append(f"[{index}:v:0]setpts=PTS-STARTPTS[v{index}]")
+        filter_parts.append(f"[{index}:a:0]asetpts=PTS-STARTPTS[a{index}]")
+        concat_inputs.append(f"[v{index}][a{index}]")
+    filter_parts.append(
+        f"{''.join(concat_inputs)}concat=n={len(downloaded_paths)}:v=1:a=1[vout][aout]"
+    )
+
+    cmd.extend([
+        "-filter_complex", ";".join(filter_parts),
+        "-map", "[vout]",
+        "-map", "[aout]",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-crf", "23",
+        "-pix_fmt", "yuv420p",
+        "-profile:v", "high",
+        "-level:v", "4.0",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", "48000",
+        "-ac", "2",
+        "-movflags", "+faststart",
         "-avoid_negative_ts", "make_zero",
         output_path,
-    ]
+    ])
 
     result = subprocess.run(
         cmd,
@@ -209,13 +301,13 @@ def _concatenate_with_ffmpeg(
     logger.success("FFmpeg concat 連結完了")
 
 
-def execute(ctx: RequestContext, downloaded_paths: list) -> Dict[str, Any]:
+def execute(ctx: RequestContext, downloaded_sections: list) -> Dict[str, Any]:
     """
     Step 2: 動画を連結
 
     params: {
         ctx: RequestContext - リクエストコンテキスト,
-        downloaded_paths: List[str] - ダウンロードした動画ファイルのパスのリスト
+        downloaded_sections: List[Dict[str, Any]] - ダウンロードした動画ファイルとセクションメタ情報
     }
 
     returns: Dict[str, Any] - 連結動画の情報
@@ -229,33 +321,52 @@ def execute(ctx: RequestContext, downloaded_paths: list) -> Dict[str, Any]:
         firestore_client.log_processing_status(
             ctx,
             status="processing",
-            message=f"動画を連結中 ({len(downloaded_paths)}個のセクション)",
+            message=f"動画を連結中 ({len(downloaded_sections)}個のセクション)",
             current_step="concatenating"
         )
 
-    if not downloaded_paths:
+    if not downloaded_sections:
         raise ValueError("連結する動画がありません")
 
-    if len(downloaded_paths) == 1:
+    input_data = ctx.get_param('input', {})
+    expected_total_duration = 0.0
+    try:
+        expected_total_duration = float(input_data.get("expectedTotalDurationSeconds") or 0)
+    except (TypeError, ValueError):
+        expected_total_duration = 0.0
+
+    if len(downloaded_sections) == 1:
         # 1つの動画のみの場合はそのまま返す
-        logger.info("セクションが1つのみのため、連結処理をスキップ")
-        single_path = downloaded_paths[0]
-        video_info = _get_video_metadata_ffprobe(single_path)
+        logger.info("セクションが1つのみのため、正規化のみ実行")
+        single_section = downloaded_sections[0]
+        single_path = single_section["localPath"]
+        probed_info = _get_video_metadata_ffprobe(single_path)
+        expected_duration = float(single_section.get("expectedDurationSeconds") or probed_info["duration"] or 1.0)
 
         # 出力ファイルパスを生成
         output_filename = "concatenated_video.mp4"
         output_path = os.path.join(ctx.temp_dir, output_filename)
 
-        # ファイルをコピー
-        shutil.copy2(single_path, output_path)
+        _normalize_for_concat(
+            single_path,
+            output_path,
+            probed_info["has_audio"],
+            has_video=probed_info["has_video"],
+            duration=expected_duration,
+            width=probed_info["width"],
+            height=probed_info["height"],
+            fps=probed_info["fps"],
+        )
+        _assert_audible_output(output_path, required=probed_info["has_audio"])
+        output_info = _get_video_metadata_ffprobe(output_path)
 
         return {
             "output_path": output_path,
-            "duration": video_info["duration"],
-            "fps": video_info["fps"],
-            "width": video_info["width"],
-            "height": video_info["height"],
-            "has_audio": video_info["has_audio"],
+            "duration": output_info["duration"],
+            "fps": output_info["fps"],
+            "width": output_info["width"],
+            "height": output_info["height"],
+            "has_audio": output_info["has_audio"],
             "size_bytes": os.path.getsize(output_path) if os.path.exists(output_path) else 0,
         }
 
@@ -263,9 +374,10 @@ def execute(ctx: RequestContext, downloaded_paths: list) -> Dict[str, Any]:
     clips_info = []
     total_duration = 0.0
 
-    logger.info(f"セクション動画の情報を取得中... ({len(downloaded_paths)}個)")
+    logger.info(f"セクション動画の情報を取得中... ({len(downloaded_sections)}個)")
 
-    for i, video_path in enumerate(downloaded_paths):
+    for i, section_item in enumerate(downloaded_sections):
+        video_path = section_item["localPath"]
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"セクション動画が見つかりません: {video_path}")
 
@@ -274,18 +386,26 @@ def execute(ctx: RequestContext, downloaded_paths: list) -> Dict[str, Any]:
             firestore_client.log_processing_status(
                 ctx,
                 status="processing",
-                message=f"セクション{i + 1}/{len(downloaded_paths)}の情報を取得中",
+                message=f"セクション{i + 1}/{len(downloaded_sections)}の情報を取得中",
                 current_step="concatenating",
                 progress={
                     "processed": i,
-                    "total": len(downloaded_paths)
+                    "total": len(downloaded_sections)
                 }
             )
 
         meta = _get_video_metadata_ffprobe(video_path)
+        try:
+            expected_duration = float(section_item.get("expectedDurationSeconds") or 0)
+        except (TypeError, ValueError):
+            expected_duration = 0.0
+        duration_for_concat = expected_duration if expected_duration > 0 else meta["duration"]
         clip_info = {
             "path": video_path,
-            "duration": meta["duration"],
+            "duration": duration_for_concat,
+            "probed_duration": meta["duration"],
+            "section_id": section_item.get("sectionId"),
+            "section_index": section_item.get("sectionIndex", i),
             "fps": meta["fps"],
             "size": meta["size"],
             "width": meta["width"],
@@ -294,9 +414,12 @@ def execute(ctx: RequestContext, downloaded_paths: list) -> Dict[str, Any]:
             "has_video": meta["has_video"],
         }
         clips_info.append(clip_info)
-        total_duration += meta["duration"]
+        total_duration += duration_for_concat
 
-        logger.info(f"セクション{i + 1}: {meta['duration']:.2f}秒, {meta['width']}x{meta['height']}, FPS={meta['fps']}")
+        logger.info(
+            f"セクション{i + 1}: expected={duration_for_concat:.2f}秒, probed={meta['duration']:.2f}秒, "
+            f"{meta['width']}x{meta['height']}, FPS={meta['fps']}"
+        )
 
     # 動画情報をログに記録
     logger.data_analysis("セクション動画情報", {
@@ -314,13 +437,14 @@ def execute(ctx: RequestContext, downloaded_paths: list) -> Dict[str, Any]:
             current_step="concatenating"
         )
 
-    # 全セクションを標準形式に正規化してから連結
-    # mergeVideoAudioNarrationはCANONICAL_FPS(30)で統一出力するため、映像はcopyで高速連結可能。
-    # 音声のみサンプルレート・チャンネルを48kHz/stereoに統一。
+    # 全セクションを標準形式・期待秒数に正規化してから連結
     paths_for_concat: List[str] = []
     for i, clip_info in enumerate(clips_info):
         normalized_path = os.path.join(ctx.temp_dir, f"normalized_{i}.mp4")
-        logger.info(f"セクション{i + 1}: 標準形式に正規化中 (映像=copy, 音声={'あり' if clip_info['has_audio'] else 'なし'})")
+        logger.info(
+            f"セクション{i + 1}: 標準形式に正規化中 "
+            f"(duration={clip_info['duration']:.3f}s, 音声={'あり' if clip_info['has_audio'] else 'なし'})"
+        )
         _normalize_for_concat(
             clip_info["path"],
             normalized_path,
@@ -349,6 +473,10 @@ def execute(ctx: RequestContext, downloaded_paths: list) -> Dict[str, Any]:
     output_path = os.path.join(ctx.temp_dir, output_filename)
 
     _concatenate_with_ffmpeg(paths_for_concat, output_path, ctx.temp_dir)
+    has_audio = any(c["has_audio"] for c in clips_info)
+    _assert_audible_output(output_path, required=has_audio)
+    final_expected_duration = expected_total_duration if expected_total_duration > 0 else total_duration
+    actual_output_duration = _assert_duration_close(output_path, final_expected_duration, "concatenated output")
 
     # ファイルサイズを取得
     output_size_bytes = os.path.getsize(output_path) if os.path.exists(output_path) else 0
@@ -365,14 +493,12 @@ def execute(ctx: RequestContext, downloaded_paths: list) -> Dict[str, Any]:
             current_step="concatenating"
         )
 
-    has_audio = any(c["has_audio"] for c in clips_info)
-
     operation_time = time.time() - operation_start_time
     logger.complete_operation("Step 2: 動画連結処理", operation_time)
 
     return {
         "output_path": output_path,
-        "duration": total_duration,
+        "duration": actual_output_duration,
         "fps": clips_info[0]["fps"] if clips_info else 30,
         "width": clips_info[0]["width"] if clips_info else 1920,
         "height": clips_info[0]["height"] if clips_info else 1080,

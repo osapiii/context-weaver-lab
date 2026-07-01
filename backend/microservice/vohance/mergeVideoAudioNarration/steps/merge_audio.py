@@ -9,7 +9,7 @@ import json
 import os
 import shutil
 import subprocess
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from localPackages.common.logger import logger
 
 
@@ -113,7 +113,7 @@ def _get_audio_duration_seconds(audio_path: str) -> float:
         return 0.0
 
 
-def _get_has_video_and_size(video_path: str) -> Tuple[bool, int, int, float, float, float, float]:
+def _get_has_video_and_size(video_path: str) -> Tuple[bool, bool, int, int, float, float, float, float]:
     """ffprobeで映像ストリームの有無とサイズ・duration・start_time・fpsを取得。
     durationは stream.duration と format.duration の長い方を採用（短い方が誤っている場合の途切れを防止）。
     """
@@ -135,6 +135,7 @@ def _get_has_video_and_size(video_path: str) -> Tuple[bool, int, int, float, flo
     except json.JSONDecodeError as e:
         raise RuntimeError(f"ffprobe returned invalid JSON: {(result.stdout or '')[:500]}") from e
     has_video = False
+    has_audio = False
     width, height = 1920, 1080
     stream_duration = 0.0
     start_time = 0.0
@@ -164,6 +165,8 @@ def _get_has_video_and_size(video_path: str) -> Tuple[bool, int, int, float, flo
                 except (TypeError, ValueError, ZeroDivisionError, KeyError):
                     pass
             break
+        if s.get("codec_type") == "audio":
+            has_audio = True
 
     format_duration = 0.0
     if data.get("format"):
@@ -183,7 +186,99 @@ def _get_has_video_and_size(video_path: str) -> Tuple[bool, int, int, float, flo
         logger.info(
             f"duration差あり: stream={stream_duration:.2f}s, format={format_duration:.2f}s → {duration:.2f}s採用"
         )
-    return has_video, width, height, duration, start_time, fps, stream_duration
+    if not has_audio:
+        has_audio = any(s.get("codec_type") == "audio" for s in data.get("streams", []))
+    return has_video, has_audio, width, height, duration, start_time, fps, stream_duration
+
+
+def _get_audio_max_volume_db(path: str) -> Optional[float]:
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostats",
+        "-i",
+        path,
+        "-map",
+        "0:a:0",
+        "-af",
+        "volumedetect",
+        "-f",
+        "null",
+        "-",
+    ]
+    result = _run_media_command(cmd, timeout=120, label="ffmpeg-audio-volume")
+    if result.returncode != 0:
+        logger.warning(
+            "音声音量検査に失敗しました",
+            return_code=result.returncode,
+            stderr=(result.stderr or "").strip()[-1200:],
+        )
+        return None
+    for line in (result.stderr or "").splitlines():
+        if "max_volume:" not in line:
+            continue
+        raw_value = line.split("max_volume:", 1)[1].strip().split(" ", 1)[0]
+        if raw_value == "-inf":
+            return float("-inf")
+        try:
+            return float(raw_value)
+        except ValueError:
+            return None
+    return None
+
+
+def _media_duration_seconds(path: str) -> float:
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=nokey=1:noprint_wrappers=1",
+        path,
+    ]
+    result = _run_media_command(cmd, timeout=30, label="ffprobe-output-duration")
+    if result.returncode != 0:
+        logger.warning(
+            "出力duration取得に失敗しました",
+            return_code=result.returncode,
+            stderr=(result.stderr or "").strip()[-1000:],
+        )
+        return 0.0
+    try:
+        return max(0.0, float((result.stdout or "0").strip() or 0))
+    except ValueError:
+        return 0.0
+
+
+def _assert_duration_close(path: str, expected_duration: float) -> float:
+    actual_duration = _media_duration_seconds(path)
+    if expected_duration <= 0:
+        return actual_duration
+    tolerance = max(0.35, min(1.0, expected_duration * 0.03))
+    logger.info(
+        f"出力duration検査: actual={actual_duration:.3f}s expected={expected_duration:.3f}s tolerance={tolerance:.3f}s"
+    )
+    if actual_duration <= 0:
+        raise RuntimeError("merged output duration could not be determined")
+    if abs(actual_duration - expected_duration) > tolerance:
+        raise RuntimeError(
+            f"merged output duration mismatch: actual={actual_duration:.3f}s expected={expected_duration:.3f}s"
+        )
+    return actual_duration
+
+
+def _assert_audible_output(path: str, *, required: bool) -> None:
+    if not required:
+        return
+    _, has_audio, *_ = _get_has_video_and_size(path)
+    if not has_audio:
+        raise RuntimeError("merged output has no audio stream")
+    max_volume = _get_audio_max_volume_db(path)
+    if max_volume is None:
+        logger.warning("音声音量検査をスキップしました: max_volumeが取得できません")
+        return
+    logger.info(f"出力音声 max_volume: {max_volume:.2f} dB")
+    if max_volume == float("-inf") or max_volume < -60:
+        raise RuntimeError(f"merged output audio is silent or too quiet: max_volume={max_volume} dB")
 
 
 def merge_audio_with_video(params: dict) -> dict:
@@ -202,6 +297,7 @@ def merge_audio_with_video(params: dict) -> dict:
     video_path = params['video_path']
     audio_segments_with_paths = params['audio_segments_with_paths']
     output_path = params['output_path']
+    expected_duration_seconds = params.get('expected_duration_seconds')
 
     logger.info(f"動画・音声マージ開始（ffmpeg）: {video_path}")
     logger.info(f"音声セグメント数: {len(audio_segments_with_paths)}")
@@ -214,13 +310,21 @@ def merge_audio_with_video(params: dict) -> dict:
         os.makedirs(output_dir, mode=0o755, exist_ok=True)
         logger.info(f"出力ディレクトリを作成しました: {output_dir}")
 
-    has_video, width, height, duration, _, fps, stream_duration = _get_has_video_and_size(video_path)
-    if has_video and duration > 0:
+    has_video, has_input_audio, width, height, probed_duration, _, fps, stream_duration = _get_has_video_and_size(video_path)
+    try:
+        expected_duration = float(expected_duration_seconds or 0)
+    except (TypeError, ValueError):
+        expected_duration = 0.0
+    duration = expected_duration if expected_duration > 0 else probed_duration
+    if expected_duration > 0:
+        logger.info(
+            f"セクション定義の長さを優先します: expected={expected_duration:.3f}s, probed={probed_duration:.3f}s, fps={fps:.1f}"
+        )
+    elif has_video and duration > 0:
         logger.info(f"入力映像の長さ: {duration:.2f}秒, fps: {fps:.1f}（この長さを出力に維持）")
 
     if len(audio_segments_with_paths) == 0:
-        # 音声なし: 映像のみ出力（元動画の音声は含めない）
-        logger.info("音声セグメントなし。映像のみ出力します")
+        logger.info("音声セグメントなし。入力動画の音声を保持して出力します")
         if has_video:
             # setptsでPTS正規化、yuv420pでQuickTime互換（-pix_fmt が最重要）
             # -g: キーフレーム間隔（QuickTimeは長いGOPで4秒以降黒化することがある）
@@ -228,15 +332,20 @@ def merge_audio_with_video(params: dict) -> dict:
             cmd = [
                 "ffmpeg", "-y", "-fflags", "+genpts",
                 "-i", video_path,
-                "-an", "-vf", "setpts=PTS-STARTPTS,format=yuv420p",
+                "-vf", f"setpts=PTS-STARTPTS,fps={int(round(fps))},format=yuv420p",
+                "-map", "0:v:0",
+                "-map", "0:a:0?",
                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
                 "-pix_fmt", "yuv420p", "-profile:v", "main", "-g", str(gop),
+                "-c:a", "aac", "-b:a", "192k", "-ar", "44100", "-ac", "2",
                 "-vsync", "cfr",
                 "-movflags", "+faststart",
                 "-avoid_negative_ts", "make_zero",
                 "-muxdelay", "0", "-muxpreload", "0",
-                output_path,
             ]
+            if duration > 0:
+                cmd.extend(["-t", f"{duration:.3f}"])
+            cmd.append(output_path)
         else:
             # 映像なし: lavfiで黒映像を生成
             d = duration or 1.0
@@ -263,7 +372,12 @@ def merge_audio_with_video(params: dict) -> dict:
         raise RuntimeError(f"ffmpeg マージ失敗 (code={result.returncode}): {stderr or stdout or 'no output'}")
 
     logger.success(f"MP4出力完了: {output_path}")
-    return {'output_path': output_path}
+    _assert_audible_output(
+        output_path,
+        required=len(audio_segments_with_paths) > 0 or has_input_audio,
+    )
+    actual_duration = _assert_duration_close(output_path, duration) if duration > 0 else _media_duration_seconds(output_path)
+    return {'output_path': output_path, 'duration_seconds': actual_duration}
 
 
 def _build_ffmpeg_merge_command(
@@ -313,9 +427,10 @@ def _build_ffmpeg_merge_command(
     for idx, seg in enumerate(audio_segments_with_paths):
         ts_ms = int(seg["timestamp_ms"])
         in_idx = audio_start_idx + idx
+        remaining_seconds = max(0.001, silence_dur - (ts_ms / 1000.0))
         filter_parts.append(
             f"[{in_idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            f"asetpts=PTS-STARTPTS,adelay={ts_ms}:all=1[a{idx}]"
+            f"asetpts=PTS-STARTPTS,atrim=0:{remaining_seconds:.3f},adelay={ts_ms}:all=1[a{idx}]"
         )
 
     # 3. ミキシング: 無音ベース + 全セグメント、duration=firstで無音長に合わせる

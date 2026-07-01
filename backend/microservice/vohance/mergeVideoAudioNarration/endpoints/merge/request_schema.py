@@ -54,11 +54,18 @@ class MergeInput(BaseModel):
     """
     videoBucketName: str = Field(..., min_length=1, description="動画ファイルバケット名")
     videoFilePath: str = Field(..., description="動画ファイルパス")
-    audioSegments: List[AudioSegmentInput] = Field(..., min_length=1, description="音声セグメントリスト（空でないこと）")
+    audioSegments: List[AudioSegmentInput] = Field(default_factory=list, description="音声セグメントリスト")
     outputBucketName: str = Field(..., min_length=1, description="出力バケット名")
     outputFilePath: str = Field(..., description="出力ファイルパス")
     videoId: str = Field(..., min_length=1, description="動画ID")
     projectId: Optional[str] = Field(None, description="プロジェクトID（オプション）")
+    expectedDurationSeconds: Optional[float] = Field(
+        default=None,
+        ge=0.1,
+        description="セクション定義上の正しい長さ。指定時は入力動画メタデータより優先して出力長を固定する"
+    )
+    sectionStartSeconds: Optional[float] = Field(default=None, ge=0, description="元動画上のセクション開始秒")
+    sectionEndSeconds: Optional[float] = Field(default=None, ge=0, description="元動画上のセクション終了秒")
 
     # 字幕機能フィールド
     captionIsEnabled: bool = Field(default=False, description="字幕機能を有効化")

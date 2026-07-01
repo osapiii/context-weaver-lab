@@ -2217,7 +2217,7 @@ import { useContextStore } from "@stores/context";
 import { screenVideoAspectPresets, useScreenVideoRecorder } from "@composables/useScreenVideoRecorder";
 import { useMasterEditorAIFileSpace } from "@composables/useMasterEditorAIFileSpace";
 import { useVoiceInput } from "@composables/useVoiceInput";
-import type { VideoStudioSection, VideoStudioVideo } from "@models/videoStudio";
+import type { VideoStudioNarrationSegment, VideoStudioSection, VideoStudioVideo } from "@models/videoStudio";
 import { reportDatadogError, reportDatadogInfo } from "@utils/datadogObservability";
 import appLog from "@utils/logger";
 import {
@@ -2465,6 +2465,7 @@ let timingPlaybackLastCorrectionAt = 0;
 let transcriptionRecoveryToken = 0;
 const watchedTranscriptionRequestIds = new Set<string>();
 let transcriptionProjectUpdateQueue = Promise.resolve();
+let editorProjectUpdateQueue = Promise.resolve();
 let mediaRecorder: MediaRecorder | null = null;
 let recordingStream: MediaStream | null = null;
 let recordingAudioContext: AudioContext | null = null;
@@ -2509,6 +2510,23 @@ const sectionEndSeconds = (section: Pick<VideoStudioSection, "startTime" | "endT
 
 const sectionDurationSeconds = (section: Pick<VideoStudioSection, "startTime" | "endTime">): number =>
   Math.max(0, sectionEndSeconds(section) - sectionStartSeconds(section));
+
+const narrationStartSecondsInSection = (
+  section: Pick<VideoStudioSection, "startTime" | "endTime">,
+  segment: Pick<VideoStudioNarrationSegment, "startSeconds">,
+  fallback = 0
+): number => {
+  const rawStart = safeNonNegativeSeconds(segment.startSeconds, fallback);
+  const sectionStart = sectionStartSeconds(section);
+  const sectionEnd = sectionEndSeconds(section);
+  const sectionDuration = sectionDurationSeconds(section);
+  const appearsAbsolute =
+    sectionStart > 0 &&
+    rawStart >= sectionStart - 0.25 &&
+    rawStart <= sectionEnd + 0.25;
+  const relativeStart = appearsAbsolute ? rawStart - sectionStart : rawStart;
+  return Math.max(0, Math.min(relativeStart, sectionDuration));
+};
 
 const buildBoundedTicks = (totalSeconds: number, minimumSeconds: number, maxTicks = 2000): number[] => {
   const total = Math.min(
@@ -3133,7 +3151,11 @@ const selectedNarrationTimingSegments = computed(() => {
   if (!section) return [];
   return section.finalyNarrations
     .map((segment, index) => {
-      const startSeconds = safeNonNegativeSeconds(segment.startSeconds, index * 0.1);
+      const startSeconds = clampNarrationStart(
+        section,
+        segment,
+        narrationStartSecondsInSection(section, segment, index * 0.1)
+      );
       const durationSeconds = narrationDurationSeconds(segment);
       return {
         key: segment.id || `${section.id}-${index}`,
@@ -5495,8 +5517,8 @@ const handleWorkflowNext = async (): Promise<void> => {
 const addNarrationSegment = async (sectionIndex = selectedSectionIndex.value): Promise<void> => {
   const section = editorSections.value[sectionIndex];
   if (!section) return;
-  const nextSections = editorSections.value.map((item, index) => {
-    if (index !== sectionIndex) return item;
+  await updateEditorProjectSections((sections) => sections.map((item) => {
+    if (item.id !== section.id) return item;
     return {
       ...item,
       isFixed: false,
@@ -5513,16 +5535,17 @@ const addNarrationSegment = async (sectionIndex = selectedSectionIndex.value): P
         },
       ],
     };
-  });
-  await store.saveSections(nextSections);
+  }));
 };
 
 const deleteNarrationSegment = async (
   sectionIndex: number,
   segmentIndex: number
 ): Promise<void> => {
-  const sections = editorSections.value.map((section, index) => {
-    if (index !== sectionIndex || section.finalyNarrations.length <= 1) return section;
+  const targetSection = editorSections.value[sectionIndex];
+  if (!targetSection) return;
+  await updateEditorProjectSections((sections) => sections.map((section) => {
+    if (section.id !== targetSection.id || section.finalyNarrations.length <= 1) return section;
     return {
       ...section,
       isFixed: false,
@@ -5530,8 +5553,7 @@ const deleteNarrationSegment = async (
         (_segment, itemIndex) => itemIndex !== segmentIndex
       ),
     };
-  });
-  await store.saveSections(sections);
+  }));
 };
 
 function narrationDurationSeconds(
@@ -5566,8 +5588,8 @@ const updateNarrationTiming = async (
   const targetSegment = section.finalyNarrations[segmentIndex];
   if (!targetSegment) return;
   const nextStart = clampNarrationStart(section, targetSegment, startSeconds);
-  const sections = editorSections.value.map((item, index) => {
-    if (index !== sectionIndex) return item;
+  await updateEditorProjectSections((sections) => sections.map((item) => {
+    if (item.id !== section.id) return item;
     return {
       ...item,
       isFixed: false,
@@ -5581,8 +5603,7 @@ const updateNarrationTiming = async (
           : segment
       ),
     };
-  });
-  await store.saveSections(sections);
+  }));
 };
 
 const adjustNarrationTiming = (
@@ -5708,8 +5729,10 @@ const handleNarrationEditFocus = (
 const confirmNarrationEdit = async (): Promise<void> => {
   const sectionIndex = narrationEditConfirm.sectionIndex;
   const paragraphIndex = narrationEditConfirm.paragraphIndex;
-  const nextSections = editorSections.value.map((section, index) => {
-    if (index !== sectionIndex) return section;
+  const targetSectionId = editorSections.value[sectionIndex]?.id;
+  if (!targetSectionId) return;
+  await updateEditorProjectSections((sections) => sections.map((section) => {
+    if (section.id !== targetSectionId) return section;
     return {
       ...section,
       isFixed: false,
@@ -5723,8 +5746,7 @@ const confirmNarrationEdit = async (): Promise<void> => {
         };
       }),
     };
-  });
-  await store.saveSections(nextSections);
+  }));
   narrationEditConfirm.open = false;
 };
 
@@ -5737,16 +5759,59 @@ const addLanguage = (): void => {
   isLanguageModalOpen.value = false;
 };
 
+const updateEditorProjectSections = async (
+  mutateSections: (sections: VideoStudioSection[]) => VideoStudioSection[]
+): Promise<void> => {
+  const project = store.selectedProject;
+  if (!project) return;
+
+  editorProjectUpdateQueue = editorProjectUpdateQueue.then(async () => {
+    await store.openProject(project.videoId, project.id);
+    const freshProject = store.selectedProject;
+    if (!freshProject) return;
+
+    const sections = mutateSections(freshProject.sections);
+    const selectedIndex = freshProject.editorState.selectedSectionIndex;
+    const selectedSection =
+      typeof selectedIndex === "number"
+        ? sections[selectedIndex] ?? null
+        : freshProject.editorState.selectedSection ?? sections[0] ?? null;
+    await store.updateProject(freshProject.videoId, freshProject.id, {
+      sections,
+      editorState: {
+        ...freshProject.editorState,
+        selectedSection,
+      },
+    });
+  });
+
+  return editorProjectUpdateQueue;
+};
+
 const saveEditorSections = async (): Promise<void> => {
-  const sections = editorSections.value.map((section, index) => ({
-    ...section,
-    index,
-    finalyNarrations: section.finalyNarrations.map((segment) => ({
-      ...segment,
-      characterCount: segment.rewrittenText.length,
-    })),
-  }));
-  await store.saveSections(sections);
+  const currentSections = editorSections.value;
+  await updateEditorProjectSections((freshSections) =>
+    currentSections.map((section, index) => {
+      const freshSection = freshSections.find((item) => item.id === section.id);
+      return {
+        ...freshSection,
+        ...section,
+        index,
+        isFixed: Boolean(section.isFixed || freshSection?.isFixed),
+        finalyNarrations: section.finalyNarrations.map((segment, segmentIndex) => {
+          const freshSegment = freshSection?.finalyNarrations[segmentIndex];
+          const requestOutput = segment.requestOutput ?? freshSegment?.requestOutput;
+          return {
+            ...freshSegment,
+            ...segment,
+            requestOutput,
+            isTtsGenerated: Boolean(segment.isTtsGenerated || freshSegment?.isTtsGenerated || requestOutput),
+            characterCount: segment.rewrittenText.length,
+          };
+        }),
+      };
+    })
+  );
 };
 
 const saveAndCloseEditor = async (): Promise<void> => {
@@ -5857,7 +5922,7 @@ const splitAtCurrentPosition = async (): Promise<void> => {
       })
     );
   }
-  await store.saveSections(sections.map((section, index) => ({ ...section, index })));
+  await updateEditorProjectSections(() => sections.map((section, index) => ({ ...section, index })));
 };
 
 const normalizeAutoSection = (
@@ -6105,6 +6170,16 @@ const getSectionVideoForMerge = (
   return sectionVideoSourceInfo(section);
 };
 
+const sectionExportTiming = (section: VideoStudioSection) => {
+  const startSeconds = sectionStartSeconds(section);
+  const endSeconds = sectionEndSeconds(section);
+  return {
+    expectedDurationSeconds: Math.max(0.1, endSeconds - startSeconds),
+    sectionStartSeconds: startSeconds,
+    sectionEndSeconds: endSeconds,
+  };
+};
+
 const buildAudioSegmentsForEditorSection = (
   section: VideoStudioSection
 ): AudioSegmentInput[] =>
@@ -6112,13 +6187,16 @@ const buildAudioSegmentsForEditorSection = (
     const outputPath = narration.requestOutput?.outputPath;
     const parsed = parseGcsPath(outputPath);
     if (!parsed) return [];
-    const startSeconds =
-      typeof narration.startSeconds === "number" ? narration.startSeconds : index === 0 ? 0 : null;
     const previousSegments = section.finalyNarrations.slice(0, index);
     const fallbackStart = previousSegments.reduce((total, item) => {
       const duration = Number(item.requestOutput?.durationSeconds ?? 0);
       return total + (Number.isFinite(duration) ? duration : 0);
     }, 0);
+    const startSeconds = clampNarrationStart(
+      section,
+      narration,
+      narrationStartSecondsInSection(section, narration, index === 0 ? 0 : fallbackStart)
+    );
     return [
       {
         sourceBucketName: parsed.bucketName,
@@ -6137,7 +6215,7 @@ const persistNarrationTtsOutput = async (
     .find((section) => section.id === sectionId)
     ?.finalyNarrations[segmentIndex];
   clearTtsSegmentPreview(sectionId, segmentIndex, previousSegment);
-  const sections = editorSections.value.map((section) => {
+  await updateEditorProjectSections((sections) => sections.map((section) => {
     if (section.id !== sectionId) return section;
     return {
       ...section,
@@ -6152,8 +6230,7 @@ const persistNarrationTtsOutput = async (
           : segment
       ),
     };
-  });
-  await store.saveSections(sections);
+  }));
   void hydrateTtsWaveforms();
 };
 
@@ -6475,7 +6552,15 @@ const requestExport = async (): Promise<void> => {
   requestNotice.value = { kind: "success", message: "動画出力を開始しています..." };
   exportProgress.message = "セクション動画の合成準備をしています。";
   try {
-    const sectionOutputs: Array<{ bucketName: string; filePath: string }> = [];
+    const sectionOutputs: Array<{
+      bucketName: string;
+      filePath: string;
+      expectedDurationSeconds: number;
+      sectionId: string;
+      sectionIndex: number;
+      sectionStartSeconds: number;
+      sectionEndSeconds: number;
+    }> = [];
     for (const [sectionIndex, section] of editorSections.value.entries()) {
       const progressKey = `section-${sectionIndex}`;
       setExportProgressItemStatus(progressKey, "running");
@@ -6486,11 +6571,7 @@ const requestExport = async (): Promise<void> => {
         throw new Error(`セクション${sectionIndex + 1}の分割動画が見つかりません。`);
       }
       const audioSegments = buildAudioSegmentsForEditorSection(section);
-      if (audioSegments.length === 0) {
-        sectionOutputs.push(sectionVideo);
-        setExportProgressItemStatus(progressKey, "skipped");
-        continue;
-      }
+      const timing = sectionExportTiming(section);
 
       const requestId = `merge_${project.id}_section_${sectionIndex}_${Date.now()}`;
       const outputFilePath = getMergedVideoStoragePath({
@@ -6512,6 +6593,9 @@ const requestExport = async (): Promise<void> => {
           sectionId: section.id,
           sectionIndex,
           sectionTitle: section.title,
+          expectedDurationSeconds: timing.expectedDurationSeconds,
+          sectionStartSeconds: timing.sectionStartSeconds,
+          sectionEndSeconds: timing.sectionEndSeconds,
           audioSegments,
           outputBucketName: store.defaultBucket,
           outputFilePath,
@@ -6531,9 +6615,14 @@ const requestExport = async (): Promise<void> => {
         setExportProgressItemStatus(progressKey, "error");
         throw new Error(`セクション${sectionIndex + 1}の合成出力が不完全です。`);
       }
-      sectionOutputs.push(mergedOutput);
-      const nextSections = editorSections.value.map((item, index) =>
-        index === sectionIndex
+      sectionOutputs.push({
+        ...mergedOutput,
+        ...timing,
+        sectionId: section.id,
+        sectionIndex,
+      });
+      await updateEditorProjectSections((sections) => sections.map((item) =>
+        item.id === section.id
           ? {
               ...item,
               mergedVideoOutput: {
@@ -6545,8 +6634,7 @@ const requestExport = async (): Promise<void> => {
               },
             }
           : item
-      );
-      await store.saveSections(nextSections);
+      ));
       setExportProgressItemStatus(progressKey, "completed");
       if (selectedExportSectionIndex.value === sectionIndex) {
         void refreshExportSectionPreview();
@@ -6573,6 +6661,10 @@ const requestExport = async (): Promise<void> => {
         projectId: project.id,
         projectName: project.name,
         videoTitle: video.title,
+        expectedTotalDurationSeconds: sectionOutputs.reduce(
+          (total, item) => total + item.expectedDurationSeconds,
+          0
+        ),
       },
       concatenateRequestId
     );
@@ -8285,8 +8377,9 @@ const saveRecordedAudio = async (audioBlob: Blob): Promise<void> => {
     contentType,
   });
 
-  const nextSections = editorSections.value.map((item, index) => {
-    if (index !== sectionIndex) return item;
+  const targetSectionId = section.id;
+  await updateEditorProjectSections((sections) => sections.map((item) => {
+    if (item.id !== targetSectionId) return item;
     return {
       ...item,
       recording: {
@@ -8302,8 +8395,7 @@ const saveRecordedAudio = async (audioBlob: Blob): Promise<void> => {
       },
       finalyNarrations: item.finalyNarrations,
     };
-  });
-  await store.saveSections(nextSections);
+  }));
   requestNotice.value = {
     kind: "success",
     message: "録音を保存しました。次へ進むと文字起こしを開始します。",
@@ -8397,15 +8489,14 @@ const toggleSectionFixed = async (sectionIndex: number): Promise<void> => {
     };
     return;
   }
-  const sections = editorSections.value.map((item, index) =>
-    index === sectionIndex
+  await updateEditorProjectSections((sections) => sections.map((item) =>
+    item.id === section.id
       ? {
           ...item,
           isFixed: nextFixed,
         }
       : item
-  );
-  await store.saveSections(sections);
+  ));
   requestNotice.value = {
     kind: nextFixed ? "success" : "error",
     message: nextFixed
