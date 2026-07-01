@@ -281,6 +281,96 @@ def _assert_audible_output(path: str, *, required: bool) -> None:
         raise RuntimeError(f"merged output audio is silent or too quiet: max_volume={max_volume} dB")
 
 
+def _last_non_silent_end_seconds(path: str, *, noise_db: int = -40, min_silence_seconds: float = 0.15) -> Optional[float]:
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostats",
+        "-i",
+        path,
+        "-map",
+        "0:a:0",
+        "-af",
+        f"silencedetect=noise={noise_db}dB:d={min_silence_seconds}",
+        "-f",
+        "null",
+        "-",
+    ]
+    result = _run_media_command(cmd, timeout=120, label="ffmpeg-silencedetect")
+    if result.returncode != 0:
+        logger.warning(f"音声終端検査に失敗しました: {(result.stderr or '')[-1200:]}")
+        return None
+
+    duration = _get_audio_duration_seconds(path) or _media_duration_seconds(path)
+    last_end = 0.0 if duration > 0 else None
+    current_silence_start: Optional[float] = None
+    for line in (result.stderr or "").splitlines():
+        if "silence_start:" in line:
+            raw_value = line.split("silence_start:", 1)[1].strip().split(" ", 1)[0]
+            try:
+                current_silence_start = max(float(raw_value), 0.0)
+                last_end = current_silence_start
+            except ValueError:
+                continue
+        elif "silence_end:" in line:
+            raw_value = line.split("silence_end:", 1)[1].strip().split(" ", 1)[0]
+            try:
+                silence_end = max(float(raw_value), 0.0)
+                if duration > 0 and silence_end >= duration - 0.05 and current_silence_start is not None:
+                    last_end = current_silence_start
+                else:
+                    last_end = max(silence_end, last_end or 0.0)
+                current_silence_start = None
+            except ValueError:
+                continue
+    return last_end
+
+
+def _assert_audio_segments_not_truncated(
+    output_path: str,
+    audio_segments_with_paths: List[dict],
+    output_duration_seconds: float,
+) -> None:
+    if not audio_segments_with_paths or output_duration_seconds <= 0:
+        return
+
+    expected_last_speech_end = 0.0
+    for seg in audio_segments_with_paths:
+        start_seconds = max(0.0, int(seg.get("timestamp_ms", 0)) / 1000.0)
+        remaining_seconds = max(0.0, output_duration_seconds - start_seconds)
+        if remaining_seconds <= 0:
+            continue
+        source_last_speech_end = _last_non_silent_end_seconds(seg["local_path"])
+        if source_last_speech_end is None:
+            source_last_speech_end = _get_audio_duration_seconds(seg["local_path"])
+        if source_last_speech_end <= 0:
+            continue
+        expected_last_speech_end = max(
+            expected_last_speech_end,
+            start_seconds + min(source_last_speech_end, remaining_seconds),
+        )
+
+    if expected_last_speech_end <= 1.0:
+        return
+
+    output_last_speech_end = _last_non_silent_end_seconds(output_path)
+    if output_last_speech_end is None:
+        logger.warning("出力音声終端検査をスキップしました: last non-silent endが取得できません")
+        return
+
+    tolerance_seconds = 1.0
+    logger.info(
+        "音声終端検査: "
+        f"output_last_speech_end={output_last_speech_end:.3f}s "
+        f"expected_last_speech_end={expected_last_speech_end:.3f}s"
+    )
+    if output_last_speech_end + tolerance_seconds < expected_last_speech_end:
+        raise RuntimeError(
+            "merged output audio appears truncated: "
+            f"last_speech={output_last_speech_end:.3f}s expected_at_least={expected_last_speech_end:.3f}s"
+        )
+
+
 def merge_audio_with_video(params: dict) -> dict:
     """
     動画と音声セグメントをタイムスタンプベースで合成（ffmpeg 実装）
@@ -377,6 +467,7 @@ def merge_audio_with_video(params: dict) -> dict:
         required=len(audio_segments_with_paths) > 0 or has_input_audio,
     )
     actual_duration = _assert_duration_close(output_path, duration) if duration > 0 else _media_duration_seconds(output_path)
+    _assert_audio_segments_not_truncated(output_path, audio_segments_with_paths, actual_duration)
     return {'output_path': output_path, 'duration_seconds': actual_duration}
 
 
@@ -429,8 +520,11 @@ def _build_ffmpeg_merge_command(
         in_idx = audio_start_idx + idx
         remaining_seconds = max(0.001, silence_dur - (ts_ms / 1000.0))
         filter_parts.append(
-            f"[{in_idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
-            f"asetpts=PTS-STARTPTS,atrim=0:{remaining_seconds:.3f},adelay={ts_ms}:all=1[a{idx}]"
+            f"[{in_idx}:a]aresample=44100:async=1:first_pts=0,"
+            f"aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo,"
+            f"atrim=start=0:duration={remaining_seconds:.3f},asetpts=PTS-STARTPTS,"
+            f"apad=whole_dur={remaining_seconds:.3f},atrim=0:{remaining_seconds:.3f},"
+            f"adelay={ts_ms}:all=1[a{idx}]"
         )
 
     # 3. ミキシング: 無音ベース + 全セグメント、duration=firstで無音長に合わせる
