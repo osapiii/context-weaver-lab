@@ -36,14 +36,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-CONTEXT_STORE_SERVICE_URL="${CONTEXT_STORE_SERVICE_URL:-https://context-store-781544707153.us-central1.run.app}"
-VIBE_CONTROL_GCS_BUCKET="${VIBE_CONTROL_GCS_BUCKET:-${PROJECT_ID}.firebasestorage.app}"
+CONTEXT_STORE_SERVICE_URL="${CONTEXT_STORE_SERVICE_URL:-https://context-store-mdgjayj74q-uc.a.run.app}"
+STORYVAULT_GCS_BUCKET="${STORYVAULT_GCS_BUCKET:-${PROJECT_ID}.firebasestorage.app}"
 
 # ✅ Step 3: Cloud Run にデプロイ
 echo -e "${YELLOW}Deploying directly from source using gcloud run deploy...${NC}"
 echo -e "${YELLOW}Note: Using Dockerfile-based deployment with Crawl4AI${NC}"
 echo -e "${YELLOW}Context Store URL: ${CONTEXT_STORE_SERVICE_URL}${NC}"
-echo -e "${YELLOW}Vibe Control GCS bucket: ${VIBE_CONTROL_GCS_BUCKET}${NC}"
+echo -e "${YELLOW}StoryVault GCS bucket: ${STORYVAULT_GCS_BUCKET}${NC}"
 
 DEPLOY_CMD="gcloud run deploy ${SERVICE_NAME} \
     --source . \
@@ -57,7 +57,7 @@ DEPLOY_CMD="gcloud run deploy ${SERVICE_NAME} \
     --concurrency 1 \
     --max-instances 10 \
     --port 8080 \
-    --set-env-vars CONTEXT_STORE_SERVICE_URL=${CONTEXT_STORE_SERVICE_URL},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},VIBE_CONTROL_GCS_BUCKET=${VIBE_CONTROL_GCS_BUCKET},EN_AISTUDIO_GCS_BUCKET=${VIBE_CONTROL_GCS_BUCKET}"
+    --set-env-vars CONTEXT_STORE_SERVICE_URL=${CONTEXT_STORE_SERVICE_URL},GOOGLE_CLOUD_PROJECT=${PROJECT_ID},STORYVAULT_GCS_BUCKET=${STORYVAULT_GCS_BUCKET},EN_AISTUDIO_GCS_BUCKET=${STORYVAULT_GCS_BUCKET}"
 
 eval ${DEPLOY_CMD} || {
     echo -e "${RED}Error: Cloud Run deployment failed${NC}"

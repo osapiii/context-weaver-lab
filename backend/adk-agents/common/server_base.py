@@ -147,11 +147,11 @@ from .business_partner_workflow import (
     patch_business_partner_bucket,
     validate_business_partner_invoke,
 )
-from .vibe_control_workflow import (
-    vibe_capability_structuring_state_patch_from_mode_state,
-    vibe_related_context_state_patch_from_mode_state,
-    vibe_zapping_analysis_state_patch_from_mode_state,
-    vibe_story_generation_state_patch_from_mode_state,
+from .storyvault_workflow import (
+    storyvault_capability_structuring_state_patch_from_mode_state,
+    storyvault_related_context_state_patch_from_mode_state,
+    storyvault_zapping_analysis_state_patch_from_mode_state,
+    storyvault_story_generation_state_patch_from_mode_state,
 )
 from .writing_action_scope import activate_writing_action, deactivate_writing_action
 from .artifact_ui_bridge import (
@@ -204,7 +204,7 @@ def _zapping_analysis_result_from_bucket(value: Any) -> dict[str, Any] | None:
         nested = _zapping_analysis_result_from_bucket(existing)
         if nested is not None:
             return nested
-    if value.get("schemaVersion") != "vibe-control-zapping-analysis-v2":
+    if value.get("schemaVersion") != "storyvault-zapping-analysis-v2":
         return None
     if not isinstance(value.get("generatedAt"), str):
         return None
@@ -223,7 +223,7 @@ def _related_context_result_from_bucket(value: Any) -> dict[str, Any] | None:
         nested = _related_context_result_from_bucket(existing)
         if nested is not None:
             return nested
-    if value.get("schemaVersion") != "vibe-control-related-context-v1":
+    if value.get("schemaVersion") != "storyvault-related-context-v1":
         return None
     if not isinstance(value.get("generatedAt"), str):
         return None
@@ -246,10 +246,10 @@ def _related_context_result_from_bucket(value: Any) -> dict[str, Any] | None:
 
 VERTEX_AI_ONLY_MODES = frozenset(
     {
-        "vibe_related_context",
-        "vibe_zapping_analysis",
-        "vibe_capability_structuring",
-        "vibe_story_generation",
+        "storyvault_related_context",
+        "storyvault_zapping_analysis",
+        "storyvault_capability_structuring",
+        "storyvault_story_generation",
     }
 )
 
@@ -608,23 +608,23 @@ async def _stream_invoke(
                 business_partner_state_patch_from_mode_state(req.mode_state)
             )
             patch_business_partner_bucket(state_patch, req.mode_state)
-        if agent_mode == "vibe_capability_structuring":
+        if agent_mode == "storyvault_capability_structuring":
             state_patch.update(
-                vibe_capability_structuring_state_patch_from_mode_state(
+                storyvault_capability_structuring_state_patch_from_mode_state(
                     req.mode_state
                 )
             )
-        if agent_mode == "vibe_related_context":
+        if agent_mode == "storyvault_related_context":
             state_patch.update(
-                vibe_related_context_state_patch_from_mode_state(req.mode_state)
+                storyvault_related_context_state_patch_from_mode_state(req.mode_state)
             )
-        if agent_mode == "vibe_zapping_analysis":
+        if agent_mode == "storyvault_zapping_analysis":
             state_patch.update(
-                vibe_zapping_analysis_state_patch_from_mode_state(req.mode_state)
+                storyvault_zapping_analysis_state_patch_from_mode_state(req.mode_state)
             )
-        if agent_mode == "vibe_story_generation":
+        if agent_mode == "storyvault_story_generation":
             state_patch.update(
-                vibe_story_generation_state_patch_from_mode_state(req.mode_state)
+                storyvault_story_generation_state_patch_from_mode_state(req.mode_state)
             )
         if merged_image_reference is not None:
             from .workspace_state_buckets import patch_task_bucket
@@ -1161,7 +1161,7 @@ async def _stream_invoke(
                             from .workspace_state_buckets import patch_task_bucket
 
                             zapping_bucket: dict[str, Any] = {}
-                            nested = response.get("vibe_zapping_analysis")
+                            nested = response.get("storyvault_zapping_analysis")
                             if isinstance(nested, dict):
                                 zapping_bucket = dict(nested)
                             analysis_result = zapping_bucket.get("analysis_result")
@@ -1171,7 +1171,7 @@ async def _stream_invoke(
                                 zapping_patch: dict[str, Any] = {}
                                 patch_task_bucket(
                                     zapping_patch,
-                                    "vibe_zapping_analysis",
+                                    "storyvault_zapping_analysis",
                                     zapping_bucket,
                                 )
                                 await persist_session_state_patch(
@@ -1392,8 +1392,8 @@ async def _stream_invoke(
                             },
                         )
                 done_payload["business_partner"] = finalized_bp
-        if agent_mode == "vibe_zapping_analysis":
-            raw_zapping = stored_state.get("vibe_zapping_analysis")
+        if agent_mode == "storyvault_zapping_analysis":
+            raw_zapping = stored_state.get("storyvault_zapping_analysis")
             analysis_result = _zapping_analysis_result_from_bucket(raw_zapping)
             if analysis_result is not None:
                 from .workspace_state_buckets import patch_task_bucket
@@ -1401,12 +1401,12 @@ async def _stream_invoke(
                 zapping_patch: dict[str, Any] = {}
                 patch_task_bucket(
                     zapping_patch,
-                    "vibe_zapping_analysis",
+                    "storyvault_zapping_analysis",
                     {
                         "phase": "completed",
                         "analysis_result": analysis_result,
                     },
-                    active_task="vibe_zapping_analysis",
+                    active_task="storyvault_zapping_analysis",
                 )
                 await persist_session_state_patch(
                     session_service,
@@ -1417,14 +1417,14 @@ async def _stream_invoke(
                     organization_id=session_org_id,
                     space_id=session_space_id,
                 )
-                done_payload["vibe_zapping_analysis"] = {
+                done_payload["storyvault_zapping_analysis"] = {
                     "analysis_result": analysis_result,
                     "story_candidate_count": len(
                         analysis_result.get("storyCandidates") or []
                     ),
                 }
-        if agent_mode == "vibe_related_context":
-            raw_related = stored_state.get("vibe_related_context")
+        if agent_mode == "storyvault_related_context":
+            raw_related = stored_state.get("storyvault_related_context")
             related_result = _related_context_result_from_bucket(raw_related)
             if related_result is not None:
                 from .workspace_state_buckets import patch_task_bucket
@@ -1432,12 +1432,12 @@ async def _stream_invoke(
                 related_patch: dict[str, Any] = {}
                 patch_task_bucket(
                     related_patch,
-                    "vibe_related_context",
+                    "storyvault_related_context",
                     {
                         "phase": "completed",
                         "related_context_result": related_result,
                     },
-                    active_task="vibe_related_context",
+                    active_task="storyvault_related_context",
                 )
                 await persist_session_state_patch(
                     session_service,
@@ -1466,7 +1466,7 @@ async def _stream_invoke(
                     if isinstance(knowledge, dict)
                     else []
                 )
-                done_payload["vibe_related_context"] = {
+                done_payload["storyvault_related_context"] = {
                     "related_context_result": related_result,
                     "github_pull_request_count": len(pull_requests or []),
                     "slack_message_count": len(slack_messages or []),

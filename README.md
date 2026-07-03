@@ -1,6 +1,6 @@
 # StoryVault
 
-StoryVault is a hackathon app built from the EN AIstudio foundation. It turns product intent, tickets, code, pull requests, and source evidence into a governed user-story SSOT so teams can keep the speed of vibe coding while preserving delivery confidence.
+StoryVault is a hackathon app built from the EN AIstudio foundation. It turns product intent, tickets, code, pull requests, and source evidence into a governed user-story SSOT so teams can keep the speed of AI coding while preserving delivery confidence.
 
 This repository was cut out as a fresh repo from `en-aistudio` on 2026-06-18. The inherited base keeps the Nuxt/Firebase UI foundation, ADK agent runtime, and knowledge ingestion pipeline. New StoryVault work should proceed in this repository.
 
@@ -40,7 +40,7 @@ The MVP should focus on four user-facing surfaces:
 ```bash
 cd app
 yarn install
-cp .env.example .env.vibe-control-dev
+cp .env.example .env.storyvault-dev
 yarn local:dev
 ```
 
@@ -48,12 +48,12 @@ Use `.env.example` as the template for local Firebase and agent endpoints. Do no
 
 ## Development GCP Project
 
-- Project ID: `vibe-control-dev`
-- Firebase Hosting: `https://vibe-control-dev.web.app`
-- Unified ADK Cloud Run: `https://en-aistudio-adk-agent-q2uwnmd3yq-an.a.run.app`
+- Project ID: `storyvault-dev`
+- Firebase Hosting: `https://storyvault-dev.web.app`
+- Unified ADK Cloud Run: `https://en-aistudio-adk-agent-mdgjayj74q-an.a.run.app`
 - Firestore: `(default)` database in `asia-northeast1`
-- Firebase Storage: `gs://vibe-control-dev.firebasestorage.app`
-- ADK artifact bucket: `gs://vibe-control-dev-adk-artifacts`
+- Firebase Storage: `gs://storyvault-dev.firebasestorage.app`
+- ADK artifact bucket: `gs://storyvault-dev-adk-artifacts`
 - Firebase Functions codebase: `ui-backend`
 
 Deploy the SPA to the development project:
@@ -63,8 +63,8 @@ cd app
 yarn dev:deploy
 ```
 
-Deploy backend Functions after creating `backend/app/.env.vibe-control-dev` from `backend/app/.env.example`:
+Deploy backend Functions after creating `backend/app/.env.storyvault-dev` from `backend/app/.env.example`:
 
 ```bash
-firebase deploy --only functions:ui-backend --project vibe-control-dev --config firebase.json
+firebase deploy --only functions:ui-backend --project storyvault-dev --config firebase.json
 ```

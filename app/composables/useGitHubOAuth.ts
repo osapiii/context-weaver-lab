@@ -45,7 +45,7 @@ export type GitHubMergedPullRequest = {
 };
 
 type GitHubCodeMessage = {
-  source: "vibe-control-github-oauth";
+  source: "storyvault-github-oauth";
   code?: string;
   error?: string;
   state?: string;
@@ -67,7 +67,7 @@ function githubCallbackUrl(configuredRedirectUri?: string): string {
   if (origin.hostname === "localhost") {
     origin.hostname = "127.0.0.1";
   }
-  return `${origin.toString().replace(/\/$/, "")}/admin/vibe-control/github-callback`;
+  return `${origin.toString().replace(/\/$/, "")}/admin/storyvault/github-callback`;
 }
 
 function encodeBase64Url(value: string): string {
@@ -122,7 +122,7 @@ function waitForGitHubCode(
 
     const onMessage = (event: MessageEvent<GitHubCodeMessage>) => {
       const payload = event.data;
-      if (!payload || payload.source !== "vibe-control-github-oauth") return;
+      if (!payload || payload.source !== "storyvault-github-oauth") return;
       if (payload.state !== state) return;
       if (payload.error) {
         settle(() => reject(new Error(payload.error)));
@@ -225,7 +225,7 @@ export function useGitHubOAuth() {
       }
       const popup = window.open(
         url.toString(),
-        "vibe-control-github-oauth",
+        "storyvault-github-oauth",
         "width=720,height=760"
       );
       const code = await waitForGitHubCode(popup, state);

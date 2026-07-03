@@ -209,30 +209,30 @@ def build_agent_for_mode(
             tools=tools,
         )
 
-    if mode == "vibe_control":
-        from vibe_control.prompts import SYSTEM_INSTRUCTION  # type: ignore
-        from vibe_control.tools import (  # type: ignore
-            read_vibe_control_sources,
+    if mode == "storyvault":
+        from storyvault.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from storyvault.tools import (  # type: ignore
+            read_storyvault_sources,
             save_user_story_ssot,
         )
 
         tools = [
             *base_tools,
-            FunctionTool(func=read_vibe_control_sources),
+            FunctionTool(func=read_storyvault_sources),
             FunctionTool(func=save_user_story_ssot),
             FunctionTool(func=add_markdown_document),
             FunctionTool(func=add_html_document),
         ]
         return LlmAgent(
-            name="en_aistudio_vibe_control_agent",
+            name="en_aistudio_storyvault_agent",
             model=model,
             instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
             tools=tools,
         )
 
-    if mode == "vibe_capability_structuring":
-        from vibe_capability_structuring.prompts import SYSTEM_INSTRUCTION  # type: ignore
-        from vibe_capability_structuring.tools import (  # type: ignore
+    if mode == "storyvault_capability_structuring":
+        from storyvault_capability_structuring.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from storyvault_capability_structuring.tools import (  # type: ignore
             read_capability_structuring_context,
             save_capability_structure,
         )
@@ -245,16 +245,16 @@ def build_agent_for_mode(
             FunctionTool(func=add_html_document),
         ]
         return LlmAgent(
-            name="vibe_capability_structuring_agent",
+            name="storyvault_capability_structuring_agent",
             model=model,
             instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
             tools=tools,
         )
 
-    if mode == "vibe_related_context":
-        from vibe_related_context.prompts import SYSTEM_INSTRUCTION  # type: ignore
-        from vibe_related_context.schemas import RelatedContextResult  # type: ignore
-        from vibe_related_context.tools import (  # type: ignore
+    if mode == "storyvault_related_context":
+        from storyvault_related_context.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from storyvault_related_context.schemas import RelatedContextResult  # type: ignore
+        from storyvault_related_context.tools import (  # type: ignore
             fetch_github_pull_request_candidates,
             fetch_knowledge_document_candidates,
             fetch_slack_message_candidates,
@@ -269,18 +269,18 @@ def build_agent_for_mode(
             FunctionTool(func=fetch_knowledge_document_candidates),
         ]
         return LlmAgent(
-            name="vibe_related_context_agent",
+            name="storyvault_related_context_agent",
             model=model,
             instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
             tools=tools,
             output_schema=RelatedContextResult,
-            output_key="vibe_related_context",
+            output_key="storyvault_related_context",
         )
 
-    if mode == "vibe_zapping_analysis":
-        from vibe_zapping_analysis.prompts import SYSTEM_INSTRUCTION  # type: ignore
-        from vibe_zapping_analysis.schemas import ZappingAnalysisResult  # type: ignore
-        from vibe_zapping_analysis.tools import read_zapping_analysis_context  # type: ignore
+    if mode == "storyvault_zapping_analysis":
+        from storyvault_zapping_analysis.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from storyvault_zapping_analysis.schemas import ZappingAnalysisResult  # type: ignore
+        from storyvault_zapping_analysis.tools import read_zapping_analysis_context  # type: ignore
 
         tools = [
             *base_tools,
@@ -289,17 +289,17 @@ def build_agent_for_mode(
             FunctionTool(func=add_html_document),
         ]
         return LlmAgent(
-            name="vibe_zapping_analysis_agent",
+            name="storyvault_zapping_analysis_agent",
             model=model,
             instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
             tools=tools,
             output_schema=ZappingAnalysisResult,
-            output_key="vibe_zapping_analysis",
+            output_key="storyvault_zapping_analysis",
         )
 
-    if mode == "vibe_story_generation":
-        from vibe_story_generation.prompts import SYSTEM_INSTRUCTION  # type: ignore
-        from vibe_story_generation.tools import (  # type: ignore
+    if mode == "storyvault_story_generation":
+        from storyvault_story_generation.prompts import SYSTEM_INSTRUCTION  # type: ignore
+        from storyvault_story_generation.tools import (  # type: ignore
             read_story_generation_context,
             save_story_generation,
         )
@@ -312,7 +312,7 @@ def build_agent_for_mode(
             FunctionTool(func=add_html_document),
         ]
         return LlmAgent(
-            name="vibe_story_generation_agent",
+            name="storyvault_story_generation_agent",
             model=model,
             instruction=_instruction_with_global_prompt(SYSTEM_INSTRUCTION),
             tools=tools,

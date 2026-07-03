@@ -21,29 +21,29 @@ db = firestore.Client()
 def _adk_base_url(mode: str | None = None) -> str:
     normalized = (mode or "").strip().lower()
     mode_env = ""
-    if normalized == "vibe_zapping_analysis":
-        mode_env = os.getenv("EN_AISTUDIO_ADK_VIBE_ZAPPING_ANALYSIS_URL", "")
-    elif normalized == "vibe_capability_structuring":
-        mode_env = os.getenv("EN_AISTUDIO_ADK_VIBE_CAPABILITY_STRUCTURING_URL", "")
-    elif normalized == "vibe_story_generation":
-        mode_env = os.getenv("EN_AISTUDIO_ADK_VIBE_STORY_GENERATION_URL", "")
+    if normalized == "storyvault_zapping_analysis":
+        mode_env = os.getenv("EN_AISTUDIO_ADK_STORYVAULT_ZAPPING_ANALYSIS_URL", "")
+    elif normalized == "storyvault_capability_structuring":
+        mode_env = os.getenv("EN_AISTUDIO_ADK_STORYVAULT_CAPABILITY_STRUCTURING_URL", "")
+    elif normalized == "storyvault_story_generation":
+        mode_env = os.getenv("EN_AISTUDIO_ADK_STORYVAULT_STORY_GENERATION_URL", "")
     return (
         mode_env
         or os.getenv(
             "EN_AISTUDIO_ADK_AGENT_URL",
-            "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+            "https://en-aistudio-adk-agent-mdgjayj74q-an.a.run.app",
         )
     ).rstrip("/")
 
 
 def _adk_service_name(mode: str) -> str:
     normalized = (mode or "").strip().lower()
-    if normalized == "vibe_zapping_analysis":
-        return "vibe-zapping-analysis-agent"
-    if normalized == "vibe_capability_structuring":
-        return "vibe-capability-structuring-agent"
-    if normalized == "vibe_story_generation":
-        return "vibe-story-generation-agent"
+    if normalized == "storyvault_zapping_analysis":
+        return "storyvault-zapping-analysis-agent"
+    if normalized == "storyvault_capability_structuring":
+        return "storyvault-capability-structuring-agent"
+    if normalized == "storyvault_story_generation":
+        return "storyvault-story-generation-agent"
     return "en-aistudio-adk-agent"
 
 
@@ -206,7 +206,7 @@ def _with_application_scan_email_hint(
     mode_state: dict[str, Any],
 ) -> dict[str, Any]:
     # Email-link sign-in requires the exact recipient address for the pasted
-    # Firebase link. The logged-in VibeControl user can differ from that
+    # Firebase link. The logged-in StoryVault user can differ from that
     # recipient, so falling back to requestedBy.email causes auth/invalid-email.
     return mode_state
 
@@ -225,7 +225,7 @@ def _related_context_from_text(text: str) -> dict[str, Any] | None:
     parsed = _parse_json_document_body(text)
     if not parsed:
         return None
-    if parsed.get("schemaVersion") != "vibe-control-related-context-v1":
+    if parsed.get("schemaVersion") != "storyvault-related-context-v1":
         return None
     if parsed.get("status") not in ("completed", "error"):
         return None
@@ -295,16 +295,16 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
                     merged = dict(raw_bp)
                     merged.setdefault("draft", existing.get("draft"))
                     summary["businessPartner"] = merged
-            raw_related = payload.get("vibe_related_context")
+            raw_related = payload.get("storyvault_related_context")
             if isinstance(raw_related, dict) and raw_related:
-                summary["vibe_related_context"] = raw_related
+                summary["storyvault_related_context"] = raw_related
         elif event_name == "error":
             msg = payload.get("message")
             if isinstance(msg, str) and msg.strip():
                 raise RuntimeError(msg.strip())
     related_context = _related_context_from_text("".join(response_text_parts))
     if related_context is not None and not isinstance(
-        summary.get("vibe_related_context"), dict
+        summary.get("storyvault_related_context"), dict
     ):
         knowledge = related_context.get("knowledge")
         knowledge_documents = (
@@ -314,7 +314,7 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
         pull_requests = github.get("pullRequests") if isinstance(github, dict) else []
         slack = related_context.get("slack")
         slack_messages = slack.get("messages") if isinstance(slack, dict) else []
-        summary["vibe_related_context"] = {
+        summary["storyvault_related_context"] = {
             "related_context_result": related_context,
             "github_pull_request_count": len(pull_requests or []),
             "slack_message_count": len(slack_messages or []),

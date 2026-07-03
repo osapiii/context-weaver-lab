@@ -16,10 +16,10 @@ export const AdkInvokeModeEnum = z.enum([
   "web_page",
   "application_scan",
   "business_partner",
-  "vibe_related_context",
-  "vibe_zapping_analysis",
-  "vibe_capability_structuring",
-  "vibe_story_generation",
+  "storyvault_related_context",
+  "storyvault_zapping_analysis",
+  "storyvault_capability_structuring",
+  "storyvault_story_generation",
 ]);
 
 export const AdkInvokeAttachmentSchema = z.object({
@@ -113,7 +113,7 @@ export const AdkInvokeOutputSchema = z
         progress_logs: z.array(z.record(z.string(), z.unknown())).optional(),
       })
       .optional(),
-    vibe_related_context: z
+    storyvault_related_context: z
       .object({
         related_context_result: z.unknown().optional(),
         github_pull_request_count: z.number().optional(),

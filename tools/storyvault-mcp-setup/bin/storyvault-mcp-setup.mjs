@@ -4,11 +4,9 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
-const DEFAULT_URL = "https://storyvault-mcp-q2uwnmd3yq-an.a.run.app/mcp";
+const DEFAULT_URL = "https://storyvault-mcp-mdgjayj74q-an.a.run.app/mcp";
 const SERVER_NAME = "storyvault";
-const LEGACY_SERVER_NAME = "vibe_control";
 const TOKEN_ENV = "STORYVAULT_MCP_TOKEN";
-const LEGACY_TOKEN_ENV = "VIBE_CONTROL_MCP_TOKEN";
 const PACKAGE_NAME = "@enostech/storyvault-mcp-setup";
 
 const usage = () => `
@@ -90,9 +88,6 @@ const writeJsonFile = (path, value, dryRun) => {
 
 const upsertMcpServer = (path, serverConfig, dryRun) => {
   const config = readJsonFile(path);
-  if (config.mcpServers && Object.prototype.hasOwnProperty.call(config.mcpServers, LEGACY_SERVER_NAME)) {
-    delete config.mcpServers[LEGACY_SERVER_NAME];
-  }
   config.mcpServers = {
     ...(config.mcpServers || {}),
     [SERVER_NAME]: serverConfig,
@@ -108,7 +103,6 @@ const run = (command, args, dryRun) => {
 const setLaunchctlEnv = (token, dryRun) => {
   if (process.platform !== "darwin") return;
   run("launchctl", ["setenv", TOKEN_ENV, token], dryRun);
-  run("launchctl", ["setenv", LEGACY_TOKEN_ENV, token], dryRun);
 };
 
 const upsertShellEnv = (token, dryRun) => {
@@ -117,9 +111,9 @@ const upsertShellEnv = (token, dryRun) => {
   const markerLine = `${markerStart}\nexport ${TOKEN_ENV}='${token.replace(/'/g, "'\\''")}'`;
   const current = existsSync(zshrcPath) ? readFileSync(zshrcPath, "utf8") : "";
   const stripped = current
-    .replace(/\n?# StoryVault MCP\nexport (?:STORYVAULT_MCP_TOKEN|VIBE_CONTROL_MCP_TOKEN)='[^']*'\n(?:export VIBE_CONTROL_MCP_TOKEN="\$STORYVAULT_MCP_TOKEN"\n)?/g, "\n")
+    .replace(/\n?# StoryVault MCP\nexport STORYVAULT_MCP_TOKEN='[^']*'\n/g, "\n")
     .trimEnd();
-  const next = `${stripped}\n\n${markerLine}\nexport ${LEGACY_TOKEN_ENV}="$${TOKEN_ENV}"\n`;
+  const next = `${stripped}\n\n${markerLine}\n`;
   if (!dryRun) {
     writeFileSync(zshrcPath, next, "utf8");
   }
@@ -138,7 +132,6 @@ const setupCodex = ({ token, url, dryRun }) => {
   }
   if (!dryRun) {
     spawnSync("codex", ["mcp", "remove", SERVER_NAME], { stdio: "ignore" });
-    spawnSync("codex", ["mcp", "remove", LEGACY_SERVER_NAME], { stdio: "ignore" });
   }
   run("codex", ["mcp", "add", SERVER_NAME, "--url", url, "--bearer-token-env-var", TOKEN_ENV], dryRun);
   return {

@@ -1,4 +1,4 @@
-"""Gemini timestamped transcription callable for VibeControl zapping audio."""
+"""Gemini timestamped transcription callable for StoryVault zapping audio."""
 from __future__ import annotations
 
 import base64

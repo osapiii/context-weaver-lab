@@ -24,6 +24,7 @@
     {
       "source": "backend/app",
       "codebase": "ui-backend",
+      "runtime": "python312",
       "ignore": ["venv", ".git", "firebase-debug.log", "firebase-debug.*.log"]
     }
   ],

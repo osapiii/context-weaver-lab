@@ -9,7 +9,7 @@ const SERVICE_ACCOUNT_KEY_PATH = resolve(
   ".local/en-aistudio-local-dev-signer-key.json"
 );
 const DEV_ADMIN_SIGN_IN_URL =
-  "https://asia-northeast1-vibe-control-dev.cloudfunctions.net/dev_admin_sign_in";
+  "https://asia-northeast1-storyvault-dev.cloudfunctions.net/dev_admin_sign_in";
 const ALLOWED_EMAILS = new Set(["super@enostech.co.jp"]);
 
 type ServiceAccountKey = {
@@ -98,7 +98,7 @@ export default defineEventHandler(async (event) => {
       customToken: payload.result.customToken,
       email: payload.result.email || email,
       uid: payload.result.uid || "super_enostech_co_jp",
-      projectId: payload.result.projectId || "vibe-control-dev",
+      projectId: payload.result.projectId || "storyvault-dev",
     };
   }
 

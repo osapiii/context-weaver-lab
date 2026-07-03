@@ -17,7 +17,7 @@
 # Required Workflow env (set in deploy.sh via --set-env-vars):
 #   DRIVE_TO_GCS_SYNC_URL          — Cloud Run base URL for drive-to-gcs-sync
 #   GCS_TO_CONTEXT_STORE_REGISTER_URL  — Cloud Run base URL for gcs-to-filespace-register
-#   DRIVE_MIRROR_BUCKET            — e.g. "vibe-control-dev.firebasestorage.app"
+#   DRIVE_MIRROR_BUCKET            — e.g. "storyvault-dev.firebasestorage.app"
 #   FIRESTORE_DATABASE             — e.g. "(default)"
 #
 # Notes on Firestore writeback shape:

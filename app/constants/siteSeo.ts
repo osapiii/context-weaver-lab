@@ -1,7 +1,7 @@
 export const SITE_NAME = "StoryVault";
 export const SITE_DESCRIPTION =
   "StoryVaultは、操作動画・ユーザーストーリー・関連コンテキストを束ね、AI開発の背景知を管理するストーリーSSOTです。";
-export const SITE_URL = "https://vibe-control-dev.web.app";
+export const SITE_URL = "https://storyvault-dev.web.app";
 
 export const SITE_FAVICON_LINKS = [
   {

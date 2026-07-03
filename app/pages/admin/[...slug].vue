@@ -4,7 +4,7 @@ definePageMeta({
   middleware: ["admin-logged-in-check"],
 });
 
-await navigateTo({ name: "admin-vibe-control" }, { replace: true });
+await navigateTo({ name: "admin-storyvault" }, { replace: true });
 </script>
 
 <template>

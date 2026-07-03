@@ -64,12 +64,12 @@ function buildAdkSessionNavigateTarget(
   };
 }
 
-function buildVibeControlApplicationNavigateTarget(
+function buildStoryVaultApplicationNavigateTarget(
   applicationId?: string | null,
   applicationScanRequestId?: string | null
 ): WorkflowItemNavigateTarget {
   return {
-    routeName: "admin-vibe-control",
+    routeName: "admin-storyvault",
     query: {
       view: applicationScanRequestId
         ? "application-screen-catalog"
@@ -132,7 +132,7 @@ function resolveWorkflowRequestNavigateTarget(
         | { mode?: unknown; sessionId?: string; workspaceId?: string }
         | undefined;
       if (input?.mode === "application_scan") {
-        return buildVibeControlApplicationNavigateTarget(input.workspaceId, log.id);
+        return buildStoryVaultApplicationNavigateTarget(input.workspaceId, log.id);
       }
       const sessionId = input?.sessionId;
       return sessionId ? buildAdkSessionNavigateTarget(sessionId) : undefined;

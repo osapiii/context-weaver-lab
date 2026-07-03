@@ -10,7 +10,7 @@
     >
       <div class="flex h-14 items-center justify-between px-4">
         <NuxtLink
-          :to="{ name: 'admin-vibe-control' }"
+          :to="{ name: 'admin-storyvault' }"
           class="inline-flex items-center"
           aria-label="StoryVault ホームへ"
         >

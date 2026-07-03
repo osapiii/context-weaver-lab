@@ -117,23 +117,23 @@ def _source_asset_type_from_metadata(
     source = _metadata_value(metadata, "source")
     phase = _metadata_value(metadata, "phase")
     document_kind = _metadata_value(metadata, "documentKind")
-    if source == "vibe-control-application-screen-observation":
+    if source == "storyvault-application-screen-observation":
         return "application_screen"
-    if source == "vibe-control-application-screen-variant-observation":
+    if source == "storyvault-application-screen-variant-observation":
         return "application_screen_variant"
-    if source == "vibe-control-application-screen-atlas":
+    if source == "storyvault-application-screen-atlas":
         return "application_screen_atlas"
-    if source == "vibe-control-application-screen-atlas-summary":
+    if source == "storyvault-application-screen-atlas-summary":
         return "application_scan_summary"
-    if source == "vibe-control-application-screenshot-observation":
+    if source == "storyvault-application-screenshot-observation":
         return "application_screenshot"
-    if source == "vibe-control-application-scan-sitemap":
+    if source == "storyvault-application-scan-sitemap":
         return "application_scan_sitemap"
-    if source == "vibe-control-application-scan-summary":
+    if source == "storyvault-application-scan-summary":
         return "application_scan_summary"
-    if source == "vibe-control-operation-video-journey":
+    if source == "storyvault-operation-video-journey":
         return "operation_video_journey"
-    if source == "vibe-control-operation-video" or document_kind == "operation_video_metadata":
+    if source == "storyvault-operation-video" or document_kind == "operation_video_metadata":
         return "operation_video"
     if phase == "screen_observation" and descriptor.kind == "markdown_document":
         return "application_screen"
@@ -159,7 +159,7 @@ def _discovery_status(discovery_import: dict[str, Any] | None) -> str:
     return "not_registered"
 
 
-def upsert_vibe_control_source_asset(
+def upsert_storyvault_source_asset(
     db: firestore.Client,
     *,
     descriptor: ArtifactDescriptor,
@@ -168,7 +168,7 @@ def upsert_vibe_control_source_asset(
     space_id: str,
     discovery_import: dict[str, Any] | None,
 ) -> None:
-    """Mirror searchable VibeControl ADK artifacts into the SourceAsset catalog."""
+    """Mirror searchable StoryVault ADK artifacts into the SourceAsset catalog."""
     if not _truthy_metadata(
         metadata.get("agentSearchImport")
         or metadata.get("agentsearchimport")
@@ -238,7 +238,7 @@ def upsert_vibe_control_source_asset(
 
     ref = db.document(
         f"organizations/{organization_id}/spaces/{space_id}/"
-        f"vibeControlSourceAssets/{source_asset_id}"
+        f"storyVaultSourceAssets/{source_asset_id}"
     )
     if not ref.get().exists:
         payload["createdAt"] = firestore.SERVER_TIMESTAMP
@@ -551,7 +551,7 @@ def ingest_from_storage_event(
             space_id=space_id,
             uid=uid,
         )
-        upsert_vibe_control_source_asset(
+        upsert_storyvault_source_asset(
             db,
             descriptor=descriptor,
             metadata=source_metadata,

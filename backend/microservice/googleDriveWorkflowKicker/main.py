@@ -49,8 +49,8 @@ def _resolve_cors_origins() -> list[str]:
     if not raw:
         return [
             "http://localhost:3000",
-            "https://vibe-control-dev.web.app",
-            "https://vibe-control-dev.firebaseapp.com",
+            "https://storyvault-dev.web.app",
+            "https://storyvault-dev.firebaseapp.com",
         ]
     if raw == "*":
         return ["*"]

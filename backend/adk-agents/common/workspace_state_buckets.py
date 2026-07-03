@@ -12,11 +12,11 @@ TASK_KEYS = (
     "data_analysis",
     "web_page",
     "business_partner",
-    "vibe_control",
-    "vibe_related_context",
-    "vibe_zapping_analysis",
-    "vibe_capability_structuring",
-    "vibe_story_generation",
+    "storyvault",
+    "storyvault_related_context",
+    "storyvault_zapping_analysis",
+    "storyvault_capability_structuring",
+    "storyvault_story_generation",
     "guide",
 )
 

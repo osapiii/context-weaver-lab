@@ -144,7 +144,7 @@ def _llmobs_span(model_name: str):
             model_name=model_name,
             name="ask_en_aistudio_guide.generate_content",
             model_provider="google_gemini",
-            ml_app=os.getenv("DD_LLMOBS_ML_APP", "vibe-control"),
+            ml_app=os.getenv("DD_LLMOBS_ML_APP", "storyvault"),
         )
     except Exception:
         return nullcontext()
@@ -183,8 +183,8 @@ def _llmobs_annotate(
             metadata=metadata,
             metrics=metrics or None,
             tags={
-                "vibe_control.operation": "ask_en_aistudio_guide",
-                "vibe_control.feature": "guide_assistant",
+                "storyvault.operation": "ask_en_aistudio_guide",
+                "storyvault.feature": "guide_assistant",
             },
         )
     except Exception:

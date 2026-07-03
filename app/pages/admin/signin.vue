@@ -96,8 +96,8 @@ const isDevAuthBypassEmail = (email: string): boolean => {
   const devAuthBypassHosts = new Set([
     "localhost",
     "127.0.0.1",
-    "vibe-control-dev.web.app",
-    "vibe-control-dev.firebaseapp.com",
+    "storyvault-dev.web.app",
+    "storyvault-dev.firebaseapp.com",
   ]);
   const isDevHost =
     typeof window !== "undefined" &&
@@ -317,7 +317,7 @@ onMounted(async () => {
 
 <template>
   <main class="signin-shell">
-    <section class="signin-auth-panel" aria-label="VibeControl login">
+    <section class="signin-auth-panel" aria-label="StoryVault login">
       <div class="signin-auth-inner">
         <header class="signin-brand">
           <div class="signin-mark" aria-hidden="true">
@@ -325,7 +325,7 @@ onMounted(async () => {
           </div>
           <div>
             <p class="signin-kicker">ENOSTECH</p>
-            <h1>VibeControl</h1>
+            <h1>StoryVault</h1>
           </div>
         </header>
 
@@ -349,7 +349,7 @@ onMounted(async () => {
           <div>
             <p>スマートフォンでのご利用について</p>
             <span>
-              ログイン後、VibeControl 画面へ移動します。
+              ログイン後、StoryVault 画面へ移動します。
             </span>
           </div>
         </div>
@@ -506,7 +506,7 @@ onMounted(async () => {
         </div>
         <div class="preview-header">
           <div>
-            <p>VibeControl</p>
+            <p>StoryVault</p>
             <strong>Story SSOT</strong>
           </div>
           <div class="preview-live">LIVE</div>

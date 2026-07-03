@@ -1,5 +1,5 @@
 <template>
-  <section :class="embedded ? 'vohance-workspace text-slate-900' : 'vohance-workspace min-h-[calc(100vh-5.5rem)] bg-[#f8f7ff] px-6 py-7 text-slate-900'">
+  <section :class="embedded ? 'storyvault-video-workspace text-slate-900' : 'storyvault-video-workspace min-h-[calc(100vh-5.5rem)] bg-[#f8f7ff] px-6 py-7 text-slate-900'">
     <div v-if="store.errorMessage" class="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
       {{ store.errorMessage }}
     </div>
@@ -1871,7 +1871,7 @@
       <form class="w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl" @submit.prevent="registerVideo">
         <div class="border-b border-gray-100 px-6 py-5">
           <h2 class="text-2xl font-bold text-gray-900">動画を登録</h2>
-          <p class="mt-1 text-sm text-gray-500">Vohance に取り込む素材動画を登録します。</p>
+          <p class="mt-1 text-sm text-gray-500">StoryVault に取り込む素材動画を登録します。</p>
         </div>
         <div class="grid gap-6 p-6 lg:grid-cols-[1fr_1.2fr]">
           <div class="space-y-4">
@@ -6600,6 +6600,7 @@ const requestExport = async (): Promise<void> => {
       sectionIndex: number;
       sectionStartSeconds: number;
       sectionEndSeconds: number;
+      audioSegments: AudioSegmentInput[];
     }> = [];
     for (const [sectionIndex, section] of editorSections.value.entries()) {
       const progressKey = `section-${sectionIndex}`;
@@ -6613,73 +6614,15 @@ const requestExport = async (): Promise<void> => {
       const audioSegments = buildAudioSegmentsForEditorSection(section);
       const timing = sectionExportTiming(section);
 
-      const requestId = `merge_${project.id}_section_${sectionIndex}_${Date.now()}`;
-      const outputFilePath = getMergedVideoStoragePath({
-        organizationId: store.organizationId,
-        spaceId: store.spaceId,
-        videoId: video.id,
-        projectId: project.id,
-        fileName: `section_${sectionIndex}_merged_${Date.now()}.mp4`,
-      });
-      await createWorkflowRequestDoc(
-        "mergeVideoAudioNarrationRequests",
-        {
-          videoBucketName: sectionVideo.bucketName,
-          videoFilePath: sectionVideo.filePath,
-          videoId: video.id,
-          projectId: project.id,
-          projectName: project.name,
-          videoTitle: video.title,
-          sectionId: section.id,
-          sectionIndex,
-          sectionTitle: section.title,
-          expectedDurationSeconds: timing.expectedDurationSeconds,
-          sectionStartSeconds: timing.sectionStartSeconds,
-          sectionEndSeconds: timing.sectionEndSeconds,
-          audioSegments,
-          outputBucketName: store.defaultBucket,
-          outputFilePath,
-        },
-        requestId
-      );
-      requestNotice.value = {
-        kind: "success",
-        message: `セクション動画を合成中... ${sectionIndex + 1}/${editorSections.value.length}`,
-      };
-      const result = await waitForRequestDoc("mergeVideoAudioNarrationRequests", requestId);
-      const output = result.output ?? {};
-      const mergedOutput = extractStorageOutputPath(output, {
-        preferredNestedKey: "mergedVideoPath",
-      });
-      if (!mergedOutput) {
-        setExportProgressItemStatus(progressKey, "error");
-        throw new Error(`セクション${sectionIndex + 1}の合成出力が不完全です。`);
-      }
       sectionOutputs.push({
-        ...mergedOutput,
+        bucketName: sectionVideo.bucketName,
+        filePath: sectionVideo.filePath,
         ...timing,
         sectionId: section.id,
         sectionIndex,
+        audioSegments,
       });
-      const mergedVideoOutput = {
-        resultBucketName: mergedOutput.bucketName,
-        resultFilePath: mergedOutput.filePath,
-        processingTime: Number(output.processingTime ?? 0),
-        ...(isRecord(output.statistics) ? { statistics: output.statistics } : {}),
-        requestId,
-      };
-      await updateEditorProjectSections((sections) => sections.map((item) =>
-        item.id === section.id
-          ? {
-              ...item,
-              mergedVideoOutput,
-            }
-          : item
-      ));
       setExportProgressItemStatus(progressKey, "completed");
-      if (selectedExportSectionIndex.value === sectionIndex) {
-        void refreshExportSectionPreview();
-      }
     }
 
     setExportProgressItemStatus("final", "running");
@@ -9049,7 +8992,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.vohance-workspace {
+.storyvault-video-workspace {
   font-feature-settings: "palt";
 }
 

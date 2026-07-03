@@ -23,7 +23,7 @@ export const useDatadogStore = defineStore("datadog", {
         clientToken: runtimeConfig.public.datadog.clientToken,
         site: runtimeConfig.public.datadog.site || "ap1.datadoghq.com",
         service:
-          runtimeConfig.public.datadog.service || "vibe-control-frontend",
+          runtimeConfig.public.datadog.service || "storyvault-frontend",
         sessionSampleRate: 100,
         sessionReplaySampleRate: 100,
         trackResources: true,

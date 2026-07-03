@@ -23,7 +23,7 @@ db = firestore.Client()
 def _resolve_kicker_url() -> str:
     return os.getenv(
         "WEB_CRAWL_WORKFLOW_KICKER_URL",
-        "https://web-crawl-workflow-kicker-wsqdguu4pq-uc.a.run.app",
+        "https://web-crawl-workflow-kicker-mdgjayj74q-uc.a.run.app",
     ).rstrip("/")
 
 

@@ -339,7 +339,7 @@
           </EnCard>
         </div>
         <div v-if="item.key == 'mcp'">
-          <VibeControlMcpSetupPanel />
+          <StoryVaultMcpSetupPanel />
         </div>
       </template>
     </UTabs>

@@ -11,8 +11,8 @@ substitutions:
   _SLACK_TOKEN_ENCRYPTION_KEY: ""
   _DD_LLMOBS_ENABLED: "false"
   _DD_LLMOBS_AGENTLESS_ENABLED: "true"
-  _DD_LLMOBS_ML_APP: vibe-control
-  _DD_SERVICE: vibe-control-adk-agent
+  _DD_LLMOBS_ML_APP: storyvault
+  _DD_SERVICE: storyvault-adk-agent
   _DD_ENV: dev
   _DD_SITE: ap1.datadoghq.com
 

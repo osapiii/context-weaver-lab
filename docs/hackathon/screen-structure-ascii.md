@@ -1,28 +1,28 @@
-# VibeControl ASCII Screen Structure
+# StoryVault ASCII Screen Structure
 
 Last updated: 2026-06-18
 
 These wireframes intentionally follow the EN AIstudio admin/workspace patterns: left navigation, compact operation-first panels, tabbed detail surfaces, and evidence-first cards.
 
-Domain premise: VibeControl is multi-application. The top-level domain model is `Application`, and each Application owns multiple user stories. Every board, source setup, evidence view, and export action is scoped to the selected Application.
+Domain premise: StoryVault is multi-application. The top-level domain model is `Application`, and each Application owns multiple user stories. Every board, source setup, evidence view, and export action is scoped to the selected Application.
 
 ## 1. App Shell
 
 ```text
 +--------------------------------------------------------------------------------+
-| EN AIstudio / VibeControl                                      [User] [Settings] |
+| EN AIstudio / StoryVault                                      [User] [Settings] |
 +----------------------+---------------------------------------------------------+
-| Admin Nav            | VibeControl                                             |
-|                      | Govern vibe coding with application-scoped stories      |
+| Admin Nav            | StoryVault                                             |
+|                      | Govern AI coding with application-scoped stories      |
 | - AI Studio          |                                                         |
 | - Knowledge          | [App Switcher] [New App] [Generate Stories] [Export]    |
-| - VibeControl  (*)   |                                                         |
+| - StoryVault  (*)   |                                                         |
 | - Request Logs       | +----------------+ +----------------+ +---------------+ |
 | - Settings           | | Stories        | | Drift Alerts   | | Avg Confidence| |
 |                      | | 42 total       | | 5 high         | | 86%           | |
 |                      | +----------------+ +----------------+ +---------------+ |
 |                      |                                                         |
-|                      | Main content changes by selected VibeControl view.      |
+|                      | Main content changes by selected StoryVault view.      |
 +----------------------+---------------------------------------------------------+
 ```
 
@@ -32,7 +32,7 @@ Primary use: understand what remains for MVP, which stories are risky, and where
 
 ```text
 +--------------------------------------------------------------------------------+
-| VibeControl > Story Board                                                       |
+| StoryVault > Story Board                                                       |
 +--------------------------------------------------------------------------------+
 | Application: [Demo Commerce App v]  Key: SHOP  Repo: enostech/demo-shop         |
 | [VC Platform] [SHOP Demo Commerce] [New App] [Edit App]                         |
@@ -115,7 +115,7 @@ Primary use: one place to inspect intent, tickets, implementation, evidence, and
 
 ## 3.5 Application Detail Top
 
-Primary use: VibeControl opens on the currently selected Application. The page first shows application metadata, source bindings, and health metrics, then the story board below.
+Primary use: StoryVault opens on the currently selected Application. The page first shows application metadata, source bindings, and health metrics, then the story board below.
 
 ```text
 +--------------------------------------------------------------------------------+
@@ -256,7 +256,7 @@ This should reuse the existing EN AIstudio knowledge screens instead of creating
 
 ```text
 +--------------------------------------------------------------------------------+
-| VibeControl > Sources                                                           |
+| StoryVault > Sources                                                           |
 +--------------------------------------------------------------------------------+
 | Application                                                                    |
 | [Application v] [Application Key] [Application Name]                            |
@@ -300,7 +300,7 @@ This should reuse the existing EN AIstudio knowledge screens instead of creating
 | (*) MCP/OAuth endpoint                                                          |
 |                                                                                |
 | Endpoint                                                                        |
-| https://.../vibe-control/mcp/stories/ST-104                                     |
+| https://.../storyvault/mcp/stories/ST-104                                     |
 |                                                                                |
 | [Copy endpoint] [Regenerate bundle]                                             |
 +--------------------------------------------------------------------------------+
@@ -309,37 +309,37 @@ This should reuse the existing EN AIstudio knowledge screens instead of creating
 ## 11. Route Draft
 
 ```text
-/admin/vibe-control
+/admin/storyvault
   Selected Application detail top + story board / dashboard
 
-/admin/vibe-control/sources
+/admin/storyvault/sources
   Application-scoped source setup for FileSpace, GitHub, tickets, and export targets
 
-/admin/vibe-control/stories/:storyId
+/admin/storyvault/stories/:storyId
   Story detail package
 
-/admin/vibe-control/runs/:runId
+/admin/storyvault/runs/:runId
   Agent run detail and logs
 ```
 
 ## 12. Initial Component Draft
 
 ```text
-app/pages/admin/vibe-control/index.vue
-app/pages/admin/vibe-control/sources.vue
-app/pages/admin/vibe-control/stories/[storyId].vue
-app/pages/admin/vibe-control/runs/[runId].vue
+app/pages/admin/storyvault/index.vue
+app/pages/admin/storyvault/sources.vue
+app/pages/admin/storyvault/stories/[storyId].vue
+app/pages/admin/storyvault/runs/[runId].vue
 
-app/components/vibeControl/VibeControlStoryBoard.vue
-app/components/vibeControl/VibeControlStoryCard.vue
-app/components/vibeControl/VibeControlStoryDetail.vue
-app/components/vibeControl/VibeControlApplicationHeader.vue
-app/components/vibeControl/VibeControlApplicationDetail.vue
-app/components/vibeControl/VibeControlApplicationFormModal.vue
-app/components/vibeControl/VibeControlEvidenceRail.vue
-app/components/vibeControl/VibeControlSourceSetup.vue
-app/components/vibeControl/VibeControlAgentRunCenter.vue
+app/components/storyVault/StoryVaultStoryBoard.vue
+app/components/storyVault/StoryVaultStoryCard.vue
+app/components/storyVault/StoryVaultStoryDetail.vue
+app/components/storyVault/StoryVaultApplicationHeader.vue
+app/components/storyVault/StoryVaultApplicationDetail.vue
+app/components/storyVault/StoryVaultApplicationFormModal.vue
+app/components/storyVault/StoryVaultEvidenceRail.vue
+app/components/storyVault/StoryVaultSourceSetup.vue
+app/components/storyVault/StoryVaultAgentRunCenter.vue
 
-app/stores/vibeControl.ts
-app/types/models/vibeControl.ts
+app/stores/storyVault.ts
+app/types/models/storyVault.ts
 ```

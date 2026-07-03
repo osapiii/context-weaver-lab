@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VibeControlSourceAssetTypeSchema } from "@models/vibeControl";
+import { StoryVaultSourceAssetTypeSchema } from "@models/storyVault";
 import {
   applicationScanFieldsComplete,
   applicationScanModeStateToApi,
@@ -79,11 +79,11 @@ describe("applicationScanWorkspaceState", () => {
   });
 
   it("accepts Screen Atlas SourceAsset types", () => {
-    expect(VibeControlSourceAssetTypeSchema.parse("application_screen")).toBe(
+    expect(StoryVaultSourceAssetTypeSchema.parse("application_screen")).toBe(
       "application_screen"
     );
     expect(
-      VibeControlSourceAssetTypeSchema.parse("application_screen_variant")
+      StoryVaultSourceAssetTypeSchema.parse("application_screen_variant")
     ).toBe("application_screen_variant");
   });
 

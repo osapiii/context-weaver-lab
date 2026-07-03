@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: StoryVault Trim Silence Video API
+  version: 1.0.0
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+  /trim-silence:
+    post:
+      summary: Trim silent portions from a video while preserving A/V sync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id, input, systemMetadata]
+              properties:
+                request_id:
+                  type: string
+                input:
+                  type: object
+                  required:
+                    - videoBucketName
+                    - videoFilePath
+                    - outputBucketName
+                    - outputFilePath
+                    - manifestOutputFilePath
+                  properties:
+                    videoBucketName:
+                      type: string
+                    videoFilePath:
+                      type: string
+                    outputBucketName:
+                      type: string
+                    outputFilePath:
+                      type: string
+                    manifestOutputFilePath:
+                      type: string
+                    settings:
+                      type: object
+                      properties:
+                        thresholdDb:
+                          type: number
+                          default: -38
+                        minSilenceMs:
+                          type: integer
+                          default: 700
+                        keepPaddingMs:
+                          type: integer
+                          default: 180
+                        minSegmentMs:
+                          type: integer
+                          default: 450
+                systemMetadata:
+                  type: object
+      responses:
+        "200":
+          description: Trim completed
+        "400":
+          description: Validation error
+        "500":
+          description: Processing error

@@ -1,6 +1,6 @@
 # EN AIstudio ADK Agents
 
-EN AIstudio / VibeControl の ADK agents を mode ごとに実装し、
+EN AIstudio / StoryVault の ADK agents を mode ごとに実装し、
 必要に応じて独立した Cloud Run service として deploy する.
 
 ## モード一覧
@@ -12,8 +12,8 @@ EN AIstudio / VibeControl の ADK agents を mode ごとに実装し、
 | image | `en-aistudio-image-agent` | 画像生成 | `search_knowledge` + image generation tools |
 | consultation | `en-aistudio-consultation-agent` | 経営相談 | `search_knowledge` |
 | guide | `en-aistudio-adk-agent` (unified) | 操作ガイド | `VertexAiSearchTool` (platform datastore `en-aistudio-platform-guide`) |
-| vibe_capability_structuring | `vibe-capability-structuring-agent` | VibeControl Capability 構造化 | `read_capability_structuring_context`, `save_capability_structure` |
-| vibe_story_generation | `vibe-story-generation-agent` | VibeControl Story 生成 | `read_story_generation_context`, `save_story_generation` |
+| storyvault_capability_structuring | `storyvault-capability-structuring-agent` | StoryVault Capability 構造化 | `read_capability_structuring_context`, `save_capability_structure` |
+| storyvault_story_generation | `storyvault-story-generation-agent` | StoryVault Story 生成 | `read_story_generation_context`, `save_story_generation` |
 
 guide は全ユーザー共通の Agent Search datastore を参照する (組織 FileSpace とは別).
 intent 分類のみ frontend 直 Gemini. 1 ターン目以降の guide 本体は ADK SSE.
@@ -66,14 +66,14 @@ backend/adk-agents/
 │   ├── agent.py
 │   ├── prompts.py
 │   └── openai_image_tools.py
-├── vibe_capability_structuring/
+├── storyvault_capability_structuring/
 │   ├── Dockerfile
 │   ├── cloudbuild.yaml
 │   ├── server.py
 │   ├── agent.py
 │   ├── prompts.py
 │   └── tools.py
-└── vibe_story_generation/
+└── storyvault_story_generation/
     ├── (同構成)
     ├── agent.py
     ├── prompts.py
@@ -92,8 +92,8 @@ backend/adk-agents/
 | `FIREBASE_PROJECT_ID`          | Firebase Admin SDK (ADC で auto-detect) |
 | `DD_LLMOBS_ENABLED`            | Datadog LLM Observability を有効化 (`true` / `false`) |
 | `DD_LLMOBS_AGENTLESS_ENABLED`  | Datadog agentless 送信 (`true` 推奨) |
-| `DD_LLMOBS_ML_APP`             | LLM Observability app 名 (`vibe-control`) |
-| `DD_SERVICE`                   | Datadog 上の論理 service 名 (`vibe-control-adk-agent`) |
+| `DD_LLMOBS_ML_APP`             | LLM Observability app 名 (`storyvault`) |
+| `DD_SERVICE`                   | Datadog 上の論理 service 名 (`storyvault-adk-agent`) |
 | `DD_ENV`                       | Datadog env (`dev` / `prod`) |
 | `DD_SITE`                      | Datadog site (`ap1.datadoghq.com`) |
 | `DD_API_KEY`                   | Datadog API key。Secret Manager から注入する |
@@ -102,7 +102,7 @@ Datadog API key は Cloud Build substitutions に渡さない。例:
 
 ```bash
 gcloud run services update en-aistudio-adk-agent \
-  --project=vibe-control-dev \
+  --project=storyvault-dev \
   --region=asia-northeast1 \
   --update-env-vars=DD_LLMOBS_ENABLED=true \
   --update-secrets=DD_API_KEY=datadog-api-key:latest
@@ -119,10 +119,10 @@ gcloud builds submit --config cloudbuild.yaml --substitutions=_REGION=asia-north
 
 ```bash
 cd backend/adk-agents
-PROJECT_ID=vibe-control-dev REGION=asia-northeast1 ONLY=all ./deploy-all.sh
+PROJECT_ID=storyvault-dev REGION=asia-northeast1 ONLY=all ./deploy-all.sh
 ```
 
-`vibe_capability_structuring` / `vibe_story_generation` は RequestDoc trigger から
+`storyvault_capability_structuring` / `storyvault_story_generation` は RequestDoc trigger から
 internal secret header で呼ばれるため、Cloud Run IAM は public invoker を許可する。
 `deploy-all.sh` 経由では deploy 後に `roles/run.invoker` を `allUsers` へ付与する。
 
@@ -133,8 +133,8 @@ deploy 後の URL を EN AIstudio frontend の env に登録:
 NUXT_PUBLIC_EN_AISTUDIO_ADK_WRITING_URL=https://en-aistudio-writing-agent-xxx.a.run.app
 NUXT_PUBLIC_EN_AISTUDIO_ADK_SHEET_URL=https://en-aistudio-sheet-agent-xxx.a.run.app
 NUXT_PUBLIC_EN_AISTUDIO_ADK_IMAGE_URL=https://en-aistudio-image-agent-xxx.a.run.app
-NUXT_PUBLIC_EN_AISTUDIO_ADK_VIBE_CAPABILITY_STRUCTURING_URL=https://vibe-capability-structuring-agent-xxx.a.run.app
-NUXT_PUBLIC_EN_AISTUDIO_ADK_VIBE_STORY_GENERATION_URL=https://vibe-story-generation-agent-xxx.a.run.app
+NUXT_PUBLIC_EN_AISTUDIO_ADK_STORYVAULT_CAPABILITY_STRUCTURING_URL=https://storyvault-capability-structuring-agent-xxx.a.run.app
+NUXT_PUBLIC_EN_AISTUDIO_ADK_STORYVAULT_STORY_GENERATION_URL=https://storyvault-story-generation-agent-xxx.a.run.app
 ```
 
 全 mode を unified service に寄せる場合は `NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL` 1 個でも可.

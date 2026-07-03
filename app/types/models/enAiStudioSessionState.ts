@@ -11,10 +11,10 @@ export type EnAiStudioActiveTask =
   | "web_page"
   | "application_scan"
   | "business_partner"
-  | "vibe_related_context"
-  | "vibe_zapping_analysis"
-  | "vibe_capability_structuring"
-  | "vibe_story_generation"
+  | "storyvault_related_context"
+  | "storyvault_zapping_analysis"
+  | "storyvault_capability_structuring"
+  | "storyvault_story_generation"
   | "guide"
   | "sheet";
 
@@ -105,25 +105,25 @@ export type BusinessPartnerTaskBucket = TaskBucketBase<
   unknown
 >;
 
-export type VibeRelatedContextTaskBucket = TaskBucketBase<
+export type StoryVaultRelatedContextTaskBucket = TaskBucketBase<
   Record<string, unknown>,
   Record<string, unknown>,
   unknown
 >;
 
-export type VibeCapabilityStructuringTaskBucket = TaskBucketBase<
+export type StoryVaultCapabilityStructuringTaskBucket = TaskBucketBase<
   Record<string, unknown>,
   Record<string, unknown>,
   unknown
 >;
 
-export type VibeZappingAnalysisTaskBucket = TaskBucketBase<
+export type StoryVaultZappingAnalysisTaskBucket = TaskBucketBase<
   Record<string, unknown>,
   Record<string, unknown>,
   unknown
 >;
 
-export type VibeStoryGenerationTaskBucket = TaskBucketBase<
+export type StoryVaultStoryGenerationTaskBucket = TaskBucketBase<
   Record<string, unknown>,
   Record<string, unknown>,
   unknown
@@ -156,10 +156,10 @@ export interface EnAiStudioSessionState {
   web_page?: WebPageTaskBucket;
   application_scan?: ApplicationScanTaskBucket;
   business_partner?: BusinessPartnerTaskBucket;
-  vibe_related_context?: VibeRelatedContextTaskBucket;
-  vibe_zapping_analysis?: VibeZappingAnalysisTaskBucket;
-  vibe_capability_structuring?: VibeCapabilityStructuringTaskBucket;
-  vibe_story_generation?: VibeStoryGenerationTaskBucket;
+  storyvault_related_context?: StoryVaultRelatedContextTaskBucket;
+  storyvault_zapping_analysis?: StoryVaultZappingAnalysisTaskBucket;
+  storyvault_capability_structuring?: StoryVaultCapabilityStructuringTaskBucket;
+  storyvault_story_generation?: StoryVaultStoryGenerationTaskBucket;
   guide?: GuideTaskBucket;
 }
 
@@ -180,10 +180,10 @@ const EN_AISTUDIO_ACTIVE_TASKS = new Set<EnAiStudioActiveTask>([
   "web_page",
   "application_scan",
   "business_partner",
-  "vibe_related_context",
-  "vibe_zapping_analysis",
-  "vibe_capability_structuring",
-  "vibe_story_generation",
+  "storyvault_related_context",
+  "storyvault_zapping_analysis",
+  "storyvault_capability_structuring",
+  "storyvault_story_generation",
   "guide",
   "sheet",
 ]);

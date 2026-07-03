@@ -161,7 +161,7 @@ const selectedItem = ref<WorkflowItem | null>(null);
 
 const sourceOptions = [
   { value: "all", label: "すべて" },
-  { value: "adkSession", label: "VibeControl" },
+  { value: "adkSession", label: "StoryVault" },
   { value: "workflowRequest", label: "ワークフロー" },
 ];
 const statusOptions = [
