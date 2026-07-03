@@ -23,7 +23,7 @@ SECRET_ID_RE = re.compile(r"[^A-Za-z0-9_-]+")
 SESSION_TTL_SECONDS = int(os.getenv("E2E_AUTH_BROWSER_SESSION_TTL_SECONDS", "1800"))
 MAX_ENTRY_URL_LENGTH = 2048
 
-app = FastAPI(title="Vibe E2E Auth Browser")
+app = FastAPI(title="StoryVault E2E Auth Browser")
 
 _playwright: Any | None = None
 _browser: Browser | None = None
@@ -87,9 +87,9 @@ def _shared_secret() -> str:
 
 
 def _secret_id(organization_id: str, application_id: str) -> str:
-    raw = f"vibe-e2e-state-{organization_id}-{application_id}"
+    raw = f"storyvault-e2e-state-{organization_id}-{application_id}"
     normalized = SECRET_ID_RE.sub("-", raw).strip("-")
-    return normalized[:240] or "vibe-e2e-state"
+    return normalized[:240] or "storyvault-e2e-state"
 
 
 def _sign_message(
@@ -179,7 +179,7 @@ async def _save_storage_state(
                 "secret": {
                     "replication": {"automatic": {}},
                     "labels": {
-                        "source": "vibe-control",
+                        "source": "storyvault",
                         "kind": "e2e-auth-state",
                     },
                 },

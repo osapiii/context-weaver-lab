@@ -1,4 +1,4 @@
-"""Slack OAuth connection and message read helpers for VibeControl."""
+"""Slack OAuth connection and message read helpers for StoryVault."""
 from __future__ import annotations
 
 import os
@@ -123,6 +123,14 @@ def _slack_get(
     return payload
 
 
+def _as_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(maximum, parsed))
+
+
 def _exchange_auth_code(code: str, redirect_uri: str | None = None) -> dict[str, Any]:
     client_id = _oauth_client_id()
     client_secret = _oauth_client_secret()
@@ -172,6 +180,111 @@ def _access_token_for_user(organization_id: str, user_id: str) -> str:
     return token
 
 
+def _message_permalink(access_token: str, channel_id: str, message_ts: str) -> str:
+    if not channel_id or not message_ts:
+        return ""
+    try:
+        payload = _slack_get(
+            access_token,
+            "/chat.getPermalink",
+            {"channel": channel_id, "message_ts": message_ts},
+        )
+        return str(payload.get("permalink") or "")
+    except Exception:
+        return ""
+
+
+def _message_dto(
+    item: dict[str, Any],
+    *,
+    access_token: str,
+    channel_id: str = "",
+    channel_name: str = "",
+) -> dict[str, Any]:
+    channel = item.get("channel") if isinstance(item.get("channel"), dict) else {}
+    resolved_channel_id = (
+        str(item.get("channel_id") or "").strip()
+        or str(channel.get("id") or "").strip()
+        or channel_id
+    )
+    resolved_channel_name = (
+        str(item.get("channel_name") or "").strip()
+        or str(channel.get("name") or "").strip()
+        or channel_name
+    )
+    message_ts = str(item.get("ts") or "").strip()
+    permalink = str(item.get("permalink") or "").strip()
+    if not permalink:
+        permalink = _message_permalink(access_token, resolved_channel_id, message_ts)
+    return {
+        "channelId": resolved_channel_id,
+        "channelName": resolved_channel_name,
+        "messageTs": message_ts,
+        "threadTs": str(item.get("thread_ts") or "").strip(),
+        "permalink": permalink,
+        "author": str(item.get("user") or item.get("username") or "").strip(),
+        "text": str(item.get("text") or "").strip()[:2000],
+        "postedAt": message_ts,
+    }
+
+
+def _search_messages(access_token: str, query: str, limit: int) -> list[dict[str, Any]]:
+    payload = _slack_get(
+        access_token,
+        "/search.messages",
+        {
+            "query": query,
+            "sort": "timestamp",
+            "sort_dir": "desc",
+            "count": min(limit, 20),
+        },
+    )
+    matches = (payload.get("messages") or {}).get("matches") or []
+    return [
+        _message_dto(item, access_token=access_token)
+        for item in matches
+        if isinstance(item, dict)
+    ][:limit]
+
+
+def _recent_messages(access_token: str, limit: int) -> list[dict[str, Any]]:
+    channels = _slack_get(
+        access_token,
+        "/conversations.list",
+        {
+            "types": "public_channel,private_channel",
+            "exclude_archived": True,
+            "limit": 50,
+        },
+    ).get("channels") or []
+    out: list[dict[str, Any]] = []
+    for channel in channels:
+        if not isinstance(channel, dict) or not channel.get("id"):
+            continue
+        try:
+            history = _slack_get(
+                access_token,
+                "/conversations.history",
+                {"channel": channel.get("id"), "limit": min(20, limit)},
+            )
+        except https_fn.HttpsError:
+            continue
+        for item in history.get("messages") or []:
+            if not isinstance(item, dict) or item.get("subtype"):
+                continue
+            out.append(
+                _message_dto(
+                    item,
+                    access_token=access_token,
+                    channel_id=str(channel.get("id") or ""),
+                    channel_name=str(channel.get("name") or ""),
+                )
+            )
+            if len(out) >= limit:
+                return out
+    return out
+
+
 @https_fn.on_call(region="asia-northeast1", memory=512, timeout_sec=60)
 def connect_slack(req: https_fn.CallableRequest) -> dict[str, Any]:
     user_id = _require_auth(req)
@@ -201,6 +314,11 @@ def connect_slack(req: https_fn.CallableRequest) -> dict[str, Any]:
         for scope in str(token.get("scope") or "").split(",")
         if scope.strip()
     ]
+    user_scopes = [
+        scope.strip()
+        for scope in str(authed_user.get("scope") or "").split(",")
+        if scope.strip()
+    ]
     now = firestore.SERVER_TIMESTAMP
     _connection_ref(organization_id, user_id).set(
         {
@@ -211,6 +329,10 @@ def connect_slack(req: https_fn.CallableRequest) -> dict[str, Any]:
             "slackUserId": authed_user.get("id") or "",
             "scopes": scopes,
             "accessToken": _protect(access_token),
+            "userAccessToken": _protect(str(authed_user.get("access_token") or ""))
+            if authed_user.get("access_token")
+            else None,
+            "userScopes": user_scopes,
             "connectedAt": now,
             "updatedAt": now,
         },
@@ -222,6 +344,7 @@ def connect_slack(req: https_fn.CallableRequest) -> dict[str, Any]:
         "teamName": team.get("name") or "",
         "slackUserId": authed_user.get("id") or "",
         "scopes": scopes,
+        "userScopes": user_scopes,
     }
 
 
@@ -240,6 +363,7 @@ def get_slack_connection(req: https_fn.CallableRequest) -> dict[str, Any]:
         "teamName": doc.get("teamName") or "",
         "slackUserId": doc.get("slackUserId") or "",
         "scopes": doc.get("scopes") or [],
+        "userScopes": doc.get("userScopes") or [],
     }
 
 
@@ -265,4 +389,34 @@ def test_slack_connection(req: https_fn.CallableRequest) -> dict[str, Any]:
         "user": auth.get("user") or "",
         "teamId": auth.get("team_id") or "",
         "userId": auth.get("user_id") or "",
+    }
+
+
+@https_fn.on_call(region="asia-northeast1", memory=512, timeout_sec=60)
+def list_slack_messages(req: https_fn.CallableRequest) -> dict[str, Any]:
+    """Read Slack messages for setup checks and lightweight previews.
+
+    Rich related-context ranking is handled by the ADK agent, but this callable
+    gives the app a direct way to confirm collection works before invoking AI.
+    """
+    user_id = _require_auth(req)
+    data = req.data if isinstance(req.data, dict) else {}
+    organization_id = _require_org(data)
+    query = str(data.get("query") or "").strip()
+    limit = _as_int(data.get("limit"), default=10, minimum=1, maximum=20)
+    token = _access_token_for_user(organization_id, user_id)
+    connection = _connection_ref(organization_id, user_id).get().to_dict() or {}
+    if query:
+        user_token = _unprotect(connection.get("userAccessToken"))
+        messages = _search_messages(user_token, query, limit) if user_token else []
+        if not messages:
+            messages = _recent_messages(token, limit)
+    else:
+        messages = _recent_messages(token, limit)
+    return {
+        "ok": True,
+        "teamId": connection.get("teamId") or "",
+        "teamName": connection.get("teamName") or "",
+        "query": query,
+        "messages": messages,
     }

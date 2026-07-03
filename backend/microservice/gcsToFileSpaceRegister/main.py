@@ -39,7 +39,7 @@ PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "en-aistudio-development")
 MIRROR_BUCKET = resolve_knowledge_storage_bucket(PROJECT_ID)
 CONTEXT_STORE_SERVICE_URL = os.getenv(
     "CONTEXT_STORE_SERVICE_URL",
-    "https://context-store-wsqdguu4pq-uc.a.run.app",
+    "https://context-store-mdgjayj74q-uc.a.run.app",
 ).rstrip("/")
 IMPORT_TIMEOUT_SEC = float(os.getenv("CONTEXT_STORE_IMPORT_TIMEOUT_SEC", "180"))
 DELETE_TIMEOUT_SEC = float(os.getenv("CONTEXT_STORE_DELETE_TIMEOUT_SEC", "60"))

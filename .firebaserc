@@ -1,13 +1,13 @@
 {
   "projects": {
-    "default": "vibe-control-dev",
-    "development": "vibe-control-dev"
+    "default": "storyvault-dev",
+    "development": "storyvault-dev"
   },
   "targets": {
-    "vibe-control-dev": {
+    "storyvault-dev": {
       "hosting": {
         "default": [
-          "vibe-control-dev"
+          "storyvault-dev"
         ]
       }
     }

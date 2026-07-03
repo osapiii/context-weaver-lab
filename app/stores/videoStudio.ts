@@ -80,6 +80,22 @@ const collectUndefinedFieldPaths = (
   );
 };
 
+const hasPersistedEditorProgress = (project: VideoStudioProject): boolean => {
+  if (project.currentStep !== "section_split") return true;
+  if ((project.completedSteps ?? []).length > 0) return true;
+  if (project.mergedVideoOutput) return true;
+  if (project.subtitleOutput) return true;
+  if (project.silenceCutOutput) return true;
+  if (project.latestExportedZip || project.latestExportedAt) return true;
+  return (project.sections ?? []).some((section) => {
+    if (section.isFixed || section.mergedVideoOutput) return true;
+    if (section.recording?.transcriptionStatus === "completed") return true;
+    return (section.finalyNarrations ?? []).some(
+      (segment) => segment.isTtsGenerated || Boolean(segment.requestOutput)
+    );
+  });
+};
+
 const extractYouTubeVideoId = (url: string): string | null => {
   const match = url.match(
     /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\\s]{11})/
@@ -376,7 +392,7 @@ export const useVideoStudioStore = defineStore("videoStudio", {
         removeUndefinedFields({
           id: params.videoId,
           ...input,
-          sourceVibeControlOperationVideo: true,
+          sourceStoryVaultOperationVideo: true,
         } as unknown as VideoStudioVideo & Record<string, unknown>),
         { merge: true }
       );
@@ -467,8 +483,11 @@ export const useVideoStudioStore = defineStore("videoStudio", {
           removeUndefinedFields({ id: params.projectId, ...input } as VideoStudioProject)
         );
       } else {
+        const existingProject = existing.data();
         const shouldRefreshPreparedSections =
-          params.refreshPreparedSections === true && params.sections.length > 0;
+          params.refreshPreparedSections === true &&
+          params.sections.length > 0 &&
+          !hasPersistedEditorProgress(existingProject);
         await updateDoc(projectRef, removeUndefinedFields({
           ...(shouldRefreshPreparedSections
             ? {

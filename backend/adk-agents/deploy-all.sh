@@ -3,7 +3,7 @@
 #
 # 使い方:
 #   cd backend/adk-agents
-#   PROJECT_ID=vibe-control-dev REGION=asia-northeast1 ./deploy-all.sh
+#   PROJECT_ID=storyvault-dev REGION=asia-northeast1 ./deploy-all.sh
 #
 # 必須 env:
 #   PROJECT_ID   — GCP プロジェクト ID
@@ -11,7 +11,7 @@
 #   REGION       — Cloud Run リージョン (既定: asia-northeast1)
 #   IMAGE_BUCKET — image agent の生成画像保存先 GCS バケット (未指定なら data URL fallback)
 #   ONLY         — "unified" / "writing" / "sheet" / "image" / "consultation" /
-#                  "vibe_capability_structuring" / "vibe_story_generation" / "all" (既定 unified)
+#                  "storyvault_capability_structuring" / "storyvault_story_generation" / "all" (既定 unified)
 #   GITHUB_TOKEN_ENCRYPTION_KEY — GitHub OAuth token 復号キー
 #   SLACK_TOKEN_ENCRYPTION_KEY  — Slack OAuth token 復号キー
 #   DD_*         — Datadog LLM Observability non-secret env (API key は Secret Manager 推奨)
@@ -27,7 +27,7 @@ IMAGE_BUCKET="${IMAGE_BUCKET:-}"
 ONLY="${ONLY:-unified}"
 DD_LLMOBS_ENABLED="${DD_LLMOBS_ENABLED:-false}"
 DD_LLMOBS_AGENTLESS_ENABLED="${DD_LLMOBS_AGENTLESS_ENABLED:-true}"
-DD_LLMOBS_ML_APP="${DD_LLMOBS_ML_APP:-vibe-control}"
+DD_LLMOBS_ML_APP="${DD_LLMOBS_ML_APP:-storyvault}"
 DD_ENV="${DD_ENV:-dev}"
 DD_SITE="${DD_SITE:-ap1.datadoghq.com}"
 
@@ -78,7 +78,7 @@ deploy_one() {
   if [[ "${mode}" == "image" && -n "${IMAGE_BUCKET}" ]]; then
     sub="${sub},_IMAGE_BUCKET=${IMAGE_BUCKET}"
   fi
-  if [[ "${mode}" == vibe_* ]]; then
+  if [[ "${mode}" == storyvault_* ]]; then
     local artifact_bucket="${ARTIFACT_BUCKET:-${IMAGE_BUCKET:-}}"
     if [[ -z "${artifact_bucket}" ]]; then
       artifact_bucket="${PROJECT_ID}-adk-artifacts"
@@ -92,7 +92,7 @@ deploy_one() {
     --project="${PROJECT_ID}" \
     --config="${SCRIPT_DIR}/${mode}/cloudbuild.yaml" \
     --substitutions="${sub}"
-  if [[ "${mode}" == vibe_* ]]; then
+  if [[ "${mode}" == storyvault_* ]]; then
     gcloud run services add-iam-policy-binding "${service_name}" \
       --project="${PROJECT_ID}" \
       --region="${REGION}" \
@@ -104,14 +104,14 @@ deploy_one() {
 
 service_name_for_mode() {
   case "$1" in
-    vibe_capability_structuring)
-      echo "vibe-capability-structuring-agent"
+    storyvault_capability_structuring)
+      echo "storyvault-capability-structuring-agent"
       ;;
-    vibe_zapping_analysis)
-      echo "vibe-zapping-analysis-agent"
+    storyvault_zapping_analysis)
+      echo "storyvault-zapping-analysis-agent"
       ;;
-    vibe_story_generation)
-      echo "vibe-story-generation-agent"
+    storyvault_story_generation)
+      echo "storyvault-story-generation-agent"
       ;;
     *)
       echo "en-aistudio-$1-agent"
@@ -121,24 +121,24 @@ service_name_for_mode() {
 
 dd_service_for_mode() {
   case "$1" in
-    vibe_capability_structuring)
-      echo "vibe-control-capability-structuring-agent"
+    storyvault_capability_structuring)
+      echo "storyvault-capability-structuring-agent"
       ;;
-    vibe_zapping_analysis)
-      echo "vibe-control-zapping-analysis-agent"
+    storyvault_zapping_analysis)
+      echo "storyvault-zapping-analysis-agent"
       ;;
-    vibe_story_generation)
-      echo "vibe-control-story-generation-agent"
+    storyvault_story_generation)
+      echo "storyvault-story-generation-agent"
       ;;
     *)
-      echo "vibe-control-${1//_/-}-agent"
+      echo "storyvault-${1//_/-}-agent"
       ;;
   esac
 }
 
 deploy_unified() {
   echo "::: Deploying en-aistudio-adk-agent (unified) (project=${PROJECT_ID} region=${REGION})"
-  local sub="_REGION=${REGION},_DD_LLMOBS_ENABLED=${DD_LLMOBS_ENABLED},_DD_LLMOBS_AGENTLESS_ENABLED=${DD_LLMOBS_AGENTLESS_ENABLED},_DD_LLMOBS_ML_APP=${DD_LLMOBS_ML_APP},_DD_SERVICE=vibe-control-adk-agent,_DD_ENV=${DD_ENV},_DD_SITE=${DD_SITE}"
+  local sub="_REGION=${REGION},_DD_LLMOBS_ENABLED=${DD_LLMOBS_ENABLED},_DD_LLMOBS_AGENTLESS_ENABLED=${DD_LLMOBS_AGENTLESS_ENABLED},_DD_LLMOBS_ML_APP=${DD_LLMOBS_ML_APP},_DD_SERVICE=storyvault-adk-agent,_DD_ENV=${DD_ENV},_DD_SITE=${DD_SITE}"
   local artifact_bucket="${ARTIFACT_BUCKET:-${IMAGE_BUCKET:-}}"
   if [[ -z "${artifact_bucket}" ]]; then
     artifact_bucket="${PROJECT_ID}-adk-artifacts"
@@ -173,15 +173,15 @@ case "${ONLY}" in
     deploy_one sheet
     deploy_one image
     deploy_one consultation
-    deploy_one vibe_zapping_analysis
-    deploy_one vibe_capability_structuring
-    deploy_one vibe_story_generation
+    deploy_one storyvault_zapping_analysis
+    deploy_one storyvault_capability_structuring
+    deploy_one storyvault_story_generation
     ;;
-  writing|sheet|image|consultation|vibe_zapping_analysis|vibe_capability_structuring|vibe_story_generation)
+  writing|sheet|image|consultation|storyvault_zapping_analysis|storyvault_capability_structuring|storyvault_story_generation)
     deploy_one "${ONLY}"
     ;;
   *)
-    echo "ONLY must be one of: unified | writing | sheet | image | consultation | vibe_zapping_analysis | vibe_capability_structuring | vibe_story_generation | all" >&2
+    echo "ONLY must be one of: unified | writing | sheet | image | consultation | storyvault_zapping_analysis | storyvault_capability_structuring | storyvault_story_generation | all" >&2
     exit 1
     ;;
 esac
@@ -193,7 +193,7 @@ url=$(gcloud run services describe "en-aistudio-adk-agent" \
 if [[ -n "${url}" ]]; then
   echo "NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL=${url}"
 fi
-for mode in writing sheet image consultation vibe_zapping_analysis vibe_capability_structuring vibe_story_generation; do
+for mode in writing sheet image consultation storyvault_zapping_analysis storyvault_capability_structuring storyvault_story_generation; do
   service_name="$(service_name_for_mode "${mode}")"
   url=$(gcloud run services describe "${service_name}" \
     --project="${PROJECT_ID}" --region="${REGION}" \

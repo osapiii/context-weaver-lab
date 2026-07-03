@@ -1,22 +1,22 @@
-# VibeControl Hackathon Implementation Plan
+# StoryVault Hackathon Implementation Plan
 
 Last updated: 2026-06-18
 
 ## 1. Product Direction
 
-VibeControl is a governance layer for AI-driven software delivery. It treats the user story as the single source of truth, then keeps that story synchronized with specs, tickets, GitHub code state, pull requests, and AI-editor context.
+StoryVault is a governance layer for AI-driven software delivery. It treats the user story as the single source of truth, then keeps that story synchronized with specs, tickets, GitHub code state, pull requests, and AI-editor context.
 
-Domain premise: VibeControl can manage multiple software applications. Unlike HAiFF, where masters were attached to a manufacturing-line domain model, VibeControl uses `Application` as the top-level domain model. Each application owns multiple user stories, and story evidence, code references, source connections, drift, and editor context are always interpreted inside that application boundary.
+Domain premise: StoryVault can manage multiple software applications. Unlike HAiFF, where masters were attached to a manufacturing-line domain model, StoryVault uses `Application` as the top-level domain model. Each application owns multiple user stories, and story evidence, code references, source connections, drift, and editor context are always interpreted inside that application boundary.
 
 The pitch from the attached deck is:
 
-- Vibe coding accelerates prototyping, but weak governance creates context collapse, unclear requirements, and spec/code drift.
+- AI coding accelerates prototyping, but weak governance creates context collapse, unclear requirements, and spec/code drift.
 - The product definition should move from "a pile of code" to "a bundle of user stories with evidence."
-- VibeControl generates and maintains those stories automatically by comparing intent (To-Be) with implementation state (As-Is).
+- StoryVault generates and maintains those stories automatically by comparing intent (To-Be) with implementation state (As-Is).
 
 ## 2. Hackathon Fit
 
-The Findy DevOps x AI Agent Hackathon requires both a Google Cloud application runtime and Google Cloud AI technology. VibeControl maps cleanly to that requirement:
+The Findy DevOps x AI Agent Hackathon requires both a Google Cloud application runtime and Google Cloud AI technology. StoryVault maps cleanly to that requirement:
 
 - Application runtime: Firebase Hosting for the SPA, Cloud Run for ADK agents and integration microservices, Cloud Functions for webhook/request glue where useful.
 - AI technology: Gemini API / ADK for agent orchestration, Vertex AI Search / Agent Search for product knowledge retrieval, optional Agent Builder style workflows later.
@@ -35,7 +35,7 @@ Key dates:
 
 1. Application context setup
    - Select or create an Application as the top-level working domain.
-   - Switch the active Application from the VibeControl header.
+   - Switch the active Application from the StoryVault header.
    - Provide Application CRUD UI: create modal, edit modal, delete action, and an Application detail top page.
    - Select or create a FileSpace.
    - Connect GitHub repository.
@@ -84,7 +84,7 @@ Reuse these patterns directly:
 - `app/components/knowledge/*` for document cards, previews, and pickers.
 - `app/components/requestLog/*` and `app/components/workflow/*` for observability.
 
-New VibeControl pages should keep the EN AIstudio visual system: quiet operational layout, dense scan-friendly cards, restrained colors, and icon-led controls.
+New StoryVault pages should keep the EN AIstudio visual system: quiet operational layout, dense scan-friendly cards, restrained colors, and icon-led controls.
 
 ### Knowledge Foundation
 
@@ -110,7 +110,7 @@ Reuse these runtime patterns:
 - `backend/microservice/driveToGcsSync`, `gcsToFileSpaceRegister`, and `webCrawler` for ingestion.
 - Existing Cloud Run + Cloud Build deploy scripts as templates.
 
-Add a new ADK mode named `vibe_control` rather than creating a separate agent framework.
+Add a new ADK mode named `storyvault` rather than creating a separate agent framework.
 
 ## 5. Proposed Architecture
 
@@ -136,7 +136,7 @@ Application-scoped Story SSOT package
 
 ## 6. Data Model Draft
 
-### `vibeControlApplications/{applicationId}`
+### `storyVaultApplications/{applicationId}`
 
 - `applicationKey`
 - `name`
@@ -152,7 +152,7 @@ Application-scoped Story SSOT package
 - `lastGeneratedAt`
 - `createdAt`, `updatedAt`
 
-### `vibeControlStories/{storyId}`
+### `storyVaultStories/{storyId}`
 
 - `applicationId`
 - `applicationKey`
@@ -169,7 +169,7 @@ Application-scoped Story SSOT package
 - `codeRefs`: repo, branch, PR, commit, files
 - `createdAt`, `updatedAt`, `generatedAt`
 
-### `vibeControlStoryEvidence/{evidenceId}`
+### `storyVaultStoryEvidence/{evidenceId}`
 
 - `applicationId`
 - `applicationKey`
@@ -182,7 +182,7 @@ Application-scoped Story SSOT package
 - `citation`
 - `freshness`
 
-### `vibeControlSourceConnections/{connectionId}`
+### `storyVaultSourceConnections/{connectionId}`
 
 - `applicationId`
 - `applicationKey`
@@ -198,21 +198,21 @@ Application-scoped Story SSOT package
 
 ### Phase 0 - Repository Cutout (2026-06-18)
 
-- Create fresh `vibe-control` repository from EN AIstudio base.
+- Create fresh `storyvault` repository from EN AIstudio base.
 - Remove local env files and private local signer keys.
 - Add hackathon plan and ASCII screen docs.
-- Rename frontend package to `vibe-control-app`.
+- Rename frontend package to `storyvault-app`.
 
 ### Phase 1 - Product Skeleton (2026-06-18 to 2026-06-21)
 
-- Add `/admin/vibe-control` route.
+- Add `/admin/storyvault` route.
 - Reuse admin immersive layout and EN components.
 - Add Application switcher header, Application create/edit modal, Application detail top, mock story board, detail drawer/page, and source setup screen.
 - Add Pinia store and TypeScript types for applications, stories, evidence, and source connections.
 
 ### Phase 2 - Knowledge-First Story Generation (2026-06-22 to 2026-06-27)
 
-- Add ADK mode `vibe_control`.
+- Add ADK mode `storyvault`.
 - Implement story generation from Agent Search results over the selected application's FileSpace.
 - Persist generated stories and evidence in Firestore.
 - Render citations and confidence indicators in the story detail view.
@@ -248,11 +248,11 @@ Application-scoped Story SSOT package
 
 - GitHub/Jira/Linear auth may consume time. Mitigation: implement GitHub first, keep tickets as imported knowledge for MVP.
 - Story generation can become vague. Mitigation: require citations and confidence score from Agent Search/GitHub evidence.
-- New repo still points to EN AIstudio dev config. Mitigation: keep `.env.example` only, then create VibeControl-specific Firebase/GCP projects before shared demos.
+- New repo still points to EN AIstudio dev config. Mitigation: keep `.env.example` only, then create StoryVault-specific Firebase/GCP projects before shared demos.
 
 ## 9. Submission Demo Script
 
-1. Open VibeControl dashboard.
+1. Open StoryVault dashboard.
 2. Select or create an Application, then attach its FileSpace with product docs and GitHub repo.
 3. Run "Generate stories."
 4. Show dynamic board grouped by lifecycle.

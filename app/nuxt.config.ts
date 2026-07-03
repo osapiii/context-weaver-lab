@@ -29,7 +29,7 @@ const useFirebaseEmulator =
   process.env.NUXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
 const firebaseProjectId = process.env.NUXT_PUBLIC_FIREBASECONFIG_PROJECTID || "";
 const devAuthBypassDefaultProjects = new Set([
-  "vibe-control-dev",
+  "storyvault-dev",
   "en-aistudio-development",
 ]);
 const defaultDevAuthBypassEmails =
@@ -256,16 +256,10 @@ export default defineNuxtConfig({
       /** StoryVault remote MCP endpoint for coding agents. */
       storyVaultMcpUrl:
         process.env.NUXT_PUBLIC_STORYVAULT_MCP_URL ||
-        process.env.NUXT_PUBLIC_VIBE_CONTROL_MCP_URL ||
-        "https://storyvault-mcp-q2uwnmd3yq-an.a.run.app/mcp",
+        "https://storyvault-mcp-mdgjayj74q-an.a.run.app/mcp",
       /** Optional override for the StoryVault Codex Skill install command shown in settings. */
       storyVaultSkillInstallCommand:
         process.env.NUXT_PUBLIC_STORYVAULT_SKILL_INSTALL_COMMAND || "",
-      /** @deprecated use storyVaultMcpUrl */
-      vibeControlMcpUrl:
-        process.env.NUXT_PUBLIC_STORYVAULT_MCP_URL ||
-        process.env.NUXT_PUBLIC_VIBE_CONTROL_MCP_URL ||
-        "https://storyvault-mcp-q2uwnmd3yq-an.a.run.app/mcp",
       /** Gシート連携: ユーザーが「編集者」で招待する SA（ui-backend の .cred.json と一致） */
       gsheetServiceAccountEmail:
         process.env.NUXT_PUBLIC_GSHEET_SERVICE_ACCOUNT_EMAIL ||
@@ -287,7 +281,7 @@ export default defineNuxtConfig({
         site: process.env.NUXT_PUBLIC_DATADOG_SITE || "ap1.datadoghq.com",
         service:
           process.env.NUXT_PUBLIC_DATADOG_SERVICE ||
-          "vibe-control-frontend",
+          "storyvault-frontend",
         env: datadogEnv,
         version:
           process.env.NUXT_PUBLIC_APP_VERSION ||
@@ -310,57 +304,57 @@ export default defineNuxtConfig({
       researchAgentServiceUrl:
         process.env.NUXT_PUBLIC_RESEARCH_AGENT_SERVICE_URL ||
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+        "https://en-aistudio-adk-agent-mdgjayj74q-an.a.run.app",
       // データ分析エージェント (Cloud Run, Conversational Analytics API のラッパー) の URL.
       // setup_org_bq.py で provisioning した 1 org = 1 Data Agent を呼び出す.
       dataAnalystServiceUrl:
         process.env.NUXT_PUBLIC_DATA_ANALYST_SERVICE_URL ||
-        "https://en-aistudio-data-analyst-wsqdguu4pq-an.a.run.app",
+        "",
       // EN AIstudio ADK 統合エージェント (unified Cloud Run) のベース URL.
       // 末尾スラッシュなし. クライアントは {base}/v1/agents/{mode}/invoke を叩く.
       // unified 未設定時は mode 別 URL (legacy per-service deploy) にフォールバック.
       enAiStudioAdkBaseUrl:
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+        "https://en-aistudio-adk-agent-mdgjayj74q-an.a.run.app",
       enAiStudioAdkWritingUrl:
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_WRITING_URL ||
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+        "https://en-aistudio-writing-agent-mdgjayj74q-an.a.run.app",
       enAiStudioAdkSheetUrl:
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_SHEET_URL ||
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+        "https://en-aistudio-sheet-agent-mdgjayj74q-an.a.run.app",
       enAiStudioAdkImageUrl:
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_IMAGE_URL ||
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+        "https://en-aistudio-image-agent-mdgjayj74q-an.a.run.app",
       enAiStudioAdkConsultationUrl:
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_CONSULTATION_URL ||
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
-      enAiStudioAdkVibeZappingAnalysisUrl:
-        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_VIBE_ZAPPING_ANALYSIS_URL ||
+        "https://en-aistudio-consultation-agent-mdgjayj74q-an.a.run.app",
+      enAiStudioAdkStoryVaultZappingAnalysisUrl:
+        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_STORYVAULT_ZAPPING_ANALYSIS_URL ||
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
-      enAiStudioAdkVibeCapabilityStructuringUrl:
-        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_VIBE_CAPABILITY_STRUCTURING_URL ||
+        "https://storyvault-zapping-analysis-agent-mdgjayj74q-an.a.run.app",
+      enAiStudioAdkStoryVaultCapabilityStructuringUrl:
+        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_STORYVAULT_CAPABILITY_STRUCTURING_URL ||
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
-      enAiStudioAdkVibeStoryGenerationUrl:
-        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_VIBE_STORY_GENERATION_URL ||
+        "https://storyvault-capability-structuring-agent-mdgjayj74q-an.a.run.app",
+      enAiStudioAdkStoryVaultStoryGenerationUrl:
+        process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_STORYVAULT_STORY_GENERATION_URL ||
         process.env.NUXT_PUBLIC_EN_AISTUDIO_ADK_BASE_URL ||
-        "https://en-aistudio-adk-agent-wsqdguu4pq-an.a.run.app",
+        "https://storyvault-story-generation-agent-mdgjayj74q-an.a.run.app",
       /** false 明示時のみ legacy SSE。デフォルトは RequestDoc + Firebase trigger */
       adkInvokeViaRequestDoc:
         process.env.NUXT_PUBLIC_ADK_INVOKE_VIA_REQUEST_DOC !== "false",
       /** ADK GcsArtifactService のバケット（Functions ingest 前の表示フォールバック） */
       enAiStudioAdkArtifactBucket:
         process.env.NUXT_PUBLIC_ADK_ARTIFACT_BUCKET ||
-        "en-aistudio-development-adk-artifacts",
+        "storyvault-dev-adk-artifacts",
       // 取引先プロファイル自動取得 (法人番号 / 公式URL → 概要・所在地・資本金・代表者)
       // Cloud Run `corporate-info-lookup` の POST /lookup URL を設定 (推奨)。
       // 例: NUXT_PUBLIC_CORPORATE_INFO_LOOKUP_ENDPOINT=https://...run.app/lookup
       // 未設定時は gBizINFO 直接呼び出し (gbizInfoApiToken) にフォールバック。
       corporateInfoLookupEndpoint:
         process.env.NUXT_PUBLIC_CORPORATE_INFO_LOOKUP_ENDPOINT ||
-        "https://corporate-info-lookup-wsqdguu4pq-an.a.run.app/lookup",
+        "",
       // フロント直叩き用フォールバック (本番は Cloud Run 側 GBIZ_INFO_API_TOKEN 推奨)
       gbizInfoApiToken:
         process.env.NUXT_PUBLIC_GBIZ_INFO_API_TOKEN ||

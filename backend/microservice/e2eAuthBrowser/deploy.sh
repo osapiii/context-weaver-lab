@@ -3,8 +3,8 @@ set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-${GOOGLE_CLOUD_PROJECT:-}}"
 REGION="${REGION:-asia-northeast1}"
-SERVICE_NAME="${SERVICE_NAME:-vibe-e2e-auth-browser}"
-SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-vibe-e2e-auth-browser}"
+SERVICE_NAME="${SERVICE_NAME:-storyvault-e2e-auth-browser}"
+SERVICE_ACCOUNT_NAME="${SERVICE_ACCOUNT_NAME:-storyvault-e2e-auth-browser}"
 SHARED_SECRET="${E2E_AUTH_BROWSER_SHARED_SECRET:-}"
 
 if [ -z "$PROJECT_ID" ]; then
@@ -22,7 +22,7 @@ SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount
 if ! gcloud iam service-accounts describe "$SERVICE_ACCOUNT_EMAIL" --project "$PROJECT_ID" >/dev/null 2>&1; then
   gcloud iam service-accounts create "$SERVICE_ACCOUNT_NAME" \
     --project "$PROJECT_ID" \
-    --display-name "Vibe E2E Auth Browser"
+    --display-name "StoryVault E2E Auth Browser"
 fi
 
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \

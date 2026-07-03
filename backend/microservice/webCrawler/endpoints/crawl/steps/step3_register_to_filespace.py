@@ -36,7 +36,7 @@ from endpoints.crawl.workflow_step_state import restore_context_keys
 
 CONTEXT_STORE_SERVICE_URL = os.getenv(
     "CONTEXT_STORE_SERVICE_URL",
-    "https://context-store-wsqdguu4pq-uc.a.run.app",
+    "https://context-store-mdgjayj74q-uc.a.run.app",
 ).rstrip("/")
 
 # === 並列度 / タイムアウト / リトライ ============================================

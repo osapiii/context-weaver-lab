@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const router = useRouter();
-router.replace({ name: "admin-vibe-control" });
+router.replace({ name: "admin-storyvault" });
 </script>
 
 <template>

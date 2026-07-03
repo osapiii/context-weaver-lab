@@ -11,18 +11,18 @@ from research.agent import build_root_agent as build_research_agent
 from business_partner.agent import build_root_agent as build_business_partner_agent
 from data_analysis.agent import build_root_agent as build_data_analysis_agent
 from web_page.agent import build_root_agent as build_web_page_agent
-from vibe_control.agent import build_root_agent as build_vibe_control_agent
-from vibe_capability_structuring.agent import (
-    build_root_agent as build_vibe_capability_structuring_agent,
+from storyvault.agent import build_root_agent as build_storyvault_agent
+from storyvault_capability_structuring.agent import (
+    build_root_agent as build_storyvault_capability_structuring_agent,
 )
-from vibe_related_context.agent import (
-    build_root_agent as build_vibe_related_context_agent,
+from storyvault_related_context.agent import (
+    build_root_agent as build_storyvault_related_context_agent,
 )
-from vibe_zapping_analysis.agent import (
-    build_root_agent as build_vibe_zapping_analysis_agent,
+from storyvault_zapping_analysis.agent import (
+    build_root_agent as build_storyvault_zapping_analysis_agent,
 )
-from vibe_story_generation.agent import (
-    build_root_agent as build_vibe_story_generation_agent,
+from storyvault_story_generation.agent import (
+    build_root_agent as build_storyvault_story_generation_agent,
 )
 
 
@@ -60,24 +60,24 @@ def build_agent_registry() -> dict[str, AgentBundle]:
             app_name=UNIFIED_APP_NAME,
             root_agent=build_web_page_agent(),
         ),
-        "vibe_control": AgentBundle(
+        "storyvault": AgentBundle(
             app_name=UNIFIED_APP_NAME,
-            root_agent=build_vibe_control_agent(),
+            root_agent=build_storyvault_agent(),
         ),
-        "vibe_capability_structuring": AgentBundle(
+        "storyvault_capability_structuring": AgentBundle(
             app_name=UNIFIED_APP_NAME,
-            root_agent=build_vibe_capability_structuring_agent(),
+            root_agent=build_storyvault_capability_structuring_agent(),
         ),
-        "vibe_related_context": AgentBundle(
+        "storyvault_related_context": AgentBundle(
             app_name=UNIFIED_APP_NAME,
-            root_agent=build_vibe_related_context_agent(),
+            root_agent=build_storyvault_related_context_agent(),
         ),
-        "vibe_zapping_analysis": AgentBundle(
+        "storyvault_zapping_analysis": AgentBundle(
             app_name=UNIFIED_APP_NAME,
-            root_agent=build_vibe_zapping_analysis_agent(),
+            root_agent=build_storyvault_zapping_analysis_agent(),
         ),
-        "vibe_story_generation": AgentBundle(
+        "storyvault_story_generation": AgentBundle(
             app_name=UNIFIED_APP_NAME,
-            root_agent=build_vibe_story_generation_agent(),
+            root_agent=build_storyvault_story_generation_agent(),
         ),
     }

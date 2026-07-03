@@ -150,8 +150,8 @@ const aiAssistant = useEnAiStudioAssistantStore();
 
 const dismissedBubbleKey = ref<string | null>(null);
 
-const PET_SIDE_STORAGE_KEY = "vibe-control:workflowNotificationPetSide";
-const PET_SIZE_STORAGE_KEY = "vibe-control:workflowNotificationPetSize";
+const PET_SIDE_STORAGE_KEY = "storyvault:workflowNotificationPetSide";
+const PET_SIZE_STORAGE_KEY = "storyvault:workflowNotificationPetSize";
 
 type PetSide = "left" | "right";
 type PetSize = "compact" | "large";

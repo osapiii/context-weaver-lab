@@ -11,11 +11,11 @@ WorkspaceMode = Literal[
     "research",
     "data_analysis",
     "web_page",
-    "vibe_control",
-    "vibe_related_context",
-    "vibe_zapping_analysis",
-    "vibe_capability_structuring",
-    "vibe_story_generation",
+    "storyvault",
+    "storyvault_related_context",
+    "storyvault_zapping_analysis",
+    "storyvault_capability_structuring",
+    "storyvault_story_generation",
 ]
 
 _VALID_MODES = frozenset(
@@ -27,11 +27,11 @@ _VALID_MODES = frozenset(
         "research",
         "data_analysis",
         "web_page",
-        "vibe_control",
-        "vibe_related_context",
-        "vibe_zapping_analysis",
-        "vibe_capability_structuring",
-        "vibe_story_generation",
+        "storyvault",
+        "storyvault_related_context",
+        "storyvault_zapping_analysis",
+        "storyvault_capability_structuring",
+        "storyvault_story_generation",
     }
 )
 
@@ -47,7 +47,7 @@ def convert_mode(
     サーバーは同一 HTTP リクエスト内で切替先エージェントへハンドオフする.
 
     Args:
-        mode: 切り替え先 ("writing" | "sheet" | "image" | "consultation" | "research" | "data_analysis" | "web_page" | "vibe_control" | "vibe_related_context" | "vibe_zapping_analysis" | "vibe_capability_structuring" | "vibe_story_generation")
+        mode: 切り替え先 ("writing" | "sheet" | "image" | "consultation" | "research" | "data_analysis" | "web_page" | "storyvault" | "storyvault_related_context" | "storyvault_zapping_analysis" | "storyvault_capability_structuring" | "storyvault_story_generation")
         reason: 切替理由 (1 行、UI 表示用)
 
     Returns:

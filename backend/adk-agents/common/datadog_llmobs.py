@@ -22,7 +22,7 @@ def init_datadog_llmobs() -> None:
         from ddtrace.llmobs import LLMObs
 
         LLMObs.enable(
-            ml_app=os.environ.get("DD_LLMOBS_ML_APP", "vibe-control"),
+            ml_app=os.environ.get("DD_LLMOBS_ML_APP", "storyvault"),
             agentless_enabled=_enabled(
                 os.environ.get("DD_LLMOBS_AGENTLESS_ENABLED", "true")
             ),

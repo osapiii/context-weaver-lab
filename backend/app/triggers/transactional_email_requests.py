@@ -20,7 +20,7 @@ db = firestore.Client()
 
 SEND_MAIL_SERVICE_URL = os.getenv(
     "SEND_MAIL_SERVICE_URL",
-    "https://send-mail-wsqdguu4pq-an.a.run.app",
+    "",
 ).rstrip("/")
 
 
@@ -101,6 +101,8 @@ def on_transactional_email_request_created(
         return
 
     try:
+        if not SEND_MAIL_SERVICE_URL:
+            raise RuntimeError("SEND_MAIL_SERVICE_URL is not configured")
         _update_doc(collection_path, request_id, {"status": "processing"})
         _append_log(collection_path, request_id, "Send mail start", "info")
 

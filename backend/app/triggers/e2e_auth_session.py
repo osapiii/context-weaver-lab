@@ -59,9 +59,9 @@ def _required_string(data: dict[str, Any], key: str) -> str:
 
 
 def _secret_id(organization_id: str, application_id: str) -> str:
-    raw = f"vibe-e2e-state-{organization_id}-{application_id}"
+    raw = f"storyvault-e2e-state-{organization_id}-{application_id}"
     normalized = SECRET_ID_RE.sub("-", raw).strip("-")
-    return normalized[:240] or "vibe-e2e-state"
+    return normalized[:240] or "storyvault-e2e-state"
 
 
 def _client() -> secretmanager.SecretManagerServiceClient:
@@ -242,7 +242,7 @@ def save_e2e_auth_session_state(req: https_fn.CallableRequest) -> dict[str, Any]
                 "secret": {
                     "replication": {"automatic": {}},
                     "labels": {
-                        "source": "vibe-control",
+                        "source": "storyvault",
                         "kind": "e2e-auth-state",
                     },
                 },

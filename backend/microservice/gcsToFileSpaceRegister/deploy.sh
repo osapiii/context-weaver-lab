@@ -24,7 +24,7 @@ SERVICE_NAME="${SERVICE_NAME:-gcs-to-filespace-register}"
 FIREBASE_STORAGE_BUCKET="${FIREBASE_STORAGE_BUCKET:-${PROJECT_ID}.firebasestorage.app}"
 DRIVE_MIRROR_BUCKET="${DRIVE_MIRROR_BUCKET:-${FIREBASE_STORAGE_BUCKET}}"
 SA_EMAIL="${SA_EMAIL:-gcs-to-filespace-register@${PROJECT_ID}.iam.gserviceaccount.com}"
-CONTEXT_STORE_SERVICE_URL="${CONTEXT_STORE_SERVICE_URL:-https://context-store-781544707153.us-central1.run.app}"
+CONTEXT_STORE_SERVICE_URL="${CONTEXT_STORE_SERVICE_URL:-https://context-store-mdgjayj74q-uc.a.run.app}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

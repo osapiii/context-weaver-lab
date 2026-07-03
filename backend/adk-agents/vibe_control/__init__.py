@@ -1,1 +1,0 @@
-"""VibeControl ADK mode."""

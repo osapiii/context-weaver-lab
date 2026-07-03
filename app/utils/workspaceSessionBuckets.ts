@@ -49,10 +49,10 @@ export type WorkspaceTaskKey =
   | "data_analysis"
   | "web_page"
   | "application_scan"
-  | "vibe_related_context"
-  | "vibe_zapping_analysis"
-  | "vibe_capability_structuring"
-  | "vibe_story_generation"
+  | "storyvault_related_context"
+  | "storyvault_zapping_analysis"
+  | "storyvault_capability_structuring"
+  | "storyvault_story_generation"
   | "guide";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -142,10 +142,10 @@ export const buildInvokeModeStateFromWorkspaceState = (params: {
     "data_analysis",
     "web_page",
     "application_scan",
-    "vibe_related_context",
-    "vibe_zapping_analysis",
-    "vibe_capability_structuring",
-    "vibe_story_generation",
+    "storyvault_related_context",
+    "storyvault_zapping_analysis",
+    "storyvault_capability_structuring",
+    "storyvault_story_generation",
   ] as const) {
     const bucket = params.state[task];
     if (isRecord(bucket)) {

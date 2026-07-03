@@ -1,5 +1,5 @@
 /**
- * Google Drive Cloud Run microservices (en-aistudio-development / us-central1).
+ * Google Drive Cloud Run microservices (storyvault-dev / us-central1).
  *
  * Workflows architecture (post drive-sync-workflows-architecture plan):
  *   - drive-to-gcs-sync: Drive → GCS mirror + 動作確認 / プレビュー
@@ -21,7 +21,7 @@
  * このサービスから直接叩く。`/mirror/*` 系は Workflows のみが叩く。
  */
 export const DRIVE_TO_GCS_SYNC_SERVICE_URL =
-  "https://drive-to-gcs-sync-q2uwnmd3yq-uc.a.run.app";
+  "https://drive-to-gcs-sync-mdgjayj74q-uc.a.run.app";
 
 /**
  * Google Drive Workflow Kicker. 通常は Firebase Functions trigger からのみ叩く
@@ -29,4 +29,4 @@ export const DRIVE_TO_GCS_SYNC_SERVICE_URL =
  * input artifact (GCS YAML) を取得する。
  */
 export const GOOGLE_DRIVE_WORKFLOW_KICKER_URL =
-  "https://google-drive-workflow-kicker-wsqdguu4pq-uc.a.run.app";
+  "https://google-drive-workflow-kicker-mdgjayj74q-uc.a.run.app";

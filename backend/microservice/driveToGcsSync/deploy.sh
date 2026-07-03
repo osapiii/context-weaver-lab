@@ -29,7 +29,7 @@ DRIVE_SECRET_NAME="${DRIVE_SECRET_NAME:-en-aistudio-drive-agent-key}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-WORKSPACE_ENV_FILE="${GOOGLE_WORKSPACE_ENV_FILE:-${ROOT_DIR}/backend/app/.env.vibe-control-dev}"
+WORKSPACE_ENV_FILE="${GOOGLE_WORKSPACE_ENV_FILE:-${ROOT_DIR}/backend/app/.env.storyvault-dev}"
 
 if [ -f "${WORKSPACE_ENV_FILE}" ]; then
   set -a

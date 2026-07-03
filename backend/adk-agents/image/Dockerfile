@@ -16,6 +16,7 @@ RUN pip install -r /tmp/common-requirements.txt && \
     pip install -r /tmp/image-requirements.txt
 
 COPY common /app/common
+COPY consultation /app/consultation
 COPY image /app/image
 
 WORKDIR /app/image

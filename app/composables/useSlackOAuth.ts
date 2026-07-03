@@ -4,7 +4,8 @@ import log from "@utils/logger";
 
 const FUNCTIONS_REGION = "asia-northeast1";
 const SLACK_SCOPES =
-  "search:read,channels:read,channels:history,groups:read,groups:history";
+  "channels:read,channels:history,groups:read,groups:history";
+const SLACK_USER_SCOPES = "search:read";
 
 export type SlackConnection = {
   connected: boolean;
@@ -12,10 +13,22 @@ export type SlackConnection = {
   teamName?: string;
   slackUserId?: string;
   scopes?: string[];
+  userScopes?: string[];
+};
+
+export type SlackMessagePreview = {
+  channelId: string;
+  channelName: string;
+  messageTs: string;
+  threadTs: string;
+  permalink: string;
+  author: string;
+  text: string;
+  postedAt: string;
 };
 
 type SlackCodeMessage = {
-  source: "vibe-control-slack-oauth";
+  source: "storyvault-slack-oauth";
   code?: string;
   error?: string;
   state?: string;
@@ -31,7 +44,7 @@ function slackCallbackUrl(configuredRedirectUri?: string): string {
   if (origin.hostname === "localhost") {
     origin.hostname = "127.0.0.1";
   }
-  return `${origin.toString().replace(/\/$/, "")}/admin/vibe-control/slack-callback`;
+  return `${origin.toString().replace(/\/$/, "")}/admin/storyvault/slack-callback`;
 }
 
 function encodeBase64Url(value: string): string {
@@ -77,7 +90,7 @@ function waitForSlackCode(popup: Window | null, state: string): Promise<string> 
     }, 500);
     const onMessage = (event: MessageEvent<SlackCodeMessage>) => {
       const payload = event.data;
-      if (!payload || payload.source !== "vibe-control-slack-oauth") return;
+      if (!payload || payload.source !== "storyvault-slack-oauth") return;
       if (payload.state !== state) return;
       if (payload.error) {
         settle(() => reject(new Error(payload.error)));
@@ -165,13 +178,14 @@ export function useSlackOAuth() {
       const url = new URL("https://slack.com/oauth/v2/authorize");
       url.searchParams.set("client_id", clientId.value);
       url.searchParams.set("scope", SLACK_SCOPES);
+      url.searchParams.set("user_scope", SLACK_USER_SCOPES);
       url.searchParams.set("state", state);
       if (redirectUri) {
         url.searchParams.set("redirect_uri", redirectUri);
       }
       const popup = window.open(
         url.toString(),
-        "vibe-control-slack-oauth",
+        "storyvault-slack-oauth",
         "width=720,height=760"
       );
       const code = await waitForSlackCode(popup, state);
@@ -183,6 +197,7 @@ export function useSlackOAuth() {
           teamName?: string;
           slackUserId?: string;
           scopes?: string[];
+          userScopes?: string[];
         }
       >(functions(), "connect_slack");
       const res = await callable({
@@ -196,6 +211,7 @@ export function useSlackOAuth() {
         teamName: res.data.teamName,
         slackUserId: res.data.slackUserId,
         scopes: res.data.scopes,
+        userScopes: res.data.userScopes,
       };
       toast.add({
         title: "Slack を接続しました",
@@ -241,12 +257,30 @@ export function useSlackOAuth() {
     return Boolean(res.data.ok);
   };
 
+  const listMessages = async (params: {
+    query?: string;
+    limit?: number;
+  } = {}): Promise<SlackMessagePreview[]> => {
+    if (!organizationId.value) return [];
+    const callable = httpsCallable<
+      { organizationId: string; query?: string; limit?: number },
+      { ok: boolean; messages: SlackMessagePreview[] }
+    >(functions(), "list_slack_messages");
+    const res = await callable({
+      organizationId: organizationId.value,
+      query: params.query?.trim() || undefined,
+      limit: params.limit,
+    });
+    return res.data.messages ?? [];
+  };
+
   return {
     clientId,
     connection: sharedConnection,
     isLoading: sharedIsLoading,
     connect,
     disconnect,
+    listMessages,
     refreshConnection,
     testConnection,
   };

@@ -33,7 +33,7 @@
               <h2 class="text-lg font-semibold">ヘッダーロゴ</h2>
             </div>
             <p class="mb-4 text-sm leading-relaxed text-neutral-600">
-              自社のロゴ画像を設定すると、ヘッダーの「VibeControl」文字の代わりにそのロゴが表示されます。
+              自社のロゴ画像を設定すると、ヘッダーの「StoryVault」文字の代わりにそのロゴが表示されます。
               透過 PNG / SVG を推奨します (高さ 24px 前後で表示)。
             </p>
 
@@ -50,7 +50,7 @@
                 <span
                   v-else
                   class="text-xl font-bold text-white tracking-tight font-mono"
-                >VibeControl</span>
+                >StoryVault</span>
               </div>
 
               <div class="flex-1 space-y-2">
@@ -72,7 +72,7 @@
                   />
                   <EButton
                     v-if="appearance.hasCustomLogo.value"
-                    label="リセット (VibeControl 表示に戻す)"
+                    label="リセット (StoryVault 表示に戻す)"
                     color="neutral"
                     size="md"
                     icon="material-symbols:restart-alt"
@@ -151,9 +151,9 @@
               <h2 class="text-lg font-semibold">AI アシスタントのアバター</h2>
             </div>
             <p class="mb-4 text-sm leading-relaxed text-neutral-600">
-              VibeControl の AI 補助で表示されるキャラクター画像です。
+              StoryVault の AI 補助で表示されるキャラクター画像です。
               自社のマスコットに差し替えると、対応する AI 機能でその画像が使われます。
-              未設定なら VibeControl 標準のアバターが表示されます。
+              未設定なら StoryVault 標準のアバターが表示されます。
             </p>
 
             <div class="flex flex-col items-start gap-6 sm:flex-row">
@@ -495,7 +495,7 @@
                 </h2>
               </div>
               <p class="mt-2 text-sm leading-relaxed text-neutral-600">
-                Google Drive / Sheets を VibeControl の素材投入やデータ連携で使うための接続です。
+                Google Drive / Sheets を StoryVault の素材投入やデータ連携で使うための接続です。
                 OAuth クライアント登録後、上のカードから Google アカウントを接続できます。
               </p>
             </template>
@@ -572,7 +572,7 @@
       </template>
 
       <template #mcp>
-        <VibeControlMcpSetupPanel />
+        <StoryVaultMcpSetupPanel />
       </template>
 
       <!-- Godモード (内部オンボーディング) -->
@@ -618,7 +618,7 @@ import GlobalPinnedKnowledgePanel from "@components/preferences/GlobalPinnedKnow
 import OAuthConnectionGitHubCard from "@components/preferences/OAuthConnectionGitHubCard.vue";
 import OAuthConnectionSlackCard from "@components/preferences/OAuthConnectionSlackCard.vue";
 import OrganizationMemberManagementPanel from "@components/admin/members/OrganizationMemberManagementPanel.vue";
-import VibeControlMcpSetupPanel from "@components/vibeControl/VibeControlMcpSetupPanel.vue";
+import StoryVaultMcpSetupPanel from "@components/storyVault/StoryVaultMcpSetupPanel.vue";
 import EnCard from "@components/EnCard.vue";
 import {
   themeSemanticClasses,
@@ -819,7 +819,7 @@ const uploadBranding = async (file: File, kind: "logo" | "ai-avatar") => {
 };
 
 const resetLogo = async () => {
-  if (!confirm("ヘッダーロゴをリセットします (VibeControl 文字表示に戻ります)。よろしいですか?")) return;
+  if (!confirm("ヘッダーロゴをリセットします (StoryVault 文字表示に戻ります)。よろしいですか?")) return;
   logoError.value = null;
   uploadingLogo.value = true;
   try {

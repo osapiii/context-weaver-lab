@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-slate-50 text-slate-900">
     <EFullScreenLoading
-      :active="globalLoading.isLoading"
+      :active="globalLoading.isLoading && !suppressGlobalLoadingForVideoEditor"
       :message="globalLoading.loadingText"
     />
 
@@ -15,7 +15,7 @@
             type="button"
             class="flex min-w-0 items-center gap-2 rounded-md text-left transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
             aria-label="StoryVault ホームへ"
-            @click="navigateToVibeControl"
+            @click="navigateToStoryVault"
           >
             <img
               src="/storyvault-logo.svg"
@@ -24,21 +24,21 @@
             >
           </button>
 
-          <VibeControlApplicationHeader
-            v-if="showVibeControlSwitcher"
-            :applications="vibeControl.applications"
-            :selected-application="vibeControl.selectedApplication"
+          <StoryVaultApplicationHeader
+            v-if="showStoryVaultSwitcher"
+            :applications="storyVault.applications"
+            :selected-application="storyVault.selectedApplication"
             :show-create="false"
             :show-edit="false"
-            @select="selectVibeControlApplication"
+            @select="selectStoryVaultApplication"
             @manage="isApplicationManagerOpen = true"
           />
         </div>
 
         <div class="flex min-w-0 shrink-0 items-center gap-2">
-          <VibeControlE2EAuthSessionHeaderChip
-            v-if="showVibeControlSwitcher"
-            :selected-application="vibeControl.selectedApplication"
+          <StoryVaultE2EAuthSessionHeaderChip
+            v-if="showStoryVaultSwitcher"
+            :selected-application="storyVault.selectedApplication"
           />
           <GoogleWorkspaceConnectionHeaderChip />
           <GoogleDriveSyncGlobalIndicator />
@@ -180,8 +180,8 @@
       size="full"
       :ui="{ content: 'sm:max-w-5xl' }"
     >
-      <VibeControlApplicationList
-        :applications="vibeControl.applications"
+      <StoryVaultApplicationList
+        :applications="storyVault.applications"
         :stats-by-application-id="applicationStatsById"
         @open="openManagedApplication"
         @create="openCreateApplication"
@@ -205,7 +205,7 @@ import GoogleDriveImportProgressModal from "@components/dataSource/GoogleDriveIm
 import GoogleDriveSyncGlobalIndicator from "@components/GoogleDriveSyncGlobalIndicator.vue";
 import GoogleWorkspaceConnectionHeaderChip from "@components/GoogleWorkspaceConnectionHeaderChip.vue";
 import AdminPageContainer from "@components/layout/AdminPageContainer.vue";
-import VibeControlE2EAuthSessionHeaderChip from "@components/vibeControl/VibeControlE2EAuthSessionHeaderChip.vue";
+import StoryVaultE2EAuthSessionHeaderChip from "@components/storyVault/StoryVaultE2EAuthSessionHeaderChip.vue";
 import { ADMIN_NAV_SIDEBAR_STORAGE_KEY } from "@constants/adminLayout";
 import {
   resolveAdminPageContainerVariant,
@@ -230,7 +230,7 @@ const adminUser = useAdminUserStore();
 const organization = useOrganizationStore();
 const globalLoading = useGlobalLoadingStore();
 const spaceStore = useSpaceStore();
-const vibeControl = useVibeControlStore();
+const storyVault = useStoryVaultStore();
 const videoStudio = useVideoStudioStore();
 const workflowExecutions = useWorkflowExecutionsStore();
 const notifications = useWorkflowNotificationsStore();
@@ -244,13 +244,13 @@ const isApplicationManagerOpen = ref(false);
 const adminNavSidebarCollapsed = ref(false);
 const mountWorkflowNotificationPet = ref(false);
 
-function navigateToVibeControl(): void {
+function navigateToStoryVault(): void {
   const query: Record<string, string> = { view: "application-knowledge" };
-  if (vibeControl.selectedApplicationId) {
-    query.applicationId = vibeControl.selectedApplicationId;
+  if (storyVault.selectedApplicationId) {
+    query.applicationId = storyVault.selectedApplicationId;
   }
   void router.push({
-    name: "admin-vibe-control",
+    name: "admin-storyvault",
     query,
   });
 }
@@ -292,12 +292,12 @@ const routeName = computed(() => {
   return typeof name === "string" ? name : "";
 });
 
-const isVibeControlRoute = computed(() =>
-  routeName.value.startsWith("admin-vibe-control")
+const isStoryVaultRoute = computed(() =>
+  routeName.value.startsWith("admin-storyvault")
 );
 
 const currentMode = computed(() => {
-  if (isVibeControlRoute.value) {
+  if (isStoryVaultRoute.value) {
     const view = typeof route.query.view === "string" ? route.query.view : "";
     const modeKeyByView: Record<string, (typeof navModes)[number]["key"]> = {
       "application-knowledge": "knowledge",
@@ -319,7 +319,7 @@ const currentMode = computed(() => {
 });
 
 useHead({
-  title: () => currentMode.value?.label ?? "VibeControl",
+  title: () => currentMode.value?.label ?? "StoryVault",
 });
 
 useSeoMeta({
@@ -337,10 +337,13 @@ useSeoMeta({
 });
 
 const currentModeKey = computed(() => currentMode.value?.key);
-const showVibeControlSwitcher = computed(() => isVibeControlRoute.value);
+const showStoryVaultSwitcher = computed(() => isStoryVaultRoute.value);
+const suppressGlobalLoadingForVideoEditor = computed(
+  () => isStoryVaultRoute.value && videoStudio.view === "editor"
+);
 const hideAdminHeaderForVideoEditor = computed(
   () =>
-    isVibeControlRoute.value &&
+    isStoryVaultRoute.value &&
     videoStudio.view === "editor" &&
     Boolean(videoStudio.selectedProject)
 );
@@ -351,12 +354,12 @@ const hasRunningWorkflowExecutions = computed(
   () => workflowExecutions.runningCount > 0
 );
 
-function selectVibeControlApplication(applicationId: string): void {
-  vibeControl.selectApplication(applicationId);
+function selectStoryVaultApplication(applicationId: string): void {
+  storyVault.selectApplication(applicationId);
   const currentView =
     typeof route.query.view === "string" ? route.query.view : "stories";
   void router.push({
-    name: "admin-vibe-control",
+    name: "admin-storyvault",
     query: { view: currentView },
   });
 }
@@ -368,8 +371,8 @@ const applicationStatsById = computed(() => {
     needsReviewCount: number;
     highDriftCount: number;
   }> = {};
-  for (const application of vibeControl.applications) {
-    const stories = vibeControl.stories.filter(
+  for (const application of storyVault.applications) {
+    const stories = storyVault.stories.filter(
       (story) => story.applicationId === application.id
     );
     stats[application.id] = {
@@ -393,13 +396,13 @@ const applicationStatsById = computed(() => {
 
 function openManagedApplication(applicationId: string): void {
   isApplicationManagerOpen.value = false;
-  selectVibeControlApplication(applicationId);
+  selectStoryVaultApplication(applicationId);
 }
 
 function openCreateApplication(): void {
   isApplicationManagerOpen.value = false;
   void router.push({
-    name: "admin-vibe-control",
+    name: "admin-storyvault",
     query: { view: "application-knowledge", action: "create-app" },
   });
 }
@@ -407,7 +410,7 @@ function openCreateApplication(): void {
 function openRepositoryList(): void {
   isApplicationManagerOpen.value = false;
   void router.push({
-    name: "admin-vibe-control",
+    name: "admin-storyvault",
     query: { view: "repositories" },
   });
 }
@@ -437,8 +440,8 @@ const groupedNavModes = computed(() => {
 
 function navigateToMode(mode: (typeof navModes)[number]): void {
   const query: Record<string, string> = { ...(mode.homeRouteQuery ?? {}) };
-  if (mode.homeRouteName === "admin-vibe-control" && vibeControl.selectedApplicationId) {
-    query.applicationId = vibeControl.selectedApplicationId;
+  if (mode.homeRouteName === "admin-storyvault" && storyVault.selectedApplicationId) {
+    query.applicationId = storyVault.selectedApplicationId;
   }
   void router.push({
     name: mode.homeRouteName,

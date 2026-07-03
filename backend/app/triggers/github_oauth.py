@@ -1,4 +1,4 @@
-"""GitHub OAuth connection and repository read helpers for VibeControl."""
+"""GitHub OAuth connection and repository read helpers for StoryVault."""
 from __future__ import annotations
 
 import os

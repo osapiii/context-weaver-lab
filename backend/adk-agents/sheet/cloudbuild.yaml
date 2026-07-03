@@ -5,8 +5,8 @@ substitutions:
   _REGION: asia-northeast1
   _DD_LLMOBS_ENABLED: "false"
   _DD_LLMOBS_AGENTLESS_ENABLED: "true"
-  _DD_LLMOBS_ML_APP: vibe-control
-  _DD_SERVICE: vibe-control-sheet-agent
+  _DD_LLMOBS_ML_APP: storyvault
+  _DD_SERVICE: storyvault-sheet-agent
   _DD_ENV: dev
   _DD_SITE: ap1.datadoghq.com
 

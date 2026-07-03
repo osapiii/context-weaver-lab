@@ -29,7 +29,7 @@ db = firestore.Client()
 def _resolve_kicker_url() -> str:
     return os.getenv(
         "GOOGLE_DRIVE_WORKFLOW_KICKER_URL",
-        "https://google-drive-workflow-kicker-q2uwnmd3yq-uc.a.run.app",
+        "https://google-drive-workflow-kicker-mdgjayj74q-uc.a.run.app",
     ).rstrip("/")
 
 

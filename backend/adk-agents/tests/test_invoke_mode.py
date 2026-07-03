@@ -31,13 +31,13 @@ def test_resolve_falls_back_to_url():
     assert mode == "consultation"
 
 
-def test_resolve_accepts_vibe_control_mode():
+def test_resolve_accepts_storyvault_mode():
     mode = resolve_invoke_agent_mode(
-        url_mode="vibe_control",
-        mode_state={"active_mode": "vibe_control"},
+        url_mode="storyvault",
+        mode_state={"active_mode": "storyvault"},
         session_state={},
     )
-    assert mode == "vibe_control"
+    assert mode == "storyvault"
 
 
 def test_resolve_rejects_removed_application_scan_mode():
@@ -49,22 +49,22 @@ def test_resolve_rejects_removed_application_scan_mode():
     assert mode == "consultation"
 
 
-def test_resolve_accepts_separated_vibe_modes():
+def test_resolve_accepts_separated_storyvault_modes():
     zapping_mode = resolve_invoke_agent_mode(
-        url_mode="vibe_zapping_analysis",
-        mode_state={"active_mode": "vibe_zapping_analysis"},
+        url_mode="storyvault_zapping_analysis",
+        mode_state={"active_mode": "storyvault_zapping_analysis"},
         session_state={},
     )
     capability_mode = resolve_invoke_agent_mode(
-        url_mode="vibe_capability_structuring",
-        mode_state={"active_mode": "vibe_capability_structuring"},
+        url_mode="storyvault_capability_structuring",
+        mode_state={"active_mode": "storyvault_capability_structuring"},
         session_state={},
     )
     story_mode = resolve_invoke_agent_mode(
-        url_mode="vibe_story_generation",
-        mode_state={"active_mode": "vibe_story_generation"},
+        url_mode="storyvault_story_generation",
+        mode_state={"active_mode": "storyvault_story_generation"},
         session_state={},
     )
-    assert zapping_mode == "vibe_zapping_analysis"
-    assert capability_mode == "vibe_capability_structuring"
-    assert story_mode == "vibe_story_generation"
+    assert zapping_mode == "storyvault_zapping_analysis"
+    assert capability_mode == "storyvault_capability_structuring"
+    assert story_mode == "storyvault_story_generation"

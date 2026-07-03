@@ -1,0 +1,47 @@
+# StoryVault zapping analysis agent — Cloud Build → Cloud Run deploy.
+#
+# 使い方:
+#   cd backend/adk-agents
+#   gcloud builds submit . --config storyvault_zapping_analysis/cloudbuild.yaml \
+#       --substitutions=_REGION=asia-northeast1
+substitutions:
+  _SERVICE: storyvault-zapping-analysis-agent
+  _REGION: asia-northeast1
+  _ARTIFACT_BUCKET: ""
+  _ADK_INTERNAL_INVOKE_SECRET: ""
+  _DD_LLMOBS_ENABLED: "false"
+  _DD_LLMOBS_AGENTLESS_ENABLED: "true"
+  _DD_LLMOBS_ML_APP: storyvault
+  _DD_SERVICE: storyvault-zapping-analysis-agent
+  _DD_ENV: dev
+  _DD_SITE: ap1.datadoghq.com
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/${_SERVICE}:latest", "-f", "storyvault_zapping_analysis/Dockerfile", "."]
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "gcr.io/$PROJECT_ID/${_SERVICE}:latest"]
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=gcr.io/$PROJECT_ID/${_SERVICE}:latest
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --memory=1Gi
+      - --cpu=1
+      - --concurrency=8
+      - --timeout=900
+      - --set-env-vars=GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=us-central1,VERTEX_SEARCH_LOCATION=global,MODEL_ID=gemini-2.5-flash,ADK_SESSION_BACKEND=firestore,FIRESTORE_ADK_SESSIONS_COLLECTION=adkSessions,ADK_ARTIFACT_BUCKET=${_ARTIFACT_BUCKET},ADK_INTERNAL_INVOKE_SECRET=${_ADK_INTERNAL_INVOKE_SECRET},DD_LLMOBS_ENABLED=${_DD_LLMOBS_ENABLED},DD_LLMOBS_AGENTLESS_ENABLED=${_DD_LLMOBS_AGENTLESS_ENABLED},DD_LLMOBS_ML_APP=${_DD_LLMOBS_ML_APP},DD_SERVICE=${_DD_SERVICE},DD_ENV=${_DD_ENV},DD_SITE=${_DD_SITE}
+
+images:
+  - gcr.io/$PROJECT_ID/${_SERVICE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
