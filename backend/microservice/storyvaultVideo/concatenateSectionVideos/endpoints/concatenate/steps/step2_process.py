@@ -170,6 +170,7 @@ def _video_duration_filter(
         f"tpad=stop_mode=clone:stop_duration={target_duration:.3f},"
         f"trim=duration={target_duration:.3f},"
         "setpts=PTS-STARTPTS,"
+        "setsar=1,"
         "format=yuv420p"
     )
 
@@ -477,7 +478,7 @@ def _concatenate_timeline_with_ffmpeg(
     for index in range(len(video_paths)):
         video_input = index * 2
         audio_input = video_input + 1
-        filter_parts.append(f"[{video_input}:v:0]setpts=PTS-STARTPTS[v{index}]")
+        filter_parts.append(f"[{video_input}:v:0]setpts=PTS-STARTPTS,setsar=1,format=yuv420p[v{index}]")
         filter_parts.append(
             f"[{audio_input}:a:0]asetpts=PTS-STARTPTS,aresample=48000:first_pts=0,"
             f"aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo[a{index}]"
@@ -539,7 +540,7 @@ def _concatenate_with_ffmpeg(
     filter_parts: List[str] = []
     concat_inputs: List[str] = []
     for index in range(len(downloaded_paths)):
-        filter_parts.append(f"[{index}:v:0]setpts=PTS-STARTPTS[v{index}]")
+        filter_parts.append(f"[{index}:v:0]setpts=PTS-STARTPTS,setsar=1,format=yuv420p[v{index}]")
         filter_parts.append(
             f"[{index}:a:0]asetpts=PTS-STARTPTS,aresample=48000:first_pts=0,"
             f"aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo[a{index}]"
@@ -582,6 +583,42 @@ def _concatenate_with_ffmpeg(
     logger.success("FFmpeg concat 連結完了")
 
 
+def _apply_expected_total_duration_to_last_clip(
+    clips_info: List[Dict[str, Any]],
+    expected_total_duration: float,
+    current_total_duration: float,
+) -> float:
+    """セクション境界の丸めで生じた総尺差分を最後のセクションに吸収する。"""
+    if not clips_info or expected_total_duration <= 0 or current_total_duration <= 0:
+        return current_total_duration
+
+    duration_delta = expected_total_duration - current_total_duration
+    if abs(duration_delta) <= 0.02:
+        return current_total_duration
+
+    max_adjustment = max(1.0, expected_total_duration * 0.05)
+    if abs(duration_delta) > max_adjustment:
+        logger.warning(
+            "期待総尺との差分が大きいためセクション長補正をスキップ: "
+            f"expected={expected_total_duration:.3f}s current={current_total_duration:.3f}s "
+            f"delta={duration_delta:.3f}s max_adjustment={max_adjustment:.3f}s"
+        )
+        return current_total_duration
+
+    last_clip = clips_info[-1]
+    current_last_duration = float(last_clip.get("duration") or 0)
+    adjusted_last_duration = max(0.1, current_last_duration + duration_delta)
+    actual_delta = adjusted_last_duration - current_last_duration
+    last_clip["duration"] = adjusted_last_duration
+    logger.info(
+        "期待総尺に合わせて最終セクション長を補正: "
+        f"expected_total={expected_total_duration:.3f}s current_total={current_total_duration:.3f}s "
+        f"delta={duration_delta:.3f}s applied={actual_delta:.3f}s "
+        f"last_section={current_last_duration:.3f}s->{adjusted_last_duration:.3f}s"
+    )
+    return current_total_duration + actual_delta
+
+
 def execute(ctx: RequestContext, downloaded_sections: list) -> Dict[str, Any]:
     """
     Step 2: 動画を連結
@@ -622,7 +659,12 @@ def execute(ctx: RequestContext, downloaded_sections: list) -> Dict[str, Any]:
         single_section = downloaded_sections[0]
         single_path = single_section["localPath"]
         probed_info = _get_video_metadata_ffprobe(single_path)
-        expected_duration = float(single_section.get("expectedDurationSeconds") or probed_info["duration"] or 1.0)
+        expected_duration = float(
+            expected_total_duration
+            or single_section.get("expectedDurationSeconds")
+            or probed_info["duration"]
+            or 1.0
+        )
         trim_start_seconds = _section_trim_start_seconds(single_section, probed_info["duration"], expected_duration)
 
         # 出力ファイルパスを生成
@@ -736,6 +778,12 @@ def execute(ctx: RequestContext, downloaded_sections: list) -> Dict[str, Any]:
             f"trim_start={trim_start_seconds:.2f}秒, source_reused={same_source_reused}, "
             f"{meta['width']}x{meta['height']}, FPS={meta['fps']}"
         )
+
+    total_duration = _apply_expected_total_duration_to_last_clip(
+        clips_info,
+        expected_total_duration,
+        total_duration,
+    )
 
     # 動画情報をログに記録
     logger.data_analysis("セクション動画情報", {

@@ -72,9 +72,10 @@
       <div class="flex flex-wrap gap-2">
         <EnButton
           variant="solid"
-          :color="connection.connected ? 'success' : 'primary'"
+          color="neutral"
           size="sm"
           leading-icon="i-simple-icons-github"
+          custom-class="bg-neutral-950 text-white hover:bg-neutral-800 active:bg-black focus-visible:ring-neutral-500 disabled:bg-neutral-950/70"
           :loading="github.isLoading.value"
           @click="connect"
         >

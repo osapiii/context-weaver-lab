@@ -392,7 +392,7 @@ export const useVideoStudioStore = defineStore("videoStudio", {
         removeUndefinedFields({
           id: params.videoId,
           ...input,
-          sourceStoryVaultOperationVideo: true,
+          sourceStoryVaultClip: true,
         } as unknown as VideoStudioVideo & Record<string, unknown>),
         { merge: true }
       );
@@ -410,6 +410,7 @@ export const useVideoStudioStore = defineStore("videoStudio", {
       sections: VideoStudioSection[];
       openAfterCreate?: boolean;
       refreshPreparedSections?: boolean;
+      resetPreparedProject?: boolean;
     }): Promise<string> {
       const { organizationId, spaceId } = this.requireScope();
       const db = getFirestore();
@@ -444,40 +445,41 @@ export const useVideoStudioStore = defineStore("videoStudio", {
         };
       };
       const editorState = makeEditorState();
-      if (!existing.exists()) {
-        const input: VideoStudioProjectCreateInput = {
-          videoId: params.video.id,
-          organizationId,
-          name: params.name.trim(),
-          description: params.description?.trim() || undefined,
-          status: "in_progress",
-          videoAudioType: "with_audio",
-          voiceName: params.voiceName || "Puck",
-          currentStep: "section_split",
-          completedSteps: [],
-          sections: params.sections,
-          editorState,
-          mergedVideoOutput: null,
-          silenceCutSettings: {
-            enabled: false,
-            preset: "natural",
-            thresholdDb: -38,
-            minSilenceMs: 700,
-            keepPaddingMs: 180,
-            minSegmentMs: 450,
-            skipped: false,
-          },
-          silenceCutOutput: null,
-          subtitleSettings: {
-            enabled: true,
-            preset: "clear_standard",
-            size: "medium",
-            position: "bottom",
-            fontScale: 1,
-            skipped: false,
-          },
-          subtitleOutput: null,
-        };
+      const makePreparedProjectInput = (): VideoStudioProjectCreateInput => ({
+        videoId: params.video.id,
+        organizationId,
+        name: params.name.trim(),
+        description: params.description?.trim() || undefined,
+        status: "in_progress",
+        videoAudioType: "with_audio",
+        voiceName: params.voiceName || "Puck",
+        currentStep: "section_split",
+        completedSteps: [],
+        sections: params.sections,
+        editorState,
+        mergedVideoOutput: null,
+        silenceCutSettings: {
+          enabled: false,
+          preset: "natural",
+          thresholdDb: -38,
+          minSilenceMs: 700,
+          keepPaddingMs: 180,
+          minSegmentMs: 450,
+          skipped: false,
+        },
+        silenceCutOutput: null,
+        subtitleSettings: {
+          enabled: true,
+          preset: "clear_standard",
+          size: "medium",
+          position: "bottom",
+          fontScale: 1,
+          skipped: false,
+        },
+        subtitleOutput: null,
+      });
+      if (!existing.exists() || params.resetPreparedProject === true) {
+        const input = makePreparedProjectInput();
         await setDoc(
           projectRef,
           removeUndefinedFields({ id: params.projectId, ...input } as VideoStudioProject)
@@ -506,6 +508,21 @@ export const useVideoStudioStore = defineStore("videoStudio", {
         await this.openProject(params.video.id, params.projectId);
       }
       return params.projectId;
+    },
+
+    async preparedProjectExists(params: {
+      videoId: string;
+      projectId: string;
+    }): Promise<boolean> {
+      const { organizationId, spaceId } = this.requireScope();
+      const db = getFirestore();
+      const snap = await getDoc(
+        doc(
+          db,
+          `organizations/${organizationId}/spaces/${spaceId}/videos/${params.videoId}/narrationProjects/${params.projectId}`
+        )
+      );
+      return snap.exists();
     },
 
     async updateVideo(
@@ -789,6 +806,8 @@ export const useVideoStudioStore = defineStore("videoStudio", {
         id: createId("section"),
         index: params.index,
         title: `セクション ${params.index + 1}`,
+        sourceTranscriptCueIds: [],
+        sourceTranscriptCues: [],
         startTime: params.startTime,
         endTime: params.endTime,
         finalyNarrations: [],

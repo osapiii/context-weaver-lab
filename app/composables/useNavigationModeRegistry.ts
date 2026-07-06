@@ -77,8 +77,8 @@ export const useNavigationModeRegistry = () => {
     {
       key: "operation-videos",
       navGroup: "input",
-      label: "操作動画",
-      subtitle: "音声付きの操作動画を録画し、解析の材料として蓄積",
+      label: "クリップ",
+      subtitle: "音声付きのクリップを録画し、解析の材料として蓄積",
       icon: navModeIcons.operationVideos,
       homeRouteName: "admin-storyvault",
       homeRouteQuery: { view: "application-zapping" },

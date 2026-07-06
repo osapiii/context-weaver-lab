@@ -108,6 +108,7 @@ export const StoryVaultOperationVideoQuickScanSchema = z.object({
 
 export const StoryVaultOperationVideoClipSchema = z.object({
   id: z.string(),
+  title: z.string().optional(),
   fileName: z.string(),
   bucketName: z.string(),
   storagePath: z.string(),
@@ -553,62 +554,32 @@ export const StoryVaultOperationVideoRelatedContextsSchema = z.object({
   notes: z.array(z.string()).default([]),
 });
 
-export const StoryVaultOperationVideoGroupSchema = z.object({
+export const StoryVaultClipGroupSchema = z.object({
   id: z.string().optional(),
   applicationId: z.string().default("app-default"),
   applicationKey: z.string().default("APP"),
   name: z.string(),
   description: z.string().optional(),
-  videoCount: z.number().min(0).default(0),
+  clipCount: z.number().min(0).default(0),
   createdAt: z.instanceof(Timestamp).optional(),
   updatedAt: z.instanceof(Timestamp).optional(),
 });
 
-export const DecodedStoryVaultOperationVideoGroupSchema =
-  StoryVaultOperationVideoGroupSchema.extend({
+export const DecodedStoryVaultClipGroupSchema =
+  StoryVaultClipGroupSchema.extend({
     id: z.string(),
   });
 
-export const StoryVaultOperationVideoSchema = z.object({
+export const StoryVaultClipSchema = StoryVaultOperationVideoClipSchema.extend({
   id: z.string().optional(),
   applicationId: z.string().default("app-default"),
   applicationKey: z.string().default("APP"),
-  groupId: z.string().optional(),
-  groupNameSnapshot: z.string().optional(),
+  clipGroupId: z.string(),
+  clipGroupNameSnapshot: z.string().optional(),
   title: z.string(),
   description: z.string().optional(),
-  fileName: z.string(),
-  bucketName: z.string(),
-  storagePath: z.string(),
-  contentType: z.string().default("video/webm"),
-  sizeBytes: z.number().min(0).default(0),
-  durationMs: z.number().min(0).optional(),
-  transcriptText: z.string().optional(),
-  transcriptProvider: z.string().optional(),
-  transcriptSummary: z.string().optional(),
-  transcriptSegments: z.array(StoryVaultTranscriptCueSchema).default([]),
-  transcriptSrt: z.string().optional(),
-  transcriptTimingStatus: StoryVaultTranscriptTimingStatusSchema.default(
-    "unavailable"
-  ),
-  quickScan: StoryVaultOperationVideoQuickScanSchema.optional(),
-  frameCaptures: z.array(StoryVaultOperationVideoFrameSchema).default([]),
-  clips: z.array(StoryVaultOperationVideoClipSchema).default([]),
-  clipCount: z.number().min(0).default(1),
-  totalDurationMs: z.number().min(0).optional(),
-  hasUnanalyzedClip: z.boolean().default(false),
-  lastClipAddedAt: z.string().optional(),
-  analysisStaleReason: z.string().optional(),
   tags: z.array(z.string()).default([]),
   fileSpaceId: z.string().optional(),
-  fileSpaceRequestId: z.string().optional(),
-  metadataFileName: z.string().optional(),
-  metadataStoragePath: z.string().optional(),
-  journeyFileName: z.string().optional(),
-  journeyStoragePath: z.string().optional(),
-  journeyFileSpaceRequestId: z.string().optional(),
-  sourceAssetId: z.string().optional(),
-  journeySourceAssetId: z.string().optional(),
   discoveryStatus: StoryVaultOperationVideoDiscoveryStatusSchema.default(
     "not_registered"
   ),
@@ -622,18 +593,13 @@ export const StoryVaultOperationVideoSchema = z.object({
   analyzedAt: z.string().optional(),
   analysisResult: StoryVaultZappingAnalysisResultSchema.optional(),
   relatedContexts: StoryVaultOperationVideoRelatedContextsSchema.optional(),
-  sourceDisplaySurface: StoryVaultOperationVideoDisplaySurfaceSchema.default(
-    "unknown"
-  ),
-  recordedAt: z.string(),
   createdAt: z.instanceof(Timestamp).optional(),
   updatedAt: z.instanceof(Timestamp).optional(),
 });
 
-export const DecodedStoryVaultOperationVideoSchema =
-  StoryVaultOperationVideoSchema.extend({
-    id: z.string(),
-  });
+export const DecodedStoryVaultClipSchema = StoryVaultClipSchema.extend({
+  id: z.string(),
+});
 
 export const StoryVaultApplicationScanRunSchema = z.object({
   requestId: z.string(),
@@ -772,7 +738,7 @@ export const StoryVaultGenerationSessionSchema = z.object({
       repoFullName: z.string().optional(),
       defaultBranch: z.string().optional(),
       screenshotCount: z.number().min(0).default(0),
-      videoCount: z.number().min(0).default(0),
+      clipCount: z.number().min(0).default(0),
       zappingSearchDocumentCount: z.number().min(0).default(0),
       zappingFrameCount: z.number().min(0).default(0),
       transcriptCount: z.number().min(0).default(0),
@@ -780,7 +746,7 @@ export const StoryVaultGenerationSessionSchema = z.object({
     })
     .default({
       screenshotCount: 0,
-      videoCount: 0,
+      clipCount: 0,
       zappingSearchDocumentCount: 0,
       zappingFrameCount: 0,
       transcriptCount: 0,
@@ -951,18 +917,12 @@ export type StoryVaultSourceConnection = z.infer<
 export type DecodedStoryVaultSourceConnection = z.infer<
   typeof DecodedStoryVaultSourceConnectionSchema
 >;
-export type StoryVaultOperationVideo = z.infer<
-  typeof StoryVaultOperationVideoSchema
+export type StoryVaultClipGroup = z.infer<typeof StoryVaultClipGroupSchema>;
+export type DecodedStoryVaultClipGroup = z.infer<
+  typeof DecodedStoryVaultClipGroupSchema
 >;
-export type DecodedStoryVaultOperationVideo = z.infer<
-  typeof DecodedStoryVaultOperationVideoSchema
->;
-export type StoryVaultOperationVideoGroup = z.infer<
-  typeof StoryVaultOperationVideoGroupSchema
->;
-export type DecodedStoryVaultOperationVideoGroup = z.infer<
-  typeof DecodedStoryVaultOperationVideoGroupSchema
->;
+export type StoryVaultClip = z.infer<typeof StoryVaultClipSchema>;
+export type DecodedStoryVaultClip = z.infer<typeof DecodedStoryVaultClipSchema>;
 export type StoryVaultApplicationScanRun = z.infer<
   typeof StoryVaultApplicationScanRunSchema
 >;
@@ -1028,11 +988,11 @@ export const storyVaultStoryEvidenceConverter = firestoreTypeConverter(
 export const storyVaultSourceConnectionConverter = firestoreTypeConverter(
   DecodedStoryVaultSourceConnectionSchema
 );
-export const storyVaultOperationVideoConverter = firestoreTypeConverter(
-  DecodedStoryVaultOperationVideoSchema
+export const storyVaultClipGroupConverter = firestoreTypeConverter(
+  DecodedStoryVaultClipGroupSchema
 );
-export const storyVaultOperationVideoGroupConverter = firestoreTypeConverter(
-  DecodedStoryVaultOperationVideoGroupSchema
+export const storyVaultClipConverter = firestoreTypeConverter(
+  DecodedStoryVaultClipSchema
 );
 export const storyVaultApplicationScanProfileConverter = firestoreTypeConverter(
   DecodedStoryVaultApplicationScanProfileSchema

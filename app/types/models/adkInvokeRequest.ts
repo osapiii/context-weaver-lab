@@ -121,6 +121,13 @@ export const AdkInvokeOutputSchema = z
         knowledge_document_count: z.number().optional(),
       })
       .optional(),
+    storyvault_zapping_analysis: z
+      .object({
+        analysis_result: z.unknown().optional(),
+        story_candidate_count: z.number().optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .nullable()
   .optional();

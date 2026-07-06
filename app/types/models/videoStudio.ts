@@ -28,6 +28,10 @@ const transcriptSegmentSchema = z.object({
   confidence: optionalFiniteNumberSchema,
 });
 
+const sectionTranscriptCueSchema = transcriptSegmentSchema.extend({
+  sourceId: z.string().optional(),
+});
+
 const parseTimestampLikeObject = (value: unknown): Timestamp | unknown => {
   if (!value || typeof value !== "object") return value;
   if (value instanceof Timestamp || value instanceof Date) return value;
@@ -161,6 +165,9 @@ export const videoSectionSchema = z.object({
   index: finiteNumberSchema,
   title: z.string().optional(),
   memo: z.string().optional(),
+  sourceKind: z.enum(["manual", "ai_section", "transcript_chapter"]).optional(),
+  sourceTranscriptCueIds: z.array(z.string()).default([]),
+  sourceTranscriptCues: z.array(sectionTranscriptCueSchema).default([]),
   startTime: finiteNumberSchema,
   endTime: finiteNumberSchema,
   splitVideo: splitVideoInfoSchema.optional(),

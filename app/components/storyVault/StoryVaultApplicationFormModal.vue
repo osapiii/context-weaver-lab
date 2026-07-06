@@ -4,12 +4,12 @@
     :title="modalTitle"
     :subtitle="modalSubtitle"
     title-icon="material-symbols:apps-outline"
-    size="3xl"
+    size="2xl"
     padding="lg"
     :close-on-backdrop="!isSaving"
   >
-    <div class="grid gap-4 md:grid-cols-2">
-      <label class="block min-w-0 md:col-span-2">
+    <div class="grid gap-4">
+      <label class="block min-w-0">
         <span class="text-xs font-medium text-slate-600">アプリ名</span>
         <input
           v-model="form.name"
@@ -20,98 +20,7 @@
         >
       </label>
 
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">App Key</span>
-        <input
-          v-model="form.applicationKey"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm uppercase text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="VC"
-          :disabled="isSaving"
-        >
-      </label>
-
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">ドメイン</span>
-        <input
-          v-model="form.domain"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="devops-governance"
-          :disabled="isSaving"
-        >
-      </label>
-
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">オーナー</span>
-        <input
-          v-model="form.owner"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="Product team"
-          :disabled="isSaving"
-        >
-      </label>
-
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">ラベル</span>
-        <input
-          v-model="labelsText"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="hackathon, governance"
-          :disabled="isSaving"
-        >
-      </label>
-
-      <label class="block min-w-0 md:col-span-2">
-        <span class="text-xs font-medium text-slate-600">概要</span>
-        <textarea
-          v-model="form.summary"
-          rows="3"
-          class="mt-1 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="このアプリケーションが扱うプロダクト領域、対象ユーザー、管理したいストーリーの範囲"
-          :disabled="isSaving"
-        />
-      </label>
-
-      <label class="block min-w-0 md:col-span-2">
-        <span class="text-xs font-medium text-slate-600">Start URL</span>
-        <input
-          v-model="form.startUrl"
-          type="url"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="https://example.com/"
-          :disabled="isSaving"
-        >
-      </label>
-
-      <label
-        v-if="isEdit"
-        class="block min-w-0"
-      >
-        <span class="text-xs font-medium text-slate-600">FileSpace ID</span>
-        <input
-          v-model="form.fileSpaceId"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="w-default"
-          :disabled="isSaving"
-        >
-      </label>
-      <div
-        v-else
-        class="min-w-0 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2"
-      >
-        <p class="text-xs font-semibold text-emerald-800">
-          専用FileSpace
-        </p>
-        <p class="mt-1 text-xs leading-5 text-emerald-700">
-          アプリ登録後に自動で作成します。
-        </p>
-      </div>
-
-      <div class="min-w-0 md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div class="min-w-0 rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="min-w-0">
             <p class="text-sm font-semibold text-slate-900">GitHub repository</p>
@@ -188,17 +97,6 @@
           </p>
         </div>
       </div>
-
-      <label class="block min-w-0">
-        <span class="text-xs font-medium text-slate-600">Default branch</span>
-        <input
-          v-model="form.defaultBranch"
-          type="text"
-          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-          placeholder="main"
-          :disabled="isSaving"
-        >
-      </label>
     </div>
 
     <EnAlert
@@ -268,7 +166,6 @@ const form = reactive<StoryVaultApplicationInput>({
   repoFullName: "",
   defaultBranch: "main",
 });
-const labelsText = ref("");
 const validationError = ref("");
 const repositoriesLoading = ref(false);
 const github = useGitHubOAuth();
@@ -316,7 +213,6 @@ watch(
     form.domain = application?.domain ?? "";
     form.owner = application?.owner ?? "";
     form.labels = application?.labels ?? [];
-    labelsText.value = application?.labels.join(", ") ?? "";
     form.startUrl =
       application?.startUrl ?? application?.lastScan?.startUrl ?? "";
     form.fileSpaceId = application?.fileSpaceId ?? "";
@@ -352,17 +248,13 @@ function submit(): void {
     validationError.value = `${form.repoFullName} は ${duplicated.name} に登録済みです`;
     return;
   }
-  const labels = labelsText.value
-    .split(",")
-    .map((label) => label.trim())
-    .filter(Boolean);
   emit("save", {
     ...form,
     applicationKey: form.applicationKey.trim(),
     name: form.name.trim(),
     startUrl: form.startUrl?.trim(),
     repoFullName: form.repoFullName.trim(),
-    labels,
+    labels: form.labels?.map((label) => label.trim()).filter(Boolean) ?? [],
   });
 }
 

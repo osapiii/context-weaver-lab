@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DecodedStoryVaultOperationVideoSchema } from "./storyVault";
+import { DecodedStoryVaultClipSchema } from "./storyVault";
 
 const baseVideo = {
   id: "video-1",
@@ -18,13 +18,13 @@ const baseVideo = {
 
 describe("StoryVault operation video relatedContexts", () => {
   it("decodes existing videos without relatedContexts", () => {
-    const parsed = DecodedStoryVaultOperationVideoSchema.parse(baseVideo);
+    const parsed = DecodedStoryVaultClipSchema.parse(baseVideo);
 
     expect(parsed.relatedContexts).toBeUndefined();
   });
 
   it("decodes GitHub related PR results", () => {
-    const parsed = DecodedStoryVaultOperationVideoSchema.parse({
+    const parsed = DecodedStoryVaultClipSchema.parse({
       ...baseVideo,
       relatedContexts: {
         generatedAt: "2026-06-28T00:00:00.000Z",
@@ -54,7 +54,7 @@ describe("StoryVault operation video relatedContexts", () => {
   });
 
   it("decodes Slack related message results", () => {
-    const parsed = DecodedStoryVaultOperationVideoSchema.parse({
+    const parsed = DecodedStoryVaultClipSchema.parse({
       ...baseVideo,
       relatedContexts: {
         generatedAt: "2026-06-28T00:00:00.000Z",

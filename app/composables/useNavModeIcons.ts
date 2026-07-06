@@ -11,7 +11,7 @@ export const useNavModeIcons = () => {
     applications: "flat-color-icons:deployment",
     /** ユーザーストーリー */
     stories: "flat-color-icons:flow-chart",
-    /** 操作動画 */
+    /** クリップ */
     operationVideos: "material-symbols:video-camera-back-outline",
     /** 外部サービス連携 */
     externalServices: "material-symbols:conversion-path",

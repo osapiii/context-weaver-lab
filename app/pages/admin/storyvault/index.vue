@@ -47,101 +47,154 @@
 
     <EnModal
       v-model:open="zappingAnalysisModalOpen"
-      title="ザッピング動画を解析中"
-      subtitle="動画・文字起こし・アプリ専用ナレッジを照合しています"
+      title="ユーザーストーリー解析"
+      subtitle="保存済みクリップ・文字起こし・アプリ専用ナレッジから候補を抽出しています"
       title-icon="material-symbols:psychology-outline"
       size="full"
       :ui="{ content: 'w-[92vw] max-w-[1560px]' }"
-      :hide-close="activeZappingAnalysisVideo?.analysisStatus === 'queued' || activeZappingAnalysisVideo?.analysisStatus === 'running'"
-      :close-on-backdrop="activeZappingAnalysisVideo?.analysisStatus !== 'queued' && activeZappingAnalysisVideo?.analysisStatus !== 'running'"
+      :hide-close="activeZappingAnalysisClip?.analysisStatus === 'queued' || activeZappingAnalysisClip?.analysisStatus === 'running'"
+      :close-on-backdrop="activeZappingAnalysisClip?.analysisStatus !== 'queued' && activeZappingAnalysisClip?.analysisStatus !== 'running'"
     >
       <div class="space-y-5">
         <div
           class="overflow-hidden rounded-xl border"
-          :class="activeZappingAnalysisVideo?.analysisStatus === 'error' ? 'border-red-200 bg-red-50' : activeZappingAnalysisVideo?.analysisStatus === 'completed' ? 'border-emerald-200 bg-emerald-50' : 'border-cyan-100 bg-cyan-50'"
+          :class="activeZappingAnalysisClip?.analysisStatus === 'error' ? 'border-red-200 bg-red-50' : activeZappingAnalysisClip?.analysisStatus === 'completed' ? 'border-emerald-200 bg-emerald-50' : 'border-cyan-100 bg-cyan-50'"
         >
           <div class="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
             <div class="flex min-w-0 items-start gap-3">
               <span
                 class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
-                :class="activeZappingAnalysisVideo?.analysisStatus === 'error' ? 'bg-red-100 text-red-600' : activeZappingAnalysisVideo?.analysisStatus === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-cyan-700 shadow-sm ring-1 ring-cyan-100'"
+                :class="activeZappingAnalysisClip?.analysisStatus === 'error' ? 'bg-red-100 text-red-600' : activeZappingAnalysisClip?.analysisStatus === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-cyan-700 shadow-sm ring-1 ring-cyan-100'"
               >
                 <UIcon
-                  :name="activeZappingAnalysisVideo?.analysisStatus === 'error' ? 'material-symbols:error-outline' : activeZappingAnalysisVideo?.analysisStatus === 'completed' ? 'material-symbols:check-circle-outline' : 'material-symbols:psychology-outline'"
+                  :name="activeZappingAnalysisClip?.analysisStatus === 'error' ? 'material-symbols:error-outline' : activeZappingAnalysisClip?.analysisStatus === 'completed' ? 'material-symbols:check-circle-outline' : 'material-symbols:psychology-outline'"
                   class="h-6 w-6"
                 />
               </span>
               <div class="min-w-0">
                 <p class="truncate text-base font-black text-slate-950">
-                  {{ activeZappingAnalysisVideo?.title || "ザッピング動画" }}
+                  {{ activeZappingAnalysisClip?.title || "クリップ" }}
                 </p>
                 <p class="mt-1 text-sm leading-relaxed text-slate-600">
                   {{ zappingAnalysisProgressLabel }}
                 </p>
                 <p class="mt-2 truncate font-mono text-[11px] text-slate-500">
-                  {{ activeZappingAnalysisRequestId || activeZappingAnalysisVideo?.analysisRequestId || "解析ジョブを準備中" }}
+                  {{ activeZappingAnalysisRequestId || activeZappingAnalysisClip?.analysisRequestId || "解析ジョブを準備中" }}
                 </p>
               </div>
             </div>
             <div class="min-w-[220px] rounded-lg bg-white/80 p-3 ring-1 ring-white">
               <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                <span>ストーリー抽出</span>
+                <span>ユーザーストーリー解析</span>
                 <span>{{ zappingAnalysisProgressPercent }}%</span>
               </div>
               <UProgress
                 class="mt-2"
                 :model-value="zappingAnalysisProgressPercent"
-                :color="activeZappingAnalysisVideo?.analysisStatus === 'error' ? 'error' : activeZappingAnalysisVideo?.analysisStatus === 'completed' ? 'success' : 'primary'"
+                :color="activeZappingAnalysisClip?.analysisStatus === 'error' ? 'error' : activeZappingAnalysisClip?.analysisStatus === 'completed' ? 'success' : 'primary'"
               />
             </div>
           </div>
         </div>
 
         <div class="grid gap-5 2xl:grid-cols-[minmax(390px,0.78fr)_minmax(680px,1.22fr)]">
-          <ol class="space-y-2">
-            <li
-              v-for="step in zappingAnalysisSteps"
-              :key="step.key"
-              class="flex items-start gap-3 rounded-xl border bg-white px-3 py-3 transition"
-              :class="step.status === 'active' ? 'border-cyan-200 shadow-sm shadow-cyan-100' : step.status === 'done' ? 'border-emerald-100' : step.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-200'"
-            >
-              <span
-                class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                :class="step.status === 'done' ? 'bg-emerald-100 text-emerald-700' : step.status === 'active' ? 'bg-cyan-100 text-cyan-700' : step.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'"
+          <div class="flex min-h-[720px] flex-col justify-between gap-4">
+            <ol class="space-y-2">
+              <li
+                v-for="step in zappingAnalysisSteps"
+                :key="step.key"
+                class="flex items-start gap-3 rounded-xl border bg-white px-3 py-3 transition"
+                :class="step.status === 'active' ? 'border-cyan-200 shadow-sm shadow-cyan-100' : step.status === 'done' ? 'border-emerald-100' : step.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-200'"
               >
-                <UIcon
-                  v-if="step.status === 'done'"
-                  name="material-symbols:check-small"
-                  class="h-5 w-5"
-                />
-                <UIcon
-                  v-else-if="step.status === 'active'"
-                  name="material-symbols:progress-activity"
-                  class="h-5 w-5 animate-spin"
-                />
-                <UIcon
-                  v-else-if="step.status === 'error'"
-                  name="material-symbols:close-small"
-                  class="h-5 w-5"
-                />
-                <span v-else>{{ step.index }}</span>
-              </span>
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center justify-between gap-3">
-                  <p class="text-sm font-bold text-slate-900">{{ step.label }}</p>
-                  <span
-                    class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
-                    :class="step.status === 'done' ? 'bg-emerald-50 text-emerald-700' : step.status === 'active' ? 'bg-cyan-50 text-cyan-700' : step.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-slate-50 text-slate-400'"
-                  >
-                    {{ step.statusLabel }}
-                  </span>
+                <span
+                  class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                  :class="step.status === 'done' ? 'bg-emerald-100 text-emerald-700' : step.status === 'active' ? 'bg-cyan-100 text-cyan-700' : step.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'"
+                >
+                  <UIcon
+                    v-if="step.status === 'done'"
+                    name="material-symbols:check-small"
+                    class="h-5 w-5"
+                  />
+                  <UIcon
+                    v-else-if="step.status === 'active'"
+                    name="material-symbols:progress-activity"
+                    class="h-5 w-5 animate-spin"
+                  />
+                  <UIcon
+                    v-else-if="step.status === 'error'"
+                    name="material-symbols:close-small"
+                    class="h-5 w-5"
+                  />
+                  <span v-else>{{ step.index }}</span>
+                </span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center justify-between gap-3">
+                    <p class="text-sm font-bold text-slate-900">{{ step.label }}</p>
+                    <span
+                      class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
+                      :class="step.status === 'done' ? 'bg-emerald-50 text-emerald-700' : step.status === 'active' ? 'bg-cyan-50 text-cyan-700' : step.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-slate-50 text-slate-400'"
+                    >
+                      {{ step.statusLabel }}
+                    </span>
+                  </div>
+                  <p class="mt-1 text-xs leading-relaxed text-slate-500">
+                    {{ step.description }}
+                  </p>
                 </div>
-                <p class="mt-1 text-xs leading-relaxed text-slate-500">
-                  {{ step.description }}
-                </p>
+              </li>
+            </ol>
+
+            <div
+              v-if="zappingAnalysisScanPreviewVisible"
+              class="zapping-scan-card"
+            >
+              <div class="flex items-center justify-between gap-3 px-3 pt-3">
+                <div class="min-w-0">
+                  <p class="truncate text-xs font-black text-white">
+                    {{ activeZappingAnalysisClip?.title || "クリップ" }}
+                  </p>
+                  <p class="mt-0.5 text-[11px] font-semibold text-cyan-100">
+                    {{ zappingAnalysisScanStateLabel }}
+                  </p>
+                </div>
+                <span class="zapping-scan-live">
+                  <span class="h-1.5 w-1.5 rounded-full bg-cyan-300" />
+                  SCAN
+                </span>
               </div>
-            </li>
-          </ol>
+
+              <div class="zapping-scan-preview">
+                <img
+                  v-if="zappingAnalysisPreviewFrameUrl"
+                  :key="zappingAnalysisPreviewFrame?.id"
+                  :src="zappingAnalysisPreviewFrameUrl"
+                  alt=""
+                  class="h-full w-full object-cover"
+                >
+                <div
+                  v-else
+                  class="flex h-full w-full items-center justify-center bg-slate-950"
+                >
+                  <UIcon name="material-symbols:movie-outline" class="h-12 w-12 text-cyan-200/80" />
+                </div>
+                <div class="zapping-scan-grid" />
+                <div class="zapping-scan-line" />
+                <div class="zapping-scan-glow" />
+              </div>
+
+              <div class="grid grid-cols-3 gap-2 px-3 pb-3 text-[10px] font-bold text-cyan-50/90">
+                <div class="rounded-md bg-white/10 px-2 py-1">
+                  {{ zappingAnalysisStats.frameCount }} frames
+                </div>
+                <div class="rounded-md bg-white/10 px-2 py-1">
+                  {{ zappingAnalysisStats.cueCount }} cues
+                </div>
+                <div class="rounded-md bg-white/10 px-2 py-1">
+                  {{ zappingAnalysisProgressPercent }}%
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div class="flex items-start justify-between gap-3">
@@ -252,9 +305,9 @@
         </div>
 
         <EnAlert
-          v-if="activeZappingAnalysisVideo?.analysisErrorMessage"
+          v-if="activeZappingAnalysisClip?.analysisErrorMessage"
           color="error"
-          :title="activeZappingAnalysisVideo.analysisErrorMessage"
+          :title="activeZappingAnalysisClip.analysisErrorMessage"
         />
       </div>
 
@@ -263,13 +316,13 @@
           variant="outline"
           color="neutral"
           size="sm"
-          :disabled="activeZappingAnalysisVideo?.analysisStatus === 'queued' || activeZappingAnalysisVideo?.analysisStatus === 'running'"
+          :disabled="activeZappingAnalysisClip?.analysisStatus === 'queued' || activeZappingAnalysisClip?.analysisStatus === 'running'"
           @click="zappingAnalysisModalOpen = false"
         >
           閉じる
         </EnButton>
         <EnButton
-          v-if="activeZappingAnalysisVideo?.analysisStatus === 'completed'"
+          v-if="activeZappingAnalysisClip?.analysisStatus === 'completed'"
           variant="ai"
           size="sm"
           leading-icon="material-symbols:visibility-outline"
@@ -282,7 +335,7 @@
 
     <EnModal
       v-model:open="zappingAnalysisRerunConfirmOpen"
-      title="解析結果を作り直しますか?"
+      title="ユーザーストーリー解析をやり直しますか?"
       subtitle="既存のストーリー候補が新しい解析結果で置き換わります。"
       header-variant="warning"
       title-icon="material-symbols:warning-outline"
@@ -290,11 +343,11 @@
     >
       <div class="space-y-3">
         <div
-          v-if="zappingAnalysisRerunTargetVideo"
+          v-if="zappingAnalysisRerunTargetClip"
           class="rounded-lg border border-amber-100 bg-amber-50 p-3"
         >
           <p class="text-sm font-semibold text-slate-950">
-            {{ zappingAnalysisRerunTargetVideo.title || "ザッピング動画" }}
+            {{ zappingAnalysisRerunTargetClip.title || "クリップ" }}
           </p>
           <p class="mt-1 text-xs leading-relaxed text-slate-600">
             現在の解析結果には {{ zappingAnalysisRerunStoryCount }} 件のストーリー候補があります。
@@ -366,133 +419,6 @@
       :title="store.error"
     />
 
-    <section
-      v-if="currentView === 'application-detail'"
-      class="overflow-hidden rounded-lg border border-slate-200 bg-white"
-    >
-      <div class="border-b border-slate-100 bg-slate-950 px-4 py-4 text-white">
-        <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <StoryVaultApplicationHeader
-                :applications="store.applications"
-                :selected-application="selectedApplication"
-                @select="selectApplicationFromHeader"
-                @create="openCreateApplicationModal"
-                @edit="openEditApplicationModal"
-                @manage="showRepositoryList"
-              />
-              <EnBadge
-                v-if="selectedApplication"
-                variant="soft"
-                color="neutral"
-                size="xs"
-              >
-                {{ selectedApplication.applicationKey }}
-              </EnBadge>
-              <EnBadge
-                v-if="selectedApplication?.repoFullName"
-                variant="soft"
-                color="info"
-                size="xs"
-              >
-                {{ selectedApplication.repoFullName }}
-              </EnBadge>
-            </div>
-            <h1 class="mt-4 text-2xl font-black tracking-tight sm:text-3xl">
-              {{ selectedApplication?.name || "StoryVault" }}
-            </h1>
-            <p class="mt-2 max-w-4xl text-sm leading-relaxed text-slate-300">
-              {{ selectedApplication?.summary || "操作動画・仕様ナレッジ・GitHubの実装状態をユーザーストーリー単位で束ね、AI開発の文脈崩れと仕様差分を審査できる状態にします。" }}
-            </p>
-          </div>
-
-          <div class="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[34rem]">
-            <div
-              v-for="metric in commandMetrics"
-              :key="metric.label"
-              class="rounded-md bg-white/10 px-3 py-2"
-            >
-              <div class="flex items-center justify-between gap-2">
-                <p class="text-[10px] font-bold uppercase text-slate-400">
-                  {{ metric.label }}
-                </p>
-                <UIcon :name="metric.icon" class="h-4 w-4 text-slate-400" />
-              </div>
-              <p class="mt-1 text-xl font-black tabular-nums">
-                {{ metric.value }}
-              </p>
-              <p class="mt-1 truncate text-[11px] font-medium text-slate-400">
-                {{ metric.caption }}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="grid gap-0 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div class="min-w-0 border-b border-slate-100 p-3 lg:border-b-0 lg:border-r">
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="tab in applicationTabs"
-              :key="tab.value"
-              type="button"
-              class="inline-flex h-10 items-center gap-2 rounded-md px-3 text-xs font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-              :class="activeApplicationTab === tab.value ? 'bg-slate-950 text-white shadow-sm' : 'bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-white hover:text-slate-950'"
-              @click="switchApplicationTab(tab.value)"
-            >
-              <UIcon :name="tab.icon" class="h-4 w-4" />
-              {{ tab.label }}
-              <span
-                v-if="tab.count !== undefined"
-                class="rounded bg-white/15 px-1.5 py-0.5 font-mono text-[10px]"
-                :class="activeApplicationTab === tab.value ? 'text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'"
-              >
-                {{ tab.count }}
-              </span>
-            </button>
-          </div>
-        </div>
-
-        <aside class="bg-slate-50 p-3">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <p class="text-xs font-bold text-slate-500">Submission readiness</p>
-              <p class="mt-0.5 text-sm font-black text-slate-950">
-                {{ readinessScore }}%
-              </p>
-            </div>
-            <div class="h-2 w-28 overflow-hidden rounded-full bg-slate-200">
-              <div
-                class="h-full rounded-full"
-                :class="readinessScore >= 75 ? 'bg-emerald-500' : readinessScore >= 45 ? 'bg-amber-500' : 'bg-slate-400'"
-                :style="{ width: `${readinessScore}%` }"
-              />
-            </div>
-          </div>
-          <div class="mt-3 grid gap-2">
-            <div
-              v-for="item in demoReadinessItems"
-              :key="item.label"
-              class="flex items-start gap-2 rounded-md bg-white px-2.5 py-2 ring-1 ring-slate-200"
-            >
-              <UIcon
-                :name="item.done ? 'material-symbols:check-circle-outline' : 'material-symbols:radio-button-unchecked'"
-                class="mt-0.5 h-4 w-4 shrink-0"
-                :class="item.done ? 'text-emerald-600' : 'text-slate-300'"
-              />
-              <div class="min-w-0">
-                <p class="text-xs font-bold text-slate-800">{{ item.label }}</p>
-                <p class="mt-0.5 text-[11px] leading-relaxed text-slate-500">
-                  {{ item.caption }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </section>
-
     <StoryVaultRepositoryList
       v-if="currentView === 'repositories'"
       :applications="store.applications"
@@ -506,7 +432,7 @@
       <template v-if="activeApplicationTab === 'stories'">
         <StoryVaultVideoStoryCurationList
           :application-id="selectedApplication?.id"
-          :videos="store.activeOperationVideos"
+          :videos="store.activeClipRecords"
         />
       </template>
 
@@ -622,8 +548,9 @@
       <StoryVaultOperationVideoPanel
         v-else-if="activeApplicationTab === 'zapping'"
         :application="selectedApplication"
-        :videos="store.activeOperationVideos"
-        :operation-video-groups="store.activeOperationVideoGroups"
+        :clip-records="store.activeClipRecords"
+        :clips="store.activeClips"
+        :clip-groups="store.activeClipGroups"
         :is-saving="store.isSavingOperationVideo"
         :is-analyzing="store.isAnalyzingZappingVideos"
         :is-fetching-related-contexts="store.isFetchingRelatedContexts"
@@ -632,15 +559,13 @@
         @analyze="startZappingVideoAnalysis"
         @fetch-related-context="startRelatedContextAnalysis"
         @save="saveOperationVideo"
-        @append-clip="appendOperationVideoClip"
         @update-clip-analysis="updateOperationVideoClipAnalysis"
-        @create-group="createOperationVideoGroup"
-        @update-group="updateOperationVideoGroup"
-        @delete-group="deleteOperationVideoGroup"
-        @apply-organization-plan="applyOperationVideoOrganizationPlan"
-        @update-title="updateOperationVideoTitle"
-        @delete-clip="deleteOperationVideoClip"
-        @delete="deleteOperationVideo"
+        @create-clip-group="createClipGroup"
+        @update-clip-group="updateClipGroup"
+        @delete-clip-group="deleteClipGroup"
+        @apply-clip-group-organization-plan="applyClipGroupOrganizationPlan"
+        @update-title="updateClipTitle"
+        @delete="deleteClip"
         @refresh="store.fetchFromFirestore()"
       />
 
@@ -656,14 +581,14 @@
         :story="selectedStory"
         :evidence="store.selectedEvidence"
         :source-assets="store.activeSourceAssets"
-        :operation-videos="store.activeOperationVideos"
+        :operation-videos="store.activeClipRecords"
       />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useStoryVaultStore } from "@stores/storyVault";
 import { useGeminiFileSpaceOperatorStore } from "@stores/geminiFileSpaceOperator";
@@ -672,20 +597,20 @@ import { useOrganizationStore } from "@stores/organization";
 import { useSpaceStore } from "@stores/space";
 import { useGeminiFileSpaceSnapshot } from "@composables/useGeminiFileSpaceSnapshot";
 import { useGoogleDriveFolderSync } from "@composables/useGoogleDriveFolderSync";
+import { resolveArtifactDisplayUrl } from "@utils/artifactDisplayUrl";
 import DataSourceUploadMode from "@components/dataSource/DataSourceUploadMode.vue";
 import DataSourceViewMode from "@components/dataSource/DataSourceViewMode.vue";
 import StoryVaultApplicationKnowledgeSpacePanel from "@components/storyVault/StoryVaultApplicationKnowledgeSpacePanel.vue";
 import type {
   DecodedStoryVaultApplication,
-  DecodedStoryVaultOperationVideo,
+  DecodedStoryVaultClip,
 } from "@models/storyVault";
 import type { Document } from "@models/geminiFileSpaceRequest";
 import type {
   StoryVaultApplicationInput,
+  StoryVaultClipAnalysisInput,
+  StoryVaultClipSaveInput,
   StoryVaultGenerationInput,
-  StoryVaultOperationVideoAppendInput,
-  StoryVaultOperationVideoClipAnalysisInput,
-  StoryVaultOperationVideoSaveInput,
 } from "@stores/storyVault";
 import type { GitHubRepositorySummary } from "@composables/useGitHubOAuth";
 
@@ -732,12 +657,6 @@ type AnalysisInsight = {
   lines: string[];
   inputs: AnalysisInsightItem[];
 };
-type ApplicationTabItem = {
-  value: ApplicationDetailTab;
-  label: string;
-  icon: string;
-  count?: number;
-};
 
 defineOptions({
   name: "AdminStoryVaultIndexPage",
@@ -771,12 +690,16 @@ const applicationModalOpen = ref(false);
 const deleteConfirmOpen = ref(false);
 const zappingAnalysisModalOpen = ref(false);
 const zappingAnalysisRerunConfirmOpen = ref(false);
-const activeZappingAnalysisVideoId = ref("");
+const activeZappingAnalysisClipId = ref("");
 const activeZappingAnalysisRequestId = ref("");
-const pendingZappingAnalysisVideoId = ref("");
+const pendingZappingAnalysisClipId = ref("");
+const zappingAnalysisPreviewFrameUrl = ref("");
+const zappingAnalysisPreviewFrameIndex = ref(0);
 const editingApplicationId = ref<string | null>(null);
 const initialApplicationRepository = ref<GitHubRepositorySummary | null>(null);
 const isUploadingApplicationKnowledge = ref(false);
+let zappingAnalysisPreviewFrameLoadToken = 0;
+let zappingAnalysisPreviewFrameTimer: ReturnType<typeof setInterval> | null = null;
 
 const showPageHeader = computed(() => currentView.value !== "application-detail");
 const pageShellClass = computed(() =>
@@ -794,124 +717,6 @@ const selectedApplicationKnowledgeDocuments = computed(() => {
   return applicationKnowledgeDocumentsByFileSpace.value[fileSpaceId] ?? [];
 });
 const isApplicationKnowledgeLoading = computed(() => isLoadingDocuments.value);
-const commandMetrics = computed(() => [
-  {
-    label: "Stories",
-    value: store.activeOperationVideos.reduce(
-      (sum, video) => sum + (video.analysisResult?.storyCandidates.length ?? 0),
-      0
-    ),
-    caption: "動画から抽出",
-    icon: "material-symbols:article-outline",
-  },
-  {
-    label: "Videos",
-    value: store.activeOperationVideos.length,
-    caption: `${analyzedOperationVideoCount.value}件解析済み`,
-    icon: "material-symbols:video-library-outline",
-  },
-  {
-    label: "Assets",
-    value: store.activeSourceAssets.length,
-    caption: "Search根拠",
-    icon: "material-symbols:database-search-outline",
-  },
-  {
-    label: "Confidence",
-    value: `${store.averageConfidence}%`,
-    caption: `${store.needsReviewCount}件レビュー`,
-    icon: "material-symbols:verified-outline",
-  },
-]);
-const analyzedOperationVideoCount = computed(
-  () =>
-    store.activeOperationVideos.filter(
-      (video) => video.analysisStatus === "completed"
-    ).length
-);
-const applicationTabs = computed<ApplicationTabItem[]>(() => [
-  {
-    value: "stories",
-    label: "ストーリー",
-    icon: "material-symbols:account-tree-outline",
-    count: store.activeOperationVideos.reduce(
-      (sum, video) => sum + (video.analysisResult?.storyCandidates.length ?? 0),
-      0
-    ),
-  },
-  {
-    value: "zapping",
-    label: "ザッピング",
-    icon: "material-symbols:video-camera-front-outline",
-    count: store.activeOperationVideos.length,
-  },
-  {
-    value: "capabilities",
-    label: "Capability",
-    icon: "material-symbols:conversion-path-outline",
-    count: store.activeCapabilities.length,
-  },
-  {
-    value: "knowledge-space",
-    label: "ナレッジ",
-    icon: "material-symbols:database-outline",
-    count: selectedApplicationKnowledgeDocuments.value.length,
-  },
-  {
-    value: "screen-catalog",
-    label: "画面カタログ",
-    icon: "material-symbols:imagesmode-outline",
-    count: selectedApplication.value?.lastScan?.artifactCount ?? 0,
-  },
-  {
-    value: "external-services",
-    label: "外部連携",
-    icon: "material-symbols:hub-outline",
-  },
-  {
-    value: "basic",
-    label: "基本情報",
-    icon: "material-symbols:settings-outline",
-  },
-]);
-const demoReadinessItems = computed(() => [
-  {
-    label: "操作動画",
-    done: store.activeOperationVideos.length > 0,
-    caption:
-      store.activeOperationVideos.length > 0
-        ? `${store.activeOperationVideos.length}件の操作証跡があります`
-        : "ザッピングから操作動画を追加します",
-  },
-  {
-    label: "ストーリー候補",
-    done: applicationTabs.value[0]?.count ? applicationTabs.value[0].count > 0 : false,
-    caption:
-      (applicationTabs.value[0]?.count ?? 0) > 0
-        ? `${applicationTabs.value[0]?.count ?? 0}件を審査できます`
-        : "動画解析で候補を生成します",
-  },
-  {
-    label: "根拠ナレッジ",
-    done: Boolean(selectedApplication.value?.fileSpaceId) || store.activeSourceAssets.length > 0,
-    caption:
-      selectedApplication.value?.fileSpaceId || store.activeSourceAssets.length > 0
-        ? "FileSpace / SourceAsset と接続済み"
-        : "仕様・画面知識を取り込みます",
-  },
-  {
-    label: "実装コンテキスト",
-    done: Boolean(selectedApplication.value?.repoFullName),
-    caption: selectedApplication.value?.repoFullName || "GitHubリポジトリを接続します",
-  },
-]);
-const readinessScore = computed(() => {
-  const items = demoReadinessItems.value;
-  if (items.length === 0) return 0;
-  return Math.round(
-    (items.filter((item) => item.done).length / items.length) * 100
-  );
-});
 const editingApplication = computed(() =>
   editingApplicationId.value
     ? store.applications.find(
@@ -919,25 +724,25 @@ const editingApplication = computed(() =>
       ) ?? null
     : null
 );
-const activeZappingAnalysisVideo = computed(
+const activeZappingAnalysisClip = computed(
   () =>
-    store.operationVideos.find(
-      (video) => video.id === activeZappingAnalysisVideoId.value
+    store.clips.find(
+      (clip) => clip.id === activeZappingAnalysisClipId.value
     ) ?? null
 );
-const zappingAnalysisRerunTargetVideo = computed(
+const zappingAnalysisRerunTargetClip = computed(
   () =>
-    store.operationVideos.find(
-      (video) => video.id === pendingZappingAnalysisVideoId.value
+    store.clips.find(
+      (clip) => clip.id === pendingZappingAnalysisClipId.value
     ) ?? null
 );
 const zappingAnalysisRerunStoryCount = computed(
   () =>
-    zappingAnalysisRerunTargetVideo.value?.analysisResult?.storyCandidates
+    zappingAnalysisRerunTargetClip.value?.analysisResult?.storyCandidates
       .length ?? 0
 );
 const zappingAnalysisProgressPercent = computed(() => {
-  const status = activeZappingAnalysisVideo.value?.analysisStatus;
+  const status = activeZappingAnalysisClip.value?.analysisStatus;
   if (status === "completed") return 100;
   if (status === "running") return 68;
   if (status === "queued") return 28;
@@ -945,26 +750,43 @@ const zappingAnalysisProgressPercent = computed(() => {
   return 0;
 });
 const zappingAnalysisProgressLabel = computed(() => {
-  const status = activeZappingAnalysisVideo.value?.analysisStatus;
+  const status = activeZappingAnalysisClip.value?.analysisStatus;
   if (status === "completed") return "解析が完了しました";
-  if (status === "running") return "動画とナレッジを照合して解析しています";
+  if (status === "running") return "クリップとナレッジを照合して解析しています";
   if (status === "queued") return "解析リクエストを投入しました";
   if (status === "error") return "解析に失敗しました";
   return "解析を準備しています";
 });
 const zappingAnalysisStoryPreview = computed(
-  () => activeZappingAnalysisVideo.value?.analysisResult?.storyCandidates.slice(0, 3) ?? []
+  () => activeZappingAnalysisClip.value?.analysisResult?.storyCandidates.slice(0, 3) ?? []
 );
 const zappingAnalysisStats = computed(() => {
-  const video = activeZappingAnalysisVideo.value;
+  const video = activeZappingAnalysisClip.value;
   return {
     frameCount: video?.frameCaptures.length ?? 0,
+    cueCount: video?.transcriptSegments.length ?? 0,
     transcriptChars: video?.transcriptText?.length ?? 0,
     storyCount: video?.analysisResult?.storyCandidates.length ?? 0,
   };
 });
+const zappingAnalysisScanPreviewVisible = computed(() => {
+  const status = activeZappingAnalysisClip.value?.analysisStatus;
+  return status === "queued" || status === "running";
+});
+const zappingAnalysisScanStateLabel = computed(() => {
+  const status = activeZappingAnalysisClip.value?.analysisStatus;
+  if (status === "queued") return "解析キューを待機中";
+  if (status === "running") return "フレームと発話を走査中";
+  return "プレビュー";
+});
+const zappingAnalysisPreviewFrame = computed(() => {
+  const frames = activeZappingAnalysisClip.value?.frameCaptures ?? [];
+  if (frames.length === 0) return null;
+  const safeIndex = zappingAnalysisPreviewFrameIndex.value % frames.length;
+  return frames[safeIndex] ?? frames[0] ?? null;
+});
 const zappingAnalysisSteps = computed<AnalysisProgressStep[]>(() => {
-  const status = activeZappingAnalysisVideo.value?.analysisStatus;
+  const status = activeZappingAnalysisClip.value?.analysisStatus;
   const requestStatus: AnalysisStepStatus =
     status === "queued"
       ? "active"
@@ -996,7 +818,7 @@ const zappingAnalysisSteps = computed<AnalysisProgressStep[]>(() => {
       key: "match",
       index: 2,
       label: "照合",
-      description: "動画・文字起こし・アプリ専用ナレッジを突き合わせています。",
+      description: "クリップ・文字起こし・アプリ専用ナレッジを突き合わせています。",
       status: matchStatus,
       statusLabel: analysisStepStatusLabel(matchStatus),
     },
@@ -1011,7 +833,7 @@ const zappingAnalysisSteps = computed<AnalysisProgressStep[]>(() => {
   ];
 });
 const zappingAnalysisInsight = computed<AnalysisInsight>(() => {
-  const video = activeZappingAnalysisVideo.value;
+  const video = activeZappingAnalysisClip.value;
   const status = video?.analysisStatus;
   const summary = compactZappingAnalysisText(
     video?.analysisResult?.transcriptSummary ||
@@ -1033,7 +855,7 @@ const zappingAnalysisInsight = computed<AnalysisInsight>(() => {
   const firstStory = video?.analysisResult?.storyCandidates[0] ?? null;
   const inputs: AnalysisInsightItem[] = [
     {
-      label: "動画メモ",
+      label: "クリップメモ",
       value: operationIntent || "操作画面の変化と録画メモを読み取っています。",
       icon: "material-symbols:movie-info-outline",
     },
@@ -1051,7 +873,7 @@ const zappingAnalysisInsight = computed<AnalysisInsight>(() => {
 
   if (status === "completed") {
     return {
-      heading: "ストーリー候補を動画詳細へ反映しました",
+      heading: "ストーリー候補をクリップ詳細へ反映しました",
       subheading: "抽出した候補と根拠シーンを、このまま詳細タブで確認できます。",
       badge: "完了",
       lines: [
@@ -1071,7 +893,7 @@ const zappingAnalysisInsight = computed<AnalysisInsight>(() => {
       lines: [
         operationIntent || "画面遷移から操作目的を推定しています。",
         summary || "文字起こしから期待結果と確認対象を拾っています。",
-        "根拠になるスクリーンショットと動画区間をストーリー候補に紐付けています。",
+        "根拠になるスクリーンショットとクリップ区間をストーリー候補に紐付けています。",
       ],
       inputs,
     };
@@ -1080,7 +902,7 @@ const zappingAnalysisInsight = computed<AnalysisInsight>(() => {
   if (status === "queued") {
     return {
       heading: "解析リクエストを受け付けました",
-      subheading: "解析ジョブを作成し、実行ワーカーが動画とナレッジを読み始めるのを待っています。",
+      subheading: "解析ジョブを作成し、実行ワーカーがクリップとナレッジを読み始めるのを待っています。",
       badge: "受付済み",
       lines: [
         activeZappingAnalysisRequestId.value || video?.analysisRequestId
@@ -1104,7 +926,7 @@ const zappingAnalysisInsight = computed<AnalysisInsight>(() => {
 
   return {
     heading: "解析の準備をしています",
-    subheading: "動画、文字起こし、アプリナレッジを読み込む準備をしています。",
+    subheading: "クリップ、文字起こし、アプリナレッジを読み込む準備をしています。",
     badge: "準備中",
     lines: [],
     inputs,
@@ -1234,9 +1056,17 @@ const breadcrumbItems = computed(() => {
 const storyCountByApplicationId = computed<Record<string, number>>(() => {
   const counts: Record<string, number> = {};
   for (const application of store.applications) {
-    counts[application.id] = store.stories.filter(
+    const legacyStoryCount = store.stories.filter(
       (story) => story.applicationId === application.id
     ).length;
+    const clipStoryCount = store.clips
+      .filter((clip) => clip.applicationId === application.id)
+      .reduce(
+        (sum, clip) =>
+          sum + (clip.analysisResult?.storyCandidates.length ?? 0),
+        0
+      );
+    counts[application.id] = legacyStoryCount + clipStoryCount;
   }
   return counts;
 });
@@ -1296,6 +1126,57 @@ watch(syncCompletedTick, () => {
   if (activeApplicationTab.value !== "knowledge-space") return;
   void refreshApplicationKnowledgeDocuments();
 });
+
+watch(
+  [
+    zappingAnalysisModalOpen,
+    zappingAnalysisScanPreviewVisible,
+    () => activeZappingAnalysisClip.value?.id,
+    () => activeZappingAnalysisClip.value?.frameCaptures.length ?? 0,
+  ],
+  ([isOpen, isVisible, clipId, frameCount]) => {
+    stopZappingAnalysisPreviewFrameTimer();
+    zappingAnalysisPreviewFrameIndex.value = 0;
+    if (!isOpen || !isVisible || !clipId || frameCount <= 1) return;
+    zappingAnalysisPreviewFrameTimer = setInterval(() => {
+      zappingAnalysisPreviewFrameIndex.value =
+        (zappingAnalysisPreviewFrameIndex.value + 1) % frameCount;
+    }, 1000);
+  },
+  { immediate: true }
+);
+
+watch(
+  [
+    zappingAnalysisModalOpen,
+    zappingAnalysisScanPreviewVisible,
+    () => zappingAnalysisPreviewFrame.value?.bucketName,
+    () => zappingAnalysisPreviewFrame.value?.storagePath,
+    () => zappingAnalysisPreviewFrame.value?.contentType,
+  ],
+  async ([isOpen, isVisible, bucketName, storagePath, contentType]) => {
+    const token = ++zappingAnalysisPreviewFrameLoadToken;
+    zappingAnalysisPreviewFrameUrl.value = "";
+    if (!isOpen || !isVisible || !bucketName || !storagePath) return;
+    const url = await resolveArtifactDisplayUrl({
+      storageGcsPath: `gs://${bucketName}/${storagePath}`,
+      contentType: contentType || "image/jpeg",
+    });
+    if (token !== zappingAnalysisPreviewFrameLoadToken) return;
+    zappingAnalysisPreviewFrameUrl.value = url ?? "";
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  stopZappingAnalysisPreviewFrameTimer();
+});
+
+function stopZappingAnalysisPreviewFrameTimer(): void {
+  if (!zappingAnalysisPreviewFrameTimer) return;
+  clearInterval(zappingAnalysisPreviewFrameTimer);
+  zappingAnalysisPreviewFrameTimer = null;
+}
 
 function routeView(): RouteView {
   if (route.query.view === "repositories") return "repositories";
@@ -1451,22 +1332,6 @@ function showApplicationDetail(): void {
   activeApplicationTab.value = "stories";
   currentView.value = "application-detail";
   updateViewQuery("stories");
-}
-
-function showRepositoryList(): void {
-  currentView.value = "repositories";
-  updateViewQuery("repositories");
-}
-
-function selectApplicationFromHeader(applicationId: string): void {
-  store.selectApplication(applicationId);
-  currentView.value = "application-detail";
-  updateViewQuery(routeView());
-}
-
-function switchApplicationTab(tab: ApplicationDetailTab): void {
-  activeApplicationTab.value = tab;
-  currentView.value = "application-detail";
 }
 
 function applyRouteAction(): void {
@@ -1699,26 +1564,26 @@ async function uploadApplicationKnowledgeFiles(files: File[]): Promise<void> {
 }
 
 async function saveOperationVideo(
-  input: StoryVaultOperationVideoSaveInput,
+  input: StoryVaultClipSaveInput,
   callbacks?: {
-    onSuccess?: (video: DecodedStoryVaultOperationVideo) => void;
+    onSuccess?: (clip: DecodedStoryVaultClip) => void;
     onError?: (message: string) => void;
   }
 ): Promise<void> {
   try {
-    const video = await store.saveOperationVideoCapture(input);
-    callbacks?.onSuccess?.(video);
+    const clip = await store.saveClipToGroup(input);
+    callbacks?.onSuccess?.(clip);
     toast.add({
-      title: "ザッピング動画を保存しました",
+      title: "クリップを保存しました",
       description:
-        video.discoveryStatus === "queued"
+        clip.discoveryStatus === "queued"
           ? "DiscoveryEngine登録を開始しました"
-          : video.discoveryStatus === "not_registered"
-            ? "動画を保存しました。解析にはアプリ専用FileSpaceが必要です"
-            : "動画は保存されましたが、検索登録を確認してください",
+          : clip.discoveryStatus === "not_registered"
+            ? "クリップを保存しました。解析にはアプリ専用FileSpaceが必要です"
+            : "クリップは保存されましたが、検索登録を確認してください",
       color:
-        video.discoveryStatus === "queued" ||
-        video.discoveryStatus === "not_registered"
+        clip.discoveryStatus === "queued" ||
+        clip.discoveryStatus === "not_registered"
           ? "success"
           : "warning",
     });
@@ -1726,33 +1591,7 @@ async function saveOperationVideo(
     const message = err instanceof Error ? err.message : String(err);
     callbacks?.onError?.(message);
     toast.add({
-      title: "ザッピング動画の保存に失敗しました",
-      description: message,
-      color: "error",
-    });
-  }
-}
-
-async function appendOperationVideoClip(
-  input: StoryVaultOperationVideoAppendInput,
-  callbacks?: {
-    onSuccess?: (video: DecodedStoryVaultOperationVideo) => void;
-    onError?: (message: string) => void;
-  }
-): Promise<void> {
-  try {
-    const video = await store.appendOperationVideoClip(input);
-    callbacks?.onSuccess?.(video);
-    toast.add({
-      title: "動画クリップを追加しました",
-      description: "まとめて再解析すると、追加した動画も解析結果に反映されます",
-      color: "success",
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    callbacks?.onError?.(message);
-    toast.add({
-      title: "動画クリップの追加に失敗しました",
+      title: "クリップの保存に失敗しました",
       description: message,
       color: "error",
     });
@@ -1760,17 +1599,17 @@ async function appendOperationVideoClip(
 }
 
 async function updateOperationVideoClipAnalysis(
-  input: StoryVaultOperationVideoClipAnalysisInput,
+  input: StoryVaultClipAnalysisInput,
   callbacks?: {
-    onSuccess?: (video: DecodedStoryVaultOperationVideo) => void;
+    onSuccess?: (clip: DecodedStoryVaultClip) => void;
     onError?: (message: string) => void;
   }
 ): Promise<void> {
   try {
-    const video = await store.updateOperationVideoClipAnalysis(input);
-    callbacks?.onSuccess?.(video);
+    const clip = await store.updateClipAnalysis(input);
+    callbacks?.onSuccess?.(clip);
     toast.add({
-      title: "動画解析を保存しました",
+      title: "クリップ解析を保存しました",
       description: "続けてユーザーストーリー解析へ進めます",
       color: "success",
     });
@@ -1778,83 +1617,83 @@ async function updateOperationVideoClipAnalysis(
     const message = err instanceof Error ? err.message : String(err);
     callbacks?.onError?.(message);
     toast.add({
-      title: "動画解析の保存に失敗しました",
+      title: "クリップ解析の保存に失敗しました",
       description: message,
       color: "error",
     });
   }
 }
 
-async function createOperationVideoGroup(input: {
+async function createClipGroup(input: {
   applicationId: string;
   name: string;
   description?: string;
 }): Promise<void> {
   try {
-    await store.createOperationVideoGroup(input);
+    await store.createClipGroup(input);
     toast.add({
-      title: "動画グループを作成しました",
+      title: "クリップグループを作成しました",
       description: input.name,
       color: "success",
     });
   } catch (err) {
     toast.add({
-      title: "動画グループの作成に失敗しました",
+      title: "クリップグループの作成に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });
   }
 }
 
-async function updateOperationVideoGroup(input: {
+async function updateClipGroup(input: {
   groupId: string;
   name: string;
   description?: string;
 }): Promise<void> {
   try {
-    await store.updateOperationVideoGroup(input);
+    await store.updateClipGroup(input);
     toast.add({
-      title: "動画グループを更新しました",
+      title: "クリップグループを更新しました",
       color: "success",
     });
   } catch (err) {
     toast.add({
-      title: "動画グループの更新に失敗しました",
+      title: "クリップグループの更新に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });
   }
 }
 
-async function deleteOperationVideoGroup(groupId: string): Promise<void> {
+async function deleteClipGroup(groupId: string): Promise<void> {
   try {
-    await store.deleteOperationVideoGroup(groupId);
+    await store.deleteClipGroup(groupId);
     toast.add({
-      title: "動画グループを削除しました",
+      title: "クリップグループを削除しました",
       color: "success",
     });
   } catch (err) {
     toast.add({
-      title: "動画グループの削除に失敗しました",
+      title: "クリップグループの削除に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });
   }
 }
 
-type OperationVideoOrganizationPlan = {
+type ClipGroupOrganizationPlan = {
   summary: string;
   groups: {
     existingGroupId?: string;
     name: string;
     description?: string;
-    videoIds: string[];
+    clipIds: string[];
     reason?: string;
   }[];
 };
 
-async function applyOperationVideoOrganizationPlan(
-  plan: OperationVideoOrganizationPlan,
+async function applyClipGroupOrganizationPlan(
+  plan: ClipGroupOrganizationPlan,
   callbacks?: {
     onSuccess?: () => void;
     onError?: (message: string) => void;
@@ -1868,23 +1707,23 @@ async function applyOperationVideoOrganizationPlan(
     let movedCount = 0;
     for (const groupPlan of plan.groups) {
       const group = groupPlan.existingGroupId
-        ? store.operationVideoGroups.find((item) => item.id === groupPlan.existingGroupId)
-        : await store.createOperationVideoGroup({
+        ? store.activeClipGroups.find((item) => item.id === groupPlan.existingGroupId)
+        : await store.createClipGroup({
             applicationId: selectedApplication.value.id,
             name: groupPlan.name,
             description: groupPlan.description,
           });
       if (!group) continue;
-      await store.moveOperationVideosToGroup({
+      await store.moveClipsToGroup({
         groupId: group.id,
-        videoIds: groupPlan.videoIds,
+        clipIds: groupPlan.clipIds,
       });
-      movedCount += groupPlan.videoIds.length;
+      movedCount += groupPlan.clipIds.length;
     }
     callbacks?.onSuccess?.();
     toast.add({
       title: "AI整理案を適用しました",
-      description: `${plan.groups.length}グループ / ${movedCount}件の動画を整理しました`,
+      description: `${plan.groups.length}グループ / ${movedCount}件のクリップを整理しました`,
       color: "success",
     });
   } catch (err) {
@@ -1900,8 +1739,8 @@ async function applyOperationVideoOrganizationPlan(
   }
 }
 
-async function updateOperationVideoTitle(
-  videoId: string,
+async function updateClipTitle(
+  clipId: string,
   title: string,
   callbacks?: {
     onSuccess?: () => void;
@@ -1909,49 +1748,33 @@ async function updateOperationVideoTitle(
   }
 ): Promise<void> {
   try {
-    await store.updateOperationVideoTitle({ videoId, title });
+    await store.updateClipTitle({ clipId, title });
     callbacks?.onSuccess?.();
     toast.add({
-      title: "動画タイトルを更新しました",
+      title: "クリップタイトルを更新しました",
       color: "success",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     callbacks?.onError?.(message);
     toast.add({
-      title: "動画タイトルの更新に失敗しました",
+      title: "クリップタイトルの更新に失敗しました",
       description: message,
       color: "error",
     });
   }
 }
 
-async function deleteOperationVideo(videoId: string): Promise<void> {
+async function deleteClip(clipId: string): Promise<void> {
   try {
-    await store.deleteOperationVideo(videoId);
+    await store.deleteClip(clipId);
     toast.add({
-      title: "ザッピング動画を削除しました",
+      title: "クリップを削除しました",
       color: "success",
     });
   } catch (err) {
     toast.add({
-      title: "ザッピング動画の削除に失敗しました",
-      description: err instanceof Error ? err.message : String(err),
-      color: "error",
-    });
-  }
-}
-
-async function deleteOperationVideoClip(videoId: string, clipId: string): Promise<void> {
-  try {
-    await store.deleteOperationVideoClip({ videoId, clipId });
-    toast.add({
-      title: "動画クリップを削除しました",
-      color: "success",
-    });
-  } catch (err) {
-    toast.add({
-      title: "動画クリップの削除に失敗しました",
+      title: "クリップの削除に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });
@@ -1959,44 +1782,44 @@ async function deleteOperationVideoClip(videoId: string, clipId: string): Promis
 }
 
 async function startZappingVideoAnalysis(
-  videoId: string,
+  clipId: string,
   options?: { inline?: boolean },
   callbacks?: { onStarted?: () => void; onError?: (message: string) => void }
 ): Promise<void> {
-  const video = store.operationVideos.find((item) => item.id === videoId);
+  const clip = store.clips.find((item) => item.id === clipId);
   if (
     !options?.inline &&
-    video &&
-    (video.analysisStatus === "completed" || Boolean(video.analysisResult))
+    clip &&
+    (clip.analysisStatus === "completed" || Boolean(clip.analysisResult))
   ) {
-    pendingZappingAnalysisVideoId.value = videoId;
+    pendingZappingAnalysisClipId.value = clipId;
     zappingAnalysisRerunConfirmOpen.value = true;
     return;
   }
-  await runZappingVideoAnalysis(videoId, options, callbacks);
+  await runZappingVideoAnalysis(clipId, options, callbacks);
 }
 
 function cancelZappingAnalysisRerun(): void {
   zappingAnalysisRerunConfirmOpen.value = false;
-  pendingZappingAnalysisVideoId.value = "";
+  pendingZappingAnalysisClipId.value = "";
 }
 
 async function confirmZappingAnalysisRerun(): Promise<void> {
-  const videoId = pendingZappingAnalysisVideoId.value;
-  if (!videoId) return;
+  const clipId = pendingZappingAnalysisClipId.value;
+  if (!clipId) return;
   zappingAnalysisRerunConfirmOpen.value = false;
-  pendingZappingAnalysisVideoId.value = "";
-  await runZappingVideoAnalysis(videoId);
+  pendingZappingAnalysisClipId.value = "";
+  await runZappingVideoAnalysis(clipId);
 }
 
 async function runZappingVideoAnalysis(
-  videoId: string,
+  clipId: string,
   options?: { inline?: boolean },
   callbacks?: { onStarted?: () => void; onError?: (message: string) => void }
 ): Promise<void> {
   const application = selectedApplication.value;
   if (!application) return;
-  activeZappingAnalysisVideoId.value = videoId;
+  activeZappingAnalysisClipId.value = clipId;
   activeZappingAnalysisRequestId.value = "";
   if (!options?.inline) {
     zappingAnalysisModalOpen.value = true;
@@ -2004,12 +1827,12 @@ async function runZappingVideoAnalysis(
   try {
     const requestId = await store.startZappingVideoAnalysis({
       applicationId: application.id,
-      videoId,
+      clipId,
     });
     activeZappingAnalysisRequestId.value = requestId;
     callbacks?.onStarted?.();
     toast.add({
-      title: "ザッピング解析を開始しました",
+      title: "ユーザーストーリー解析を開始しました",
       description: requestId,
       color: "success",
     });
@@ -2020,7 +1843,7 @@ async function runZappingVideoAnalysis(
       zappingAnalysisModalOpen.value = false;
     }
     toast.add({
-      title: "ザッピング解析の開始に失敗しました",
+      title: "ユーザーストーリー解析の開始に失敗しました",
       description: message,
       color: "error",
     });
@@ -2028,14 +1851,14 @@ async function runZappingVideoAnalysis(
 }
 
 async function startRelatedContextAnalysis(
-  videoId: string,
+  clipId: string,
   provider: "github" | "slack" | "knowledge"
 ): Promise<void> {
   if (!selectedApplication.value) return;
   try {
     await store.startRelatedContextAnalysis({
       applicationId: selectedApplication.value.id,
-      videoId,
+      clipId,
       provider,
     });
   } catch (err) {
@@ -2072,3 +1895,108 @@ async function deleteSelectedApplication(): Promise<void> {
   });
 }
 </script>
+
+<style scoped>
+.zapping-scan-card {
+  overflow: hidden;
+  border: 1px solid rgba(103, 232, 249, 0.42);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(34, 211, 238, 0.24), transparent 30%),
+    linear-gradient(145deg, #07111f 0%, #0f172a 48%, #062a31 100%);
+  box-shadow:
+    0 18px 40px rgba(15, 23, 42, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.zapping-scan-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.28);
+  padding: 4px 8px;
+  color: #cffafe;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.zapping-scan-preview {
+  position: relative;
+  margin: 12px;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #020617;
+  box-shadow:
+    inset 0 0 0 1px rgba(207, 250, 254, 0.14),
+    0 0 28px rgba(6, 182, 212, 0.18);
+}
+
+.zapping-scan-preview img {
+  filter: saturate(1.06) contrast(1.03);
+}
+
+.zapping-scan-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(103, 232, 249, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(103, 232, 249, 0.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.zapping-scan-line {
+  position: absolute;
+  top: -32%;
+  left: 0;
+  width: 100%;
+  height: 32%;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(34, 211, 238, 0.12) 42%,
+      rgba(34, 211, 238, 0.9) 50%,
+      rgba(34, 211, 238, 0.18) 58%,
+      transparent 100%
+    );
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.7);
+  animation: zapping-scan-sweep 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.zapping-scan-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, transparent 0%, rgba(45, 212, 191, 0.18) 44%, transparent 62%),
+    radial-gradient(circle at 50% 50%, transparent 46%, rgba(6, 182, 212, 0.18) 100%);
+  animation: zapping-scan-pulse 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes zapping-scan-sweep {
+  0% {
+    transform: translateY(0);
+  }
+  48% {
+    transform: translateY(410%);
+  }
+  100% {
+    transform: translateY(410%);
+  }
+}
+
+@keyframes zapping-scan-pulse {
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+  50% {
+    opacity: 0.78;
+  }
+}
+</style>

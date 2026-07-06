@@ -13,16 +13,42 @@
         </div>
         <div class="flex flex-wrap gap-2">
           <EnButton
+            v-if="!hasPreparedProject"
             variant="ai"
             size="xs"
             leading-icon="material-symbols:movie-edit-outline"
-            :loading="isPreparing"
+            :loading="activeGenerationAction === 'start'"
             :global-loading="false"
             :disabled="!canStartGeneration"
-            @click="openInVideoStudio"
+            @click="openInVideoStudio('start')"
           >
-            この動画で生成を開始
+            新しく始める
           </EnButton>
+          <template v-else>
+            <EnButton
+              variant="ai"
+              size="xs"
+              leading-icon="material-symbols:resume"
+              :loading="activeGenerationAction === 'resume'"
+              :global-loading="false"
+              :disabled="!canStartGeneration"
+              @click="openInVideoStudio('resume')"
+            >
+              途中から再開
+            </EnButton>
+            <EnButton
+              variant="outline"
+              color="warning"
+              size="xs"
+              leading-icon="material-symbols:restart-alt"
+              :loading="activeGenerationAction === 'restart'"
+              :global-loading="false"
+              :disabled="!canStartGeneration"
+              @click="openInVideoStudio('restart')"
+            >
+              最初からやり直す
+            </EnButton>
+          </template>
         </div>
       </div>
 
@@ -81,25 +107,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useVideoStudioStore } from "@stores/videoStudio";
 import type { VideoStudioSection } from "@models/videoStudio";
 import type {
-  DecodedStoryVaultOperationVideo,
+  DecodedStoryVaultClip,
   StoryVaultOperationVideoClip,
   StoryVaultTranscriptCue,
 } from "@models/storyVault";
 
 const props = defineProps<{
-  video: DecodedStoryVaultOperationVideo;
+  video: DecodedStoryVaultClip;
 }>();
 
 const videoStudio = useVideoStudioStore();
 const isPreparing = ref(false);
+const activeGenerationAction = ref<"start" | "resume" | "restart" | null>(null);
+const hasPreparedProject = ref(false);
 const notice = ref("");
 const noticeKind = ref<"success" | "error">("success");
 
 const videoStudioVideoId = computed(() => `storyvault_${props.video.id}`);
+const preparedProjectId = computed(() => `storyvault_narration_${props.video.id}`);
 const isEditorReady = computed(
   () =>
     videoStudio.view === "editor" &&
@@ -108,8 +137,33 @@ const isEditorReady = computed(
 const showPreparingOverlay = computed(() => isPreparing.value && !isEditorReady.value);
 
 const primaryClip = computed<StoryVaultOperationVideoClip | null>(() => {
-  const clips = props.video.clips;
-  return [...clips].sort((a, b) => (a.recordedAt || "").localeCompare(b.recordedAt || ""))[0] ?? null;
+  return {
+    id: props.video.id,
+    fileName: props.video.fileName,
+    bucketName: props.video.bucketName,
+    storagePath: props.video.storagePath,
+    contentType: props.video.contentType,
+    sizeBytes: props.video.sizeBytes,
+    durationMs: props.video.durationMs,
+    transcriptText: props.video.transcriptText,
+    transcriptProvider: props.video.transcriptProvider,
+    transcriptSummary: props.video.transcriptSummary,
+    transcriptSegments: props.video.transcriptSegments ?? [],
+    transcriptSrt: props.video.transcriptSrt,
+    transcriptTimingStatus: props.video.transcriptTimingStatus ?? "unavailable",
+    quickScan: props.video.quickScan,
+    frameCaptures: props.video.frameCaptures ?? [],
+    metadataFileName: props.video.metadataFileName,
+    metadataStoragePath: props.video.metadataStoragePath,
+    journeyFileName: props.video.journeyFileName,
+    journeyStoragePath: props.video.journeyStoragePath,
+    fileSpaceRequestId: props.video.fileSpaceRequestId,
+    journeyFileSpaceRequestId: props.video.journeyFileSpaceRequestId,
+    sourceAssetId: props.video.sourceAssetId,
+    journeySourceAssetId: props.video.journeySourceAssetId,
+    sourceDisplaySurface: props.video.sourceDisplaySurface,
+    recordedAt: props.video.recordedAt,
+  };
 });
 
 const durationLabel = computed(() => {
@@ -142,10 +196,36 @@ const canStartGeneration = computed(() =>
   Boolean(activeTranscriptSrt.value)
 );
 
-async function openInVideoStudio(): Promise<void> {
+async function refreshPreparedProjectState(): Promise<void> {
+  try {
+    hasPreparedProject.value = await videoStudio.preparedProjectExists({
+      videoId: videoStudioVideoId.value,
+      projectId: preparedProjectId.value,
+    });
+  } catch {
+    hasPreparedProject.value = false;
+  }
+}
+
+onMounted(() => {
+  void refreshPreparedProjectState();
+});
+
+watch(
+  () => props.video.id,
+  () => {
+    hasPreparedProject.value = false;
+    void refreshPreparedProjectState();
+  }
+);
+
+async function openInVideoStudio(
+  action: "start" | "resume" | "restart" = "resume"
+): Promise<void> {
   const clip = primaryClip.value;
   if (!clip || !canStartGeneration.value) return;
   isPreparing.value = true;
+  activeGenerationAction.value = action;
   notice.value = "";
   try {
     const transcriptSegments = normalizedTranscriptSegments(activeTranscriptSegments.value);
@@ -173,7 +253,7 @@ async function openInVideoStudio(): Promise<void> {
     }
     await videoStudio.createOrOpenPreparedProject({
       video: videoStudio.selectedVideo,
-      projectId: `storyvault_narration_${props.video.id}`,
+      projectId: preparedProjectId.value,
       name: `${props.video.title || props.video.quickScan?.title || clip.fileName} 編集`,
       description:
         props.video.analysisResult?.operationIntent ||
@@ -183,9 +263,14 @@ async function openInVideoStudio(): Promise<void> {
       voiceName: "Puck",
       sections: buildPreparedSections(clip),
       refreshPreparedSections: false,
+      resetPreparedProject: action === "restart",
     });
+    hasPreparedProject.value = true;
     noticeKind.value = "success";
-    notice.value = "解析済み字幕を読み込んで動画エディターを開きました。";
+    notice.value =
+      action === "restart"
+        ? "既存の動画プロジェクトを初期化して、最初から開きました。"
+        : "解析済み字幕を読み込んで動画エディターを開きました。";
   } catch (error) {
     noticeKind.value = "error";
     notice.value =
@@ -194,103 +279,133 @@ async function openInVideoStudio(): Promise<void> {
         : "Video Studioへの登録に失敗しました。";
   } finally {
     isPreparing.value = false;
+    activeGenerationAction.value = null;
   }
 }
 
 function buildPreparedSections(clip: StoryVaultOperationVideoClip): VideoStudioSection[] {
   const transcriptSegments = normalizedTranscriptSegments(activeTranscriptSegments.value);
   const durationSeconds = inferDurationSeconds(clip, transcriptSegments);
-  const sections = buildStorySections(clip, transcriptSegments, durationSeconds);
-  const fallbackSections =
-    sections.length > 0
-      ? sections
-      : buildTranscriptCueSections(clip, transcriptSegments, durationSeconds);
-  if (fallbackSections.length === 0) {
+  const sections = buildTranscriptChapterSections(clip, transcriptSegments, durationSeconds);
+  if (sections.length === 0) {
     throw new Error("動画生成にはタイムスタンプ付き文字起こしが必要です。");
   }
-  return fallbackSections;
+  return sections;
 }
 
-function buildStorySections(
+function buildTranscriptChapterSections(
   clip: StoryVaultOperationVideoClip,
   transcriptSegments: StoryVaultTranscriptCue[],
   durationSeconds: number
 ): VideoStudioSection[] {
-  const sections = (props.video.analysisResult?.storyCandidates ?? [])
-    .map((story, storyIndex) => {
-      const evidence = story.evidence.find((item) =>
-        !item.videoId ||
-        item.videoId === props.video.id ||
-        item.videoId === clip.id
-      ) ?? story.evidence[0];
-      if (!evidence) return null;
-      const [rawStart = 0, rawEnd = rawStart + 1] = evidence.tRange;
-      const startTime = clampTime(rawStart, durationSeconds);
-      const endTime = clampTime(Math.max(rawEnd, startTime + 1), durationSeconds);
-      if (endTime <= startTime) return null;
-      const cueText = transcriptTextForCueIds(transcriptSegments, evidence.transcriptCueIds);
-      const transcript = evidence.transcriptQuote || cueText;
-      if (!transcript.trim()) return null;
-      return createPreparedSection({
-        clip,
-        id: `storyvault-story-${story.id}`,
-        index: storyIndex,
-        title: story.title,
-        memo: evidence.summary,
-        startTime,
-        endTime,
-        transcript,
-      });
-    })
-    .filter((section): section is VideoStudioSection => Boolean(section));
-  return sections.map((section, index) => ({ ...section, index }));
-}
-
-function buildTranscriptCueSections(
-  clip: StoryVaultOperationVideoClip,
-  transcriptSegments: StoryVaultTranscriptCue[],
-  durationSeconds: number
-): VideoStudioSection[] {
-  const groups: StoryVaultTranscriptCue[][] = [];
-  let current: StoryVaultTranscriptCue[] = [];
-  const maxSectionSeconds = 45;
-  const maxCueCount = 12;
-
-  for (const cue of transcriptSegments) {
-    const first = current[0];
-    const last = current.at(-1);
-    const wouldExceedDuration =
-      first && cue.endMs / 1000 - first.startMs / 1000 > maxSectionSeconds;
-    const hasLargeGap = last && cue.startMs - last.endMs > 1800;
-    if (current.length > 0 && (wouldExceedDuration || hasLargeGap || current.length >= maxCueCount)) {
-      groups.push(current);
-      current = [];
-    }
-    current.push(cue);
-  }
-  if (current.length > 0) groups.push(current);
+  const groups = groupTranscriptCuesIntoChapters(transcriptSegments);
 
   return groups
     .map((group, index) => {
       const first = group[0];
       const last = group.at(-1);
       if (!first || !last) return null;
-      const startTime = clampTime(first.startMs / 1000, durationSeconds);
-      const endTime = clampTime(Math.max(last.endMs / 1000, startTime + 1), durationSeconds);
+      const nextFirst = groups[index + 1]?.[0] ?? null;
+      const startTime = clampTime(index === 0 ? 0 : first.startMs / 1000, durationSeconds);
+      const rawEndTime = nextFirst
+        ? nextFirst.startMs / 1000
+        : Math.max(durationSeconds, last.endMs / 1000);
+      const endTime = clampTime(Math.max(rawEndTime, startTime + 0.1), durationSeconds);
       const transcript = group.map((cue) => cue.text.trim()).filter(Boolean).join("\n");
       if (!transcript || endTime <= startTime) return null;
       return createPreparedSection({
         clip,
-        id: `storyvault-transcript-${index + 1}`,
+        id: `storyvault-chapter-${index + 1}`,
         index,
-        title: sectionTitleFromTranscript(transcript, index),
-        memo: "タイムスタンプ付き文字起こしから自動分割",
+        title: chapterTitleFromTranscript(transcript, index),
+        memo: "SRT字幕から作成したチャプター",
         startTime,
         endTime,
         transcript,
+        transcriptCues: group,
       });
     })
     .filter((section): section is VideoStudioSection => Boolean(section));
+}
+
+function groupTranscriptCuesIntoChapters(
+  transcriptSegments: StoryVaultTranscriptCue[]
+): StoryVaultTranscriptCue[][] {
+  const groups: StoryVaultTranscriptCue[][] = [];
+  let current: StoryVaultTranscriptCue[] = [];
+  const maxChapterSeconds = 46;
+  const targetChapterSeconds = 34;
+  const maxCueCount = 14;
+
+  for (const cue of transcriptSegments) {
+    const first = current[0];
+    const last = current.at(-1);
+    const currentDurationSeconds = first ? (cue.endMs - first.startMs) / 1000 : 0;
+    const gapMs = last ? cue.startMs - last.endMs : 0;
+    const shouldSplit =
+      current.length > 0 &&
+      (
+        gapMs > 1800 ||
+        current.length >= maxCueCount ||
+        currentDurationSeconds > maxChapterSeconds ||
+        (
+          currentDurationSeconds >= targetChapterSeconds &&
+          last !== undefined &&
+          isNaturalChapterBreak(last.text, cue.text)
+        )
+      );
+    if (shouldSplit) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(cue);
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
+
+function isNaturalChapterBreak(previousText: string, nextText: string): boolean {
+  const previous = previousText.trim();
+  const next = nextText.trim();
+  if (!previous) return false;
+  if (/[。！？!?]$/.test(previous)) return true;
+  if (/(できます|しました|します|です|ます|でした|ました)$/.test(previous)) return true;
+  if (/^(その|次に|続いて|ここから|これで|では|また|一方で|最後に)/.test(next)) return true;
+  return false;
+}
+
+function groupChapterCuesForNarration(
+  cues: StoryVaultTranscriptCue[]
+): StoryVaultTranscriptCue[][] {
+  const groups: StoryVaultTranscriptCue[][] = [];
+  let current: StoryVaultTranscriptCue[] = [];
+  const maxNarrationSeconds = 18;
+  const targetNarrationSeconds = 10;
+  const maxCueCount = 5;
+
+  for (const cue of cues) {
+    const first = current[0];
+    const last = current.at(-1);
+    const durationSeconds = first ? (cue.endMs - first.startMs) / 1000 : 0;
+    const shouldSplit =
+      current.length > 0 &&
+      (
+        current.length >= maxCueCount ||
+        durationSeconds > maxNarrationSeconds ||
+        (
+          durationSeconds >= targetNarrationSeconds &&
+          last !== undefined &&
+          isNaturalChapterBreak(last.text, cue.text)
+        )
+      );
+    if (shouldSplit) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(cue);
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
 }
 
 function createPreparedSection(params: {
@@ -302,6 +417,7 @@ function createPreparedSection(params: {
   startTime: number;
   endTime: number;
   transcript: string;
+  transcriptCues: StoryVaultTranscriptCue[];
 }): VideoStudioSection {
   const durationSeconds = Math.max(0, params.endTime - params.startTime);
   const segmentInfo = {
@@ -313,11 +429,23 @@ function createPreparedSection(params: {
     duration: durationSeconds,
     sizeBytes: params.clip.sizeBytes ?? 0,
   };
+  const narrationGroups = groupChapterCuesForNarration(params.transcriptCues);
   return {
     id: params.id,
     index: params.index,
     title: params.title,
     memo: params.memo,
+    sourceKind: "transcript_chapter",
+    sourceTranscriptCueIds: params.transcriptCues.map((cue) => cue.id),
+    sourceTranscriptCues: params.transcriptCues.map((cue) => ({
+      id: cue.id,
+      sourceId: params.clip.id,
+      index: cue.index,
+      startMs: cue.startMs,
+      endMs: cue.endMs,
+      text: cue.text,
+      confidence: cue.confidence,
+    })),
     startTime: params.startTime,
     endTime: params.endTime,
     videoSegment: segmentInfo,
@@ -334,34 +462,26 @@ function createPreparedSection(params: {
       transcript: params.transcript,
     },
     finalyNarrations: [
-      {
-        id: `narration-${params.id}`,
-        originalText: params.transcript,
-        rewrittenText: params.transcript,
-        start: formatClock(params.startTime),
-        startSeconds: params.startTime,
-        endSeconds: params.endTime,
-        characterCount: params.transcript.length,
-        isTtsGenerated: false,
-      },
+      ...narrationGroups.map((group, index) => {
+        const first = group[0]!;
+        const last = group.at(-1)!;
+        const text = group.map((cue) => cue.text.trim()).filter(Boolean).join("\n");
+        const startSeconds = Math.max(0, first.startMs / 1000 - params.startTime);
+        const endSeconds = Math.max(startSeconds, last.endMs / 1000 - params.startTime);
+        return {
+          id: `narration-${params.id}-${index + 1}`,
+          originalText: text,
+          rewrittenText: text,
+          start: formatClock(startSeconds),
+          startSeconds,
+          endSeconds,
+          characterCount: text.length,
+          isTtsGenerated: false,
+        };
+      }),
     ],
     isFixed: false,
   };
-}
-
-function transcriptTextForCueIds(
-  transcriptSegments: StoryVaultTranscriptCue[],
-  cueIds: string[]
-): string {
-  if (cueIds.length === 0) return "";
-  const ids = new Set(cueIds);
-  return transcriptSegments
-    .filter((cue) =>
-      ids.has(cue.id) ||
-      Array.from(ids).some((id) => id === `${primaryClip.value?.id}:${cue.id}` || id.endsWith(`:${cue.id}`))
-    )
-    .map((cue) => cue.text)
-    .join("\n");
 }
 
 function normalizedTranscriptSegments(
@@ -399,12 +519,12 @@ function clampTime(value: number, durationSeconds: number): number {
   return Math.min(Math.max(0, value), durationSeconds);
 }
 
-function sectionTitleFromTranscript(transcript: string, index: number): string {
+function chapterTitleFromTranscript(transcript: string, index: number): string {
   const firstLine = transcript
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 28);
-  return firstLine ? `${index + 1}. ${firstLine}` : `セクション ${index + 1}`;
+  return firstLine ? `Chapter ${index + 1}: ${firstLine}` : `Chapter ${index + 1}`;
 }
 
 function formatClock(seconds: number): string {

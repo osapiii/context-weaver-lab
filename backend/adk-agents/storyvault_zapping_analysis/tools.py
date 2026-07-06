@@ -157,7 +157,7 @@ def _operation_video_clips(operation_video: dict[str, Any]) -> list[dict[str, An
         return clips
     return [
         {
-            "id": "clip-001",
+            "id": _clean_text(operation_video.get("id"), "clip-001"),
             "fileName": operation_video.get("fileName"),
             "bucketName": operation_video.get("bucketName"),
             "storagePath": operation_video.get("storagePath"),
@@ -275,6 +275,8 @@ def read_zapping_analysis_context(tool_context: Any = None) -> dict[str, Any]:
     setup = _setup_from_bucket(bucket)
     payload = _payload_from_bucket(bucket)
     operation_video = _as_dict(payload.get("operation_video"))
+    if not operation_video:
+        operation_video = _as_dict(payload.get("clip"))
     source_assets = _as_list(payload.get("source_assets"))
     return {
         "ok": True,

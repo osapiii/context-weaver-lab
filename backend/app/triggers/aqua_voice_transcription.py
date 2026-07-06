@@ -26,6 +26,16 @@ SRT_TIME_RE = re.compile(
     r"(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[,.](\d{1,3})\s*-->\s*"
     r"(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[,.](\d{1,3})"
 )
+FILLER_ONLY_RE = re.compile(
+    r"^\s*(?:[、。,.!?！？\s]*"
+    r"(?:え+|えー+|えっと|えーっと|あ+|あー+|あの+|うーん|んー+)"
+    r"[、。,.!?！？\s]*)+$"
+)
+INLINE_FILLER_RE = re.compile(
+    r"(^|[\s、。,.!?！？])"
+    r"(?:え+|えー+|えっと|えーっと|あ+|あー+|うーん|んー+)"
+    r"(?=($|[\s、。,.!?！？]))"
+)
 
 
 def _require_auth(req: https_fn.CallableRequest) -> str:
@@ -244,6 +254,41 @@ def _segments_to_srt(segments: list[dict[str, Any]]) -> str:
     return "\n\n".join(blocks)
 
 
+def _clean_filler_text(text: str) -> str:
+    normalized = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not normalized:
+        return ""
+    if FILLER_ONLY_RE.match(normalized):
+        return ""
+    previous = None
+    cleaned = normalized
+    while previous != cleaned:
+        previous = cleaned
+        cleaned = INLINE_FILLER_RE.sub(lambda match: match.group(1), cleaned)
+        cleaned = re.sub(r"\s+([、。,.!?！？])", r"\1", cleaned)
+        cleaned = re.sub(r"([、。,.!?！？])\s+", r"\1", cleaned)
+        cleaned = re.sub(r"[、,]{2,}", "、", cleaned)
+        cleaned = re.sub(r"[。.]([。.]*)", "。", cleaned)
+        cleaned = cleaned.strip(" 、,.")
+    return cleaned.strip()
+
+
+def _clean_segments_fillers(
+    segments: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    cleaned_segments: list[dict[str, Any]] = []
+    for segment in segments:
+        cleaned_text = _clean_filler_text(str(segment.get("text") or ""))
+        if not cleaned_text:
+            continue
+        next_segment = dict(segment)
+        next_segment["text"] = cleaned_text
+        next_segment["index"] = len(cleaned_segments) + 1
+        next_segment["id"] = str(next_segment.get("id") or f"cue-{len(cleaned_segments) + 1:04d}")
+        cleaned_segments.append(next_segment)
+    return cleaned_segments
+
+
 def _project_id() -> str:
     return (
         os.getenv("GOOGLE_CLOUD_PROJECT")
@@ -311,6 +356,8 @@ def _request_gemini_transcription(
 - segments は音声の時系列順にする。
 - startMs/endMs は音声先頭からのミリ秒。
 - 1 segment は意味のまとまり、または長くても8秒程度に区切る。
+- 「え」「あ」「えっと」「えーっと」「あの」「うーん」など、意味を持たないフィラーだけを除去する。
+- フィラー以外の語順・語句・固有名詞は言い換えない。
 - 音声が無音でない限り、segments を空にしない。
 - 聞き取れない箇所は推測で補わず、分かる範囲だけを書く。
 """.strip()
@@ -421,9 +468,9 @@ def transcribe_zapping_video_with_aqua(
             message=f"Gemini transcription request failed: {exc}",
         ) from exc
 
-    text = _extract_text(payload)
-    segments = _extract_segments(payload)
-    srt = _extract_srt(payload) or _segments_to_srt(segments)
+    segments = _clean_segments_fillers(_extract_segments(payload))
+    text = "\n".join(segment["text"] for segment in segments) or _clean_filler_text(_extract_text(payload))
+    srt = _segments_to_srt(segments)
     if not segments or not srt:
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.FAILED_PRECONDITION,

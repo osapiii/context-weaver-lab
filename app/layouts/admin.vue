@@ -36,44 +36,10 @@
         </div>
 
         <div class="flex min-w-0 shrink-0 items-center gap-2">
-          <StoryVaultE2EAuthSessionHeaderChip
-            v-if="showStoryVaultSwitcher"
-            :selected-application="storyVault.selectedApplication"
-          />
           <GoogleWorkspaceConnectionHeaderChip />
+          <StoryVaultMcpConnectionHeaderChip />
           <GoogleDriveSyncGlobalIndicator />
           <WorkflowExecutionGlobalIndicator />
-
-          <button
-            type="button"
-            class="hidden h-8 max-w-[14rem] items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 sm:flex"
-            @click="isSpaceModalOpen = true"
-          >
-            <UIcon name="material-symbols:workspaces-outline-rounded" class="h-4 w-4" />
-            <span class="truncate">
-              {{ spaceStore.selectedSpace?.name ?? "スペース未選択" }}
-            </span>
-          </button>
-
-          <div class="hidden min-w-0 items-center gap-2 rounded-md bg-slate-100 px-2 py-1 sm:flex">
-            <UAvatar
-              :alt="organization.loggedInOrganizationInfo.name || 'user'"
-              size="2xs"
-              class="bg-slate-700 text-white"
-            />
-            <span class="max-w-[12rem] truncate text-xs font-semibold text-slate-700">
-              {{ adminUser.currentUserClaimsInfo.email }}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            class="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-            @click="auth.signOut"
-          >
-            <UIcon :name="actionIcons.logout" class="h-4 w-4" />
-            <span class="hidden sm:inline">サインアウト</span>
-          </button>
         </div>
       </div>
     </header>
@@ -165,10 +131,14 @@
           <span class="hidden truncate text-slate-500 sm:inline">
             {{ organization.loggedInOrganizationInfo.name }}
           </span>
-          <span class="hidden h-3 w-px bg-slate-700 sm:block" />
-          <span class="max-w-[16rem] truncate font-semibold text-slate-100">
-            {{ adminUser.currentUserClaimsInfo.email }}
-          </span>
+          <button
+            type="button"
+            class="flex h-5 items-center gap-1 rounded px-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100"
+            @click="auth.signOut"
+          >
+            <UIcon :name="actionIcons.logout" class="h-3.5 w-3.5" />
+            <span>サインアウト</span>
+          </button>
         </div>
       </div>
     </footer>
@@ -205,7 +175,7 @@ import GoogleDriveImportProgressModal from "@components/dataSource/GoogleDriveIm
 import GoogleDriveSyncGlobalIndicator from "@components/GoogleDriveSyncGlobalIndicator.vue";
 import GoogleWorkspaceConnectionHeaderChip from "@components/GoogleWorkspaceConnectionHeaderChip.vue";
 import AdminPageContainer from "@components/layout/AdminPageContainer.vue";
-import StoryVaultE2EAuthSessionHeaderChip from "@components/storyVault/StoryVaultE2EAuthSessionHeaderChip.vue";
+import StoryVaultMcpConnectionHeaderChip from "@components/StoryVaultMcpConnectionHeaderChip.vue";
 import { ADMIN_NAV_SIDEBAR_STORAGE_KEY } from "@constants/adminLayout";
 import {
   resolveAdminPageContainerVariant,
@@ -226,7 +196,6 @@ const context = useContextStore();
 const router = useRouter();
 const route = useRoute();
 const auth = useAdminUserStore();
-const adminUser = useAdminUserStore();
 const organization = useOrganizationStore();
 const globalLoading = useGlobalLoadingStore();
 const spaceStore = useSpaceStore();
@@ -295,6 +264,12 @@ const routeName = computed(() => {
 const isStoryVaultRoute = computed(() =>
   routeName.value.startsWith("admin-storyvault")
 );
+const shouldShowStoryVaultSwitcherRoute = computed(
+  () =>
+    isStoryVaultRoute.value ||
+    routeName.value === "admin-preferences" ||
+    routeName.value === "admin-settings"
+);
 
 const currentMode = computed(() => {
   if (isStoryVaultRoute.value) {
@@ -337,7 +312,7 @@ useSeoMeta({
 });
 
 const currentModeKey = computed(() => currentMode.value?.key);
-const showStoryVaultSwitcher = computed(() => isStoryVaultRoute.value);
+const showStoryVaultSwitcher = computed(() => shouldShowStoryVaultSwitcherRoute.value);
 const suppressGlobalLoadingForVideoEditor = computed(
   () => isStoryVaultRoute.value && videoStudio.view === "editor"
 );
@@ -356,6 +331,7 @@ const hasRunningWorkflowExecutions = computed(
 
 function selectStoryVaultApplication(applicationId: string): void {
   storyVault.selectApplication(applicationId);
+  if (!isStoryVaultRoute.value) return;
   const currentView =
     typeof route.query.view === "string" ? route.query.view : "stories";
   void router.push({

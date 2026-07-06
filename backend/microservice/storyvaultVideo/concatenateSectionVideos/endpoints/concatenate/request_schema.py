@@ -89,6 +89,11 @@ class ConcatenateRequestInput(BaseModel):
         ge=0.1,
         description="全セクション合計の期待再生時間"
     )
+    sectionTotalDurationSeconds: Optional[float] = Field(
+        default=None,
+        ge=0.1,
+        description="フロントエンド上のセクション長合計。元動画総尺との差分補正の診断用"
+    )
 
 
 class ConcatenateRequestSystemMetadata(BaseModel):

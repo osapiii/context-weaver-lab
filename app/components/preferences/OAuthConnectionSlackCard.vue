@@ -4,45 +4,31 @@
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="flex items-center gap-2">
-            <UIcon name="i-simple-icons-slack" class="h-5 w-5 text-neutral-900" />
+            <UIcon name="logos:slack-icon" class="h-5 w-5" />
             <h2 class="text-lg font-semibold text-neutral-900">
-              Slack OAuth
+              Slack Workspace OAuth
             </h2>
           </div>
           <p class="mt-2 text-sm leading-relaxed text-neutral-600">
             操作動画に関連するSlack投稿やスレッドを、関連コンテキストとして紐付けるための認証です。
+            複数の Slack workspace をOAuthだけで追加できます。
             <span class="mt-1 block text-xs text-neutral-500">
               保存先:
-              <code>organizations/{organizationId}/externalServiceConfigs/slackOAuth/users/{uid}</code>
+              <code>organizations/{organizationId}/externalServiceConfigs/slackIntegration/configs/{workspaceId}</code>
             </span>
           </p>
         </div>
         <EnBadge
-          :color="connection.connected ? 'success' : 'warning'"
+          :color="connections.length ? 'success' : 'warning'"
           variant="soft"
-          :leading-icon="connection.connected ? 'i-heroicons-check-circle' : 'i-heroicons-exclamation-triangle'"
+          :leading-icon="connections.length ? 'i-heroicons-check-circle' : 'i-heroicons-exclamation-triangle'"
         >
-          {{ connection.connected ? "接続済み" : "未接続" }}
+          {{ connections.length ? `${connections.length} workspace` : "未接続" }}
         </EnBadge>
       </div>
     </template>
 
     <div class="space-y-4">
-      <dl class="grid gap-3 text-sm md:grid-cols-2">
-        <div class="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
-          <dt class="font-semibold text-neutral-500">接続ワークスペース</dt>
-          <dd class="mt-1 break-all font-medium text-neutral-900">
-            {{ connection.connected ? connection.teamName || connection.teamId || "Slack workspace" : "未接続" }}
-          </dd>
-        </div>
-        <div class="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
-          <dt class="font-semibold text-neutral-500">利用 scope</dt>
-          <dd class="mt-1 break-all font-medium text-neutral-900">
-            {{ scopesLabel }}
-          </dd>
-        </div>
-      </dl>
-
       <div
         v-if="!slack.clientId.value"
         class="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800"
@@ -59,35 +45,94 @@
       <div class="flex flex-wrap gap-2">
         <EnButton
           variant="solid"
-          :color="connection.connected ? 'success' : 'primary'"
+          color="purple"
           size="sm"
-          leading-icon="i-simple-icons-slack"
+          leading-icon="logos:slack-icon"
+          custom-class="bg-[#4A154B] text-white hover:bg-[#611f69] active:bg-[#3f0f40] focus-visible:ring-[#611f69] disabled:bg-[#4A154B]/70"
           :loading="slack.isLoading.value"
           @click="connect"
         >
-          {{ connection.connected ? "Slack を再接続" : "Slack を接続" }}
+          Slack workspace を追加
         </EnButton>
         <EnButton
-          v-if="connection.connected"
           variant="outline"
           color="neutral"
           size="sm"
           leading-icon="i-heroicons-arrow-path"
-          :loading="isTesting"
-          @click="testConnection"
-        >
-          接続を確認
-        </EnButton>
-        <EnButton
-          v-if="connection.connected"
-          variant="outline"
-          color="neutral"
-          size="sm"
           :loading="slack.isLoading.value"
-          @click="disconnect"
+          @click="refresh"
         >
-          接続を解除
+          更新
         </EnButton>
+      </div>
+
+      <div
+        v-if="connections.length === 0"
+        class="rounded-lg border border-dashed border-neutral-200 bg-neutral-50 px-4 py-6 text-center"
+      >
+        <UIcon name="logos:slack-icon" class="mx-auto h-8 w-8" />
+        <p class="mt-3 text-sm font-semibold text-neutral-800">
+          Slack workspace はまだ接続されていません
+        </p>
+        <p class="mt-1 text-xs text-neutral-500">
+          SlackのOAuth画面からworkspaceを選ぶだけで追加できます。
+        </p>
+      </div>
+
+      <div v-else class="overflow-x-auto rounded-lg border border-neutral-200">
+        <table class="min-w-full divide-y divide-neutral-200 text-sm">
+          <thead class="bg-neutral-50 text-left text-xs font-semibold text-neutral-500">
+            <tr>
+              <th class="px-3 py-2">Workspace</th>
+              <th class="px-3 py-2">Team ID</th>
+              <th class="px-3 py-2">Bot</th>
+              <th class="px-3 py-2">Scopes</th>
+              <th class="px-3 py-2">
+                <span class="sr-only">操作</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-neutral-100 bg-white">
+            <tr v-for="connection in connections" :key="connection.id || connection.teamId">
+              <td class="px-3 py-3 font-medium text-neutral-900">
+                {{ connection.teamName || connection.enterpriseName || connection.id || "Slack workspace" }}
+              </td>
+              <td class="px-3 py-3 font-mono text-xs text-neutral-600">
+                {{ connection.teamId || connection.enterpriseId || connection.id || "-" }}
+              </td>
+              <td class="px-3 py-3 font-mono text-xs text-neutral-600">
+                {{ connection.botUserId || "-" }}
+              </td>
+              <td class="max-w-[320px] truncate px-3 py-3 text-xs text-neutral-600">
+                {{ (connection.scopes ?? []).join(", ") || "未取得" }}
+              </td>
+              <td class="px-3 py-3 text-right">
+                <div class="flex justify-end gap-2">
+                  <EnButton
+                    variant="ghost"
+                    color="neutral"
+                    size="xs"
+                    leading-icon="i-heroicons-arrow-path"
+                    :loading="testingConnectionId === connection.id"
+                    @click="testConnection(connection.id)"
+                  >
+                    確認
+                  </EnButton>
+                  <EnButton
+                    variant="ghost"
+                    color="error"
+                    size="xs"
+                    leading-icon="material-symbols:link-off"
+                    :loading="removingConnectionId === connection.id"
+                    @click="disconnect(connection.id)"
+                  >
+                    解除
+                  </EnButton>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </EnCard>
@@ -101,21 +146,14 @@ import EnCard from "@components/EnCard.vue";
 
 const slack = useSlackOAuth();
 const errorMessage = ref("");
-const isTesting = ref(false);
-const connection = computed(() => slack.connection.value);
-
-const scopesLabel = computed(() => {
-  if (!connection.value.connected) {
-    return "search:read channels:read channels:history groups:read groups:history";
-  }
-  const scopes = connection.value.scopes ?? [];
-  return scopes.length ? scopes.join(" ") : "未取得";
-});
+const testingConnectionId = ref("");
+const removingConnectionId = ref("");
+const connections = computed(() => slack.connections.value);
 
 const refresh = async (): Promise<void> => {
   errorMessage.value = "";
   try {
-    await slack.refreshConnection();
+    await slack.refreshConnections();
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "Slack 接続状態の取得に失敗しました";
@@ -130,28 +168,33 @@ const connect = async (): Promise<void> => {
   }
 };
 
-const disconnect = async (): Promise<void> => {
-  if (!confirm("Slack 接続を解除します。よろしいですか?")) return;
+const disconnect = async (connectionId?: string): Promise<void> => {
+  if (!connectionId) return;
+  if (!confirm("Slack workspace 接続を解除します。よろしいですか?")) return;
+  removingConnectionId.value = connectionId;
   errorMessage.value = "";
   try {
-    await slack.disconnect();
+    await slack.disconnect(connectionId);
     await refresh();
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "Slack 接続の解除に失敗しました";
+  } finally {
+    removingConnectionId.value = "";
   }
 };
 
-const testConnection = async (): Promise<void> => {
-  isTesting.value = true;
+const testConnection = async (connectionId?: string): Promise<void> => {
+  if (!connectionId) return;
+  testingConnectionId.value = connectionId;
   errorMessage.value = "";
   try {
-    await slack.testConnection();
+    await slack.testConnection(connectionId);
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "Slack 接続確認に失敗しました";
   } finally {
-    isTesting.value = false;
+    testingConnectionId.value = "";
   }
 };
 

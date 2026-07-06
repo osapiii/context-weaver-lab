@@ -42,8 +42,11 @@ from triggers.github_oauth import get_github_repository  # noqa: F401
 from triggers.github_oauth import list_github_merged_pull_requests  # noqa: F401
 from triggers.github_oauth import list_github_repositories  # noqa: F401
 from triggers.slack_oauth import connect_slack  # noqa: F401
+from triggers.slack_oauth import connect_slack_workspace  # noqa: F401
 from triggers.slack_oauth import disconnect_slack  # noqa: F401
+from triggers.slack_oauth import disconnect_slack_workspace  # noqa: F401
 from triggers.slack_oauth import get_slack_connection  # noqa: F401
+from triggers.slack_oauth import get_slack_connections  # noqa: F401
 from triggers.slack_oauth import list_slack_messages  # noqa: F401
 from triggers.slack_oauth import test_slack_connection  # noqa: F401
 from triggers.guide_assistant import ask_en_aistudio_guide  # noqa: F401
