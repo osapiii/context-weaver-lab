@@ -25,6 +25,7 @@ import logging
 import os
 import time
 import uuid
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
@@ -199,20 +200,46 @@ _RELATED_CONTEXT_RESULT_KEYS = (
 def _zapping_analysis_result_from_bucket(value: Any) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
+
     existing = value.get("analysis_result")
     if isinstance(existing, dict):
         nested = _zapping_analysis_result_from_bucket(existing)
         if nested is not None:
             return nested
-    if value.get("schemaVersion") != "storyvault-zapping-analysis-v2":
-        return None
-    if not isinstance(value.get("generatedAt"), str):
-        return None
-    if not isinstance(value.get("storyCandidates"), list):
-        return None
-    if not isinstance(value.get("notes"), list):
-        return None
-    return {key: value.get(key) for key in _ZAPPING_ANALYSIS_RESULT_KEYS if key in value}
+
+    schema_version = value.get("schemaVersion")
+    if not isinstance(schema_version, str):
+        schema_version = "storyvault-zapping-analysis-v2"
+
+    generated_at = value.get("generatedAt")
+    if not isinstance(generated_at, str):
+        generated_at = datetime.now(timezone.utc).isoformat()
+
+    candidates = value.get("storyCandidates")
+    if not isinstance(candidates, list):
+        candidates = []
+    notes = value.get("notes")
+    if not isinstance(notes, list):
+        notes = (
+            [notes]
+            if isinstance(notes, str) and notes.strip()
+            else []
+        )
+
+    normalized = {
+        "schemaVersion": schema_version,
+        "generatedAt": generated_at,
+        "transcriptSummary": value.get("transcriptSummary"),
+        "productContextSummary": value.get("productContextSummary"),
+        "operationIntent": value.get("operationIntent"),
+        "storyCandidates": candidates,
+        "notes": notes,
+    }
+    return {
+        key: normalized.get(key)
+        for key in _ZAPPING_ANALYSIS_RESULT_KEYS
+        if key in normalized
+    }
 
 
 def _related_context_result_from_bucket(value: Any) -> dict[str, Any] | None:

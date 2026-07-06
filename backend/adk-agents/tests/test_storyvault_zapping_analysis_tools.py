@@ -141,3 +141,55 @@ def test_read_zapping_analysis_context_parses_srt_only_clip():
         }
     ]
     assert evidence["clips"][0]["hasTimestampedTranscript"] is True
+
+
+def test_read_zapping_analysis_context_uses_single_clip_payload():
+    state = State(
+        value={
+            "storyvault_zapping_analysis": {
+                "setup": {
+                    "application_id": "app-storyvault",
+                    "application_name": "StoryVault",
+                    "analysis_session_id": "session-1",
+                },
+                "payload": {
+                    "clip": {
+                        "id": "clip-1",
+                        "title": "AIに教える",
+                        "storagePath": "clips/clip-1.webm",
+                        "transcriptText": "AIに対してプロダクト知識を教えることができます。",
+                        "transcriptSegments": [
+                            {
+                                "id": "cue-0001",
+                                "index": 1,
+                                "startMs": 1000,
+                                "endMs": 8000,
+                                "text": "AIに対してプロダクト知識を教えることができます。",
+                            }
+                        ],
+                        "transcriptTimingStatus": "timestamped",
+                        "frameCaptures": [
+                            {"id": "frame-001", "timestampMs": 5000}
+                        ],
+                    },
+                    "source_assets": [
+                        {
+                            "metadata": {
+                                "transcriptTimingStatus": "unavailable",
+                                "transcriptSegments": [],
+                            }
+                        }
+                    ],
+                },
+            }
+        },
+        delta={},
+    )
+
+    result = read_zapping_analysis_context(_ToolContext(state))
+
+    evidence = result["analysis_evidence"]
+    assert result["operation_video"]["id"] == "clip-1"
+    assert evidence["transcriptTimingStatus"] == "timestamped"
+    assert evidence["transcriptSegments"][0]["id"] == "clip-1:cue-0001"
+    assert evidence["frameCaptures"][0]["id"] == "clip-1:frame-001"

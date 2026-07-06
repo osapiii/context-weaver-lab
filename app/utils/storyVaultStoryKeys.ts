@@ -1,5 +1,5 @@
 import type {
-  DecodedStoryVaultOperationVideo,
+  DecodedStoryVaultClip,
   DecodedStoryVaultStory,
 } from "@models/storyVault";
 
@@ -24,7 +24,7 @@ export function storyTicketKey(story: Pick<DecodedStoryVaultStory, "storyKey" | 
 export function nextUserStorySequenceForApplication(params: {
   applicationId: string;
   stories: DecodedStoryVaultStory[];
-  operationVideos: DecodedStoryVaultOperationVideo[];
+  clips: DecodedStoryVaultClip[];
 }): number {
   const sequences = [
     ...params.stories
@@ -32,10 +32,10 @@ export function nextUserStorySequenceForApplication(params: {
       .map((story) =>
         Math.max(parseUserStoryKeySequence(story.storyKey), story.sequence || 0)
       ),
-    ...params.operationVideos
-      .filter((video) => video.applicationId === params.applicationId)
-      .flatMap((video) =>
-        (video.analysisResult?.storyCandidates ?? []).map((candidate) =>
+    ...params.clips
+      .filter((clip) => clip.applicationId === params.applicationId)
+      .flatMap((clip) =>
+        (clip.analysisResult?.storyCandidates ?? []).map((candidate) =>
           parseUserStoryKeySequence(candidate.storyKey)
         )
       ),

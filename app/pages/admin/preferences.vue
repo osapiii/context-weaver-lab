@@ -18,7 +18,7 @@
       </p>
     </header>
 
-    <UTabs :items="tabItems" class="w-full">
+    <UTabs v-model="activePreferenceTab" :items="tabItems" class="w-full">
       <!-- メンバー管理 -->
       <template #members>
         <OrganizationMemberManagementPanel />
@@ -653,6 +653,8 @@ definePageMeta({
 });
 
 const organization = useOrganizationStore();
+const route = useRoute();
+const router = useRouter();
 const appearance = useAppAppearance();
 // API キー差し替え時に AI 部下のクライアントキャッシュを無効化するため.
 const enAiStudioAssistant = useEnAiStudioAssistantStore();
@@ -691,30 +693,34 @@ const adminUserStore = useAdminUserStore();
 const showGodMode = computed(() => canAccessGodMode.value);
 
 const tabItems = computed(() => {
-  const base: Array<{ label: string; slot: string; icon: string }> = [];
+  const base: Array<{ label: string; slot: string; value: string; icon: string }> = [];
   if (adminUserStore.isAdminOrAbove) {
     base.push({
       label: "メンバー",
       slot: "members",
+      value: "members",
       icon: "material-symbols:group",
     });
   }
   base.push(
-    { label: "外観", slot: "appearance", icon: "material-symbols:palette" },
-    { label: "AI 連携", slot: "ai-integration", icon: "material-symbols:key" },
+    { label: "外観", slot: "appearance", value: "appearance", icon: "material-symbols:palette" },
+    { label: "AI 連携", slot: "ai-integration", value: "ai-integration", icon: "material-symbols:key" },
     {
       label: "Googleクラウド連携",
       slot: "data-integration",
+      value: "data-integration",
       icon: "material-symbols:cloud-sync",
     },
     {
       label: "OAuth認証",
       slot: "oauth-connections",
+      value: "oauth-connections",
       icon: "material-symbols:hub",
     },
     {
       label: "MCP",
       slot: "mcp",
+      value: "mcp",
       icon: "material-symbols:account-tree-outline",
     }
   );
@@ -722,15 +728,51 @@ const tabItems = computed(() => {
     base.push({
       label: "Godモード",
       slot: "god-mode",
+      value: "god-mode",
       icon: "material-symbols:admin-panel-settings",
     });
   }
   base.push({
     label: "その他",
     slot: "more",
+    value: "more",
     icon: "material-symbols:more-horiz",
   });
   return base;
+});
+
+const resolvePreferenceTab = (value: unknown): string => {
+  const requested = typeof value === "string" ? value : "";
+  const available = tabItems.value.map((item) => item.value);
+  if (requested && available.includes(requested)) return requested;
+  return available[0] ?? "appearance";
+};
+
+const activePreferenceTab = ref("appearance");
+
+watch(
+  tabItems,
+  () => {
+    activePreferenceTab.value = resolvePreferenceTab(route.query.tab);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    activePreferenceTab.value = resolvePreferenceTab(tab);
+  }
+);
+
+watch(activePreferenceTab, (tab) => {
+  if (route.query.tab === tab) return;
+  void router.replace({
+    query: {
+      ...route.query,
+      tab,
+    },
+  });
 });
 
 const isMac = computed(() => {

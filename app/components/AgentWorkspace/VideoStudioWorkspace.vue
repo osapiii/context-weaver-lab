@@ -539,18 +539,78 @@
 
     <div
       v-else-if="store.view === 'editor' && store.selectedProject"
-      class="video-editor-light fixed inset-0 z-[1000] flex h-dvh min-h-0 w-screen flex-col overflow-hidden bg-gray-900 text-white"
+      class="fixed inset-0 z-[1000] flex h-dvh min-h-0 w-screen flex-col overflow-hidden bg-gray-900 text-white"
       data-testid="video-studio-fullscreen-editor"
     >
-      <header class="relative z-[140] flex shrink-0 items-center justify-between border-b border-gray-700 bg-gray-800 px-4 py-2">
-        <div class="flex min-w-0 items-center gap-4">
-          <h2 class="truncate font-bold text-white">{{ store.selectedVideo?.title || store.selectedProject.editorState.video.title }}</h2>
-          <div class="flex min-w-0 items-center gap-2 text-sm text-gray-300">
-            <UIcon name="i-heroicons-folder-solid" class="h-4 w-4 text-gray-400" />
-            <span class="truncate">{{ store.selectedProject.name }}</span>
+      <header class="relative z-[140] flex shrink-0 items-center gap-3 border-b border-gray-700 bg-gray-800 px-4 py-2">
+        <div class="flex min-w-0 shrink-0 items-center gap-3">
+          <h2 class="max-w-[12rem] truncate font-bold text-white">{{ store.selectedVideo?.title || store.selectedProject.editorState.video.title }}</h2>
+          <div class="hidden min-w-0 items-center gap-1.5 text-xs text-gray-400 lg:flex">
+            <UIcon name="i-heroicons-folder-solid" class="h-3.5 w-3.5 text-gray-500" />
+            <span class="max-w-[8rem] truncate">{{ store.selectedProject.name }}</span>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+
+        <div class="flex min-w-0 flex-1 items-center justify-center gap-1.5">
+          <button
+            v-if="currentWorkflowIndex > 0"
+            type="button"
+            class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-40"
+            :disabled="Boolean(activeRequest)"
+            title="前へ"
+            @click.stop.prevent="setWorkflowIndex(currentWorkflowIndex - 1)"
+          >
+            <UIcon name="i-heroicons-chevron-left" class="h-3.5 w-3.5" />
+          </button>
+
+          <div class="flex min-w-0 items-center gap-1 overflow-x-auto">
+            <template v-for="(step, index) in workflowSteps" :key="step.key">
+              <button
+                type="button"
+                class="flex shrink-0 items-center gap-1.5 rounded-full px-1.5 py-1 transition"
+                :class="index === currentWorkflowIndex ? 'bg-indigo-500/15' : ''"
+                :title="step.title"
+                @click.stop.prevent="setWorkflowIndex(index)"
+              >
+                <span
+                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                  :class="
+                    isWorkflowStepCompleted(step.key)
+                      ? 'bg-emerald-500 text-white'
+                      : index === currentWorkflowIndex
+                        ? 'bg-indigo-500 text-white'
+                        : 'bg-gray-700 text-gray-400'
+                  "
+                >
+                  <UIcon v-if="isWorkflowStepCompleted(step.key)" name="i-heroicons-check-solid" class="h-3 w-3" />
+                  <template v-else>{{ index + 1 }}</template>
+                </span>
+                <span
+                  class="hidden whitespace-nowrap text-xs sm:inline"
+                  :class="index === currentWorkflowIndex ? 'font-bold text-white' : 'text-gray-500'"
+                >{{ step.title }}</span>
+              </button>
+              <span
+                v-if="index < workflowSteps.length - 1"
+                class="h-px w-3 shrink-0 sm:w-6"
+                :class="isWorkflowStepCompleted(step.key) ? 'bg-emerald-500' : 'bg-gray-700'"
+              />
+            </template>
+          </div>
+
+          <button
+            v-if="currentWorkflowIndex < workflowSteps.length - 1"
+            type="button"
+            class="flex h-6 shrink-0 items-center gap-1 rounded-md bg-indigo-500 px-2 text-xs font-bold text-white hover:bg-indigo-600 disabled:opacity-50"
+            :disabled="Boolean(activeRequest)"
+            @click.stop.prevent="handleWorkflowNext"
+          >
+            <span class="whitespace-nowrap">{{ activeRequest === "transcription" ? "文字起こし中..." : "次へ" }}</span>
+            <UIcon name="i-heroicons-chevron-right" class="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div class="flex shrink-0 items-center gap-2">
           <div class="flex items-center gap-1 rounded-lg border border-gray-600 bg-gray-700/50 px-1.5 py-1">
             <button class="rounded p-1 text-white hover:bg-gray-600" @click="editorZoom = Math.max(50, editorZoom - 10)">
               <UIcon name="i-heroicons-minus" class="h-4 w-4" />
@@ -572,34 +632,6 @@
           </button>
         </div>
       </header>
-
-      <div class="relative z-[130] shrink-0 border-b border-gray-700 bg-gray-800 px-4 py-1.5">
-        <div class="flex items-center gap-3">
-          <div class="flex flex-1 items-center gap-2">
-            <div
-              v-for="(step, index) in workflowSteps"
-              :key="step.key"
-              class="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-2 transition"
-              :class="workflowStepClass(step.key, index)"
-            >
-              <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ring-inset" :class="workflowStepBadgeClass(step.key, index)">
-                <UIcon v-if="isWorkflowStepCompleted(step.key)" name="i-heroicons-check-solid" class="h-4 w-4" />
-                <span v-else>{{ index + 1 }}</span>
-              </span>
-              <span class="truncate text-sm font-bold">{{ step.title }}</span>
-              <span v-if="isWorkflowStepCompleted(step.key)" class="ml-auto hidden rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold text-emerald-200 ring-1 ring-inset ring-emerald-400/25 xl:inline">
-                完了
-              </span>
-            </div>
-          </div>
-          <button v-if="currentWorkflowIndex > 0" type="button" class="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-bold text-gray-200 hover:bg-gray-600" :disabled="Boolean(activeRequest)" @click.stop.prevent="setWorkflowIndex(currentWorkflowIndex - 1)">
-            前へ
-          </button>
-          <button v-if="currentWorkflowIndex < workflowSteps.length - 1" type="button" class="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-600 disabled:opacity-50" :disabled="Boolean(activeRequest)" @click.stop.prevent="handleWorkflowNext">
-            {{ activeRequest === "transcription" ? "文字起こし中..." : "次へ" }}
-          </button>
-        </div>
-      </div>
 
       <div class="flex min-h-0 flex-1 overflow-hidden" :style="{ zoom: editorZoom / 100 }">
         <aside v-if="!isExportStep && !isSubtitleStep && isSectionSidebarOpen" class="flex w-72 shrink-0 flex-col border-r border-gray-700 bg-gray-850">
@@ -640,6 +672,16 @@
                     <UIcon name="i-heroicons-check-solid" class="h-7 w-7" />
                   </div>
                 </div>
+                <div
+                  v-if="sectionTtsProcessingCount(section) > 0"
+                  class="absolute inset-0 flex items-center justify-center bg-gray-950/60"
+                  aria-live="polite"
+                >
+                  <div class="inline-flex items-center gap-2 rounded-full bg-indigo-500 px-3 py-1.5 text-xs font-bold text-white shadow-lg shadow-indigo-500/30">
+                    <UIcon name="i-heroicons-arrow-path" class="h-4 w-4 animate-spin" />
+                    AI音声生成中
+                  </div>
+                </div>
               </div>
               <div class="mt-2 flex items-center justify-between gap-2">
                 <span class="truncate text-sm font-bold text-gray-100">{{ section.title || `セクション ${index + 1}` }}</span>
@@ -649,7 +691,8 @@
                 <span class="rounded bg-gray-950 px-2 py-1 text-gray-300">
                   文字 {{ sectionTranscriptionCompleted(section) ? "完了" : "未完了" }}
                 </span>
-                <span class="rounded px-2 py-1" :class="sectionHasGeneratedAudio(section) ? 'bg-emerald-500/15 text-emerald-200' : 'bg-gray-950 text-gray-400'">
+                <span class="inline-flex items-center gap-1 rounded px-2 py-1" :class="sectionHasGeneratedAudio(section) ? 'bg-emerald-500/15 text-emerald-200' : sectionTtsProcessingCount(section) > 0 ? 'bg-indigo-500/15 text-indigo-100' : 'bg-gray-950 text-gray-400'">
+                  <UIcon v-if="sectionTtsProcessingCount(section) > 0" name="i-heroicons-arrow-path" class="h-3 w-3 animate-spin" />
                   AI音声 {{ generatedNarrationCount(section) }}/{{ section.finalyNarrations.length }}
                 </span>
               </div>
@@ -816,7 +859,7 @@
               </span>
             </div>
 
-            <div v-if="aiNarrationSubStep === 'transcription'" class="flex h-[calc(100%-8rem)] min-h-[520px] flex-col rounded-xl border border-gray-700 bg-gray-850">
+            <div v-if="aiNarrationSubStep === 'transcription'" class="video-editor-dark-panel flex h-[calc(100%-8rem)] min-h-[520px] flex-col rounded-xl border border-gray-700 bg-gray-850">
               <div class="flex items-center justify-between border-b border-gray-700 px-4 py-3">
                 <h4 class="flex items-center gap-2 text-lg font-bold text-gray-100">
                   <UIcon name="i-heroicons-arrow-path" class="h-5 w-5 animate-spin text-indigo-300" />
@@ -863,7 +906,7 @@
             <div v-else-if="aiNarrationMode === 'narration'" class="flex h-[calc(100%-6.5rem)] min-h-[520px] min-w-0 flex-col">
               <div class="min-h-0 flex-1 overflow-auto">
                 <div v-if="selectedSectionForRecording?.finalyNarrations.length" class="grid gap-3 xl:grid-cols-2">
-                    <article v-for="(segment, segmentIndex) in selectedSectionForRecording.finalyNarrations" :key="segment.id || segmentIndex" class="min-w-0 rounded-lg border border-gray-700 bg-gray-900 p-3">
+                    <article v-for="(segment, segmentIndex) in selectedSectionForRecording.finalyNarrations" :key="segment.id || segmentIndex" class="video-editor-dark-panel min-w-0 rounded-lg border border-gray-700 bg-gray-900 p-3">
                       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <div class="flex min-w-0 items-center gap-2">
                           <span class="font-mono text-xs text-gray-500">{{ segment.start || formatDuration(segment.startSeconds ?? selectedSectionForRecording.startTime) }}</span>
@@ -914,7 +957,7 @@
                             :style="{ height: `${bar.height}%` }"
                           />
                           <span v-if="ttsWaveformBars(selectedSectionForRecording.id, segmentIndex, segment, 48).length === 0" class="text-xs text-gray-500">
-                            波形を読み込み中...
+                            {{ ttsWaveformStatusText(segment) }}
                           </span>
                         </div>
                       </div>
@@ -928,7 +971,7 @@
               </div>
             </div>
 
-            <div v-else class="flex h-[calc(100%-6rem)] min-h-[560px] min-w-0 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-850">
+            <div v-else class="video-editor-dark-panel flex h-[calc(100%-6rem)] min-h-[560px] min-w-0 flex-col overflow-hidden rounded-xl border border-gray-700 bg-gray-850">
               <div class="grid min-h-0 flex-1 grid-rows-[minmax(220px,42%)_minmax(0,1fr)]">
                 <section class="min-h-0 border-b border-gray-700 bg-black">
                   <div class="relative h-full">
@@ -1077,7 +1120,7 @@
               </section>
 
               <div v-if="exportReviewTab === 'overview'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_34rem]">
-                <section class="rounded-xl border border-gray-700 bg-gray-800 p-5">
+                <section class="video-editor-dark-panel rounded-xl border border-gray-700 bg-gray-800 p-5">
                   <div class="rounded-xl border border-gray-700 bg-gray-900 p-4">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -1106,7 +1149,7 @@
                   </div>
                 </section>
 
-                <section class="rounded-xl border border-gray-700 bg-gray-800 p-4">
+                <section class="video-editor-dark-panel rounded-xl border border-gray-700 bg-gray-800 p-4">
                   <div class="mb-3 flex items-center justify-between gap-3">
                     <h4 class="text-sm font-bold text-gray-200">出力済み動画</h4>
                     <button
@@ -1141,7 +1184,7 @@
               </div>
 
               <div v-else-if="exportReviewTab === 'sections'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_34rem]">
-                <section class="rounded-xl border border-gray-700 bg-gray-800 p-5">
+                <section class="video-editor-dark-panel rounded-xl border border-gray-700 bg-gray-800 p-5">
                   <div class="mb-3 flex items-center justify-between">
                     <h4 class="text-base font-bold text-gray-100">セクション最終確認</h4>
                     <span class="text-xs text-gray-500">{{ fixedSectionsCount }}/{{ editorSections.length }} 確定済み</span>
@@ -1181,7 +1224,7 @@
                   </div>
                 </section>
 
-                <section class="rounded-xl border border-gray-700 bg-gray-800 p-4">
+                <section class="video-editor-dark-panel rounded-xl border border-gray-700 bg-gray-800 p-4">
                   <div class="mb-3 flex items-center justify-between gap-3">
                     <h4 class="text-sm font-bold text-gray-200">選択セクション確認</h4>
                     <span class="truncate text-xs text-gray-500">{{ selectedExportSection?.title || "セクション未選択" }}</span>
@@ -1193,7 +1236,7 @@
                 </section>
               </div>
 
-              <section v-else class="rounded-xl border border-gray-700 bg-gray-800 p-5">
+              <section v-else class="video-editor-dark-panel rounded-xl border border-gray-700 bg-gray-800 p-5">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h4 class="text-base font-bold text-gray-100">書き出し素材</h4>
@@ -1249,66 +1292,78 @@
             </div>
           </div>
 
-          <div v-else-if="isSubtitleStep" class="min-h-0 flex-1 overflow-auto bg-gray-900 p-6">
-            <div class="space-y-4">
-              <section class="rounded-xl border border-gray-700 bg-gray-800">
-                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-gray-700 px-5 py-4">
-                  <div class="min-w-0">
-                    <h3 class="text-xl font-bold">動画調整</h3>
-                    <p class="mt-1 text-sm text-gray-400">無音カットと字幕生成を、必要なものだけ設定して実行します。</p>
-                  </div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <button
-                      v-for="(step, index) in videoAdjustmentSubStepOptions"
-                      :key="step.key"
-                      type="button"
-                      class="min-w-[9.5rem] rounded-xl border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-50"
-                      :class="videoAdjustmentSubStep === step.key ? 'border-indigo-300 bg-indigo-500 text-white' : 'border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-850'"
-                      :disabled="Boolean(activeRequest) || (step.key !== 'silence_settings' && !finalVideoExportAsset)"
-                      @click="setVideoAdjustmentSubStep(step.key)"
-                    >
-                      <span class="flex items-center gap-2 text-sm font-bold">
-                        <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs">{{ index + 1 }}</span>
-                        {{ step.title }}
-                      </span>
-                      <span class="mt-1 block truncate text-[11px] opacity-70">{{ step.description }}</span>
-                    </button>
-                  </div>
+          <div v-else-if="isSubtitleStep" class="min-h-0 flex-1 overflow-auto bg-gray-950 p-6">
+            <div class="grid min-h-full gap-5 xl:grid-cols-[18rem_minmax(0,1fr)]">
+              <aside class="self-start rounded-xl border border-gray-700/80 bg-gray-900/95 p-4 shadow-2xl shadow-black/30 ring-1 ring-white/5 xl:sticky xl:top-4">
+                <div class="rounded-lg border border-gray-700 bg-gray-950 p-4">
+                  <p class="text-[11px] font-bold uppercase tracking-wider text-gray-500">Video adjustment</p>
+                  <h3 class="mt-1 text-xl font-bold text-gray-100">動画調整</h3>
+                  <p class="mt-2 text-xs leading-5 text-gray-500">無音カットと字幕生成を必要なものだけ実行します。</p>
                 </div>
-                <div class="space-y-3 p-5">
-                  <div v-if="requestNotice" class="rounded-lg border px-3 py-2 text-sm" :class="requestNotice.kind === 'error' ? 'border-red-500/40 bg-red-500/10 text-red-200' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'">
-                    {{ requestNotice.message }}
+                <nav class="mt-4 space-y-2">
+                  <button
+                    v-for="(step, index) in videoAdjustmentSubStepOptions"
+                    :key="step.key"
+                    type="button"
+                    class="group flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-45"
+                    :class="videoAdjustmentSubStep === step.key ? 'border-indigo-300 bg-indigo-500/20 text-white shadow-lg shadow-indigo-950/40' : 'border-gray-700 bg-gray-950 text-gray-300 hover:border-gray-600 hover:bg-gray-850'"
+                    :disabled="videoAdjustmentSubStepDisabled(step.key)"
+                    @click="setVideoAdjustmentSubStep(step.key)"
+                  >
+                    <span
+                      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-bold"
+                      :class="videoAdjustmentSubStep === step.key ? 'border-indigo-200 bg-indigo-500 text-white' : index < videoAdjustmentCurrentStepIndex ? 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200' : 'border-gray-700 bg-gray-900 text-gray-400'"
+                    >
+                      <UIcon v-if="index < videoAdjustmentCurrentStepIndex" name="i-heroicons-check-solid" class="h-4 w-4" />
+                      <span v-else>{{ index + 1 }}</span>
+                    </span>
+                    <span class="min-w-0">
+                      <span class="block text-sm font-bold">{{ step.title }}</span>
+                      <span class="mt-1 block text-[11px] leading-4 text-gray-500 group-hover:text-gray-400">{{ step.description }}</span>
+                    </span>
+                  </button>
+                </nav>
+                <div class="mt-4 grid gap-2">
+                  <div class="rounded-lg border border-gray-700 bg-gray-950 p-3">
+                    <p class="text-[11px] font-bold text-gray-500">入力動画</p>
+                    <p class="mt-1 text-sm font-bold text-gray-100">{{ finalVideoExportAsset?.ready ? "最終動画" : "書き出し待ち" }}</p>
                   </div>
-                  <div v-else-if="!finalVideoExportAsset" class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                    動画調整は最終動画の書き出し完了後に実行できます。
-                  </div>
-                  <div class="grid gap-3 md:grid-cols-4">
-                    <div class="rounded-xl border border-gray-700 bg-gray-900 p-3">
-                      <p class="text-[11px] font-bold text-gray-500">入力動画</p>
-                      <p class="mt-1 text-sm font-bold text-gray-100">{{ finalVideoExportAsset?.ready ? "最終動画" : "書き出し待ち" }}</p>
-                    </div>
-                    <div class="rounded-xl border border-gray-700 bg-gray-900 p-3">
+                  <div class="grid grid-cols-2 gap-2">
+                    <div class="rounded-lg border border-gray-700 bg-gray-950 p-3">
                       <p class="text-[11px] font-bold text-gray-500">無音カット</p>
                       <p class="mt-1 text-sm font-bold" :class="isSilenceCutEnabled ? 'text-teal-200' : 'text-gray-400'">
-                        {{ isSilenceCutEnabled ? "実行する" : "実行しない" }}
+                        {{ isSilenceCutEnabled ? "ON" : "OFF" }}
                       </p>
                     </div>
-                    <div class="rounded-xl border border-gray-700 bg-gray-900 p-3">
-                      <p class="text-[11px] font-bold text-gray-500">字幕生成</p>
+                    <div class="rounded-lg border border-gray-700 bg-gray-950 p-3">
+                      <p class="text-[11px] font-bold text-gray-500">字幕</p>
                       <p class="mt-1 text-sm font-bold" :class="isSubtitleGenerationEnabled ? 'text-indigo-200' : 'text-gray-400'">
-                        {{ isSubtitleGenerationEnabled ? `${subtitleCaptionSegments.length} cues` : "実行しない" }}
+                        {{ isSubtitleGenerationEnabled ? `${effectiveSubtitleCaptionSegments.length}` : "OFF" }}
                       </p>
-                    </div>
-                    <div class="rounded-xl border border-gray-700 bg-gray-900 p-3">
-                      <p class="text-[11px] font-bold text-gray-500">プレビュー</p>
-                      <p class="mt-1 text-sm font-bold text-gray-100">{{ videoAdjustmentPreviewLabel }}</p>
                     </div>
                   </div>
+                  <div class="rounded-lg border border-gray-700 bg-gray-950 p-3">
+                    <p class="text-[11px] font-bold text-gray-500">プレビュー</p>
+                    <p class="mt-1 truncate text-sm font-bold text-gray-100">{{ videoAdjustmentPreviewLabel }}</p>
+                  </div>
                 </div>
-              </section>
+              </aside>
+
+              <div class="min-w-0 space-y-4">
+                <div v-if="requestNotice" class="rounded-xl border px-4 py-3 text-sm shadow-lg" :class="requestNotice.kind === 'error' ? 'border-red-500/40 bg-red-500/10 text-red-200 shadow-red-950/20' : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 shadow-emerald-950/20'">
+                  {{ requestNotice.message }}
+                </div>
+                <div v-else-if="!finalVideoExportAsset" class="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 shadow-lg shadow-amber-950/20">
+                  動画調整は最終動画の書き出し完了後に実行できます。
+                </div>
+                <section class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-5 shadow-2xl shadow-black/25 ring-1 ring-white/5">
+                  <p class="text-xs font-bold uppercase tracking-wider text-indigo-300">Step {{ videoAdjustmentCurrentStepIndex + 1 }}</p>
+                  <h3 class="mt-2 text-2xl font-bold text-gray-100">{{ videoAdjustmentCurrentStepTitle }}</h3>
+                  <p class="mt-2 text-sm text-gray-400">{{ videoAdjustmentCurrentStepDescription }}</p>
+                </section>
 
               <section v-if="videoAdjustmentSubStep === 'silence_settings'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_28rem]">
-                <div class="rounded-xl border border-gray-700 bg-gray-800 p-5">
+                <div class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-5 shadow-xl shadow-black/20 ring-1 ring-white/5">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h4 class="text-lg font-bold text-gray-100">無音カット設定</h4>
@@ -1373,7 +1428,7 @@
                   </div>
                 </div>
 
-                <aside class="rounded-xl border border-gray-700 bg-gray-800 p-4">
+                <aside class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-4 shadow-xl shadow-black/20 ring-1 ring-white/5">
                   <h4 class="text-sm font-bold text-gray-200">入力元確認</h4>
                   <video v-if="store.selectedProjectOutputUrl" :src="store.selectedProjectOutputUrl" class="mt-3 aspect-video w-full rounded bg-black" controls />
                   <div v-else class="mt-3 flex aspect-video items-center justify-center rounded bg-gray-950 text-sm text-gray-500">最終動画待ち</div>
@@ -1386,7 +1441,7 @@
               </section>
 
               <section v-else-if="videoAdjustmentSubStep === 'subtitle_settings'" class="space-y-4">
-                <div class="rounded-xl border border-gray-700 bg-gray-800 p-5">
+                <div class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-5 shadow-xl shadow-black/20 ring-1 ring-white/5">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h4 class="text-lg font-bold text-gray-100">字幕設定</h4>
@@ -1410,19 +1465,19 @@
                     </div>
                     <div class="rounded-lg border border-gray-700 bg-gray-900 p-3">
                       <p class="text-[11px] font-bold text-gray-500">字幕本文</p>
-                      <p class="mt-1 text-sm font-bold text-gray-100">{{ subtitleCaptionSegments.length }} cues</p>
+                      <p class="mt-1 text-sm font-bold text-gray-100">{{ effectiveSubtitleCaptionSegments.length }} cues</p>
                     </div>
                     <div class="rounded-lg border border-gray-700 bg-gray-900 p-3">
                       <p class="text-[11px] font-bold text-gray-500">選択中</p>
                       <p class="mt-1 text-sm font-bold text-gray-100">{{ selectedSubtitlePreset.label }} / {{ selectedSubtitleSize.label }}</p>
                     </div>
                   </div>
-                  <div v-if="isSubtitleGenerationEnabled && subtitleCaptionSegments.length === 0" class="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                  <div v-if="isSubtitleGenerationEnabled && effectiveSubtitleCaptionSegments.length === 0" class="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
                     字幕に使えるAIナレーション本文がありません。字幕をOFFにすると次へ進めます。
                   </div>
                 </div>
 
-                <div class="rounded-xl border border-gray-700 bg-gray-800 p-5" :class="!isSubtitleGenerationEnabled ? 'opacity-50' : ''">
+                <div class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-5 shadow-xl shadow-black/20 ring-1 ring-white/5" :class="!isSubtitleGenerationEnabled ? 'opacity-50' : ''">
                   <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-700 bg-gray-900 p-3">
                     <div>
                       <p class="text-sm font-bold text-gray-100">字幕サイズ</p>
@@ -1468,14 +1523,191 @@
                   </div>
                   <div class="mt-5 flex flex-wrap justify-between gap-2">
                     <button type="button" class="rounded-xl bg-gray-700 px-4 py-2 text-sm font-bold text-gray-100 hover:bg-gray-600 disabled:opacity-50" :disabled="Boolean(activeRequest)" @click="setVideoAdjustmentSubStep('silence_settings')">戻る</button>
-                    <button type="button" class="rounded-xl bg-indigo-500 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-600 disabled:opacity-50" :disabled="Boolean(activeRequest) || (isSubtitleGenerationEnabled && subtitleCaptionSegments.length === 0)" @click="moveToRunSettings">実行内容を確認</button>
+                    <button type="button" class="rounded-xl bg-indigo-500 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-600 disabled:opacity-50" :disabled="Boolean(activeRequest) || (isSubtitleGenerationEnabled && effectiveSubtitleCaptionSegments.length === 0)" @click="moveToSubtitleTiming">
+                      {{ isSubtitleGenerationEnabled ? "字幕微調整へ" : "実行内容を確認" }}
+                    </button>
                   </div>
                 </div>
               </section>
 
+              <section v-else-if="videoAdjustmentSubStep === 'subtitle_timing'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_30rem]">
+                <div class="space-y-4">
+                  <div class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-5 shadow-xl shadow-black/20 ring-1 ring-white/5">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h4 class="text-lg font-bold text-gray-100">字幕微調整</h4>
+                        <p class="mt-1 text-sm text-gray-500">動画を見ながら、字幕の開始・終了・本文を調整します。</p>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <button type="button" class="rounded-xl bg-gray-700 px-4 py-2 text-sm font-bold text-gray-100 hover:bg-gray-600 disabled:opacity-50" :disabled="Boolean(activeRequest)" @click="resetEditableSubtitleSegments">自動生成に戻す</button>
+                        <button type="button" class="rounded-xl bg-indigo-500 px-5 py-2 text-sm font-bold text-white hover:bg-indigo-600 disabled:opacity-50" :disabled="Boolean(activeRequest) || effectiveSubtitleCaptionSegments.length === 0" @click="moveToRunSettings">実行内容を確認</button>
+                      </div>
+                    </div>
+
+                    <div class="mt-5 overflow-hidden rounded-xl border border-gray-700 bg-black">
+                      <div class="relative mx-auto aspect-video max-h-[520px] w-full bg-black">
+                        <video
+                          v-if="videoAdjustmentPreviewUrl"
+                          ref="subtitlePreviewVideo"
+                          :src="videoAdjustmentPreviewUrl"
+                          class="h-full w-full bg-black object-contain"
+                          controls
+                          @timeupdate="syncSubtitlePreviewTime"
+                          @loadedmetadata="handleSubtitlePreviewMetadata"
+                          @durationchange="handleSubtitlePreviewMetadata"
+                        />
+                        <div v-else class="flex h-full items-center justify-center text-sm text-gray-500">プレビュー待ち</div>
+                        <div
+                          v-if="activeSubtitlePreviewSegment"
+                          class="pointer-events-none absolute inset-x-6 text-center"
+                          :class="selectedSubtitlePreset.style.position === 'top' ? 'top-8' : 'bottom-10'"
+                        >
+                          <span class="inline-block max-w-[92%] rounded bg-white/90 px-3 py-1.5 text-center font-black leading-tight text-gray-950 shadow-lg" :style="{ fontSize: `${Math.max(18, selectedSubtitleFontScale * 24)}px` }">
+                            {{ activeSubtitlePreviewSegment.text }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mt-4 rounded-xl border border-gray-700 bg-gray-900 p-4">
+                      <div class="flex items-center justify-between gap-3 text-xs font-bold text-gray-400">
+                        <span>{{ formatSubtitleTimestamp(subtitlePreviewCurrentTime * 1000) }}</span>
+                        <div class="flex items-center gap-2">
+                          <button type="button" class="rounded bg-gray-800 px-2 py-1 text-gray-200 hover:bg-gray-700" @click="adjustSubtitleTimelineZoom(-4)">−</button>
+                          <span>{{ effectiveSubtitleCaptionSegments.length }} cues / {{ subtitleTimelineZoomPxPerSecond }}px/s</span>
+                          <button type="button" class="rounded bg-gray-800 px-2 py-1 text-gray-200 hover:bg-gray-700" @click="adjustSubtitleTimelineZoom(4)">＋</button>
+                        </div>
+                      </div>
+                      <div
+                        ref="subtitleTimelineScroller"
+                        class="mt-3 overflow-x-auto rounded-lg bg-gray-950"
+                        @wheel="handleSubtitleTimelineWheel"
+                      >
+                        <div
+                          class="relative select-none py-2"
+                          :style="{ width: `${subtitleTimelineWidthPx}px` }"
+                          @pointerdown="handleSubtitleTimelinePointerDown"
+                        >
+                          <div class="flex h-16 items-end gap-0.5">
+                            <span
+                              v-for="bar in subtitlePreviewWaveformBars"
+                              :key="bar.key"
+                              class="min-w-0 flex-1 rounded-t bg-indigo-400/70"
+                              :style="{ height: `${bar.height}%` }"
+                            />
+                            <span v-if="subtitlePreviewWaveformBars.length === 0" class="flex h-full w-full items-center justify-center text-xs font-bold text-gray-500">
+                              {{ subtitlePreviewWaveformStatusText }}
+                            </span>
+                          </div>
+                          <div class="relative mt-2 h-10 rounded bg-gray-900/80">
+                            <button
+                              v-for="(segment, index) in editableSubtitleSegments"
+                              :key="segment.id"
+                              type="button"
+                              class="absolute top-1 h-8 cursor-grab overflow-hidden rounded border px-2 text-left text-[11px] font-bold leading-8 text-white/95 shadow-sm transition active:cursor-grabbing"
+                              :class="index === selectedSubtitleSegmentIndex ? 'border-indigo-100 bg-indigo-400' : 'border-indigo-400/40 bg-indigo-500/35 hover:bg-indigo-400/70'"
+                              :style="subtitleSegmentTimelineStyle(segment)"
+                              data-subtitle-segment-button="true"
+                              draggable="false"
+                              @pointerdown.stop="startSubtitleSegmentDrag(index, $event)"
+                              @click.stop="handleSubtitleSegmentClick(index)"
+                            >
+                              <span class="block truncate drop-shadow-sm">{{ subtitleTimelineSegmentLabel(segment) }}</span>
+                            </button>
+                          </div>
+                          <span
+                            class="pointer-events-none absolute bottom-2 top-2 z-20 w-0.5 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.7),0_0_14px_rgba(255,255,255,0.9)]"
+                            :style="{ left: `${subtitleTimelinePlayheadX}px` }"
+                          />
+                        </div>
+                      </div>
+                      <p class="mt-2 text-[11px] text-gray-500">クリック/ドラッグでシーク。字幕バーはドラッグで移動。Ctrl/⌘ + ホイールでズームできます。</p>
+                    </div>
+                  </div>
+                </div>
+
+                <aside class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-4 shadow-xl shadow-black/20 ring-1 ring-white/5">
+                  <div class="flex items-center justify-between gap-3">
+                    <h4 class="text-sm font-bold text-gray-200">字幕 cue</h4>
+                    <span class="rounded-full bg-gray-900 px-3 py-1 text-xs font-bold text-gray-400">{{ selectedSubtitleSegmentIndex + 1 }}/{{ editableSubtitleSegments.length }}</span>
+                  </div>
+                  <div class="mt-3 max-h-64 space-y-2 overflow-auto pr-1">
+                    <button
+                      v-for="(segment, index) in editableSubtitleSegments"
+                      :key="segment.id"
+                      type="button"
+                      class="w-full rounded-lg border px-3 py-2 text-left transition"
+                      :class="index === selectedSubtitleSegmentIndex ? 'border-indigo-300 bg-indigo-500/20' : 'border-gray-700 bg-gray-900 hover:bg-gray-850'"
+                      @click="selectedSubtitleSegmentIndex = index; seekSubtitlePreviewToMs(segment.startMs)"
+                    >
+                      <span class="block text-[11px] font-bold text-gray-500">{{ formatSubtitleTimestamp(segment.startMs) }} - {{ formatSubtitleTimestamp(segment.endMs) }}</span>
+                      <span class="mt-1 block truncate text-sm font-bold text-gray-100">{{ segment.text }}</span>
+                    </button>
+                  </div>
+
+                  <div v-if="selectedEditableSubtitleSegment" class="mt-4 rounded-xl border border-gray-700 bg-gray-900 p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                      <p class="text-xs font-bold text-gray-400">選択中の字幕</p>
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1 rounded-lg bg-red-500/15 px-3 py-1.5 text-xs font-bold text-red-200 hover:bg-red-500/25"
+                        @click="deleteEditableSubtitleSegment(selectedSubtitleSegmentIndex)"
+                      >
+                        <UIcon name="i-heroicons-trash" class="h-4 w-4" />
+                        削除
+                      </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                      <label class="text-xs font-bold text-gray-400">
+                        開始秒
+                        <input
+                          type="number"
+                          class="mt-1 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm font-bold text-gray-100 outline-none focus:border-indigo-400"
+                          min="0"
+                          step="0.05"
+                          :value="(selectedEditableSubtitleSegment.startMs / 1000).toFixed(2)"
+                          @change="updateEditableSubtitleSegmentSeconds(selectedSubtitleSegmentIndex, 'startMs', $event)"
+                        >
+                      </label>
+                      <label class="text-xs font-bold text-gray-400">
+                        終了秒
+                        <input
+                          type="number"
+                          class="mt-1 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm font-bold text-gray-100 outline-none focus:border-indigo-400"
+                          min="0"
+                          step="0.05"
+                          :value="(selectedEditableSubtitleSegment.endMs / 1000).toFixed(2)"
+                          @change="updateEditableSubtitleSegmentSeconds(selectedSubtitleSegmentIndex, 'endMs', $event)"
+                        >
+                      </label>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button
+                        v-for="control in subtitleTimingShiftControls"
+                        :key="control.label"
+                        type="button"
+                        class="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-bold text-gray-100 hover:bg-gray-600"
+                        @click="shiftEditableSubtitleSegment(selectedSubtitleSegmentIndex, control.deltaMs)"
+                      >
+                        {{ control.label }}
+                      </button>
+                      <button type="button" class="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-bold text-gray-100 hover:bg-gray-600" @click="seekSubtitlePreviewToMs(selectedEditableSubtitleSegment.startMs)">頭出し</button>
+                    </div>
+                    <label class="mt-3 block text-xs font-bold text-gray-400">
+                      字幕本文
+                      <textarea
+                        class="mt-1 h-28 w-full resize-none rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm font-bold leading-6 text-gray-100 outline-none focus:border-indigo-400"
+                        :value="selectedEditableSubtitleSegment.text"
+                        @input="updateEditableSubtitleSegmentText(selectedSubtitleSegmentIndex, $event)"
+                      />
+                    </label>
+                  </div>
+                </aside>
+              </section>
+
               <section v-else-if="videoAdjustmentSubStep === 'run'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
                 <div class="space-y-4">
-                  <div class="rounded-xl border border-gray-700 bg-gray-800 p-5">
+                  <div class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-5 shadow-xl shadow-black/20 ring-1 ring-white/5">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <h4 class="text-lg font-bold text-gray-100">実行内容</h4>
@@ -1512,12 +1744,12 @@
                           </div>
                           <span class="rounded-full px-3 py-1 text-xs font-bold" :class="isSubtitleGenerationEnabled ? 'bg-indigo-500/20 text-indigo-100' : 'bg-gray-800 text-gray-400'">{{ isSubtitleGenerationEnabled ? "実行" : "スキップ" }}</span>
                         </div>
-                        <p class="mt-3 text-xs leading-5 text-gray-500">{{ selectedSubtitlePreset.label }} / サイズ {{ selectedSubtitleSize.label }} / {{ subtitleCaptionSegments.length }} cues</p>
+                        <p class="mt-3 text-xs leading-5 text-gray-500">{{ selectedSubtitlePreset.label }} / サイズ {{ selectedSubtitleSize.label }} / {{ effectiveSubtitleCaptionSegments.length }} cues</p>
                       </div>
                     </div>
                   </div>
 
-                  <div class="rounded-xl border border-gray-700 bg-gray-800 p-5">
+                  <div class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-5 shadow-xl shadow-black/20 ring-1 ring-white/5">
                     <h4 class="text-base font-bold text-gray-100">処理進捗</h4>
                     <div class="mt-4 space-y-4">
                       <div>
@@ -1562,7 +1794,7 @@
                   </div>
                 </div>
 
-                <aside class="rounded-xl border border-gray-700 bg-gray-800 p-4">
+                <aside class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-4 shadow-xl shadow-black/20 ring-1 ring-white/5">
                   <h4 class="text-sm font-bold text-gray-200">入力元確認</h4>
                   <video v-if="videoAdjustmentPreviewUrl" :src="videoAdjustmentPreviewUrl" class="mt-3 aspect-video w-full rounded bg-black" controls />
                   <div v-else class="mt-3 flex aspect-video items-center justify-center rounded bg-gray-950 text-sm text-gray-500">プレビュー待ち</div>
@@ -1571,7 +1803,7 @@
               </section>
 
               <section v-else class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_34rem]">
-                <div class="rounded-xl border border-gray-700 bg-gray-800 p-5">
+                <div class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-5 shadow-xl shadow-black/20 ring-1 ring-white/5">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h4 class="text-lg font-bold text-gray-100">ダウンロード</h4>
@@ -1629,13 +1861,14 @@
                   </div>
                 </div>
 
-                <aside class="rounded-xl border border-gray-700 bg-gray-800 p-4">
+                <aside class="video-editor-dark-panel rounded-xl border border-gray-700/80 bg-gray-900/90 p-4 shadow-xl shadow-black/20 ring-1 ring-white/5">
                   <h4 class="text-sm font-bold text-gray-200">結果プレビュー</h4>
                   <video v-if="videoAdjustmentPreviewUrl" :src="videoAdjustmentPreviewUrl" class="mt-3 aspect-video w-full rounded bg-black" controls />
                   <div v-else class="mt-3 flex aspect-video items-center justify-center rounded bg-gray-950 text-sm text-gray-500">プレビュー待ち</div>
                   <p class="mt-3 text-xs leading-5 text-gray-500">優先表示: 字幕付き動画 → 無音カット版動画 → 字幕なし最終動画。現在は {{ videoAdjustmentPreviewLabel }} を表示しています。</p>
                 </aside>
               </section>
+            </div>
             </div>
           </div>
 
@@ -1714,7 +1947,7 @@
             <div class="min-h-0 flex-1 overflow-auto p-4">
               <div
                 ref="timelineContainer"
-                class="relative h-44 min-w-full rounded-lg border border-gray-700 bg-gray-900 select-none"
+                class="video-editor-dark-panel relative h-44 min-w-full rounded-lg border border-gray-700 bg-gray-900 select-none"
                 :class="isDraggingPlayhead ? 'cursor-grabbing' : 'cursor-crosshair'"
                 :style="{ width: `${timelineWidth}px` }"
                 @pointerdown="handleTimelinePointerDown"
@@ -1767,7 +2000,7 @@
                   <div class="absolute -top-1 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-red-300 ring-2 ring-red-100/80" />
                 </div>
               </div>
-              <div v-if="timelineWaveformSegments.length > 0" class="mt-4 rounded-lg border border-gray-700 bg-gray-900 p-3">
+              <div v-if="timelineWaveformSegments.length > 0" class="video-editor-dark-panel mt-4 rounded-lg border border-gray-700 bg-gray-900 p-3">
                 <div class="mb-2 flex items-center justify-between">
                   <span class="text-xs font-bold text-gray-300">録音波形</span>
                   <span class="text-xs text-gray-500">{{ timelineWaveformSegments.length }} tracks</span>
@@ -2307,7 +2540,7 @@ type ExportProgressItem = {
   status: ExportProgressStatus;
 };
 type ExportReviewTab = "overview" | "sections" | "assets";
-type VideoAdjustmentSubStep = "silence_settings" | "subtitle_settings" | "run" | "download";
+type VideoAdjustmentSubStep = "silence_settings" | "subtitle_settings" | "subtitle_timing" | "run" | "download";
 type SilenceCutSettingKey = "thresholdDb" | "minSilenceMs" | "keepPaddingMs" | "minSegmentMs";
 type ExportAssetKind = "final_video" | "silence_cut_video" | "silence_cut_manifest" | "subtitled_video" | "subtitle_srt" | "subtitle_ass" | "section_video" | "ai_audio" | "recording_audio";
 type ExportAsset = {
@@ -2348,6 +2581,9 @@ type SubtitleSegmentInput = {
   endMs: number;
   text: string;
 };
+type EditableSubtitleSegment = SubtitleSegmentInput & {
+  id: string;
+};
 type SubtitleCueDraft = {
   text: string;
   weight: number;
@@ -2367,6 +2603,7 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const screenRecordingLiveVideo = ref<HTMLVideoElement | null>(null);
 const detailVideoPlayer = ref<HTMLVideoElement | null>(null);
 const editorVideo = ref<HTMLVideoElement | null>(null);
+const subtitlePreviewVideo = ref<HTMLVideoElement | null>(null);
 const recordingPlaybackAudio = ref<HTMLAudioElement | null>(null);
 const timingPlaybackAudio = ref<HTMLAudioElement | null>(null);
 const timelineContainer = ref<HTMLDivElement | null>(null);
@@ -2416,6 +2653,7 @@ const activeTtsRequestKeys = ref<Record<string, boolean>>({});
 const isBulkTtsProcessing = ref(false);
 const ttsAudioUrlCache = ref<Record<string, string>>({});
 const ttsWaveformCache = ref<Record<string, number[]>>({});
+const ttsWaveformErrorMap = ref<Record<string, string>>({});
 const playingTtsKey = ref<string | null>(null);
 const playingVoiceName = ref<string | null>(null);
 const voicePreviewUrlCache = ref<Record<string, string>>({});
@@ -2430,6 +2668,18 @@ const isBulkDownloadingAssets = ref(false);
 const bulkDownloadMessage = ref("");
 const subtitleProgressItems = ref<ExportProgressItem[]>([]);
 const silenceCutProgressItems = ref<ExportProgressItem[]>([]);
+const editableSubtitleSegments = ref<EditableSubtitleSegment[]>([]);
+const selectedSubtitleSegmentIndex = ref(0);
+const subtitleEditorDirty = ref(false);
+const subtitlePreviewCurrentTime = ref(0);
+const subtitlePreviewVideoDurationSeconds = ref(0);
+const subtitleTimelineScroller = ref<HTMLDivElement | null>(null);
+const subtitleTimelineZoomPxPerSecond = ref(18);
+const isSubtitleSegmentDragging = ref(false);
+const suppressSubtitleSegmentClick = ref(false);
+const subtitlePreviewWaveformCache = ref<Record<string, number[]>>({});
+const subtitlePreviewWaveformLoadingKey = ref("");
+const subtitlePreviewWaveformErrorMap = ref<Record<string, string>>({});
 const exportProgress = reactive({
   message: "書き出し待機中です。",
 });
@@ -2510,6 +2760,15 @@ const sectionEndSeconds = (section: Pick<VideoStudioSection, "startTime" | "endT
 
 const sectionDurationSeconds = (section: Pick<VideoStudioSection, "startTime" | "endTime">): number =>
   Math.max(0, sectionEndSeconds(section) - sectionStartSeconds(section));
+
+const sectionSubtitleCues = (section: VideoStudioSection): VideoStudioSection["sourceTranscriptCues"] =>
+  [...(section.sourceTranscriptCues ?? [])]
+    .map((cue) => ({
+      ...cue,
+      text: cleanVideoEditorText(cue.text),
+    }))
+    .filter((cue) => cue.text && cue.endMs > cue.startMs)
+    .sort((a, b) => a.startMs - b.startMs || a.index - b.index);
 
 const narrationStartSecondsInSection = (
   section: Pick<VideoStudioSection, "startTime" | "endTime">,
@@ -2592,9 +2851,22 @@ const videoAdjustmentSubStepOptions: Array<{
 }> = [
   { key: "silence_settings", title: "無音カット設定", description: "使う/使わないと検出条件" },
   { key: "subtitle_settings", title: "字幕設定", description: "スタイルとサイズ" },
+  { key: "subtitle_timing", title: "字幕微調整", description: "タイミングと本文" },
   { key: "run", title: "実行", description: "選択した処理を連続実行" },
   { key: "download", title: "ダウンロード", description: "成果物の確認と保存" },
 ];
+const videoAdjustmentCurrentSubStepOption = computed(() =>
+  videoAdjustmentSubStepOptions.find((step) => step.key === videoAdjustmentSubStep.value) ?? videoAdjustmentSubStepOptions[0]!
+);
+const videoAdjustmentCurrentStepIndex = computed(() =>
+  Math.max(0, videoAdjustmentSubStepOptions.findIndex((step) => step.key === videoAdjustmentSubStep.value))
+);
+const videoAdjustmentCurrentStepTitle = computed(() => videoAdjustmentCurrentSubStepOption.value.title);
+const videoAdjustmentCurrentStepDescription = computed(() => videoAdjustmentCurrentSubStepOption.value.description);
+const subtitleTimingShiftControls = [-100, 100, -300, 300, -500, 500, -1000, 1000].map((deltaMs) => ({
+  deltaMs,
+  label: `${deltaMs > 0 ? "+" : "-"}${Math.abs(deltaMs) / 1000}s`,
+}));
 const silenceCutSettingControls: Array<{
   key: SilenceCutSettingKey;
   label: string;
@@ -3287,6 +3559,18 @@ const videoAdjustmentPreviewUrl = computed(() => {
   if (store.selectedProjectSilenceCutOutputUrl) return store.selectedProjectSilenceCutOutputUrl;
   return store.selectedProjectOutputUrl;
 });
+const videoAdjustmentPreviewAsset = computed<ExportAsset | null>(() => {
+  if (store.selectedProjectSubtitleOutputUrl && subtitledVideoExportAsset.value?.ready) return subtitledVideoExportAsset.value;
+  if (store.selectedProjectSilenceCutOutputUrl && silenceCutVideoExportAsset.value?.ready) return silenceCutVideoExportAsset.value;
+  if (store.selectedProjectOutputUrl && finalVideoExportAsset.value?.ready) return finalVideoExportAsset.value;
+  return null;
+});
+const subtitlePreviewWaveformKey = computed(() => {
+  const asset = videoAdjustmentPreviewAsset.value;
+  if (asset?.bucketName && asset.filePath) return `gs://${asset.bucketName}/${asset.filePath}`;
+  if (asset?.filePath) return asset.filePath;
+  return videoAdjustmentPreviewUrl.value || "";
+});
 const videoAdjustmentPreviewLabel = computed(() => {
   if (store.selectedProjectSubtitleOutputUrl) return "字幕付き動画";
   if (store.selectedProjectSilenceCutOutputUrl) return "無音カット版動画";
@@ -3309,17 +3593,94 @@ const videoAdjustmentReadyDownloadAssets = computed(() =>
   videoAdjustmentDownloadAssets.value.filter((asset) => asset.ready)
 );
 const subtitleCaptionSegments = computed<SubtitleSegmentInput[]>(() => buildSubtitleCaptionSegments());
+const effectiveSubtitleCaptionSegments = computed<SubtitleSegmentInput[]>(() => {
+  const source = subtitleEditorDirty.value ? editableSubtitleSegments.value : subtitleCaptionSegments.value;
+  return normalizeSubtitleSegmentTimeline(
+    source
+      .map((segment) => ({
+        startMs: Math.max(0, Math.round(Number(segment.startMs))),
+        endMs: Math.max(0, Math.round(Number(segment.endMs))),
+        text: cleanVideoEditorText(segment.text),
+      }))
+      .filter((segment) => segment.text && segment.endMs > segment.startMs)
+  );
+});
+const selectedEditableSubtitleSegment = computed<EditableSubtitleSegment | null>(
+  () => editableSubtitleSegments.value[selectedSubtitleSegmentIndex.value] ?? null
+);
+const activeSubtitlePreviewSegment = computed(() => {
+  const currentMs = subtitlePreviewCurrentTime.value * 1000;
+  return effectiveSubtitleCaptionSegments.value.find((segment) =>
+    currentMs >= segment.startMs && currentMs <= segment.endMs
+  ) ?? null;
+});
+const subtitlePreviewMediaDurationSeconds = computed(() => {
+  const trackedDuration = safeNonNegativeSeconds(subtitlePreviewVideoDurationSeconds.value);
+  if (trackedDuration > 0) return trackedDuration;
+  const elementDuration = safeNonNegativeSeconds(subtitlePreviewVideo.value?.duration);
+  if (elementDuration > 0) return elementDuration;
+  return 0;
+});
+const subtitlePreviewTimelineDurationMs = computed(() => {
+  const cueEnd = Math.max(0, ...effectiveSubtitleCaptionSegments.value.map((segment) => segment.endMs));
+  const mediaDuration = subtitlePreviewMediaDurationSeconds.value * 1000;
+  if (mediaDuration > 0) return Math.max(mediaDuration, 1000);
+  const previewCurrent = safeNonNegativeSeconds(subtitlePreviewCurrentTime.value) * 1000;
+  const projectDuration = videoAdjustmentPreviewUrl.value
+    ? 0
+    : safeNonNegativeSeconds(store.selectedVideo?.duration) * 1000;
+  return Math.max(cueEnd, previewCurrent, projectDuration, 1000);
+});
+const subtitleTimelineWidthPx = computed(() =>
+  Math.max(720, Math.ceil((subtitlePreviewTimelineDurationMs.value / 1000) * subtitleTimelineZoomPxPerSecond.value))
+);
+const subtitleTimelinePxPerMs = computed(() =>
+  subtitleTimelineWidthPx.value / Math.max(1, subtitlePreviewTimelineDurationMs.value)
+);
+const subtitleTimelinePlayheadX = computed(() =>
+  Math.max(
+    0,
+    Math.min(
+      subtitleTimelineWidthPx.value,
+      subtitleTimelineMsToPx(subtitlePreviewCurrentTime.value * 1000)
+    )
+  )
+);
+const subtitleTimelineMsToPx = (milliseconds: number): number =>
+  Math.max(0, Math.min(subtitleTimelineWidthPx.value, milliseconds * subtitleTimelinePxPerMs.value));
+const subtitleTimelinePxToMs = (pixels: number): number =>
+  Math.max(0, Math.min(subtitlePreviewTimelineDurationMs.value, pixels / subtitleTimelinePxPerMs.value));
+const subtitleTimelineDeltaPxToMs = (pixels: number): number =>
+  pixels / Math.max(0.0001, subtitleTimelinePxPerMs.value);
+const clampSubtitlePreviewMs = (milliseconds: number): number =>
+  Math.max(0, Math.min(subtitlePreviewTimelineDurationMs.value, safeFiniteNumber(milliseconds)));
+const subtitlePreviewWaveformBars = computed<WaveformBar[]>(() => {
+  const key = subtitlePreviewWaveformKey.value;
+  const waveform = key ? normalizedWaveform(subtitlePreviewWaveformCache.value[key]) : [];
+  return resampleWaveformBars(
+    waveform,
+    Math.max(96, Math.ceil(subtitleTimelineWidthPx.value / 9)),
+    `subtitle-preview-${key || "empty"}`
+  );
+});
+const subtitlePreviewWaveformStatusText = computed(() => {
+  const key = subtitlePreviewWaveformKey.value;
+  if (!key) return "動画の読み込み待ちです";
+  if (subtitlePreviewWaveformLoadingKey.value === key) return "音声波形を解析中...";
+  if (subtitlePreviewWaveformErrorMap.value[key]) return "音声波形を表示できません";
+  return "音声波形がありません";
+});
 const videoAdjustmentCanRun = computed(() => {
   if (!finalVideoExportAsset.value?.ready) return false;
   if (activeRequest.value) return false;
   if (!isSilenceCutEnabled.value && !isSubtitleGenerationEnabled.value) return true;
-  if (isSubtitleGenerationEnabled.value && subtitleCaptionSegments.value.length === 0) return false;
+  if (isSubtitleGenerationEnabled.value && effectiveSubtitleCaptionSegments.value.length === 0) return false;
   return true;
 });
 const videoAdjustmentRunDisabledReason = computed(() => {
   if (!finalVideoExportAsset.value?.ready) return "最終動画の書き出し完了後に実行できます。";
   if (activeRequest.value) return "処理中です。完了まで設定変更はできません。";
-  if (isSubtitleGenerationEnabled.value && subtitleCaptionSegments.value.length === 0) {
+  if (isSubtitleGenerationEnabled.value && effectiveSubtitleCaptionSegments.value.length === 0) {
     return "字幕に使えるAIナレーション本文がありません。字幕をOFFにするか、AIナレーションを確認してください。";
   }
   return "";
@@ -3428,6 +3789,16 @@ watch(
 );
 
 watch(
+  () => store.selectedProject?.id ?? "",
+  () => {
+    editableSubtitleSegments.value = [];
+    selectedSubtitleSegmentIndex.value = 0;
+    subtitleEditorDirty.value = false;
+    subtitlePreviewCurrentTime.value = 0;
+  }
+);
+
+watch(
   () => [aiNarrationMode.value, selectedSectionIndex.value, isAiNarrationStep.value] as const,
   ([mode, _sectionIndex, isNarrationStep]) => {
     if (mode !== "timing" || !isNarrationStep) {
@@ -3464,26 +3835,6 @@ const isWorkflowStepCompleted = (step: WorkflowStepKey): boolean => {
   if (step === "voice_generation" && allNarrationSectionsFixed.value) return true;
   if (step === "subtitle" && subtitleOutput.value) return true;
   return Boolean(store.selectedProject?.completedSteps?.includes(step));
-};
-
-const workflowStepClass = (step: WorkflowStepKey, index: number): string => {
-  if (isWorkflowStepCompleted(step)) {
-    return "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200";
-  }
-  if (currentWorkflowIndex.value === index) {
-    return "bg-white text-gray-900 shadow-sm ring-1 ring-inset ring-indigo-200";
-  }
-  return "text-gray-500 hover:bg-white/70";
-};
-
-const workflowStepBadgeClass = (step: WorkflowStepKey, index: number): string => {
-  if (isWorkflowStepCompleted(step)) {
-    return "bg-emerald-500 text-white ring-emerald-200";
-  }
-  if (currentWorkflowIndex.value >= index) {
-    return "bg-indigo-500 text-white ring-indigo-200";
-  }
-  return "bg-gray-100 text-gray-500 ring-gray-200";
 };
 
 const timelineThumbnail = (
@@ -4206,8 +4557,232 @@ const selectSubtitleSize = async (sizeKey: SubtitleSizeKey): Promise<void> => {
 const setVideoAdjustmentSubStep = (step: VideoAdjustmentSubStep): void => {
   if (activeRequest.value) return;
   if (step !== "silence_settings" && !finalVideoExportAsset.value?.ready) return;
+  if (step === "subtitle_timing") {
+    if (!isSubtitleGenerationEnabled.value) {
+      videoAdjustmentSubStep.value = "run";
+      return;
+    }
+    ensureEditableSubtitleSegments();
+  }
   videoAdjustmentSubStep.value = step;
 };
+
+const videoAdjustmentSubStepDisabled = (step: VideoAdjustmentSubStep): boolean =>
+  Boolean(activeRequest.value) || (step !== "silence_settings" && !finalVideoExportAsset.value?.ready);
+
+const createEditableSubtitleSegmentId = (segment: SubtitleSegmentInput, index: number): string =>
+  `subtitle_${index}_${segment.startMs}_${segment.endMs}`;
+
+const ensureEditableSubtitleSegments = (): void => {
+  if (editableSubtitleSegments.value.length > 0 && subtitleEditorDirty.value) return;
+  editableSubtitleSegments.value = subtitleCaptionSegments.value.map((segment, index) => ({
+    ...segment,
+    text: cleanVideoEditorText(segment.text),
+    id: createEditableSubtitleSegmentId(segment, index),
+  }));
+  selectedSubtitleSegmentIndex.value = Math.min(
+    selectedSubtitleSegmentIndex.value,
+    Math.max(0, editableSubtitleSegments.value.length - 1)
+  );
+};
+
+const resetEditableSubtitleSegments = (): void => {
+  editableSubtitleSegments.value = subtitleCaptionSegments.value.map((segment, index) => ({
+    ...segment,
+    text: cleanVideoEditorText(segment.text),
+    id: createEditableSubtitleSegmentId(segment, index),
+  }));
+  selectedSubtitleSegmentIndex.value = 0;
+  subtitleEditorDirty.value = false;
+};
+
+const updateEditableSubtitleSegment = (
+  index: number,
+  updates: Partial<SubtitleSegmentInput>
+): void => {
+  const segment = editableSubtitleSegments.value[index];
+  if (!segment) return;
+  const nextStartMs = Math.max(0, Math.round(Number(updates.startMs ?? segment.startMs)));
+  const nextEndMs = Math.max(nextStartMs + SUBTITLE_MIN_CUE_MS, Math.round(Number(updates.endMs ?? segment.endMs)));
+  editableSubtitleSegments.value = editableSubtitleSegments.value.map((item, itemIndex) =>
+    itemIndex === index
+      ? {
+          ...item,
+          startMs: nextStartMs,
+          endMs: nextEndMs,
+          text: updates.text !== undefined ? cleanVideoEditorText(updates.text) : item.text,
+        }
+      : item
+  );
+  subtitleEditorDirty.value = true;
+};
+
+const updateEditableSubtitleSegmentSeconds = (
+  index: number,
+  key: "startMs" | "endMs",
+  event: Event
+): void => {
+  const input = event.target as HTMLInputElement | null;
+  const seconds = Number(input?.value);
+  if (!Number.isFinite(seconds)) return;
+  updateEditableSubtitleSegment(index, { [key]: seconds * 1000 });
+};
+
+const updateEditableSubtitleSegmentText = (index: number, event: Event): void => {
+  const input = event.target as HTMLTextAreaElement | null;
+  updateEditableSubtitleSegment(index, { text: input?.value ?? "" });
+};
+
+const deleteEditableSubtitleSegment = (index: number): void => {
+  if (!editableSubtitleSegments.value[index]) return;
+  editableSubtitleSegments.value = editableSubtitleSegments.value.filter((_, itemIndex) => itemIndex !== index);
+  selectedSubtitleSegmentIndex.value = Math.min(
+    index,
+    Math.max(0, editableSubtitleSegments.value.length - 1)
+  );
+  subtitleEditorDirty.value = true;
+};
+
+const shiftEditableSubtitleSegment = (index: number, deltaMs: number): void => {
+  const segment = editableSubtitleSegments.value[index];
+  if (!segment) return;
+  const durationMs = Math.max(SUBTITLE_MIN_CUE_MS, segment.endMs - segment.startMs);
+  const startMs = Math.max(0, segment.startMs + deltaMs);
+  updateEditableSubtitleSegment(index, {
+    startMs,
+    endMs: startMs + durationMs,
+  });
+};
+
+const snapSubtitleTimelineMs = (milliseconds: number): number =>
+  Math.round(milliseconds / SUBTITLE_TIMELINE_DRAG_SNAP_MS) * SUBTITLE_TIMELINE_DRAG_SNAP_MS;
+
+const subtitleTimelineSegmentLabel = (segment: SubtitleSegmentInput): string =>
+  cleanVideoEditorText(segment.text).slice(0, 32);
+
+const subtitleSegmentTimelineStyle = (segment: SubtitleSegmentInput): Record<string, string> => ({
+  left: `${subtitleTimelineMsToPx(segment.startMs)}px`,
+  width: `${Math.max(14, subtitleTimelineMsToPx(segment.endMs) - subtitleTimelineMsToPx(segment.startMs))}px`,
+});
+
+const adjustSubtitleTimelineZoom = (delta: number): void => {
+  subtitleTimelineZoomPxPerSecond.value = Math.max(
+    6,
+    Math.min(96, Math.round(subtitleTimelineZoomPxPerSecond.value + delta))
+  );
+};
+
+const subtitleTimelineEventToMs = (event: PointerEvent | WheelEvent): number => {
+  const scroller = subtitleTimelineScroller.value;
+  if (!scroller) return 0;
+  const rect = scroller.getBoundingClientRect();
+  const localX = event.clientX - rect.left + scroller.scrollLeft;
+  return clampSubtitlePreviewMs(subtitleTimelinePxToMs(localX));
+};
+
+const handleSubtitleTimelineWheel = (event: WheelEvent): void => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  event.preventDefault();
+  const beforeMs = subtitleTimelineEventToMs(event);
+  const beforeZoom = subtitleTimelineZoomPxPerSecond.value;
+  adjustSubtitleTimelineZoom(event.deltaY < 0 ? 4 : -4);
+  const scroller = subtitleTimelineScroller.value;
+  if (!scroller || beforeZoom === subtitleTimelineZoomPxPerSecond.value) return;
+  const rect = scroller.getBoundingClientRect();
+  const targetX = subtitleTimelineMsToPx(beforeMs);
+  scroller.scrollLeft = Math.max(0, targetX - (event.clientX - rect.left));
+};
+
+const handleSubtitleTimelinePointerDown = (event: PointerEvent): void => {
+  if (event.button !== 0) return;
+  if (isSubtitleSegmentDragging.value) return;
+  const target = event.target;
+  if (target instanceof Element && target.closest("[data-subtitle-segment-button='true']")) return;
+  const seekFromEvent = (pointerEvent: PointerEvent): void => {
+    seekSubtitlePreviewToMs(subtitleTimelineEventToMs(pointerEvent));
+  };
+  seekFromEvent(event);
+  const handleMove = (moveEvent: PointerEvent): void => seekFromEvent(moveEvent);
+  const handleUp = (): void => {
+    window.removeEventListener("pointermove", handleMove);
+    window.removeEventListener("pointerup", handleUp);
+  };
+  window.addEventListener("pointermove", handleMove);
+  window.addEventListener("pointerup", handleUp, { once: true });
+};
+
+const handleSubtitleSegmentClick = (index: number): void => {
+  selectedSubtitleSegmentIndex.value = index;
+  if (suppressSubtitleSegmentClick.value) suppressSubtitleSegmentClick.value = false;
+};
+
+const startSubtitleSegmentDrag = (index: number, event: PointerEvent): void => {
+  if (event.button !== 0) return;
+  const segment = editableSubtitleSegments.value[index];
+  if (!segment) return;
+  event.preventDefault();
+  selectedSubtitleSegmentIndex.value = index;
+  isSubtitleSegmentDragging.value = true;
+  suppressSubtitleSegmentClick.value = false;
+  const target = event.currentTarget as HTMLElement | null;
+  target?.setPointerCapture?.(event.pointerId);
+  const startClientX = event.clientX;
+  const initialStartMs = segment.startMs;
+  const initialEndMs = segment.endMs;
+  const durationMs = Math.max(SUBTITLE_MIN_CUE_MS, initialEndMs - initialStartMs);
+  const maxStartMs = Math.max(0, subtitlePreviewTimelineDurationMs.value - durationMs);
+  const handleMove = (moveEvent: PointerEvent): void => {
+    moveEvent.preventDefault();
+    const deltaMs = subtitleTimelineDeltaPxToMs(moveEvent.clientX - startClientX);
+    if (Math.abs(moveEvent.clientX - startClientX) > 2) suppressSubtitleSegmentClick.value = true;
+    const nextStartMs = Math.max(0, Math.min(maxStartMs, snapSubtitleTimelineMs(initialStartMs + deltaMs)));
+    updateEditableSubtitleSegment(index, {
+      startMs: nextStartMs,
+      endMs: nextStartMs + durationMs,
+    });
+  };
+  const handleUp = (upEvent: PointerEvent): void => {
+    target?.releasePointerCapture?.(upEvent.pointerId);
+    isSubtitleSegmentDragging.value = false;
+    window.removeEventListener("pointermove", handleMove);
+    window.removeEventListener("pointerup", handleUp);
+    if (suppressSubtitleSegmentClick.value) {
+      window.setTimeout(() => {
+        suppressSubtitleSegmentClick.value = false;
+      }, 0);
+    }
+  };
+  window.addEventListener("pointermove", handleMove);
+  window.addEventListener("pointerup", handleUp, { once: true });
+};
+
+const seekSubtitlePreviewToMs = (timestampMs: number): void => {
+  const seconds = clampSubtitlePreviewMs(timestampMs) / 1000;
+  subtitlePreviewCurrentTime.value = seconds;
+  if (subtitlePreviewVideo.value) subtitlePreviewVideo.value.currentTime = seconds;
+};
+
+const subtitlePreviewVideoFromEvent = (event?: Event): HTMLVideoElement | null => {
+  const target = event?.currentTarget;
+  if (target instanceof HTMLVideoElement) return target;
+  return subtitlePreviewVideo.value;
+};
+
+const syncSubtitlePreviewTime = (event?: Event): void => {
+  const video = subtitlePreviewVideoFromEvent(event);
+  subtitlePreviewCurrentTime.value = clampSubtitlePreviewMs(
+    safeNonNegativeSeconds(video?.currentTime) * 1000
+  ) / 1000;
+};
+
+const handleSubtitlePreviewMetadata = (event?: Event): void => {
+  const video = subtitlePreviewVideoFromEvent(event);
+  subtitlePreviewVideoDurationSeconds.value = safeNonNegativeSeconds(video?.duration);
+  syncSubtitlePreviewTime(event);
+};
+
+const formatSubtitleTimestamp = (milliseconds: number): string =>
+  formatDuration(Math.max(0, milliseconds / 1000));
 
 const updateSilenceCutSettings = async (
   updates: Partial<{
@@ -4288,6 +4863,16 @@ const moveToRunSettings = async (): Promise<void> => {
   setVideoAdjustmentSubStep("run");
 };
 
+const moveToSubtitleTiming = async (): Promise<void> => {
+  if (!isSubtitleGenerationEnabled.value) {
+    await updateSubtitleEnabled(false);
+    setVideoAdjustmentSubStep("run");
+    return;
+  }
+  ensureEditableSubtitleSegments();
+  setVideoAdjustmentSubStep("subtitle_timing");
+};
+
 const SUBTITLE_TARGET_CHARS_PER_SECOND = 7;
 const SUBTITLE_MIN_CUE_SECONDS = 1.8;
 const SUBTITLE_MAX_CUE_SECONDS = 6.2;
@@ -4295,6 +4880,7 @@ const SUBTITLE_VISUAL_MAX_CHARS = 42;
 const SUBTITLE_VISUAL_MIN_CHARS = 18;
 const SUBTITLE_CUE_GAP_MS = 80;
 const SUBTITLE_MIN_CUE_MS = 1300;
+const SUBTITLE_TIMELINE_DRAG_SNAP_MS = 100;
 const SUBTITLE_SENTENCE_END_PATTERN = /[^。！？!?]+[。！？!?]?/g;
 const SUBTITLE_SOFT_BREAK_CHARS = new Set(["、", "，", ",", "・", "／", "/", " "]);
 const SUBTITLE_PARTICLE_BREAK_CHARS = new Set([
@@ -4309,7 +4895,21 @@ const SUBTITLE_PARTICLE_BREAK_CHARS = new Set([
   "や",
 ]);
 
-const normalizeSubtitleText = (text: string): string => text.replace(/\s+/g, " ").trim();
+const JAPANESE_TEXT_CHAR_PATTERN = "[\\p{Script=Hiragana}\\p{Script=Katakana}\\p{Script=Han}ー々〆〤]";
+
+const cleanVideoEditorText = (text: string): string => {
+  const japaneseChar = JAPANESE_TEXT_CHAR_PATTERN;
+  return String(text || "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(new RegExp(`(${japaneseChar})\\s+(${japaneseChar})`, "gu"), "$1$2")
+    .replace(/\s+([、。！？!?，,.])/g, "$1")
+    .replace(/([「『（(［[])\s+/g, "$1")
+    .replace(/\s+([」』）)］\]])/g, "$1")
+    .trim();
+};
+
+const normalizeSubtitleText = (text: string): string => cleanVideoEditorText(text);
 
 const findSubtitleBreakIndex = (text: string, maxChars: number): number => {
   const searchEnd = Math.min(maxChars, text.length - 1);
@@ -4443,23 +5043,39 @@ const buildSubtitleCaptionSegments = (): SubtitleSegmentInput[] => {
   let sectionOffsetSeconds = 0;
   for (const section of editorSections.value) {
     const sectionDuration = Math.max(0.1, section.endTime - section.startTime);
-    for (const [segmentIndex, narration] of section.finalyNarrations.entries()) {
-      const text = (narration.rewrittenText || narration.originalText || "").trim();
-      if (!text) continue;
-      const startSeconds = sectionOffsetSeconds + Math.max(
-        0,
-        Number(narration.startSeconds ?? segmentIndex * 0.1)
-      );
-      const durationSeconds = Math.max(
-        1,
-        Number(narration.requestOutput?.durationSeconds ?? narration.endSeconds ?? 0) ||
-          Math.min(8, Math.max(1.8, text.length / 9))
-      );
-      const endLimit = sectionOffsetSeconds + sectionDuration;
-      const endSeconds = Math.min(endLimit, startSeconds + durationSeconds);
-      if (endSeconds <= startSeconds) continue;
-      const chunks = splitSubtitleText(text, endSeconds - startSeconds);
-      segments.push(...allocateSubtitleCueDrafts(chunks, startSeconds, endSeconds));
+    const transcriptCues = sectionSubtitleCues(section);
+    if (transcriptCues.length > 0) {
+      for (const cue of transcriptCues) {
+        const relativeStart = Math.max(0, cue.startMs / 1000 - section.startTime);
+        const relativeEnd = Math.min(
+          sectionDuration,
+          Math.max(relativeStart + 0.1, cue.endMs / 1000 - section.startTime)
+        );
+        if (relativeEnd <= relativeStart) continue;
+        const cueStartSeconds = sectionOffsetSeconds + relativeStart;
+        const cueEndSeconds = sectionOffsetSeconds + relativeEnd;
+        const chunks = splitSubtitleText(cue.text, cueEndSeconds - cueStartSeconds);
+        segments.push(...allocateSubtitleCueDrafts(chunks, cueStartSeconds, cueEndSeconds));
+      }
+    } else {
+      for (const [segmentIndex, narration] of section.finalyNarrations.entries()) {
+        const text = cleanVideoEditorText(narration.rewrittenText || narration.originalText || "");
+        if (!text) continue;
+        const startSeconds = sectionOffsetSeconds + Math.max(
+          0,
+          Number(narration.startSeconds ?? segmentIndex * 0.1)
+        );
+        const durationSeconds = Math.max(
+          1,
+          Number(narration.requestOutput?.durationSeconds ?? narration.endSeconds ?? 0) ||
+            Math.min(8, Math.max(1.8, text.length / 9))
+        );
+        const endLimit = sectionOffsetSeconds + sectionDuration;
+        const endSeconds = Math.min(endLimit, startSeconds + durationSeconds);
+        if (endSeconds <= startSeconds) continue;
+        const chunks = splitSubtitleText(text, endSeconds - startSeconds);
+        segments.push(...allocateSubtitleCueDrafts(chunks, startSeconds, endSeconds));
+      }
     }
     sectionOffsetSeconds += sectionDuration;
   }
@@ -4616,7 +5232,7 @@ const requestSubtitleGeneration = async (
   const video = store.selectedVideo;
   const finalVideoPath = subtitleSourceVideoExportAsset.value;
   if (!project || !video || !finalVideoPath) return;
-  const captionSegments = subtitleCaptionSegments.value;
+  const captionSegments = effectiveSubtitleCaptionSegments.value;
   if (captionSegments.length === 0) {
     requestNotice.value = {
       kind: "error",
@@ -5278,6 +5894,18 @@ const createProject = async (): Promise<void> => {
     openAfterCreate: projectForm.videoAudioType !== "with_audio",
   });
   if (projectForm.videoAudioType === "with_audio") {
+    const transcriptSections = buildSectionsFromSelectedVideoTranscript(projectId);
+    if (transcriptSections.length > 0 && store.selectedVideo) {
+      await store.openProject(store.selectedVideo.id, projectId);
+      await store.saveSections(transcriptSections);
+      await store.updateProject(store.selectedVideo.id, projectId, {
+        currentStep: "section_split",
+        completedSteps: ["section_split"],
+      });
+      resetProjectCreateState();
+      isProjectCreateModalOpen.value = false;
+      return;
+    }
     createdProjectIdForAutoSection.value = projectId;
     await startAutoSection(projectId);
     return;
@@ -5307,6 +5935,182 @@ const closeProjectCreateModal = (): void => {
   cleanupAutoSectionWatcher();
   resetProjectCreateState();
   isProjectCreateModalOpen.value = false;
+};
+
+const buildSectionsFromSelectedVideoTranscript = (projectId: string): VideoStudioSection[] => {
+  const video = store.selectedVideo;
+  const source = selectedVideoStorageSourceInfo();
+  const transcriptSegments = [...(video?.transcriptSegments ?? [])]
+    .map((segment, index) => ({
+      ...segment,
+      index: Number.isFinite(segment.index) ? segment.index : index + 1,
+      startMs: Math.max(0, Number(segment.startMs)),
+      endMs: Math.max(0, Number(segment.endMs)),
+      text: cleanVideoEditorText(segment.text),
+    }))
+    .filter((segment) => segment.text && segment.endMs > segment.startMs)
+    .sort((a, b) => a.startMs - b.startMs || a.index - b.index);
+  if (!video || !source || transcriptSegments.length === 0) return [];
+
+  const groups = groupVideoTranscriptCuesIntoChapters(transcriptSegments);
+
+  const durationSeconds = Math.max(
+    safeNonNegativeSeconds(video.duration),
+    (transcriptSegments.at(-1)?.endMs ?? 0) / 1000
+  );
+  const sections: VideoStudioSection[] = [];
+  for (const [index, group] of groups.entries()) {
+    const first = group[0];
+    const last = group.at(-1);
+    if (!first || !last) continue;
+    const nextFirst = groups[index + 1]?.[0] ?? null;
+    const startTime = index === 0 ? 0 : Math.max(0, first.startMs / 1000);
+    const endTime = Math.max(
+      startTime + 0.1,
+      nextFirst ? nextFirst.startMs / 1000 : durationSeconds || last.endMs / 1000
+    );
+    const transcript = cleanVideoEditorText(group.map((cue) => cue.text).filter(Boolean).join(" "));
+    const segmentInfo = {
+      bucketName: source.bucketName,
+      gcsFilePath: source.filePath,
+      segmentNumber: index,
+      startTime,
+      endTime,
+      duration: Math.max(0, endTime - startTime),
+      sizeBytes: 0,
+    };
+    const narrationGroups = groupVideoTranscriptCuesForNarration(group);
+    sections.push({
+      id: `transcript_chapter_${projectId}_${index + 1}`,
+      index,
+      title: chapterTitleFromText(transcript, index),
+      memo: "SRT字幕から作成したチャプター",
+      sourceKind: "transcript_chapter",
+      sourceTranscriptCueIds: group.map((cue) => cue.id),
+      sourceTranscriptCues: group.map((cue) => ({ ...cue })),
+      startTime,
+      endTime,
+      splitVideo: segmentInfo,
+      videoSegment: segmentInfo,
+      recording: {
+        recordingId: `source-transcript-${projectId}-${index + 1}`,
+        audioBucketName: source.bucketName,
+        audioFilePath: source.filePath,
+        audioContentType: "video/mp4",
+        audioSizeBytes: 0,
+        durationSeconds: Math.max(0, endTime - startTime),
+        waveform: [],
+        transcriptionStatus: "completed",
+        transcript,
+      },
+      finalyNarrations: narrationGroups.map((narrationGroup, narrationIndex) => {
+        const narrationFirst = narrationGroup[0]!;
+        const narrationLast = narrationGroup.at(-1)!;
+        const text = cleanVideoEditorText(narrationGroup.map((cue) => cue.text).filter(Boolean).join(" "));
+        const startSeconds = Math.max(0, narrationFirst.startMs / 1000 - startTime);
+        const endSeconds = Math.max(startSeconds, narrationLast.endMs / 1000 - startTime);
+        return {
+          id: `narration_${projectId}_${index + 1}_${narrationIndex + 1}`,
+          originalText: text,
+          rewrittenText: text,
+          start: formatDuration(startSeconds),
+          startSeconds,
+          endSeconds,
+          characterCount: text.length,
+          isTtsGenerated: false,
+        };
+      }),
+      isFixed: false,
+    });
+  }
+  return sections;
+};
+
+type VideoTranscriptCue = NonNullable<VideoStudioVideo["transcriptSegments"]>[number];
+
+const groupVideoTranscriptCuesIntoChapters = (
+  transcriptSegments: VideoTranscriptCue[]
+): VideoTranscriptCue[][] => {
+  const groups: VideoTranscriptCue[][] = [];
+  let current: VideoTranscriptCue[] = [];
+  const maxChapterSeconds = 46;
+  const targetChapterSeconds = 34;
+  const maxCueCount = 14;
+
+  for (const cue of transcriptSegments) {
+    const first = current[0];
+    const last = current.at(-1);
+    const currentDurationSeconds = first ? (cue.endMs - first.startMs) / 1000 : 0;
+    const gapMs = last ? cue.startMs - last.endMs : 0;
+    const shouldSplit =
+      current.length > 0 &&
+      (
+        gapMs > 1800 ||
+        current.length >= maxCueCount ||
+        currentDurationSeconds > maxChapterSeconds ||
+        (
+          currentDurationSeconds >= targetChapterSeconds &&
+          last !== undefined &&
+          isNaturalTranscriptBreak(last.text, cue.text)
+        )
+      );
+    if (shouldSplit) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(cue);
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+};
+
+const groupVideoTranscriptCuesForNarration = (
+  cues: VideoTranscriptCue[]
+): VideoTranscriptCue[][] => {
+  const groups: VideoTranscriptCue[][] = [];
+  let current: VideoTranscriptCue[] = [];
+  const maxNarrationSeconds = 18;
+  const targetNarrationSeconds = 10;
+  const maxCueCount = 5;
+
+  for (const cue of cues) {
+    const first = current[0];
+    const last = current.at(-1);
+    const durationSeconds = first ? (cue.endMs - first.startMs) / 1000 : 0;
+    const shouldSplit =
+      current.length > 0 &&
+      (
+        current.length >= maxCueCount ||
+        durationSeconds > maxNarrationSeconds ||
+        (
+          durationSeconds >= targetNarrationSeconds &&
+          last !== undefined &&
+          isNaturalTranscriptBreak(last.text, cue.text)
+        )
+      );
+    if (shouldSplit) {
+      groups.push(current);
+      current = [];
+    }
+    current.push(cue);
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+};
+
+const isNaturalTranscriptBreak = (previousText: string, nextText: string): boolean => {
+  const previous = previousText.trim();
+  const next = nextText.trim();
+  if (!previous) return false;
+  if (/[。！？!?]$/.test(previous)) return true;
+  if (/(できます|しました|します|です|ます|でした|ました)$/.test(previous)) return true;
+  if (/^(その|次に|続いて|ここから|これで|では|また|一方で|最後に)/.test(next)) return true;
+  return false;
+};
+
+const chapterTitleFromText = (text: string, index: number): string => {
+  const title = text.replace(/\s+/g, " ").trim().slice(0, 28);
+  return title ? `Chapter ${index + 1}: ${title}` : `Chapter ${index + 1}`;
 };
 
 const startAutoSection = async (projectId: string): Promise<void> => {
@@ -5905,13 +6709,24 @@ const splitAtCurrentPosition = async (): Promise<void> => {
   const split = safeNonNegativeSeconds(currentTime.value);
   const selected = sections[selectedSectionIndex.value];
   if (selected && split > sectionStartSeconds(selected) && split < sectionEndSeconds(selected)) {
-    const first: VideoStudioSection = { ...selected, endTime: split };
+    const splitMs = Math.round(split * 1000);
+    const firstCues = sectionSubtitleCues(selected).filter((cue) => cue.startMs < splitMs);
+    const secondCues = sectionSubtitleCues(selected).filter((cue) => cue.endMs > splitMs);
+    const first: VideoStudioSection = withUpdatedSectionRangeAndCues(
+      selected,
+      sectionStartSeconds(selected),
+      split,
+      firstCues
+    );
     const second: VideoStudioSection = {
-      ...store.createDraftSection({
-        index: selectedSectionIndex.value + 1,
-        startTime: split,
-        endTime: sectionEndSeconds(selected),
-      }),
+      ...withUpdatedSectionRangeAndCues(
+        selected,
+        split,
+        sectionEndSeconds(selected),
+        secondCues
+      ),
+      id: createSectionId(),
+      index: selectedSectionIndex.value + 1,
       title: `セクション ${selectedSectionIndex.value + 2}`,
     };
     sections.splice(selectedSectionIndex.value, 1, first, second);
@@ -5925,6 +6740,90 @@ const splitAtCurrentPosition = async (): Promise<void> => {
     );
   }
   await updateEditorProjectSections(() => sections.map((section, index) => ({ ...section, index })));
+};
+
+const withUpdatedSectionRangeAndCues = (
+  section: VideoStudioSection,
+  startTime: number,
+  endTime: number,
+  cues: VideoStudioSection["sourceTranscriptCues"]
+): VideoStudioSection => {
+  const cleanedCues = cues
+    .map((cue) => ({
+      ...cue,
+      text: cleanVideoEditorText(cue.text),
+    }))
+    .filter((cue) => cue.text);
+  const transcript = cleanVideoEditorText(cleanedCues.map((cue) => cue.text).join(" "));
+  const nextSection = {
+    ...section,
+    startTime,
+    endTime,
+    sourceTranscriptCueIds: cleanedCues.map((cue) => cue.id),
+    sourceTranscriptCues: cleanedCues,
+    splitVideo: section.splitVideo
+      ? {
+          ...section.splitVideo,
+          startTime,
+          endTime,
+          duration: Math.max(0, endTime - startTime),
+        }
+      : section.splitVideo,
+    splitVideoConverted: section.splitVideoConverted
+      ? {
+          ...section.splitVideoConverted,
+          startTime,
+          endTime,
+          duration: Math.max(0, endTime - startTime),
+        }
+      : section.splitVideoConverted,
+    videoSegment: section.videoSegment
+      ? {
+          ...section.videoSegment,
+          startTime,
+          endTime,
+          duration: Math.max(0, endTime - startTime),
+        }
+      : section.videoSegment,
+    audioSegment: section.audioSegment
+      ? {
+          ...section.audioSegment,
+          startTime,
+          endTime,
+          duration: Math.max(0, endTime - startTime),
+        }
+      : section.audioSegment,
+    isFixed: false,
+  };
+  if (!transcript) return nextSection;
+  const narrationGroups = groupVideoTranscriptCuesForNarration(cleanedCues);
+  return {
+    ...nextSection,
+    recording: nextSection.recording
+      ? {
+          ...nextSection.recording,
+          transcript,
+          durationSeconds: Math.max(0, endTime - startTime),
+        }
+      : nextSection.recording,
+    finalyNarrations: narrationGroups.map((group) => {
+      const first = group[0]!;
+      const last = group.at(-1)!;
+      const text = cleanVideoEditorText(group.map((cue) => cue.text).filter(Boolean).join(" "));
+      const startSeconds = Math.max(0, first.startMs / 1000 - startTime);
+      const endSeconds = Math.max(startSeconds, last.endMs / 1000 - startTime);
+      return {
+        id: createNarrationSegmentId(),
+        originalText: text,
+        rewrittenText: text,
+        start: formatDuration(startSeconds),
+        startSeconds,
+        endSeconds,
+        characterCount: text.length,
+        isTtsGenerated: false,
+      };
+    }),
+  };
 };
 
 const normalizeAutoSection = (
@@ -5957,6 +6856,8 @@ const normalizeAutoSection = (
     id: sectionId,
     index,
     title: String(raw.title || `セクション ${index + 1}`),
+    sourceTranscriptCueIds: [],
+    sourceTranscriptCues: [],
     startTime,
     endTime,
     videoSegment,
@@ -6294,6 +7195,11 @@ const isTtsSegmentProcessing = (
   segmentIndex: number
 ): boolean => Boolean(activeTtsRequestKeys.value[ttsSegmentKey(sectionId, segmentIndex)]);
 
+const sectionTtsProcessingCount = (section: VideoStudioSection): number =>
+  section.finalyNarrations.filter((_, segmentIndex) =>
+    isTtsSegmentProcessing(section.id, segmentIndex)
+  ).length;
+
 function ttsSegmentOutputPath(
   segment: VideoStudioSection["finalyNarrations"][number]
 ): string {
@@ -6324,6 +7230,9 @@ const clearTtsSegmentPreview = (
   );
   ttsWaveformCache.value = Object.fromEntries(
     Object.entries(ttsWaveformCache.value).filter(([itemKey]) => itemKey !== outputPath)
+  );
+  ttsWaveformErrorMap.value = Object.fromEntries(
+    Object.entries(ttsWaveformErrorMap.value).filter(([itemKey]) => itemKey !== outputPath)
   );
 };
 
@@ -6465,7 +7374,8 @@ const selectVoiceName = async (voiceName: string): Promise<void> => {
 
 const requestSingleTts = async (
   sectionId: string,
-  segmentIndex: number
+  segmentIndex: number,
+  options: { skipPreSave?: boolean; quiet?: boolean } = {}
 ): Promise<boolean> => {
   const project = store.selectedProject;
   const video = store.selectedVideo;
@@ -6474,14 +7384,16 @@ const requestSingleTts = async (
   const text = (segment?.rewrittenText || segment?.originalText || "").trim();
   if (!project || !video || !section || !segment || !text) return false;
   if (isTtsSegmentProcessing(section.id, segmentIndex)) return false;
-  await saveEditorSections();
+  if (!options.skipPreSave) await saveEditorSections();
   setTtsSegmentProcessing(section.id, segmentIndex, true);
   requestNotice.value = null;
-  toast.add({
-    title: "AI音声生成を開始しました",
-    description: `${section.title || "選択中セクション"} / AIナレーション${segmentIndex + 1}`,
-    color: "info",
-  });
+  if (!options.quiet) {
+    toast.add({
+      title: "AI音声生成を開始しました",
+      description: `${section.title || "選択中セクション"} / AIナレーション${segmentIndex + 1}`,
+      color: "info",
+    });
+  }
   try {
     const requestId = `tts_${project.id}_${section.id}_${segmentIndex}_${Date.now()}`;
     const outputFilePath = getTtsAudioStoragePath({
@@ -6514,18 +7426,22 @@ const requestSingleTts = async (
       throw new Error(`AI音声生成の出力が不完全です: ${requestId}`);
     }
     await persistNarrationTtsOutput(section.id, segmentIndex, result.output);
-    toast.add({
-      title: "AI音声生成が完了しました",
-      description: `${section.title || "選択中セクション"} / AIナレーション${segmentIndex + 1}`,
-      color: "success",
-    });
+    if (!options.quiet) {
+      toast.add({
+        title: "AI音声生成が完了しました",
+        description: `${section.title || "選択中セクション"} / AIナレーション${segmentIndex + 1}`,
+        color: "success",
+      });
+    }
     return true;
   } catch (error) {
-    toast.add({
-      title: "AI音声生成に失敗しました",
-      description: error instanceof Error ? error.message : undefined,
-      color: "error",
-    });
+    if (!options.quiet) {
+      toast.add({
+        title: "AI音声生成に失敗しました",
+        description: error instanceof Error ? error.message : undefined,
+        color: "error",
+      });
+    }
     return false;
   } finally {
     setTtsSegmentProcessing(section.id, segmentIndex, false);
@@ -6534,32 +7450,43 @@ const requestSingleTts = async (
 
 const requestBulkTts = async (): Promise<void> => {
   if (isBulkTtsProcessing.value) return;
-  const targets = editorSections.value.flatMap((section) =>
-    section.finalyNarrations
-      .map((segment, segmentIndex) => ({
-        sectionId: section.id,
-        segmentIndex,
-        text: (segment.rewrittenText || segment.originalText || "").trim(),
-        hasOutput: segment.isTtsGenerated && Boolean(ttsSegmentOutputPath(segment)),
-      }))
-      .filter((target) => target.text && !target.hasOutput)
-  );
-  if (targets.length === 0) {
+  isBulkTtsProcessing.value = true;
+  try {
+    await saveEditorSections();
+    const targets = [...editorSections.value]
+      .sort((a, b) => a.index - b.index)
+      .flatMap((section) =>
+        section.finalyNarrations
+          .map((segment, segmentIndex) => ({
+            sectionId: section.id,
+            sectionTitle: section.title,
+            segmentIndex,
+            text: (segment.rewrittenText || segment.originalText || "").trim(),
+            hasOutput: segment.isTtsGenerated && Boolean(ttsSegmentOutputPath(segment)),
+          }))
+          .filter((target) => target.text && !target.hasOutput)
+      );
+    if (targets.length === 0) {
+      requestNotice.value = {
+        kind: "success",
+        message: "すべてのAI音声が生成済みです。",
+      };
+      return;
+    }
     requestNotice.value = {
       kind: "success",
-      message: "すべてのAI音声が生成済みです。",
+      message: `${targets.length}件のAI音声生成を開始しました。`,
     };
-    return;
-  }
-  isBulkTtsProcessing.value = true;
-  requestNotice.value = {
-    kind: "success",
-    message: `${targets.length}件のAI音声生成を開始しました。`,
-  };
-  try {
     let successCount = 0;
     for (const target of targets) {
-      const succeeded = await requestSingleTts(target.sectionId, target.segmentIndex);
+      requestNotice.value = {
+        kind: "success",
+        message: `${successCount}/${targets.length}件完了。${target.sectionTitle || "セクション"} のAI音声を生成中です。`,
+      };
+      const succeeded = await requestSingleTts(target.sectionId, target.segmentIndex, {
+        skipPreSave: true,
+        quiet: true,
+      });
       if (succeeded) successCount += 1;
     }
     requestNotice.value = {
@@ -6628,6 +7555,14 @@ const requestExport = async (): Promise<void> => {
     setExportProgressItemStatus("final", "running");
     exportProgress.message = "すべてのセクションを最終動画へ連結しています。";
     const concatenateRequestId = `concatenate_${video.id}_${Date.now()}`;
+    const sectionTotalDurationSeconds = sectionOutputs.reduce(
+      (total, item) => total + item.expectedDurationSeconds,
+      0
+    );
+    const expectedExportDurationSeconds = safeNonNegativeSeconds(
+      video.duration,
+      sectionTotalDurationSeconds
+    ) || sectionTotalDurationSeconds;
     const finalOutputFilePath = getMergedVideoStoragePath({
       organizationId: store.organizationId,
       spaceId: store.spaceId,
@@ -6645,10 +7580,8 @@ const requestExport = async (): Promise<void> => {
         projectId: project.id,
         projectName: project.name,
         videoTitle: video.title,
-        expectedTotalDurationSeconds: sectionOutputs.reduce(
-          (total, item) => total + item.expectedDurationSeconds,
-          0
-        ),
+        expectedTotalDurationSeconds: expectedExportDurationSeconds,
+        sectionTotalDurationSeconds,
       },
       concatenateRequestId
     );
@@ -7413,6 +8346,9 @@ const recordingExtensionFromMimeType = (mimeType: string): string => {
 const createRecordingId = (): string =>
   `recording_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+const createSectionId = (): string =>
+  `section_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
 const createNarrationSegmentId = (): string =>
   `narration_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -7664,9 +8600,9 @@ const stopMediaRecorder = async (): Promise<Blob> => {
 };
 
 const extractTranscriptText = (payload: unknown): string => {
-  if (typeof payload === "string") return payload;
+  if (typeof payload === "string") return cleanVideoEditorText(payload);
   if (!isRecord(payload)) return "";
-  if (typeof payload.transcript === "string") return payload.transcript;
+  if (typeof payload.transcript === "string") return cleanVideoEditorText(payload.transcript);
   const llmOutput = isRecord(payload.llm_output) ? payload.llm_output : null;
   const paragraphs = Array.isArray(llmOutput?.paragraphs) ? llmOutput.paragraphs : [];
   return paragraphs
@@ -7678,6 +8614,7 @@ const extractTranscriptText = (payload: unknown): string => {
       return "";
     })
     .filter(Boolean)
+    .map(cleanVideoEditorText)
     .join("\n");
 };
 
@@ -7685,7 +8622,7 @@ const extractTranscriptParagraphs = (payload: unknown): TranscriptionParagraph[]
   const fromText = (text: string): TranscriptionParagraph[] =>
     text
       .split(/\n{2,}|\r?\n/)
-      .map((line) => line.trim())
+      .map(cleanVideoEditorText)
       .filter(Boolean)
       .map((text, index) => ({
         text,
@@ -7707,13 +8644,13 @@ const extractTranscriptParagraphs = (payload: unknown): TranscriptionParagraph[]
     .map((paragraph, index) => {
       if (typeof paragraph === "string") {
         return {
-          text: paragraph.trim(),
+          text: cleanVideoEditorText(paragraph),
           start: formatDuration(index * 5),
           startSeconds: index * 5,
         };
       }
       if (!isRecord(paragraph)) return null;
-      const text = String(paragraph.text ?? paragraph.content ?? paragraph.summary ?? "").trim();
+      const text = cleanVideoEditorText(String(paragraph.text ?? paragraph.content ?? paragraph.summary ?? ""));
       if (!text) return null;
       const startSeconds = Number(paragraph.startSeconds ?? paragraph.start_seconds ?? paragraph.start ?? index * 5);
       const safeStart = Number.isFinite(startSeconds) ? Math.max(0, startSeconds) : index * 5;
@@ -7736,20 +8673,22 @@ const buildNarrationSegmentsFromTranscript = (
     paragraphs.length > 0
       ? paragraphs
       : [{
-          text: transcript,
+          text: cleanVideoEditorText(transcript),
           start: formatDuration(0),
           startSeconds: 0,
         }];
   return sourceParagraphs.map((paragraph, index) => {
     const previous = existing[index];
+    const originalText = cleanVideoEditorText(paragraph.text);
+    const rewrittenText = cleanVideoEditorText(previous?.rewrittenText || originalText);
     return {
       id: previous?.id ?? createNarrationSegmentId(),
-      originalText: paragraph.text,
-      rewrittenText: previous?.rewrittenText || paragraph.text,
+      originalText,
+      rewrittenText,
       start: previous?.start ?? paragraph.start,
       startSeconds: previous?.startSeconds ?? paragraph.startSeconds,
       endSeconds: previous?.endSeconds,
-      characterCount: (previous?.rewrittenText || paragraph.text).length,
+      characterCount: rewrittenText.length,
       isTtsGenerated: previous?.isTtsGenerated ?? false,
       requestOutput: previous?.requestOutput,
     };
@@ -8586,6 +9525,46 @@ const waveformFromAudioBuffer = (
   });
 };
 
+const withClientTimeout = async <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string
+): Promise<T> => {
+  let timeoutId: number | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
+  }
+};
+
+const fallbackTtsWaveform = (
+  segment: VideoStudioSection["finalyNarrations"][number],
+  sampleCount = 180
+): number[] => {
+  const seedSource = `${ttsSegmentOutputPath(segment)}:${segment.rewrittenText || segment.originalText || ""}`;
+  let seed = 0;
+  for (let index = 0; index < seedSource.length; index += 1) {
+    seed = (seed * 31 + seedSource.charCodeAt(index)) % 9973;
+  }
+  const duration = Math.max(
+    1,
+    Number(segment.requestOutput?.durationSeconds ?? segment.endSeconds ?? 1)
+  );
+  return Array.from({ length: sampleCount }, (_, index) => {
+    const position = index / Math.max(1, sampleCount - 1);
+    const envelope = Math.sin(Math.PI * position);
+    const pulse = (Math.sin(position * duration * 7 + seed) + 1) / 2;
+    const texture = (Math.sin((index + seed) * 1.73) + 1) / 2;
+    return Math.max(8, Math.min(82, Math.round(10 + envelope * 46 + pulse * 18 + texture * 8)));
+  });
+};
+
 const decodeRecordingWaveform = async (
   audioData: ArrayBuffer,
   sampleCount = 180
@@ -8602,6 +9581,94 @@ const decodeRecordingWaveform = async (
     void audioContext.close();
   }
 };
+
+const getSubtitlePreviewVideoBytes = async (): Promise<ArrayBuffer | null> => {
+  const asset = videoAdjustmentPreviewAsset.value;
+  if (asset?.filePath) {
+    const storagePath = asset.bucketName ? `gs://${asset.bucketName}/${asset.filePath}` : asset.filePath;
+    try {
+      return await withClientTimeout(
+        getBytes(storageRef(getStorage(), storagePath), 250 * 1024 * 1024),
+        10000,
+        "プレビュー動画の取得がタイムアウトしました。"
+      );
+    } catch (storageError) {
+      reportDatadogError(storageError, {
+        feature: "video_studio",
+        operation: "fetch_subtitle_preview_waveform_storage",
+        storagePath,
+      });
+    }
+  }
+
+  const url = videoAdjustmentPreviewUrl.value;
+  if (!url) return null;
+  const response = await withClientTimeout(
+    fetch(url),
+    10000,
+    "プレビュー動画URLの取得がタイムアウトしました。"
+  );
+  if (!response.ok) throw new Error(`プレビュー動画の取得に失敗しました (${response.status})`);
+  return await withClientTimeout(
+    response.arrayBuffer(),
+    10000,
+    "プレビュー動画の読み込みがタイムアウトしました。"
+  );
+};
+
+let subtitlePreviewWaveformHydrationToken = 0;
+
+const hydrateSubtitlePreviewWaveform = async (): Promise<void> => {
+  if (!import.meta.client) return;
+  const key = subtitlePreviewWaveformKey.value;
+  if (!key || subtitlePreviewWaveformCache.value[key]?.length) return;
+  const token = ++subtitlePreviewWaveformHydrationToken;
+  subtitlePreviewWaveformLoadingKey.value = key;
+  subtitlePreviewWaveformErrorMap.value = {
+    ...subtitlePreviewWaveformErrorMap.value,
+    [key]: "",
+  };
+  try {
+    const videoData = await getSubtitlePreviewVideoBytes();
+    if (!videoData || token !== subtitlePreviewWaveformHydrationToken) return;
+    const waveform = await decodeRecordingWaveform(videoData, 1200);
+    if (token !== subtitlePreviewWaveformHydrationToken) return;
+    if (waveform.length === 0) throw new Error("プレビュー動画から音声波形を生成できませんでした。");
+    subtitlePreviewWaveformCache.value = {
+      ...subtitlePreviewWaveformCache.value,
+      [key]: waveform,
+    };
+  } catch (error) {
+    if (token !== subtitlePreviewWaveformHydrationToken) return;
+    subtitlePreviewWaveformErrorMap.value = {
+      ...subtitlePreviewWaveformErrorMap.value,
+      [key]: error instanceof Error ? error.message : "音声波形の解析に失敗しました。",
+    };
+    reportDatadogError(error, {
+      feature: "video_studio",
+      operation: "hydrate_subtitle_preview_waveform",
+      key,
+    });
+  } finally {
+    if (token === subtitlePreviewWaveformHydrationToken) subtitlePreviewWaveformLoadingKey.value = "";
+  }
+};
+
+watch(
+  () => subtitlePreviewWaveformKey.value,
+  () => {
+    void hydrateSubtitlePreviewWaveform();
+  },
+  { immediate: true }
+);
+
+watch(
+  () => videoAdjustmentPreviewUrl.value,
+  () => {
+    subtitlePreviewVideoDurationSeconds.value = 0;
+    subtitlePreviewCurrentTime.value = 0;
+  }
+);
 
 const getRecordingAudioBytes = async (filePath: string): Promise<ArrayBuffer> => {
   const bytes = await getBytes(storageRef(getStorage(), filePath), 200 * 1024 * 1024);
@@ -8638,8 +9705,38 @@ const getTtsAudioBytes = async (
   const filePath = ttsOutputFilePath(segment);
   const storagePath = outputPath.startsWith("gs://") ? outputPath : filePath;
   if (!storagePath) return null;
-  const bytes = await getBytes(storageRef(getStorage(), storagePath), 50 * 1024 * 1024);
-  return bytes;
+  try {
+    return await withClientTimeout(
+      getBytes(storageRef(getStorage(), storagePath), 50 * 1024 * 1024),
+      5000,
+      "AI音声ファイルの取得がタイムアウトしました。"
+    );
+  } catch (storageError) {
+    const url = await resolveTtsAudioUrl(segment);
+    if (!url) throw storageError;
+    try {
+      const response = await withClientTimeout(
+        fetch(url),
+        5000,
+        "AI音声URLの取得がタイムアウトしました。"
+      );
+      if (!response.ok) {
+        throw new Error(`AI音声ファイルの取得に失敗しました (${response.status})`);
+      }
+      return await withClientTimeout(
+        response.arrayBuffer(),
+        5000,
+        "AI音声ファイルの読み込みがタイムアウトしました。"
+      );
+    } catch (fetchError) {
+      reportDatadogError(fetchError, {
+        feature: "video_studio",
+        operation: "fetch_tts_waveform_fallback",
+        outputPath,
+      });
+      throw storageError;
+    }
+  }
 };
 
 const resolveTtsAudioUrl = async (
@@ -8666,22 +9763,44 @@ const hydrateTtsWaveforms = async (): Promise<void> => {
     for (const [segmentIndex, segment] of section.finalyNarrations.entries()) {
       if (token !== ttsWaveformHydrationToken) return;
       const outputPath = ttsSegmentOutputPath(segment);
-      if (!segment.isTtsGenerated || !outputPath || ttsWaveformCache.value[outputPath]?.length) {
+      if (
+        !segment.isTtsGenerated ||
+        !outputPath ||
+        ttsWaveformCache.value[outputPath]?.length
+      ) {
         continue;
       }
       try {
         const audioData = await getTtsAudioBytes(segment);
         if (!audioData || token !== ttsWaveformHydrationToken) return;
         const waveform = await decodeRecordingWaveform(audioData);
-        if (token !== ttsWaveformHydrationToken || waveform.length === 0) continue;
+        if (token !== ttsWaveformHydrationToken) return;
+        if (waveform.length === 0) {
+          ttsWaveformCache.value = {
+            ...ttsWaveformCache.value,
+            [outputPath]: fallbackTtsWaveform(segment),
+          };
+          continue;
+        }
         ttsWaveformCache.value = {
           ...ttsWaveformCache.value,
           [outputPath]: waveform,
         };
+        ttsWaveformErrorMap.value = Object.fromEntries(
+          Object.entries(ttsWaveformErrorMap.value).filter(([itemKey]) => itemKey !== outputPath)
+        );
       } catch (error) {
+        if (token !== ttsWaveformHydrationToken) return;
+        ttsWaveformCache.value = {
+          ...ttsWaveformCache.value,
+          [outputPath]: fallbackTtsWaveform(segment),
+        };
+        ttsWaveformErrorMap.value = Object.fromEntries(
+          Object.entries(ttsWaveformErrorMap.value).filter(([itemKey]) => itemKey !== outputPath)
+        );
         reportDatadogError(error, {
           feature: "video_studio",
-          operation: "hydrate_tts_waveform",
+          operation: "hydrate_tts_waveform_fallback",
           sectionId: section.id,
           segmentIndex,
           outputPath,
@@ -8736,6 +9855,14 @@ const ttsWaveformBars = (
   const outputPath = ttsSegmentOutputPath(segment);
   const waveform = outputPath ? normalizedWaveform(ttsWaveformCache.value[outputPath]) : [];
   return resampleWaveformBars(waveform, barCount, ttsSegmentKey(sectionId, segmentIndex));
+};
+
+const ttsWaveformStatusText = (
+  segment: VideoStudioSection["finalyNarrations"][number]
+): string => {
+  const outputPath = ttsSegmentOutputPath(segment);
+  if (outputPath && ttsWaveformErrorMap.value[outputPath]) return "波形を表示できません";
+  return "波形を読み込み中...";
 };
 
 const stopTtsPreview = (): void => {
@@ -9141,9 +10268,86 @@ onUnmounted(() => {
   box-shadow: 0 10px 24px -18px rgb(79 70 229 / 0.65);
 }
 
+.video-editor-light .video-editor-dark-panel {
+  background-color: #1f2937;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+.video-editor-light .video-editor-dark-panel :where(h2, h3, h4, p, span, label, div, button) {
+  color: inherit;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.text-white, .text-gray-100, .text-gray-200, .text-gray-300) {
+  color: #f8fafc;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.text-gray-400, .text-gray-500, .text-slate-400, .text-slate-500) {
+  color: #94a3b8;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.text-indigo-100, .text-indigo-200, .text-indigo-300) {
+  color: #c7d2fe;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.text-emerald-100, .text-emerald-200) {
+  color: #a7f3d0;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.text-amber-100, .text-amber-200) {
+  color: #fde68a;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.text-red-100, .text-red-200) {
+  color: #fecaca;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.bg-gray-950, .bg-slate-950) {
+  background-color: #020617;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.bg-gray-900, .bg-slate-900, .bg-gray-850) {
+  background-color: #111827;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.bg-gray-800, .bg-slate-800) {
+  background-color: #1f2937;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.bg-gray-750, .bg-gray-700, .bg-gray-700\/50) {
+  background-color: #334155;
+}
+
+.video-editor-light .video-editor-dark-panel :where(.border-gray-800, .border-gray-700, .border-gray-600) {
+  border-color: #334155;
+}
+
+.video-editor-light .video-editor-dark-panel :where(textarea.bg-gray-950, input.bg-gray-950, input.bg-gray-900) {
+  background-color: #ffffff;
+  color: #111827;
+  border-color: #cbd5e1;
+}
+
+.video-editor-light .video-editor-dark-panel button.bg-gray-700,
+.video-editor-light .video-editor-dark-panel button.bg-gray-800,
+.video-editor-light .video-editor-dark-panel button.bg-gray-900,
+.video-editor-light .video-editor-dark-panel button.bg-gray-950 {
+  background-color: #334155;
+  border-color: #475569;
+  color: #f8fafc;
+}
+
+.video-editor-light .video-editor-dark-panel button.bg-gray-700:hover,
+.video-editor-light .video-editor-dark-panel button.bg-gray-800:hover,
+.video-editor-light .video-editor-dark-panel button.bg-gray-900:hover,
+.video-editor-light .video-editor-dark-panel button.bg-gray-950:hover {
+  background-color: #475569;
+}
+
 .video-editor-light footer {
   background-color: #ffffff;
   border-color: #e5e7eb;
   color: #64748b;
 }
+
 </style>

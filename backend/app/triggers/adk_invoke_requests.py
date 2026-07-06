@@ -298,6 +298,9 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
             raw_related = payload.get("storyvault_related_context")
             if isinstance(raw_related, dict) and raw_related:
                 summary["storyvault_related_context"] = raw_related
+            raw_zapping = payload.get("storyvault_zapping_analysis")
+            if isinstance(raw_zapping, dict) and raw_zapping:
+                summary["storyvault_zapping_analysis"] = raw_zapping
         elif event_name == "error":
             msg = payload.get("message")
             if isinstance(msg, str) and msg.strip():

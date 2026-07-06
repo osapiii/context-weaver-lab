@@ -52,7 +52,7 @@
 
 <script setup lang="ts">
 import type {
-  DecodedStoryVaultOperationVideo,
+  DecodedStoryVaultClip,
   StoryVaultZappingAnalysisStoryCandidate,
 } from "@models/storyVault";
 
@@ -70,7 +70,7 @@ type StoryValueCard = {
 
 const props = defineProps<{
   story: StoryVaultZappingAnalysisStoryCandidate;
-  video?: DecodedStoryVaultOperationVideo | null;
+  video?: DecodedStoryVaultClip | null;
   compact?: boolean;
 }>();
 

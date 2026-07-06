@@ -3,17 +3,27 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import log from "@utils/logger";
 
 const FUNCTIONS_REGION = "asia-northeast1";
-const SLACK_SCOPES =
-  "channels:read,channels:history,groups:read,groups:history";
+const SLACK_AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize";
+const SLACK_SCOPES = [
+  "channels:read",
+  "channels:history",
+  "groups:read",
+  "groups:history",
+].join(",");
 const SLACK_USER_SCOPES = "search:read";
 
 export type SlackConnection = {
+  id?: string;
   connected: boolean;
   teamId?: string;
   teamName?: string;
+  enterpriseId?: string;
+  enterpriseName?: string;
+  botUserId?: string;
   slackUserId?: string;
   scopes?: string[];
   userScopes?: string[];
+  connectedBy?: string;
 };
 
 export type SlackMessagePreview = {
@@ -34,8 +44,22 @@ type SlackCodeMessage = {
   state?: string;
 };
 
+type SlackConnectionsResponse = {
+  ok: boolean;
+  connections: SlackConnection[];
+};
+
+type SlackConnectResponse = {
+  ok: boolean;
+  connection?: SlackConnection;
+};
+
 const sharedIsLoading = ref(false);
-const sharedConnection = ref<SlackConnection>({ connected: false });
+const sharedConnections = ref<SlackConnection[]>([]);
+const sharedConnection = computed<SlackConnection>(() => {
+  const first = sharedConnections.value[0];
+  return first ? { ...first, connected: true } : { connected: false };
+});
 
 function slackCallbackUrl(configuredRedirectUri?: string): string {
   const configured = (configuredRedirectUri || "").trim();
@@ -61,9 +85,11 @@ function randomNonce(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function createSlackState(): string {
+function createSlackState(organizationId: string): string {
   return encodeBase64Url(
     JSON.stringify({
+      provider: "slack",
+      organizationId,
       nonce: randomNonce(),
       openerOrigin: window.location.origin,
     })
@@ -142,17 +168,25 @@ export function useSlackOAuth() {
   );
   const functions = () => getFunctions(getApp(), FUNCTIONS_REGION);
 
-  const refreshConnection = async (): Promise<SlackConnection> => {
+  const refreshConnections = async (): Promise<SlackConnection[]> => {
     if (!organizationId.value) {
-      sharedConnection.value = { connected: false };
-      return sharedConnection.value;
+      sharedConnections.value = [];
+      return sharedConnections.value;
     }
     const callable = httpsCallable<
       { organizationId: string },
-      SlackConnection
-    >(functions(), "get_slack_connection");
+      SlackConnectionsResponse
+    >(functions(), "get_slack_connections");
     const res = await callable({ organizationId: organizationId.value });
-    sharedConnection.value = res.data;
+    sharedConnections.value = (res.data.connections ?? []).map((connection) => ({
+      ...connection,
+      connected: true,
+    }));
+    return sharedConnections.value;
+  };
+
+  const refreshConnection = async (): Promise<SlackConnection> => {
+    await refreshConnections();
     return sharedConnection.value;
   };
 
@@ -171,18 +205,14 @@ export function useSlackOAuth() {
     }
     sharedIsLoading.value = true;
     try {
-      const state = createSlackState();
-      const redirectUri = configuredRedirectUri.value
-        ? slackCallbackUrl(configuredRedirectUri.value)
-        : "";
-      const url = new URL("https://slack.com/oauth/v2/authorize");
+      const state = createSlackState(organizationId.value);
+      const redirectUri = slackCallbackUrl(configuredRedirectUri.value);
+      const url = new URL(SLACK_AUTHORIZE_URL);
       url.searchParams.set("client_id", clientId.value);
       url.searchParams.set("scope", SLACK_SCOPES);
       url.searchParams.set("user_scope", SLACK_USER_SCOPES);
       url.searchParams.set("state", state);
-      if (redirectUri) {
-        url.searchParams.set("redirect_uri", redirectUri);
-      }
+      url.searchParams.set("redirect_uri", redirectUri);
       const popup = window.open(
         url.toString(),
         "storyvault-slack-oauth",
@@ -190,32 +220,18 @@ export function useSlackOAuth() {
       );
       const code = await waitForSlackCode(popup, state);
       const callable = httpsCallable<
-        { organizationId: string; code: string; redirectUri?: string },
-        {
-          ok: boolean;
-          teamId?: string;
-          teamName?: string;
-          slackUserId?: string;
-          scopes?: string[];
-          userScopes?: string[];
-        }
-      >(functions(), "connect_slack");
+        { organizationId: string; code: string; redirectUri: string },
+        SlackConnectResponse
+      >(functions(), "connect_slack_workspace");
       const res = await callable({
         organizationId: organizationId.value,
         code,
-        ...(redirectUri ? { redirectUri } : {}),
+        redirectUri,
       });
-      sharedConnection.value = {
-        connected: Boolean(res.data.ok),
-        teamId: res.data.teamId,
-        teamName: res.data.teamName,
-        slackUserId: res.data.slackUserId,
-        scopes: res.data.scopes,
-        userScopes: res.data.userScopes,
-      };
+      await refreshConnections();
       toast.add({
-        title: "Slack を接続しました",
-        description: res.data.teamName || undefined,
+        title: "Slack workspace を接続しました",
+        description: res.data.connection?.teamName || undefined,
         color: "success",
       });
       return true;
@@ -232,42 +248,49 @@ export function useSlackOAuth() {
     }
   };
 
-  const disconnect = async (): Promise<void> => {
+  const disconnect = async (connectionId?: string): Promise<void> => {
     if (!organizationId.value) return;
+    const id = connectionId || sharedConnection.value.id || "";
+    if (!id) return;
     sharedIsLoading.value = true;
     try {
-      const callable = httpsCallable<{ organizationId: string }, { ok: boolean }>(
-        functions(),
-        "disconnect_slack"
-      );
-      await callable({ organizationId: organizationId.value });
-      sharedConnection.value = { connected: false };
+      const callable = httpsCallable<
+        { organizationId: string; connectionId: string },
+        { ok: boolean }
+      >(functions(), "disconnect_slack_workspace");
+      await callable({ organizationId: organizationId.value, connectionId: id });
+      await refreshConnections();
     } finally {
       sharedIsLoading.value = false;
     }
   };
 
-  const testConnection = async (): Promise<boolean> => {
+  const testConnection = async (connectionId?: string): Promise<boolean> => {
     if (!organizationId.value) return false;
-    const callable = httpsCallable<{ organizationId: string }, { ok: boolean }>(
-      functions(),
-      "test_slack_connection"
-    );
-    const res = await callable({ organizationId: organizationId.value });
+    const callable = httpsCallable<
+      { organizationId: string; connectionId?: string },
+      { ok: boolean }
+    >(functions(), "test_slack_connection");
+    const res = await callable({
+      organizationId: organizationId.value,
+      connectionId: connectionId || sharedConnection.value.id,
+    });
     return Boolean(res.data.ok);
   };
 
   const listMessages = async (params: {
+    connectionId?: string;
     query?: string;
     limit?: number;
   } = {}): Promise<SlackMessagePreview[]> => {
     if (!organizationId.value) return [];
     const callable = httpsCallable<
-      { organizationId: string; query?: string; limit?: number },
+      { organizationId: string; connectionId?: string; query?: string; limit?: number },
       { ok: boolean; messages: SlackMessagePreview[] }
     >(functions(), "list_slack_messages");
     const res = await callable({
       organizationId: organizationId.value,
+      connectionId: params.connectionId || sharedConnection.value.id,
       query: params.query?.trim() || undefined,
       limit: params.limit,
     });
@@ -277,11 +300,13 @@ export function useSlackOAuth() {
   return {
     clientId,
     connection: sharedConnection,
+    connections: sharedConnections,
     isLoading: sharedIsLoading,
     connect,
     disconnect,
     listMessages,
     refreshConnection,
+    refreshConnections,
     testConnection,
   };
 }

@@ -70,7 +70,7 @@
             v-model="draft"
             type="text"
             class="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-            placeholder="この動画レポートについて質問"
+            placeholder="このクリップレポートについて質問"
             :disabled="isSending"
           >
           <EnButton
@@ -136,7 +136,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import type {
   DecodedStoryVaultApplication,
-  DecodedStoryVaultOperationVideo,
+  DecodedStoryVaultClip,
 } from "@models/storyVault";
 
 type McpTestMessage = {
@@ -147,7 +147,7 @@ type McpTestMessage = {
 
 const props = defineProps<{
   application: DecodedStoryVaultApplication | null;
-  video?: DecodedStoryVaultOperationVideo | null;
+  video?: DecodedStoryVaultClip | null;
   contextJson: string;
   title?: string;
   description?: string;
@@ -162,7 +162,7 @@ const messages = ref<McpTestMessage[]>([
     id: "welcome",
     role: "assistant",
     text:
-      "この動画のMCPレスポンス相当JSONだけを文脈として会話できます。AIエディターへ渡す前に、動画・ストーリー候補・関連コンテキストが十分に伝わるかを確認できます。",
+      "このクリップのMCPレスポンス相当JSONだけを文脈として会話できます。AIエディターへ渡す前に、クリップ・ストーリー候補・関連コンテキストが十分に伝わるかを確認できます。",
   },
 ]);
 
@@ -262,7 +262,7 @@ watch(
         id: `welcome-${Date.now()}`,
         role: "assistant",
         text:
-          "この動画のMCPレスポンス相当JSONだけを文脈として会話できます。AIエディターへ渡す前に、動画・ストーリー候補・関連コンテキストが十分に伝わるかを確認できます。",
+          "このクリップのMCPレスポンス相当JSONだけを文脈として会話できます。AIエディターへ渡す前に、クリップ・ストーリー候補・関連コンテキストが十分に伝わるかを確認できます。",
       },
     ];
     draft.value = "";

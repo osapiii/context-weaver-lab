@@ -20,7 +20,7 @@
 
     <EnModal
       v-model:open="evidencePreviewOpen"
-      title="根拠動画を再生"
+      title="根拠クリップを再生"
       subtitle="発話根拠のタイムスタンプ周辺を字幕と一緒に確認します。"
       title-icon="material-symbols:play-circle-outline"
       size="xl"
@@ -72,10 +72,10 @@
               v-else
               class="flex aspect-video w-full items-center justify-center text-xs font-semibold text-slate-300"
             >
-              動画URLを取得中
+              クリップURLを取得中
             </div>
             <div class="flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 text-xs font-bold text-slate-700">
-              <span class="truncate">発話区間の周辺動画</span>
+              <span class="truncate">発話区間の周辺クリップ</span>
               <span class="shrink-0 font-mono text-slate-950">
                 {{ formatEvidencePreviewRange(selectedEvidencePreview.evidence.tRange) }}
               </span>
@@ -127,10 +127,10 @@
           </span>
           <div class="min-w-0">
             <h2 class="truncate text-base font-bold text-slate-950">
-              動画別ユーザーストーリー
+              クリップ別ユーザーストーリー
             </h2>
             <p class="truncate text-xs font-medium text-slate-500">
-              操作動画ごとに抽出されたストーリー候補を確認します
+              クリップごとに抽出されたストーリー候補を確認します
             </p>
           </div>
         </div>
@@ -144,7 +144,7 @@
             v-model="query"
             type="search"
             class="h-9 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-primary-300 focus:ring-2 focus:ring-primary-100"
-            placeholder="動画タイトル・概要・ストーリー候補で検索"
+            placeholder="クリップタイトル・概要・ストーリー候補で検索"
           >
         </label>
       </div>
@@ -152,7 +152,7 @@
       <div class="flex shrink-0 flex-wrap items-center gap-2">
         <div class="hidden items-center gap-1.5 text-xs lg:flex">
           <span class="rounded-md bg-slate-50 px-2.5 py-1 font-bold text-slate-500">
-            動画 <b class="ml-1 tabular-nums text-slate-950">{{ displayedVideoGroups.length }}</b>
+            クリップ <b class="ml-1 tabular-nums text-slate-950">{{ displayedVideoGroups.length }}</b>
           </span>
           <span class="rounded-md bg-slate-50 px-2.5 py-1 font-bold text-slate-500">
             ストーリー <b class="ml-1 tabular-nums text-slate-950">{{ visibleStoryCount }}</b>
@@ -195,10 +195,10 @@
     >
       <UIcon name="material-symbols:videocam-off-outline" class="h-10 w-10 text-slate-300" />
       <p class="mt-3 text-sm font-bold text-slate-800">
-        操作動画がまだありません
+        クリップがまだありません
       </p>
       <p class="mt-1 max-w-md text-xs leading-relaxed text-slate-500">
-        ザッピングで操作動画を録画すると、動画ごとのストーリー候補をここで確認できます。
+        ザッピングでクリップを録画すると、クリップごとのストーリー候補をここで確認できます。
       </p>
     </div>
 
@@ -208,7 +208,7 @@
     >
       <UIcon name="material-symbols:filter-alt-off-outline" class="h-10 w-10 text-slate-300" />
       <p class="mt-3 text-sm font-bold text-slate-800">
-        条件に一致する動画がありません
+        条件に一致するクリップがありません
       </p>
       <p class="mt-1 max-w-md text-xs leading-relaxed text-slate-500">
         検索語または解析ステータスを変更してください。
@@ -222,8 +222,8 @@
       <aside class="border-b border-slate-200 bg-slate-50 lg:border-b-0 lg:border-r">
         <div class="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
           <div class="min-w-0">
-            <p class="text-xs font-bold text-slate-500">動画グループ</p>
-            <p class="text-sm font-bold text-slate-900">操作動画</p>
+            <p class="text-xs font-bold text-slate-500">クリップグループ</p>
+            <p class="text-sm font-bold text-slate-900">クリップ</p>
           </div>
           <EnBadge variant="tag" size="xs">{{ filteredVideoGroups.length }}</EnBadge>
         </div>
@@ -280,7 +280,7 @@
         <div class="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
           <div class="min-w-0">
             <p class="text-xs font-semibold text-slate-500">
-              {{ selectedVideoId ? "選択中の操作動画" : "すべてのストーリー候補" }}
+              {{ selectedVideoId ? "選択中のクリップ" : "すべてのストーリー候補" }}
             </p>
             <h3 class="mt-1 truncate text-lg font-bold text-slate-950">
               {{ selectedVideoTitle }}
@@ -359,7 +359,7 @@
                 </tr>
                 <tr v-else-if="group.stories.length === 0">
                   <td colspan="5" class="border-b border-slate-100 px-3 py-8 text-center text-sm text-slate-500">
-                    {{ group.storyCount === 0 ? "この動画からストーリー候補は生成されませんでした。" : "検索条件に一致するストーリー候補がありません。" }}
+                    {{ group.storyCount === 0 ? "このクリップからストーリー候補は生成されませんでした。" : "検索条件に一致するストーリー候補がありません。" }}
                   </td>
                 </tr>
 
@@ -425,7 +425,7 @@
                             <img
                               v-if="storyThumbnailUrl(group.video, story)"
                               :src="storyThumbnailUrl(group.video, story)"
-                              :alt="`${story.title} の根拠動画サムネイル`"
+                              :alt="`${story.title} の根拠クリップサムネイル`"
                               class="h-full w-full object-cover transition duration-200 group-hover/preview:scale-[1.02]"
                             >
                             <video
@@ -452,7 +452,7 @@
                           </div>
                           <div class="flex w-full items-center justify-between gap-2 px-3 py-2">
                             <span class="line-clamp-1 text-xs font-bold text-slate-700">
-                              {{ primaryEvidence(story)?.title || "根拠動画" }}
+                              {{ primaryEvidence(story)?.title || "根拠クリップ" }}
                             </span>
                             <span class="shrink-0 rounded-md bg-white px-2 py-1 font-mono text-[11px] font-bold tabular-nums text-slate-700 ring-1 ring-slate-200">
                               {{ formatEvidenceRange(primaryEvidence(story)?.tRange ?? [0, 0]) }}
@@ -585,7 +585,7 @@
 
             <section class="rounded-lg border border-slate-200 bg-white p-4">
               <div class="flex items-center justify-between gap-2">
-                <h4 class="text-sm font-bold text-slate-950">動画上の根拠</h4>
+                <h4 class="text-sm font-bold text-slate-950">クリップ上の根拠</h4>
                 <EnBadge variant="tag" size="xs">
                   {{ selectedStoryDetail.story.evidence.length }}件
                 </EnBadge>
@@ -692,10 +692,10 @@
                       v-else
                       class="flex aspect-video w-full items-center justify-center text-xs font-semibold text-slate-300"
                     >
-                      動画URLを取得中
+                      クリップURLを取得中
                     </div>
                     <div class="flex items-center justify-between gap-2 bg-white px-3 py-2 text-xs font-bold text-slate-700">
-                      <span class="truncate">発話区間の周辺動画</span>
+                      <span class="truncate">発話区間の周辺クリップ</span>
                       <span class="shrink-0 font-mono text-slate-950">
                         {{ formatEvidencePreviewRange(evidence.tRange) }}
                       </span>
@@ -715,7 +715,7 @@
 import { getDownloadURL } from "firebase/storage";
 import { storageRefForBucketPath } from "@composables/firebase-storage-operations";
 import type {
-  DecodedStoryVaultOperationVideo,
+  DecodedStoryVaultClip,
   StoryVaultTranscriptCue,
   StoryVaultZappingAnalysisStatus,
   StoryVaultZappingAnalysisStoryCandidate,
@@ -725,7 +725,7 @@ type StatusFilter = StoryVaultZappingAnalysisStatus | "all";
 type BadgeColor = "neutral" | "primary" | "info" | "success" | "warning" | "error";
 
 type VideoGroup = {
-  video: DecodedStoryVaultOperationVideo;
+  video: DecodedStoryVaultClip;
   displayId: string;
   status: {
     label: string;
@@ -738,7 +738,7 @@ type VideoGroup = {
 };
 
 type StoryDetailSelection = {
-  video: DecodedStoryVaultOperationVideo;
+  video: DecodedStoryVaultClip;
   groupDisplayId: string;
   story: StoryVaultZappingAnalysisStoryCandidate;
   storyIndex: number;
@@ -750,7 +750,7 @@ type EvidencePreviewSelection = StoryDetailSelection & {
 
 const props = defineProps<{
   applicationId?: string;
-  videos: DecodedStoryVaultOperationVideo[];
+  videos: DecodedStoryVaultClip[];
 }>();
 
 const route = useRoute();
@@ -884,8 +884,8 @@ const mcpTestTitle = computed(() =>
 
 const mcpTestDescription = computed(() =>
   mcpTargetVideoGroup.value
-    ? "選択中の操作動画に紐づくストーリー候補と関連コンテキストだけをJSONで渡して会話します"
-    : "一覧に表示されている全ストーリー候補と、それぞれに紐づく操作動画のJSONを渡して会話します"
+    ? "選択中のクリップに紐づくストーリー候補と関連コンテキストだけをJSONで渡して会話します"
+    : "一覧に表示されている全ストーリー候補と、それぞれに紐づくクリップのJSONを渡して会話します"
 );
 
 const mcpTestContextLabel = computed(() =>
@@ -906,12 +906,12 @@ const mcpTestContextJson = computed(() => {
       id: props.applicationId || "",
     },
     counts: {
-      operationVideos: groups.length,
+      clips: groups.length,
       storyCandidates: groups.reduce((sum, group) => sum + group.storyCount, 0),
       visibleStoryCandidates: groups.reduce((sum, group) => sum + group.stories.length, 0),
       analyzedVideos: groups.filter((group) => isVideoAnalyzed(group.video)).length,
     },
-    operationVideos: groups.map((group) => buildMcpVideoContext(group)),
+    clips: groups.map((group) => buildMcpVideoContext(group)),
   };
   return JSON.stringify(payload, null, 2);
 });
@@ -1041,7 +1041,7 @@ function openSelectedVideoDetail(): void {
 }
 
 function buildVideoGroup(
-  video: DecodedStoryVaultOperationVideo,
+  video: DecodedStoryVaultClip,
   index: number,
   normalizedQuery: string
 ): VideoGroup {
@@ -1082,9 +1082,9 @@ function buildMcpVideoContext(group: VideoGroup): Record<string, unknown> {
     displayId: group.displayId,
     title: displayVideoTitle(video),
     description: displayVideoDescription(video),
-    videoGroup: {
-      id: video.groupId || "",
-      name: video.groupNameSnapshot || "動画グループ未設定",
+    clipGroup: {
+      id: video.clipGroupId || "",
+      name: video.clipGroupNameSnapshot || "クリップグループ未設定",
       description: "",
     },
     recordedAt: video.recordedAt,
@@ -1148,7 +1148,7 @@ function buildMcpVideoContext(group: VideoGroup): Record<string, unknown> {
 }
 
 function normalizedAnalysisStatus(
-  video: DecodedStoryVaultOperationVideo
+  video: DecodedStoryVaultClip
 ): StoryVaultZappingAnalysisStatus {
   if (video.analysisStatus === "completed" || video.analysisResult) {
     return "completed";
@@ -1156,11 +1156,11 @@ function normalizedAnalysisStatus(
   return video.analysisStatus;
 }
 
-function isVideoAnalyzed(video: DecodedStoryVaultOperationVideo): boolean {
+function isVideoAnalyzed(video: DecodedStoryVaultClip): boolean {
   return normalizedAnalysisStatus(video) === "completed";
 }
 
-function statusMeta(video: DecodedStoryVaultOperationVideo): {
+function statusMeta(video: DecodedStoryVaultClip): {
   label: string;
   color: BadgeColor;
 } {
@@ -1172,19 +1172,19 @@ function statusMeta(video: DecodedStoryVaultOperationVideo): {
   return { label: "未解析", color: "neutral" };
 }
 
-function emptyStatusMessage(video: DecodedStoryVaultOperationVideo): string {
+function emptyStatusMessage(video: DecodedStoryVaultClip): string {
   const status = normalizedAnalysisStatus(video);
   if (status === "queued") return "解析リクエストは待機中です。";
-  if (status === "running") return "動画とナレッジを照合して解析しています。";
+  if (status === "running") return "クリップとナレッジを照合して解析しています。";
   if (status === "error") return "解析に失敗しました。";
-  return "この動画はまだ解析されていません。";
+  return "このクリップはまだ解析されていません。";
 }
 
-function displayVideoTitle(video: DecodedStoryVaultOperationVideo): string {
+function displayVideoTitle(video: DecodedStoryVaultClip): string {
   return video.quickScan?.title?.trim() || video.title;
 }
 
-function displayVideoDescription(video: DecodedStoryVaultOperationVideo): string {
+function displayVideoDescription(video: DecodedStoryVaultClip): string {
   return video.quickScan?.description?.trim() || video.description || "";
 }
 
@@ -1235,37 +1235,37 @@ function frameKey(videoId: string, frameId: string): string {
 }
 
 function savedFrameUrl(
-  video: DecodedStoryVaultOperationVideo,
+  video: DecodedStoryVaultClip,
   frameId?: string
 ): string {
   if (!frameId) return "";
   return frameUrls[frameKey(video.id, frameId)] ?? "";
 }
 
-function operationVideoUrl(video: DecodedStoryVaultOperationVideo): string {
+function operationVideoUrl(video: DecodedStoryVaultClip): string {
   return videoUrls[video.id] ?? "";
 }
 
 function storyThumbnailFrame(
-  video: DecodedStoryVaultOperationVideo,
+  video: DecodedStoryVaultClip,
   story: StoryVaultZappingAnalysisStoryCandidate
-): DecodedStoryVaultOperationVideo["frameCaptures"][number] | undefined {
+): DecodedStoryVaultClip["frameCaptures"][number] | undefined {
   const evidence = primaryEvidence(story);
   if (!evidence) return undefined;
   return storyEvidenceFrames(video, evidence)[0];
 }
 
 function storyThumbnailUrl(
-  video: DecodedStoryVaultOperationVideo,
+  video: DecodedStoryVaultClip,
   story: StoryVaultZappingAnalysisStoryCandidate
 ): string {
   return savedFrameUrl(video, storyThumbnailFrame(video, story)?.id);
 }
 
 function storyEvidenceFrames(
-  video: DecodedStoryVaultOperationVideo,
+  video: DecodedStoryVaultClip,
   evidence: StoryVaultZappingAnalysisStoryCandidate["evidence"][number]
-): DecodedStoryVaultOperationVideo["frameCaptures"] {
+): DecodedStoryVaultClip["frameCaptures"] {
   const evidenceIds = new Set(
     [
       evidence.representativeScreenshotId,
@@ -1290,17 +1290,17 @@ function storyEvidenceFrames(
 }
 
 function evidenceCaptureFrames(
-  video: DecodedStoryVaultOperationVideo,
+  video: DecodedStoryVaultClip,
   evidence: StoryVaultZappingAnalysisStoryCandidate["evidence"][number]
-): DecodedStoryVaultOperationVideo["frameCaptures"] {
+): DecodedStoryVaultClip["frameCaptures"] {
   return storyEvidenceFrames(video, evidence).slice(0, 6);
 }
 
 function nearestFrames(
-  video: DecodedStoryVaultOperationVideo,
+  video: DecodedStoryVaultClip,
   timestampMs: number,
   maxCount: number
-): DecodedStoryVaultOperationVideo["frameCaptures"] {
+): DecodedStoryVaultClip["frameCaptures"] {
   return [...video.frameCaptures]
     .sort(
       (a, b) =>
@@ -1311,7 +1311,7 @@ function nearestFrames(
 }
 
 async function resolveFrameUrls(
-  videos: DecodedStoryVaultOperationVideo[]
+  videos: DecodedStoryVaultClip[]
 ): Promise<void> {
   await Promise.all(
     videos.flatMap((video) =>
@@ -1334,7 +1334,7 @@ async function resolveFrameUrls(
 }
 
 async function resolveVideoUrls(
-  videos: DecodedStoryVaultOperationVideo[]
+  videos: DecodedStoryVaultClip[]
 ): Promise<void> {
   await Promise.all(
     videos.map(async (video) => {
@@ -1354,7 +1354,7 @@ async function resolveVideoUrls(
 }
 
 function videoMatchesQuery(
-  video: DecodedStoryVaultOperationVideo,
+  video: DecodedStoryVaultClip,
   normalizedQuery: string
 ): boolean {
   return [
@@ -1446,7 +1446,7 @@ function seekEvidencePreviewCue(startMs: number): void {
 }
 
 function evidenceTranscriptCues(
-  video: DecodedStoryVaultOperationVideo,
+  video: DecodedStoryVaultClip,
   evidence: StoryVaultZappingAnalysisStoryCandidate["evidence"][number]
 ): StoryVaultTranscriptCue[] {
   const cues = video.transcriptSegments ?? [];

@@ -217,7 +217,7 @@
             <div>
               <p class="text-sm font-bold text-slate-900">レポートプレビュー</p>
               <p class="mt-1 text-xs leading-5 text-slate-500">
-                選択中のStory、根拠、SourceAsset、動画、スクリーンショットをまとめて確認します。
+                選択中のStory、根拠、SourceAsset、クリップ、スクリーンショットをまとめて確認します。
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
@@ -234,6 +234,7 @@
                 </button>
               </div>
               <EnButton
+                v-if="reportMode !== 'excel'"
                 variant="outline"
                 color="neutral"
                 size="xs"
@@ -243,6 +244,7 @@
                 開く
               </EnButton>
               <EnButton
+                v-if="reportMode !== 'excel'"
                 variant="outline"
                 color="neutral"
                 size="xs"
@@ -297,6 +299,33 @@
               :value="reportMarkdown"
             />
           </div>
+
+          <section
+            v-else-if="reportMode === 'excel'"
+            class="rounded-lg border border-slate-200 bg-white p-4"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-bold text-slate-950">Excelブック</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">
+                  顧客共有・進捗会議向けに、ストーリー、AC、証跡、素材、クリップ、コード参照をシート別に保存します。
+                </p>
+              </div>
+              <EnBadge color="success" size="xs">
+                .xlsx
+              </EnBadge>
+            </div>
+            <div class="mt-4 grid gap-3 md:grid-cols-2">
+              <div
+                v-for="sheet in reportExcelSheets"
+                :key="sheet.name"
+                class="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <p class="text-xs font-bold text-slate-950">{{ sheet.name }}</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">{{ sheet.description }}</p>
+              </div>
+            </div>
+          </section>
         </section>
 
         <section v-else class="space-y-3">
@@ -332,9 +361,10 @@
 </template>
 
 <script setup lang="ts">
+import * as XLSX from "xlsx";
 import type {
   DecodedStoryVaultApplication,
-  DecodedStoryVaultOperationVideo,
+  DecodedStoryVaultClip,
   DecodedStoryVaultSourceAsset,
   DecodedStoryVaultStory,
   DecodedStoryVaultStoryEvidence,
@@ -351,11 +381,11 @@ const props = defineProps<{
   story: DecodedStoryVaultStory | null;
   evidence: DecodedStoryVaultStoryEvidence[];
   sourceAssets: DecodedStoryVaultSourceAsset[];
-  operationVideos: DecodedStoryVaultOperationVideo[];
+  clips: DecodedStoryVaultClip[];
 }>();
 
 type DetailTab = "spec" | "evidence" | "code" | "report" | "trace";
-type ReportMode = "html" | "markdown";
+type ReportMode = "html" | "markdown" | "excel";
 
 const activeTab = ref<DetailTab>("spec");
 const reportMode = ref<ReportMode>("html");
@@ -374,6 +404,18 @@ const tabs = [
 const reportModes = [
   { value: "html", label: "HTML" },
   { value: "markdown", label: "Markdown" },
+  { value: "excel", label: "Excel" },
+] as const;
+
+const reportExcelSheets = [
+  { name: "サマリー", description: "案件、ストーリー状態、信頼度、件数をまとめた表紙です。" },
+  { name: "ユーザーストーリー", description: "タイトル、本文、ステータス、ドメイン、マイルストーンを一覧化します。" },
+  { name: "受け入れ条件", description: "ACごとの状態と紐付く証跡IDを確認できます。" },
+  { name: "証跡リンク", description: "証跡、引用、Source URL、SourceAssetとの対応をまとめます。" },
+  { name: "Source Assets", description: "素材のURI、Storage、FileSpace、GitHub参照をまとめます。" },
+  { name: "クリップ", description: "関連クリップと動画URL、スクリーンショット数をまとめます。" },
+  { name: "スクリーンショット", description: "フレーム時刻、画像URL、保存先を一覧化します。" },
+  { name: "Code References", description: "Repository、PR、Commit、パス、行番号を一覧化します。" },
 ] as const;
 
 const coveredAcCount = computed(
@@ -445,7 +487,7 @@ const linkedOperationVideos = computed(() => {
       .map((asset) => metadataString(asset.metadata, "operationVideoId"))
       .filter(Boolean)
   );
-  return props.operationVideos.filter(
+  return props.clips.filter(
     (video) =>
       sourceAssetIds.has(video.sourceAssetId || "") ||
       sourceAssetIds.has(video.journeySourceAssetId || "") ||
@@ -698,7 +740,7 @@ function linkRow(label: string, url?: string): string {
   return `<div class="kv"><b>${escapeHtml(label)}</b><span><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a></span></div>`;
 }
 
-function videoHtml(video: DecodedStoryVaultOperationVideo): string {
+function videoHtml(video: DecodedStoryVaultClip): string {
   const videoUrl = videoUrls[video.id] || "";
   const frames = (video.frameCaptures ?? [])
     .slice(0, 24)
@@ -709,7 +751,7 @@ function videoHtml(video: DecodedStoryVaultOperationVideo): string {
     })
     .filter(Boolean)
     .join("");
-  return `<article class="panel item"><h3>${escapeHtml(video.title || video.id)}</h3>${videoUrl ? `<video controls preload="metadata" src="${escapeHtml(videoUrl)}"></video><p><a href="${escapeHtml(videoUrl)}" target="_blank" rel="noopener noreferrer">動画ファイルを開く</a></p>` : `<p class="muted">${escapeHtml(video.storagePath || "No video URL")}</p>`}${frames ? `<div class="frames">${frames}</div>` : ""}</article>`;
+  return `<article class="panel item"><h3>${escapeHtml(video.title || video.id)}</h3>${videoUrl ? `<video controls preload="metadata" src="${escapeHtml(videoUrl)}"></video><p><a href="${escapeHtml(videoUrl)}" target="_blank" rel="noopener noreferrer">クリップファイルを開く</a></p>` : `<p class="muted">${escapeHtml(video.storagePath || "No video URL")}</p>`}${frames ? `<div class="frames">${frames}</div>` : ""}</article>`;
 }
 
 async function resolveReportMediaUrls(): Promise<void> {
@@ -756,11 +798,215 @@ function refreshReportHtmlUrl(): void {
   );
 }
 
+type ExcelCellValue = string | number | boolean;
+type ExcelRow = Record<string, ExcelCellValue>;
+
+function excelCell(value: unknown): ExcelCellValue {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "boolean") return value;
+  if (Array.isArray(value)) return value.map((item) => excelCell(item)).join("\n");
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
+function appendExcelSheet(
+  workbook: XLSX.WorkBook,
+  name: string,
+  rows: ExcelRow[],
+  linkColumns: string[] = []
+): void {
+  const data = rows.length ? rows : [{ メモ: "該当データなし" }];
+  const sheet = XLSX.utils.json_to_sheet(data);
+  const headers = Object.keys(data[0] ?? {});
+  sheet["!cols"] = headers.map((header) => ({
+    wch: Math.min(Math.max(header.length + 6, 14), 48),
+  }));
+  for (const linkColumn of linkColumns) {
+    const columnIndex = headers.indexOf(linkColumn);
+    if (columnIndex < 0) continue;
+    data.forEach((row, rowIndex) => {
+      const target = String(row[linkColumn] ?? "").trim();
+      if (!/^https?:\/\//i.test(target)) return;
+      const address = XLSX.utils.encode_cell({ r: rowIndex + 1, c: columnIndex });
+      const cell = sheet[address];
+      if (!cell) return;
+      cell.l = { Target: target, Tooltip: target };
+    });
+  }
+  XLSX.utils.book_append_sheet(workbook, sheet, name.slice(0, 31));
+}
+
+function buildStoryReportWorkbook(): XLSX.WorkBook {
+  const workbook = XLSX.utils.book_new();
+  const story = props.story;
+  if (!story) {
+    appendExcelSheet(workbook, "サマリー", [{ メモ: "ストーリーが選択されていません" }]);
+    return workbook;
+  }
+  appendExcelSheet(workbook, "サマリー", [
+    { 項目: "Application", 値: excelCell(props.application?.name || story.applicationKey) },
+    { 項目: "Application ID", 値: excelCell(props.application?.id || story.applicationId) },
+    { 項目: "Story Key", 値: excelCell(story.storyKey) },
+    { 項目: "Story ID", 値: excelCell(story.id) },
+    { 項目: "Title", 値: excelCell(story.title) },
+    { 項目: "Status", 値: excelCell(story.status) },
+    { 項目: "Review State", 値: excelCell(story.reviewState) },
+    { 項目: "Drift", 値: excelCell(story.driftLevel) },
+    { 項目: "Confidence", 値: excelCell(story.confidenceScore) },
+    { 項目: "Evidence", 値: props.evidence.length },
+    { 項目: "Source Assets", 値: linkedSourceAssets.value.length },
+    { 項目: "Clips", 値: linkedOperationVideos.value.length },
+    {
+      項目: "Screenshots",
+      値: linkedOperationVideos.value.reduce(
+        (sum, video) => sum + (video.frameCaptures?.length ?? 0),
+        0
+      ),
+    },
+  ]);
+  appendExcelSheet(workbook, "ユーザーストーリー", [
+    {
+      StoryKey: excelCell(story.storyKey),
+      StoryID: excelCell(story.id),
+      Title: excelCell(story.title),
+      Summary: excelCell(story.summary),
+      UserStory: excelCell(story.userStory),
+      Domain: excelCell(story.domain),
+      Milestone: excelCell(story.milestone),
+      Labels: excelCell(story.labels),
+      Repository: excelCell(story.repoFullName || props.application?.repoFullName),
+      FileSpaceID: excelCell(story.fileSpaceId || props.application?.fileSpaceId),
+      GeneratedAt: excelCell(story.generatedAt),
+      KnowledgeCheckedAt: excelCell(story.sourceFreshness.knowledgeCheckedAt),
+      GitHubCheckedAt: excelCell(story.sourceFreshness.githubCheckedAt),
+      StaleSources: excelCell(story.sourceFreshness.staleSources),
+    },
+  ]);
+  appendExcelSheet(
+    workbook,
+    "受け入れ条件",
+    story.acceptanceCriteria.map((ac, index) => ({
+      No: index + 1,
+      ACID: excelCell(ac.id),
+      Text: excelCell(ac.text),
+      State: excelCell(ac.state),
+      EvidenceIDs: excelCell(ac.evidenceIds),
+    }))
+  );
+  appendExcelSheet(
+    workbook,
+    "証跡リンク",
+    props.evidence.map((item) => ({
+      EvidenceID: excelCell(item.id),
+      Title: excelCell(item.title),
+      Type: excelCell(item.type),
+      Freshness: excelCell(item.freshness),
+      ConfidenceImpact: excelCell(item.confidenceImpact),
+      Excerpt: excelCell(item.excerpt),
+      ObservedUserAction: excelCell(item.observedUserAction),
+      ObservedUISurface: excelCell(item.observedUiSurface),
+      SourceURL: excelCell(item.sourceUrl || item.citation.uri),
+      SourceAssetID: excelCell(item.sourceAssetId),
+      GCSPath: excelCell(item.gcsPath),
+      FileSpaceDocumentID: excelCell(item.fileSpaceDocumentId),
+      Repository: excelCell(item.repoFullName || item.codeRef?.repoFullName),
+      PullRequest: excelCell(item.pullRequest || item.codeRef?.pullRequest),
+      Commit: excelCell(item.commit || item.codeRef?.commit),
+      Path: excelCell(item.path || item.codeRef?.path),
+      CitationTitle: excelCell(item.citation.title),
+      CitationSnippet: excelCell(item.citation.snippet),
+    })),
+    ["SourceURL"]
+  );
+  appendExcelSheet(
+    workbook,
+    "Source Assets",
+    linkedSourceAssets.value.map((asset) => ({
+      SourceAssetID: excelCell(asset.id),
+      Title: excelCell(asset.title),
+      SourceType: excelCell(asset.sourceType),
+      Summary: excelCell(asset.summary),
+      URI: excelCell(asset.uri),
+      GCSPath: excelCell(asset.gcsPath),
+      StoragePath: excelCell(asset.storagePath),
+      FileSpaceID: excelCell(asset.fileSpaceId),
+      FileSpaceDocumentID: excelCell(asset.fileSpaceDocumentId),
+      Repository: excelCell(asset.repoFullName),
+      Path: excelCell(asset.path),
+      PullRequest: excelCell(asset.pullRequest),
+      Commit: excelCell(asset.commit),
+      DiscoveryStatus: excelCell(asset.discoveryStatus),
+      DiscoveryDocumentID: excelCell(asset.discoveryDocumentId),
+      DiscoveryError: excelCell(asset.discoveryErrorMessage),
+    })),
+    ["URI"]
+  );
+  appendExcelSheet(
+    workbook,
+    "クリップ",
+    linkedOperationVideos.value.map((video) => ({
+      ClipID: excelCell(video.id),
+      Title: excelCell(video.title),
+      VideoURL: excelCell(videoUrls[video.id]),
+      StoragePath: excelCell(video.storagePath),
+      Duration: excelCell(formatMilliseconds(video.durationMs)),
+      DurationMs: excelCell(video.durationMs),
+      Screenshots: excelCell(video.frameCaptures?.length ?? 0),
+      AnalysisStatus: excelCell(video.analysisStatus),
+      AnalyzedAt: excelCell(video.analyzedAt),
+      SourceAssetID: excelCell(video.sourceAssetId),
+      JourneySourceAssetID: excelCell(video.journeySourceAssetId),
+    })),
+    ["VideoURL"]
+  );
+  appendExcelSheet(
+    workbook,
+    "スクリーンショット",
+    linkedOperationVideos.value.flatMap((video) =>
+      (video.frameCaptures ?? []).map((frame) => ({
+        ClipID: excelCell(video.id),
+        FrameID: excelCell(frame.id),
+        Timestamp: excelCell(formatMilliseconds(frame.timestampMs)),
+        TimestampMs: excelCell(frame.timestampMs),
+        URL: excelCell(frameUrls[frameKey(video.id, frame.id)]),
+        StoragePath: excelCell(frame.storagePath),
+        Width: excelCell(frame.width),
+        Height: excelCell(frame.height),
+      }))
+    ),
+    ["URL"]
+  );
+  appendExcelSheet(
+    workbook,
+    "Code References",
+    story.codeRefs.map((ref) => ({
+      Repository: excelCell(ref.repoFullName || story.repoFullName),
+      Branch: excelCell(ref.branch),
+      PullRequest: excelCell(ref.pullRequest),
+      Commit: excelCell(ref.commit),
+      Path: excelCell(ref.path),
+      LineStart: excelCell(ref.lineStart),
+      LineEnd: excelCell(ref.lineEnd),
+      Summary: excelCell(ref.summary),
+    }))
+  );
+  return workbook;
+}
+
 function currentReportText(): string {
+  if (reportMode.value === "excel") {
+    return reportExcelSheets
+      .map((sheet) => `${sheet.name}: ${sheet.description}`)
+      .join("\n");
+  }
   return reportMode.value === "html" ? reportHtml.value : reportMarkdown.value;
 }
 
 function openReport(): void {
+  if (reportMode.value === "excel") {
+    downloadReport();
+    return;
+  }
   refreshReportHtmlUrl();
   if (reportMode.value === "html" && reportHtmlUrl.value) {
     window.open(reportHtmlUrl.value, "_blank", "noopener,noreferrer");
@@ -774,6 +1020,25 @@ function openReport(): void {
 }
 
 function downloadReport(): void {
+  if (reportMode.value === "excel") {
+    const excelBuffer = XLSX.write(buildStoryReportWorkbook(), {
+      bookType: "xlsx",
+      type: "array",
+    }) as ArrayBuffer;
+    const url = URL.createObjectURL(
+      new Blob([excelBuffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      })
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${reportFileStem.value}-storyvault-report.xlsx`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    return;
+  }
   const text = currentReportText();
   if (!text) return;
   const isHtml = reportMode.value === "html";

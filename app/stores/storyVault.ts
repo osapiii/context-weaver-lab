@@ -41,15 +41,16 @@ import type {
   DecodedStoryVaultApplication,
   DecodedStoryVaultApplicationScanProfile,
   DecodedStoryVaultCapability,
+  DecodedStoryVaultClip,
+  DecodedStoryVaultClipGroup,
   DecodedStoryVaultDraftPatch,
   DecodedStoryVaultGenerationSession,
-  DecodedStoryVaultOperationVideo,
-  DecodedStoryVaultOperationVideoGroup,
   DecodedStoryVaultSourceConnection,
   DecodedStoryVaultSourceAsset,
   DecodedStoryVaultStory,
   DecodedStoryVaultStoryEvidence,
   StoryVaultApplicationScanRun,
+  StoryVaultClip,
   StoryVaultDriftLevel,
   StoryVaultOperationVideoClip,
   StoryVaultOperationVideoDisplaySurface,
@@ -66,10 +67,10 @@ import {
   storyVaultApplicationScanProfileConverter,
   storyVaultApplicationConverter,
   storyVaultCapabilityConverter,
+  storyVaultClipConverter,
+  storyVaultClipGroupConverter,
   storyVaultDraftPatchConverter,
   storyVaultGenerationSessionConverter,
-  storyVaultOperationVideoConverter,
-  storyVaultOperationVideoGroupConverter,
   storyVaultSourceAssetConverter,
   storyVaultSourceConnectionConverter,
   storyVaultStoryConverter,
@@ -147,9 +148,9 @@ export type StoryVaultScreenVariantExplorationInput = {
   scanProfileId?: string;
 };
 
-export type StoryVaultOperationVideoSaveInput = {
+export type StoryVaultClipSaveInput = {
   applicationId: string;
-  groupId: string;
+  clipGroupId: string;
   title: string;
   description?: string;
   tags?: string[];
@@ -173,14 +174,8 @@ export type StoryVaultOperationVideoSaveInput = {
   sourceDisplaySurface?: StoryVaultOperationVideoDisplaySurface;
 };
 
-export type StoryVaultOperationVideoAppendInput =
-  StoryVaultOperationVideoSaveInput & {
-    videoId: string;
-  };
-
-export type StoryVaultOperationVideoClipAnalysisInput = {
-  videoId: string;
-  clipId?: string;
+export type StoryVaultClipAnalysisInput = {
+  clipId: string;
   title?: string;
   description?: string;
   transcriptText: string;
@@ -201,22 +196,36 @@ export type StoryVaultOperationVideoClipAnalysisInput = {
 
 export type StoryVaultZappingVideoAnalysisInput = {
   applicationId: string;
-  videoId: string;
+  clipId: string;
   prompt?: string;
 };
 
 export type StoryVaultRelatedContextAnalysisInput = {
   applicationId: string;
-  videoId: string;
+  clipId: string;
   provider: "github" | "slack" | "knowledge";
   prompt?: string;
 };
 
-export type StoryVaultOperationVideoGroupInput = {
+export type StoryVaultClipGroupInput = {
   id?: string;
   applicationId: string;
   name: string;
   description?: string;
+};
+
+export type StoryVaultClipMoveInput = {
+  clipIds: string[];
+  groupId: string;
+};
+
+export type StoryVaultClipListItem = {
+  key: string;
+  applicationId: string;
+  applicationKey: string;
+  clipGroupId: string;
+  clipGroupNameSnapshot?: string;
+  clip: DecodedStoryVaultClip;
 };
 
 export type StoryVaultSeparatedAdkMode =
@@ -242,111 +251,14 @@ const toDocId = (value: string, fallback: string): string => {
   return normalized || fallback;
 };
 
-const primaryOperationVideoClip = (
-  video: DecodedStoryVaultOperationVideo
-): StoryVaultOperationVideoClip => {
-  const clips = Array.isArray(video.clips) ? video.clips : [];
-  const sortedClips = [...clips].sort((a, b) =>
-    (a.recordedAt || "").localeCompare(b.recordedAt || "")
-  );
-  const firstClip = sortedClips[0];
-  if (firstClip) return firstClip;
-  return {
-    id: "clip-001",
-    fileName: video.fileName,
-    bucketName: video.bucketName,
-    storagePath: video.storagePath,
-    contentType: video.contentType || "video/webm",
-    sizeBytes: video.sizeBytes || 0,
-    durationMs: video.durationMs,
-    transcriptText: video.transcriptText,
-    transcriptProvider: video.transcriptProvider,
-    transcriptSummary: video.transcriptSummary,
-    transcriptSegments: video.transcriptSegments ?? [],
-    transcriptSrt: video.transcriptSrt,
-    transcriptTimingStatus: video.transcriptTimingStatus ?? "unavailable",
-    quickScan: video.quickScan,
-    frameCaptures: video.frameCaptures ?? [],
-    metadataFileName: video.metadataFileName,
-    metadataStoragePath: video.metadataStoragePath,
-    journeyFileName: video.journeyFileName,
-    journeyStoragePath: video.journeyStoragePath,
-    fileSpaceRequestId: video.fileSpaceRequestId,
-    journeyFileSpaceRequestId: video.journeyFileSpaceRequestId,
-    sourceAssetId: video.sourceAssetId,
-    journeySourceAssetId: video.journeySourceAssetId,
-    sourceDisplaySurface: video.sourceDisplaySurface ?? "unknown",
-    recordedAt: video.recordedAt,
-  };
-};
-
-const normalizedOperationVideoClips = (
-  video: DecodedStoryVaultOperationVideo
-): StoryVaultOperationVideoClip[] => {
-  const clips = Array.isArray(video.clips) ? video.clips : [];
-  const normalized = clips.length > 0 ? clips : [primaryOperationVideoClip(video)];
-  return [...normalized].sort((a, b) =>
-    (a.recordedAt || "").localeCompare(b.recordedAt || "")
-  );
-};
-
-const normalizeOperationVideo = (
-  video: DecodedStoryVaultOperationVideo
-): DecodedStoryVaultOperationVideo => {
-  const clips = normalizedOperationVideoClips(video);
-  const primary = clips[0] ?? primaryOperationVideoClip(video);
-  const totalDurationMs = clips.reduce(
-    (sum, clip) => sum + Math.max(0, clip.durationMs ?? 0),
-    0
-  );
-  return {
-    ...video,
-    fileName: primary.fileName,
-    bucketName: primary.bucketName,
-    storagePath: primary.storagePath,
-    contentType: primary.contentType,
-    sizeBytes: primary.sizeBytes,
-    durationMs: primary.durationMs,
-    transcriptText: primary.transcriptText,
-    transcriptProvider: primary.transcriptProvider,
-    transcriptSummary: primary.transcriptSummary,
-    transcriptSegments: primary.transcriptSegments ?? [],
-    transcriptSrt: primary.transcriptSrt,
-    transcriptTimingStatus: primary.transcriptTimingStatus ?? "unavailable",
-    quickScan: primary.quickScan,
-    frameCaptures: primary.frameCaptures ?? [],
-    fileSpaceRequestId: primary.fileSpaceRequestId ?? video.fileSpaceRequestId,
-    metadataFileName: primary.metadataFileName ?? video.metadataFileName,
-    metadataStoragePath: primary.metadataStoragePath ?? video.metadataStoragePath,
-    journeyFileName: primary.journeyFileName ?? video.journeyFileName,
-    journeyStoragePath: primary.journeyStoragePath ?? video.journeyStoragePath,
-    journeyFileSpaceRequestId:
-      primary.journeyFileSpaceRequestId ?? video.journeyFileSpaceRequestId,
-    sourceAssetId: primary.sourceAssetId ?? video.sourceAssetId,
-    journeySourceAssetId:
-      primary.journeySourceAssetId ?? video.journeySourceAssetId,
-    sourceDisplaySurface: primary.sourceDisplaySurface ?? video.sourceDisplaySurface,
-    recordedAt: primary.recordedAt || video.recordedAt,
-    clips,
-    clipCount: clips.length,
-    totalDurationMs: totalDurationMs || primary.durationMs,
-    lastClipAddedAt:
-      video.lastClipAddedAt || clips.at(-1)?.recordedAt || video.recordedAt,
-  };
-};
-
-const operationVideoSourceAssetIds = (
-  video: DecodedStoryVaultOperationVideo
+const clipSourceAssetIds = (
+  clip: Pick<DecodedStoryVaultClip, "id" | "sourceAssetId" | "journeySourceAssetId">
 ): string[] => {
   const ids = [
-    video.sourceAssetId,
-    video.journeySourceAssetId,
-    `source-asset-${video.id}`,
-    `source-asset-${video.id}-journey`,
-    ...normalizedOperationVideoClips(video).flatMap((clip) => [
-      clip.sourceAssetId,
-      clip.journeySourceAssetId,
-    ]),
+    clip.sourceAssetId,
+    clip.journeySourceAssetId,
+    `source-asset-${clip.id}`,
+    `source-asset-${clip.id}-journey`,
   ];
   return ids.filter(
     (id, index, arr): id is string => Boolean(id) && arr.indexOf(id) === index
@@ -408,6 +320,37 @@ const extractZappingAnalysisResultCandidate = (
     const parsed = extractZappingAnalysisResultCandidate(candidate);
     if (parsed) return parsed;
   }
+
+  const hasResultSignal =
+    "schemaVersion" in record ||
+    "generatedAt" in record ||
+    "transcriptSummary" in record ||
+    "productContextSummary" in record ||
+    "operationIntent" in record ||
+    "storyCandidates" in record ||
+    "notes" in record;
+  if (!hasResultSignal) return undefined;
+
+  const fallbackShape = {
+    schemaVersion: record.schemaVersion || "storyvault-zapping-analysis-v2",
+    generatedAt:
+      typeof record.generatedAt === "string" && record.generatedAt.trim()
+        ? record.generatedAt
+        : new Date().toISOString(),
+    transcriptSummary: record.transcriptSummary,
+    productContextSummary: record.productContextSummary,
+    operationIntent: record.operationIntent,
+    storyCandidates: Array.isArray(record.storyCandidates) ? record.storyCandidates : [],
+    notes: Array.isArray(record.notes)
+      ? record.notes
+      : typeof record.notes === "string"
+        ? [record.notes]
+        : [],
+  };
+  const fallback = StoryVaultZappingAnalysisResultSchema.safeParse(
+    normalizeAdkResultValue(fallbackShape)
+  );
+  if (fallback.success) return fallback.data;
   return undefined;
 };
 
@@ -470,23 +413,21 @@ const assertTimestampedTranscript = (
 
 const normalizeZappingAnalysisResultEvidence = (params: {
   result: StoryVaultZappingAnalysisResult;
-  video: DecodedStoryVaultOperationVideo;
+  clip: DecodedStoryVaultClip;
 }): StoryVaultZappingAnalysisResult => {
-  const video = normalizeOperationVideo(params.video);
-  const clips = normalizedOperationVideoClips(video);
-  const cueEntries = clips.flatMap((clip) =>
-    (clip.transcriptSegments ?? []).flatMap((cue) =>
-      transcriptCueIdForClip(clip, cue).map((id) => ({ id, clip, cue }))
-    )
-  );
-  const cueById = new Map(cueEntries.map((entry) => [entry.id, entry]));
-  const allFrames = clips.flatMap((clip) =>
-    (clip.frameCaptures ?? []).map((frame) => ({
-      id: `${clip.id}:${frame.id}`,
-      rawId: frame.id,
-      timestampMs: frame.timestampMs,
+  const cueEntries = (params.clip.transcriptSegments ?? []).flatMap((cue) =>
+    transcriptCueIdForClip(params.clip, cue).map((id) => ({
+      id,
+      clip: params.clip,
+      cue,
     }))
   );
+  const cueById = new Map(cueEntries.map((entry) => [entry.id, entry]));
+  const allFrames = (params.clip.frameCaptures ?? []).map((frame) => ({
+    id: `${params.clip.id}:${frame.id}`,
+    rawId: frame.id,
+    timestampMs: frame.timestampMs,
+  }));
 
   return {
     ...params.result,
@@ -571,12 +512,12 @@ const assignStoryKeysToZappingAnalysisResult = (params: {
   applicationId: string;
   result: StoryVaultZappingAnalysisResult;
   stories: DecodedStoryVaultStory[];
-  operationVideos: DecodedStoryVaultOperationVideo[];
+  clips: DecodedStoryVaultClip[];
 }): StoryVaultZappingAnalysisResult => {
   let nextSequence = nextUserStorySequenceForApplication({
     applicationId: params.applicationId,
     stories: params.stories,
-    operationVideos: params.operationVideos,
+    clips: params.clips,
   });
   return {
     ...params.result,
@@ -991,8 +932,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
     sourceConnections: [] as DecodedStoryVaultSourceConnection[],
     scanProfiles: [] as DecodedStoryVaultApplicationScanProfile[],
     sourceAssets: [] as DecodedStoryVaultSourceAsset[],
-    operationVideos: [] as DecodedStoryVaultOperationVideo[],
-    operationVideoGroups: [] as DecodedStoryVaultOperationVideoGroup[],
+    clips: [] as DecodedStoryVaultClip[],
+    clipGroups: [] as DecodedStoryVaultClipGroup[],
     generationSessions: [] as DecodedStoryVaultGenerationSession[],
     draftPatches: [] as DecodedStoryVaultDraftPatch[],
     selectedApplicationId: "" as string,
@@ -1083,20 +1024,35 @@ export const useStoryVaultStore = defineStore("storyVault", {
         (source) => source.applicationId === applicationId
       );
     },
-    activeOperationVideos(state): DecodedStoryVaultOperationVideo[] {
+    activeClips(state): StoryVaultClipListItem[] {
       const applicationId =
         state.selectedApplicationId || state.applications[0]?.id || "";
-      if (!applicationId) return state.operationVideos;
-      return state.operationVideos.filter(
-        (video) => video.applicationId === applicationId
+      const clips = !applicationId
+        ? state.clips
+        : state.clips.filter((clip) => clip.applicationId === applicationId);
+      return clips.map((clip) => ({
+        key: clip.id,
+        applicationId: clip.applicationId,
+        applicationKey: clip.applicationKey,
+        clipGroupId: clip.clipGroupId,
+        clipGroupNameSnapshot: clip.clipGroupNameSnapshot,
+        clip,
+      }));
+    },
+    activeClipRecords(state): DecodedStoryVaultClip[] {
+      const applicationId =
+        state.selectedApplicationId || state.applications[0]?.id || "";
+      if (!applicationId) return state.clips;
+      return state.clips.filter(
+        (clip) => clip.applicationId === applicationId
       );
     },
-    activeOperationVideoGroups(state): DecodedStoryVaultOperationVideoGroup[] {
+    activeClipGroups(state): DecodedStoryVaultClipGroup[] {
       const applicationId =
         state.selectedApplicationId || state.applications[0]?.id || "";
       const groups = !applicationId
-        ? state.operationVideoGroups
-        : state.operationVideoGroups.filter(
+        ? state.clipGroups
+        : state.clipGroups.filter(
             (group) => group.applicationId === applicationId
           );
       return [...groups].sort((a, b) => {
@@ -1259,11 +1215,11 @@ export const useStoryVaultStore = defineStore("storyVault", {
     scanProfileCollectionPath(): string {
       return useContextStore().baseFirestorePath("storyVaultScanProfiles");
     },
-    operationVideoCollectionPath(): string {
-      return useContextStore().baseFirestorePath("storyVaultOperationVideos");
+    clipCollectionPath(): string {
+      return useContextStore().baseFirestorePath("storyVaultClips");
     },
-    operationVideoGroupCollectionPath(): string {
-      return useContextStore().baseFirestorePath("storyVaultOperationVideoGroups");
+    clipGroupCollectionPath(): string {
+      return useContextStore().baseFirestorePath("storyVaultClipGroups");
     },
     capabilityCollectionPath(): string {
       return useContextStore().baseFirestorePath("storyVaultCapabilities");
@@ -1298,8 +1254,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
       this.scanProfiles = [];
       this.capabilities = [];
       this.sourceAssets = [];
-      this.operationVideos = [];
-      this.operationVideoGroups = [];
+      this.clips = [];
+      this.clipGroups = [];
       this.generationSessions = [];
       this.draftPatches = [];
       this.selectedApplicationId = this.applications.some(
@@ -1330,8 +1286,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
           evidence,
           sourceConnections,
           scanProfiles,
-          operationVideos,
-          operationVideoGroups,
+          clips,
+          clipGroups,
           capabilities,
           sourceAssets,
           generationSessions,
@@ -1365,14 +1321,14 @@ export const useStoryVaultStore = defineStore("storyVault", {
             limit: 200,
           }),
           firestoreOps.getDocumentsWithQueryAndConverter({
-            collectionName: this.operationVideoCollectionPath(),
-            converter: storyVaultOperationVideoConverter,
+            collectionName: this.clipCollectionPath(),
+            converter: storyVaultClipConverter,
             orderBy: { field: "recordedAt", direction: "desc" },
             limit: 200,
           }),
           firestoreOps.getDocumentsWithQueryAndConverter({
-            collectionName: this.operationVideoGroupCollectionPath(),
-            converter: storyVaultOperationVideoGroupConverter,
+            collectionName: this.clipGroupCollectionPath(),
+            converter: storyVaultClipGroupConverter,
             orderBy: { field: "updatedAt", direction: "desc" },
             limit: 200,
           }),
@@ -1403,8 +1359,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
         this.evidence = evidence;
         this.sourceConnections = sourceConnections;
         this.scanProfiles = scanProfiles;
-        this.operationVideos = operationVideos.map(normalizeOperationVideo);
-        this.operationVideoGroups = operationVideoGroups;
+        this.clips = clips;
+        this.clipGroups = clipGroups;
         this.capabilities = capabilities;
         this.sourceAssets = sourceAssets;
         this.generationSessions = generationSessions;
@@ -1421,7 +1377,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
         if (this.applications.length === 0) {
           this.loadMockData();
         } else {
-          await this.ensureDefaultOperationVideoGroups();
+          await this.ensureDefaultClipGroups();
+          await this.reconcileZappingVideoAnalysisRequests();
         }
       } catch (err) {
         log("WARN", "StoryVault Firestore fetch failed, using mock data", err);
@@ -2042,8 +1999,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
         const sources = this.sourceConnections.filter(
           (source) => source.applicationId === applicationId
         );
-        const videos = this.operationVideos.filter(
-          (video) => video.applicationId === applicationId
+        const clips = this.clips.filter(
+          (clip) => clip.applicationId === applicationId
         );
         const capabilities = this.capabilities.filter(
           (capability) => capability.applicationId === applicationId
@@ -2081,10 +2038,10 @@ export const useStoryVaultStore = defineStore("storyVault", {
               docId: source.id,
             })
           ),
-          ...videos.map((video) =>
+          ...clips.map((clip) =>
             firestoreOps.deleteDocument({
-              collectionName: this.operationVideoCollectionPath(),
-              docId: video.id,
+              collectionName: this.clipCollectionPath(),
+              docId: clip.id,
             })
           ),
           ...capabilities.map((capability) =>
@@ -2125,7 +2082,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
         this.sourceConnections = this.sourceConnections.filter(
           (source) => source.applicationId !== applicationId
         );
-        this.operationVideos = this.operationVideos.filter(
+        this.clips = this.clips.filter(
           (video) => video.applicationId !== applicationId
         );
         this.capabilities = this.capabilities.filter(
@@ -2353,8 +2310,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
         }));
     },
     zappingKnowledgePipelineForApplication(applicationId: string): Record<string, unknown> {
-      const videos = this.operationVideos.filter(
-        (video) => video.applicationId === applicationId
+      const clips = this.clips.filter(
+        (clip) => clip.applicationId === applicationId
       );
       const zappingAssets = this.sourceAssets.filter(
         (asset) =>
@@ -2365,18 +2322,18 @@ export const useStoryVaultStore = defineStore("storyVault", {
       const searchDocuments = zappingAssets.filter((asset) =>
         searchReadyStatuses.has(asset.discoveryStatus)
       );
-      const frameCount = videos.reduce(
-        (sum, video) => sum + (video.frameCaptures?.length ?? 0),
+      const frameCount = clips.reduce(
+        (sum, clip) => sum + (clip.frameCaptures?.length ?? 0),
         0
       );
-      const transcriptCount = videos.filter(
-        (video) =>
-          Boolean(video.transcriptText?.trim()) ||
-          Boolean(video.transcriptSummary?.trim()) ||
-          Boolean(video.quickScan?.transcriptSummary?.trim())
+      const transcriptCount = clips.filter(
+        (clip) =>
+          Boolean(clip.transcriptText?.trim()) ||
+          Boolean(clip.transcriptSummary?.trim()) ||
+          Boolean(clip.quickScan?.transcriptSummary?.trim())
       ).length;
-      const analyzedCount = videos.filter(
-        (video) => video.analysisStatus === "completed"
+      const analyzedCount = clips.filter(
+        (clip) => clip.analysisStatus === "completed"
       ).length;
 
       return {
@@ -2386,7 +2343,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
           this.applications.find((item) => item.id === applicationId)?.fileSpaceId ??
           null,
         source_of_truth:
-          "操作動画から抽出したスクリーンショット、Gemini全文文字起こし、文字起こし要約、操作ステップをFileSpace/Vertex AI Searchへ登録し、Capability/Story ADKが検索参照します。",
+          "クリップから抽出したスクリーンショット、Gemini全文文字起こし、文字起こし要約、操作ステップをFileSpace/Vertex AI Searchへ登録し、Capability/Story ADKが検索参照します。",
         included_evidence: [
           "operation_video_metadata",
           "operation_video_journey",
@@ -2396,7 +2353,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
           "operation_steps",
           "zapping_analysis_result",
         ],
-        operation_video_count: videos.length,
+        operation_clip_count: clips.length,
         search_document_count: searchDocuments.length,
         zapping_asset_count: zappingAssets.length,
         frame_capture_count: frameCount,
@@ -2411,21 +2368,21 @@ export const useStoryVaultStore = defineStore("storyVault", {
           journeyFileSpaceRequestId: video.journeyFileSpaceRequestId,
           frameCount: video.frameCaptures?.length ?? 0,
           hasTranscript:
-            Boolean(video.transcriptText?.trim()) ||
-            Boolean(video.transcriptSummary?.trim()) ||
+            Boolean(clip.transcriptText?.trim()) ||
+            Boolean(clip.transcriptSummary?.trim()) ||
             Boolean(video.quickScan?.transcriptSummary?.trim()),
         })),
       };
     },
-    defaultOperationVideoGroupId(applicationId: string): string {
-      return `operation-video-group-${applicationId}-legacy`;
+    defaultClipGroupId(applicationId: string): string {
+      return `clip-group-${applicationId}-default`;
     },
-    operationVideoCountForGroup(groupId: string): number {
-      return this.operationVideos.filter((video) => video.groupId === groupId).length;
+    clipCountForGroup(groupId: string): number {
+      return this.clips.filter((clip) => clip.clipGroupId === groupId).length;
     },
-    async createOperationVideoGroup(
-      input: StoryVaultOperationVideoGroupInput
-    ): Promise<DecodedStoryVaultOperationVideoGroup> {
+    async createClipGroup(
+      input: StoryVaultClipGroupInput
+    ): Promise<DecodedStoryVaultClipGroup> {
       const application = this.applications.find(
         (item) => item.id === input.applicationId
       );
@@ -2434,230 +2391,192 @@ export const useStoryVaultStore = defineStore("storyVault", {
       }
       const name = input.name.trim();
       if (!name) {
-        throw new Error("動画グループ名を入力してください");
+        throw new Error("クリップグループ名を入力してください");
       }
-      const groupId = input.id || `operation-video-group-${createRandomDocId()}`;
-      const group: DecodedStoryVaultOperationVideoGroup = {
+      const groupId = input.id || `clip-group-${createRandomDocId()}`;
+      const group: DecodedStoryVaultClipGroup = {
         id: groupId,
         applicationId: application.id,
         applicationKey: application.applicationKey,
         name,
         description: input.description?.trim() || undefined,
-        videoCount: this.operationVideoCountForGroup(groupId),
+        clipCount: this.clipCountForGroup(groupId),
       };
       const firestoreOps = useFirestoreDocOperation();
       const created = await firestoreOps.createDocument({
-        collectionName: this.operationVideoGroupCollectionPath(),
+        collectionName: this.clipGroupCollectionPath(),
         docId: group.id,
         docData: group,
-        converter: storyVaultOperationVideoGroupConverter,
+        converter: storyVaultClipGroupConverter,
         merge: true,
       });
       const savedGroup = created ?? group;
-      this.operationVideoGroups = [
+      this.clipGroups = [
         savedGroup,
-        ...this.operationVideoGroups.filter((item) => item.id !== savedGroup.id),
+        ...this.clipGroups.filter((item) => item.id !== savedGroup.id),
       ];
-      this.lastRunLog.unshift(`Operation Video Group: ${name} を作成`);
+      this.lastRunLog.unshift(`Clip Group: ${name} を作成`);
       return savedGroup;
     },
-    async updateOperationVideoGroup(input: {
+    async saveClipToGroup(
+      input: StoryVaultClipSaveInput
+    ): Promise<DecodedStoryVaultClip> {
+      return this.saveClipCapture(input);
+    },
+    async updateClipGroup(input: {
       groupId: string;
       name: string;
       description?: string;
     }): Promise<void> {
-      const group = this.operationVideoGroups.find(
+      const group = this.clipGroups.find(
         (item) => item.id === input.groupId
       );
       if (!group) {
-        throw new Error("更新対象の動画グループが見つかりません");
+        throw new Error("更新対象のクリップグループが見つかりません");
       }
       const name = input.name.trim();
       if (!name) {
-        throw new Error("動画グループ名を入力してください");
+        throw new Error("クリップグループ名を入力してください");
       }
-      const nextGroup: DecodedStoryVaultOperationVideoGroup = {
+      const nextGroup: DecodedStoryVaultClipGroup = {
         ...group,
         name,
         description: input.description?.trim() || undefined,
-        videoCount: this.operationVideoCountForGroup(group.id),
+        clipCount: this.clipCountForGroup(group.id),
       };
-      const groupVideos = this.operationVideos.filter(
-        (video) => video.groupId === group.id
+      const groupClips = this.clips.filter(
+        (clip) => clip.clipGroupId === group.id
       );
-      const nextVideos = this.operationVideos.map((video) =>
-        video.groupId === group.id
-          ? { ...video, groupNameSnapshot: name }
-          : video
+      const nextClips = this.clips.map((clip) =>
+        clip.clipGroupId === group.id
+          ? { ...clip, clipGroupNameSnapshot: name }
+          : clip
       );
       const firestoreOps = useFirestoreDocOperation();
       await Promise.all([
         firestoreOps.createDocument({
-          collectionName: this.operationVideoGroupCollectionPath(),
+          collectionName: this.clipGroupCollectionPath(),
           docId: nextGroup.id,
           docData: nextGroup,
-          converter: storyVaultOperationVideoGroupConverter,
+          converter: storyVaultClipGroupConverter,
           merge: true,
         }),
-        ...groupVideos.map((video) =>
+        ...groupClips.map((clip) =>
           firestoreOps.createDocument({
-            collectionName: this.operationVideoCollectionPath(),
-            docId: video.id,
-            docData: { ...video, groupNameSnapshot: name },
-            converter: storyVaultOperationVideoConverter,
+            collectionName: this.clipCollectionPath(),
+            docId: clip.id,
+            docData: { ...clip, clipGroupNameSnapshot: name },
+            converter: storyVaultClipConverter,
             merge: true,
           })
         ),
       ]);
-      this.operationVideoGroups = this.operationVideoGroups.map((item) =>
+      this.clipGroups = this.clipGroups.map((item) =>
         item.id === nextGroup.id ? nextGroup : item
       );
-      this.operationVideos = nextVideos;
-      this.lastRunLog.unshift(`Operation Video Group: ${group.name} を ${name} に変更`);
+      this.clips = nextClips;
+      this.lastRunLog.unshift(`Clip Group: ${group.name} を ${name} に変更`);
     },
-    async deleteOperationVideoGroup(groupId: string): Promise<void> {
-      const group = this.operationVideoGroups.find((item) => item.id === groupId);
+    async deleteClipGroup(groupId: string): Promise<void> {
+      const group = this.clipGroups.find((item) => item.id === groupId);
       if (!group) {
-        throw new Error("削除対象の動画グループが見つかりません");
+        throw new Error("削除対象のクリップグループが見つかりません");
       }
-      if (this.operationVideos.some((video) => video.groupId === groupId)) {
-        throw new Error("動画が登録されているグループは削除できません");
+      if (this.clips.some((clip) => clip.clipGroupId === groupId)) {
+        throw new Error("クリップが登録されているグループは削除できません");
       }
       const deleted = await useFirestoreDocOperation().deleteDocument({
-        collectionName: this.operationVideoGroupCollectionPath(),
+        collectionName: this.clipGroupCollectionPath(),
         docId: group.id,
       });
       if (!deleted) {
-        throw new Error("動画グループを削除できませんでした");
+        throw new Error("クリップグループを削除できませんでした");
       }
-      this.operationVideoGroups = this.operationVideoGroups.filter(
+      this.clipGroups = this.clipGroups.filter(
         (item) => item.id !== group.id
       );
-      this.lastRunLog.unshift(`Operation Video Group: ${group.name} を削除`);
+      this.lastRunLog.unshift(`Clip Group: ${group.name} を削除`);
     },
-    async moveOperationVideosToGroup(input: {
-      videoIds: string[];
-      groupId: string;
-    }): Promise<void> {
-      const group = this.operationVideoGroups.find((item) => item.id === input.groupId);
+    async moveClipsToGroup(input: StoryVaultClipMoveInput): Promise<void> {
+      const group = this.clipGroups.find((item) => item.id === input.groupId);
       if (!group) {
-        throw new Error("移動先の動画グループが見つかりません");
+        throw new Error("移動先のクリップグループが見つかりません");
       }
-      const targetIds = Array.from(new Set(input.videoIds)).filter(Boolean);
+      const targetIds = Array.from(new Set(input.clipIds)).filter(Boolean);
       if (targetIds.length === 0) return;
-      const targetVideos = this.operationVideos.filter((video) =>
-        targetIds.includes(video.id)
+      const targetClips = this.clips.filter((clip) =>
+        targetIds.includes(clip.id)
       );
-      if (targetVideos.length === 0) {
-        throw new Error("移動対象の操作動画が見つかりません");
+      if (targetClips.length === 0) {
+        throw new Error("移動対象のクリップが見つかりません");
       }
 
-      const nextVideos = this.operationVideos.map((video) =>
-        targetIds.includes(video.id)
+      const nextClips = this.clips.map((clip) =>
+        targetIds.includes(clip.id)
           ? {
-              ...video,
-              groupId: group.id,
-              groupNameSnapshot: group.name,
+              ...clip,
+              clipGroupId: group.id,
+              clipGroupNameSnapshot: group.name,
             }
-          : video
+          : clip
       );
-      const nextGroups = this.operationVideoGroups.map((item) => ({
+      const nextGroups = this.clipGroups.map((item) => ({
         ...item,
-        videoCount: nextVideos.filter((video) => video.groupId === item.id).length,
+        clipCount: nextClips.filter((clip) => clip.clipGroupId === item.id).length,
       }));
       const firestoreOps = useFirestoreDocOperation();
       await Promise.all([
-        ...targetVideos.map((video) => {
-          const nextVideo = nextVideos.find((item) => item.id === video.id)!;
+        ...targetClips.map((clip) => {
+          const nextClip = nextClips.find((item) => item.id === clip.id)!;
           return firestoreOps.createDocument({
-            collectionName: this.operationVideoCollectionPath(),
-            docId: nextVideo.id,
-            docData: nextVideo,
-            converter: storyVaultOperationVideoConverter,
+            collectionName: this.clipCollectionPath(),
+            docId: nextClip.id,
+            docData: nextClip,
+            converter: storyVaultClipConverter,
             merge: true,
           });
         }),
         ...nextGroups.map((nextGroup) =>
           firestoreOps.createDocument({
-            collectionName: this.operationVideoGroupCollectionPath(),
+            collectionName: this.clipGroupCollectionPath(),
             docId: nextGroup.id,
             docData: nextGroup,
-            converter: storyVaultOperationVideoGroupConverter,
+            converter: storyVaultClipGroupConverter,
             merge: true,
           })
         ),
       ]);
 
-      this.operationVideos = nextVideos;
-      this.operationVideoGroups = nextGroups;
+      this.clips = nextClips;
+      this.clipGroups = nextGroups;
       this.lastRunLog.unshift(
-        `Operation Video Group: ${targetVideos.length}件を ${group.name} に移動`
+        `Clip Group: ${targetClips.length}件を ${group.name} に移動`
       );
     },
-    async ensureDefaultOperationVideoGroups(): Promise<void> {
+    async ensureDefaultClipGroups(): Promise<void> {
       const firestoreOps = useFirestoreDocOperation();
-      const updatedGroups = [...this.operationVideoGroups];
-      const updatedVideos = [...this.operationVideos];
-
       for (const application of this.applications) {
-        const orphanVideos = updatedVideos.filter(
-          (video) => video.applicationId === application.id && !video.groupId
+        const hasGroup = this.clipGroups.some(
+          (group) => group.applicationId === application.id
         );
-        if (orphanVideos.length === 0) continue;
-
-        const groupId = this.defaultOperationVideoGroupId(application.id);
-        const existingGroup = updatedGroups.find((group) => group.id === groupId);
-        const existingGroupVideoCount = updatedVideos.filter(
-          (video) => video.groupId === groupId
-        ).length;
-        const group: DecodedStoryVaultOperationVideoGroup = {
-          ...(existingGroup ?? {}),
-          id: groupId,
+        if (hasGroup) continue;
+        const group: DecodedStoryVaultClipGroup = {
+          id: this.defaultClipGroupId(application.id),
           applicationId: application.id,
           applicationKey: application.applicationKey,
-          name: "既存の操作動画",
-          description: "グループ機能の追加前に保存された操作動画です。",
-          videoCount: existingGroupVideoCount + orphanVideos.length,
+          name: "AIに教える",
+          description: "操作クリップを登録するデフォルトグループです。",
+          clipCount: 0,
         };
-
         await firestoreOps.createDocument({
-          collectionName: this.operationVideoGroupCollectionPath(),
+          collectionName: this.clipGroupCollectionPath(),
           docId: group.id,
           docData: group,
-          converter: storyVaultOperationVideoGroupConverter,
+          converter: storyVaultClipGroupConverter,
           merge: true,
         });
-
-        if (!existingGroup) {
-          updatedGroups.push(group);
-        }
-
-        await Promise.all(
-          orphanVideos.map((video) => {
-            const nextVideo: DecodedStoryVaultOperationVideo = {
-              ...video,
-              groupId: group.id,
-              groupNameSnapshot: group.name,
-            };
-            const index = updatedVideos.findIndex((item) => item.id === video.id);
-            if (index >= 0) updatedVideos[index] = nextVideo;
-            return firestoreOps.createDocument({
-              collectionName: this.operationVideoCollectionPath(),
-              docId: nextVideo.id,
-              docData: nextVideo,
-              converter: storyVaultOperationVideoConverter,
-              merge: true,
-            });
-          })
-        );
+        this.clipGroups = [group, ...this.clipGroups];
       }
-
-      this.operationVideoGroups = updatedGroups.map((group) => ({
-        ...group,
-        videoCount: updatedVideos.filter((video) => video.groupId === group.id)
-          .length,
-      }));
-      this.operationVideos = updatedVideos;
     },
     async persistGenerationSession(
       session: DecodedStoryVaultGenerationSession
@@ -2674,34 +2593,29 @@ export const useStoryVaultStore = defineStore("storyVault", {
         merge: true,
       });
     },
-    async persistOperationVideo(
-      video: DecodedStoryVaultOperationVideo
-    ): Promise<void> {
-      const normalizedVideo = normalizeOperationVideo(video);
-      this.operationVideos = [
-        normalizedVideo,
-        ...this.operationVideos.filter((item) => item.id !== normalizedVideo.id),
+    async persistClip(clip: DecodedStoryVaultClip): Promise<void> {
+      this.clips = [
+        clip,
+        ...this.clips.filter((item) => item.id !== clip.id),
       ];
       await useFirestoreDocOperation().createDocument({
-        collectionName: this.operationVideoCollectionPath(),
-        docId: normalizedVideo.id,
-        docData: normalizedVideo,
-        converter: storyVaultOperationVideoConverter,
+        collectionName: this.clipCollectionPath(),
+        docId: clip.id,
+        docData: clip,
+        converter: storyVaultClipConverter,
         merge: true,
       });
     },
     buildZappingAnalysisModeState(params: {
       application: DecodedStoryVaultApplication;
-      video: DecodedStoryVaultOperationVideo;
+      clip: DecodedStoryVaultClip;
       analysisSessionId: string;
       prompt?: string;
     }): Record<string, unknown> {
       const sourceAssets = this.sourceAssetPayloadForApplication(
         params.application.id
       );
-      const video = normalizeOperationVideo(params.video);
-      const clips = normalizedOperationVideoClips(video);
-      const primaryClip = clips[0] ?? primaryOperationVideoClip(video);
+      const clip = params.clip;
       return {
         active_mode: "storyvault_zapping_analysis",
         storyvault_zapping_analysis: {
@@ -2715,39 +2629,36 @@ export const useStoryVaultStore = defineStore("storyVault", {
             file_space_id: params.application.fileSpaceId,
             repo_full_name: params.application.repoFullName,
             default_branch: params.application.defaultBranch || "main",
-            operation_video_id: video.id,
-            video_storage_path: primaryClip.storagePath,
-            video_bucket_name: primaryClip.bucketName,
-            video_content_type: primaryClip.contentType,
-            video_duration_ms: video.totalDurationMs ?? primaryClip.durationMs,
-            video_clip_count: clips.length,
+            clip_id: clip.id,
+            clip_group_id: clip.clipGroupId,
+            clip_storage_path: clip.storagePath,
+            clip_bucket_name: clip.bucketName,
+            clip_content_type: clip.contentType,
+            clip_duration_ms: clip.durationMs,
           },
           payload: {
-            operation_video: {
-              id: video.id,
-              title: video.title,
-              description: video.description,
-              quickScan: primaryClip.quickScan,
-              transcriptText: primaryClip.transcriptText,
-              transcriptProvider: primaryClip.transcriptProvider,
-              transcriptSummary: primaryClip.transcriptSummary,
-              transcriptSegments: primaryClip.transcriptSegments ?? [],
-              transcriptSrt: primaryClip.transcriptSrt,
-              transcriptTimingStatus:
-                primaryClip.transcriptTimingStatus ?? "unavailable",
-              fileName: primaryClip.fileName,
-              bucketName: primaryClip.bucketName,
-              storagePath: primaryClip.storagePath,
-              contentType: primaryClip.contentType,
-              sizeBytes: primaryClip.sizeBytes,
-              durationMs: video.totalDurationMs ?? primaryClip.durationMs,
-              frameCaptures: primaryClip.frameCaptures,
-              recordedAt: primaryClip.recordedAt,
-              sourceDisplaySurface: primaryClip.sourceDisplaySurface,
-              sourceAssetId: primaryClip.sourceAssetId,
-              journeySourceAssetId: primaryClip.journeySourceAssetId,
-              clipCount: clips.length,
-              clips,
+            clip: {
+              id: clip.id,
+              title: clip.title,
+              description: clip.description,
+              quickScan: clip.quickScan,
+              transcriptText: clip.transcriptText,
+              transcriptProvider: clip.transcriptProvider,
+              transcriptSummary: clip.transcriptSummary,
+              transcriptSegments: clip.transcriptSegments ?? [],
+              transcriptSrt: clip.transcriptSrt,
+              transcriptTimingStatus: clip.transcriptTimingStatus ?? "unavailable",
+              fileName: clip.fileName,
+              bucketName: clip.bucketName,
+              storagePath: clip.storagePath,
+              contentType: clip.contentType,
+              sizeBytes: clip.sizeBytes,
+              durationMs: clip.durationMs,
+              frameCaptures: clip.frameCaptures,
+              recordedAt: clip.recordedAt,
+              sourceDisplaySurface: clip.sourceDisplaySurface,
+              sourceAssetId: clip.sourceAssetId,
+              journeySourceAssetId: clip.journeySourceAssetId,
             },
             source_assets: sourceAssets,
             existing_capabilities: this.capabilities.filter(
@@ -2773,7 +2684,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
               enabled: true,
               file_space_id: params.application.fileSpaceId,
               purpose:
-                "動画の操作意図を、事業・プロダクト背景を含むFileSpace文脈で解釈する",
+                "クリップの操作意図を、事業・プロダクト背景を含むFileSpace文脈で解釈する",
             },
           },
         },
@@ -2781,7 +2692,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
     },
     buildRelatedContextModeState(params: {
       application: DecodedStoryVaultApplication;
-      video: DecodedStoryVaultOperationVideo;
+      clip: DecodedStoryVaultClip;
       sessionId: string;
       organizationId: string;
       spaceId: string;
@@ -2789,7 +2700,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
       provider: "github" | "slack" | "knowledge";
       prompt?: string;
     }): Record<string, unknown> {
-      const video = normalizeOperationVideo(params.video);
+      const clip = params.clip;
       return {
         active_mode: "storyvault_related_context",
         storyvault_related_context: {
@@ -2807,7 +2718,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
             file_space_id: params.application.fileSpaceId,
             repo_full_name: params.application.repoFullName,
             default_branch: params.application.defaultBranch || "main",
-            operation_video_id: params.video.id,
+            clip_id: clip.id,
+            clip_group_id: clip.clipGroupId,
           },
           payload: {
             application: {
@@ -2820,21 +2732,19 @@ export const useStoryVaultStore = defineStore("storyVault", {
               repoFullName: params.application.repoFullName,
               defaultBranch: params.application.defaultBranch || "main",
             },
-            operation_video: {
-              id: video.id,
-              title: video.title,
-              description: video.description,
-              quickScan: video.quickScan,
-              transcriptSummary: video.transcriptSummary,
-              transcriptProvider: video.transcriptProvider,
-              frameCaptures: video.frameCaptures,
-              clips: video.clips,
-              clipCount: video.clipCount,
-              recordedAt: video.recordedAt,
-              sourceDisplaySurface: video.sourceDisplaySurface,
+            clip: {
+              id: clip.id,
+              title: clip.title,
+              description: clip.description,
+              quickScan: clip.quickScan,
+              transcriptSummary: clip.transcriptSummary,
+              transcriptProvider: clip.transcriptProvider,
+              frameCaptures: clip.frameCaptures,
+              recordedAt: clip.recordedAt,
+              sourceDisplaySurface: clip.sourceDisplaySurface,
             },
-            analysis_result: video.analysisResult,
-            existing_related_contexts: video.relatedContexts,
+            analysis_result: clip.analysisResult,
+            existing_related_contexts: clip.relatedContexts,
             user_notes: params.prompt?.trim() || undefined,
             expected_outputs:
               params.provider === "slack"
@@ -2908,7 +2818,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
                 "zapping_analysis_result",
               ],
               purpose:
-                "ザッピング動画由来のリッチ証跡をFileSpace/Vertex AI Searchから検索し、Capability/Story候補の一次根拠として使う",
+                "クリップ由来のリッチ証跡をFileSpace/Vertex AI Searchから検索し、Capability/Story候補の一次根拠として使う",
             },
           },
         },
@@ -2939,18 +2849,17 @@ export const useStoryVaultStore = defineStore("storyVault", {
       if (!application) {
         throw new Error("対象アプリが見つかりません");
       }
-      const video = this.operationVideos.find(
-        (item) => item.id === input.videoId && item.applicationId === application.id
+      const clip = this.clips.find(
+        (item) => item.id === input.clipId && item.applicationId === application.id
       );
-      if (!video) {
-        throw new Error("対象ザッピング動画が見つかりません");
+      if (!clip) {
+        throw new Error("対象クリップが見つかりません");
       }
       const fileSpaceId = application.fileSpaceId?.trim();
       if (!fileSpaceId) {
-        throw new Error("ザッピング解析に使うアプリ専用FileSpace IDを設定してください");
+        throw new Error("ユーザーストーリー解析に使うアプリ専用FileSpace IDを設定してください");
       }
-      const clips = normalizedOperationVideoClips(video);
-      assertTimestampedTranscript(clips);
+      assertTimestampedTranscript([clip]);
 
       const orgId = useOrganizationStore().loggedInOrganizationInfo?.id ?? "";
       const spaceId = useSpaceStore().selectedSpace?.id ?? "";
@@ -2959,36 +2868,36 @@ export const useStoryVaultStore = defineStore("storyVault", {
         throw new Error("組織・スペース・ログイン状態を確認してください");
       }
 
-      const analysisSessionId = `storyvault-zapping-analysis-${application.id}-${video.id}-${Date.now()}-${createRandomDocId()}`;
+      const analysisSessionId = `storyvault-zapping-analysis-${application.id}-${clip.id}-${Date.now()}-${createRandomDocId()}`;
       const responseId = `zapping-analysis-response-${createRandomDocId()}`;
       const modeState = this.buildZappingAnalysisModeState({
         application,
-        video,
+        clip,
         analysisSessionId,
         prompt: input.prompt,
       });
       const prompt =
         input.prompt?.trim() ||
         [
-          `${application.name} のザッピング動画「${video.title}」を解析してください。`,
-          "このRequestDocにはザッピング動画ファイルを添付しています。動画内の画面遷移と音声を第一情報源として扱ってください。",
-          "アプリ専用FileSpaceのVertex AI Searchを参照し、事業背景・プロダクト背景・既存ナレッジを踏まえて動画の操作意図を解釈してください。",
-          "動画からUser Story候補を抽出し、各Storyに根拠となる動画タイムレンジ、代表スクリーンショット、関連スクリーンショットを紐付けてください。",
+          `${application.name} の操作クリップ「${clip.title}」を解析してください。`,
+          "このRequestDocには操作クリップファイルを添付しています。クリップ内の画面遷移と音声を第一情報源として扱ってください。",
+          "アプリ専用FileSpaceのVertex AI Searchを参照し、事業背景・プロダクト背景・既存ナレッジを踏まえてクリップの操作意図を解釈してください。",
+          "クリップからUser Story候補を抽出し、各Storyに根拠となるクリップタイムレンジ、代表スクリーンショット、関連スクリーンショットを紐付けてください。",
           "5秒ごとのスクリーンショットと簡易スキャンメモも補助情報として参照してください。",
         ].join("\n");
 
       this.isAnalyzingZappingVideos = true;
       this.error = null;
       try {
-        const queuedVideo: DecodedStoryVaultOperationVideo = {
-          ...video,
+        const queuedClip: DecodedStoryVaultClip = {
+          ...clip,
           analysisStatus: "queued",
           analysisSessionId,
           analysisOrganizationId: orgId,
           analysisSpaceId: spaceId,
           analysisErrorMessage: undefined,
         };
-        await this.persistOperationVideo(queuedVideo);
+        await this.persistClip(queuedClip);
 
         const requestId = await createAdkInvokeRequest({
           organizationId: orgId,
@@ -3008,21 +2917,23 @@ export const useStoryVaultStore = defineStore("storyVault", {
             workspaceId: application.id,
             history: [],
             modeState,
-            attachments: clips.map((clip) => ({
-              gcsPath: `gs://${clip.bucketName}/${clip.storagePath}`,
-              mimeType: clip.contentType || "video/webm",
-              fileName: clip.fileName,
-            })),
+            attachments: [
+              {
+                gcsPath: `gs://${clip.bucketName}/${clip.storagePath}`,
+                mimeType: clip.contentType || "video/webm",
+                fileName: clip.fileName,
+              },
+            ],
           }),
         });
 
-        await this.persistOperationVideo({
-          ...queuedVideo,
+        await this.persistClip({
+          ...queuedClip,
           analysisRequestId: requestId,
           analysisStatus: "running",
         });
         this.lastRunLog.unshift(
-          `Zapping Analysis: ${application.name} / ${video.title} の解析を開始`
+          `ユーザーストーリー解析: ${application.name} / ${clip.title} の解析を開始`
         );
 
         const stopWatch = watchAdkInvokeRequest({
@@ -3035,7 +2946,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
             output?: AdkInvokeOutput
           ) => {
             void this.updateZappingVideoAnalysisStatus({
-              videoId: video.id,
+              clipId: clip.id,
               requestId,
               status,
               errorMessage,
@@ -3050,9 +2961,9 @@ export const useStoryVaultStore = defineStore("storyVault", {
         return requestId;
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "ザッピング解析の開始に失敗しました";
-        await this.persistOperationVideo({
-          ...video,
+          err instanceof Error ? err.message : "ユーザーストーリー解析の開始に失敗しました";
+        await this.persistClip({
+          ...clip,
           analysisStatus: "error",
           analysisSessionId,
           analysisOrganizationId: orgId,
@@ -3066,18 +2977,18 @@ export const useStoryVaultStore = defineStore("storyVault", {
       }
     },
     async startAllZappingVideoAnalysis(applicationId: string): Promise<string[]> {
-      const targets = this.operationVideos.filter(
+      const targets = this.clips.filter(
         (video) =>
           video.applicationId === applicationId &&
           video.analysisStatus !== "queued" &&
           video.analysisStatus !== "running"
       );
       const requestIds: string[] = [];
-      for (const video of targets) {
+      for (const clip of targets) {
         requestIds.push(
           await this.startZappingVideoAnalysis({
             applicationId,
-            videoId: video.id,
+            clipId: clip.id,
           })
         );
       }
@@ -3092,11 +3003,11 @@ export const useStoryVaultStore = defineStore("storyVault", {
       if (!application) {
         throw new Error("対象アプリが見つかりません");
       }
-      const video = this.operationVideos.find(
-        (item) => item.id === input.videoId && item.applicationId === application.id
+      const clip = this.clips.find(
+        (item) => item.id === input.clipId && item.applicationId === application.id
       );
-      if (!video) {
-        throw new Error("対象ザッピング動画が見つかりません");
+      if (!clip) {
+        throw new Error("対象クリップが見つかりません");
       }
       if (input.provider === "github" && !application.repoFullName?.trim()) {
         throw new Error("GitHub repositoryを選択してください");
@@ -3113,11 +3024,11 @@ export const useStoryVaultStore = defineStore("storyVault", {
         throw new Error("組織・スペース・ログイン状態を確認してください");
       }
 
-      const sessionId = `storyvault-related-context-${application.id}-${video.id}-${Date.now()}-${createRandomDocId()}`;
+      const sessionId = `storyvault-related-context-${application.id}-${clip.id}-${Date.now()}-${createRandomDocId()}`;
       const responseId = `related-context-response-${createRandomDocId()}`;
       const modeState = this.buildRelatedContextModeState({
         application,
-        video,
+        clip,
         sessionId,
         organizationId: orgId,
         spaceId,
@@ -3129,57 +3040,57 @@ export const useStoryVaultStore = defineStore("storyVault", {
         input.prompt?.trim() ||
         (input.provider === "knowledge"
           ? [
-              `${application.name} の操作動画「${video.title}」に関連するFileSpaceナレッジを探してください。`,
-              "動画解析結果、操作メモ、文字起こし要約、Story候補と、Search Store内のファイル名・説明・本文・引用を照合してください。",
+              `${application.name} の操作クリップ「${clip.title}」に関連するFileSpaceナレッジを探してください。`,
+              "クリップ解析結果、操作メモ、文字起こし要約、Story候補と、Search Store内のファイル名・説明・本文・引用を照合してください。",
               "音声メモ、Markdown設計書、アーキテクチャ図、投入ファイルなど、実装やリリースノート作成に役立つファイルだけを返してください。",
               "関連する理由を日本語で付け、関連度の高いナレッジファイルだけを最大10件返してください。",
             ]
           : input.provider === "slack"
           ? [
-              `${application.name} の操作動画「${video.title}」に関連するSlack会話を探してください。`,
-              "動画解析結果、操作メモ、文字起こし要約、Story候補と、Slack投稿・スレッド・チャンネルを照合してください。",
+              `${application.name} の操作クリップ「${clip.title}」に関連するSlack会話を探してください。`,
+              "クリップ解析結果、操作メモ、文字起こし要約、Story候補と、Slack投稿・スレッド・チャンネルを照合してください。",
               "関連する理由を日本語で付け、関連度の高い会話だけを返してください。",
             ]
           : [
-              `${application.name} の操作動画「${video.title}」に関連するGitHub Pull Requestを探してください。`,
-              "動画解析結果、操作メモ、文字起こし要約、Story候補と、GitHub PRのタイトル・本文・ラベル・変更ファイルを照合してください。",
+              `${application.name} の操作クリップ「${clip.title}」に関連するGitHub Pull Requestを探してください。`,
+              "クリップ解析結果、操作メモ、文字起こし要約、Story候補と、GitHub PRのタイトル・本文・ラベル・変更ファイルを照合してください。",
               "関連する理由を日本語で付け、関連度の高いPRだけを返してください。",
             ]).join("\n");
 
       this.isFetchingRelatedContexts = true;
       this.error = null;
       try {
-        await this.persistOperationVideo({
-          ...video,
+        await this.persistClip({
+          ...clip,
           relatedContexts: {
-            ...video.relatedContexts,
+            ...clip.relatedContexts,
             generatedAt: nowIso(),
             status: "running",
             runningProvider: input.provider,
             notes: [],
             github:
               input.provider === "github"
-                ? video.relatedContexts?.github ?? {
+                ? clip.relatedContexts?.github ?? {
                     repoFullName: application.repoFullName,
                     checkedAt: nowIso(),
                     pullRequests: [],
                   }
-                : video.relatedContexts?.github,
+                : clip.relatedContexts?.github,
             slack:
               input.provider === "slack"
-                ? video.relatedContexts?.slack ?? {
+                ? clip.relatedContexts?.slack ?? {
                     checkedAt: nowIso(),
                     messages: [],
                   }
-                : video.relatedContexts?.slack,
+                : clip.relatedContexts?.slack,
             knowledge:
               input.provider === "knowledge"
-                ? video.relatedContexts?.knowledge ?? {
+                ? clip.relatedContexts?.knowledge ?? {
                     fileSpaceId: fileSpaceId || "",
                     checkedAt: nowIso(),
                     documents: [],
                   }
-                : video.relatedContexts?.knowledge,
+                : clip.relatedContexts?.knowledge,
           },
         });
 
@@ -3203,7 +3114,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
         });
 
         this.lastRunLog.unshift(
-          `Related Context: ${application.name} / ${video.title} の${
+          `Related Context: ${application.name} / ${clip.title} の${
             input.provider === "slack"
               ? "Slack会話"
               : input.provider === "knowledge"
@@ -3222,7 +3133,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
             output?: AdkInvokeOutput
           ) => {
             void this.updateRelatedContextAnalysisStatus({
-              videoId: video.id,
+              clipId: clip.id,
               requestId,
               sessionId,
               organizationId: orgId,
@@ -3241,17 +3152,17 @@ export const useStoryVaultStore = defineStore("storyVault", {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "関連コンテキスト取得の開始に失敗しました";
-        await this.persistOperationVideo({
-          ...video,
+        await this.persistClip({
+          ...clip,
           relatedContexts: {
-            ...video.relatedContexts,
+            ...clip.relatedContexts,
             generatedAt: nowIso(),
             status: "error",
             runningProvider: undefined,
             notes: [message],
-            github: video.relatedContexts?.github,
-            slack: video.relatedContexts?.slack,
-            knowledge: video.relatedContexts?.knowledge,
+            github: clip.relatedContexts?.github,
+            slack: clip.relatedContexts?.slack,
+            knowledge: clip.relatedContexts?.knowledge,
           },
         });
         this.error = message;
@@ -3381,7 +3292,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
               asset.sourceType === "application_screen" ||
               asset.sourceType === "application_screen_variant"
           ).length,
-          videoCount: sourceAssets.filter((asset) =>
+          clipCount: sourceAssets.filter((asset) =>
             asset.sourceType.startsWith("operation_video")
           ).length,
           zappingSearchDocumentCount:
@@ -3418,20 +3329,20 @@ export const useStoryVaultStore = defineStore("storyVault", {
           (input.mode === "storyvault_capability_structuring"
             ? [
                 `${application.name} のCapability構造案を作成してください。`,
-                "操作動画から抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
-                "参照対象は動画メタデータ、操作Journey、5秒ごとのスクリーンショット、Gemini全文文字起こし、文字起こし要約、操作ステップです。",
+                "クリップから抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
+                "参照対象はクリップメタデータ、操作Journey、5秒ごとのスクリーンショット、Gemini全文文字起こし、文字起こし要約、操作ステップです。",
                 "SourceAssetの生データだけで完結させず、Search Store上の文脈を検索して業務能力の境界を決めてください。",
               ].join("\n")
             : capability
               ? [
                   `${application.name} の ${capability.name} 配下に置くユーザーストーリー案を生成してください。`,
-                  "操作動画から抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
-                  "動画の全文文字起こし、要約、操作ステップ、スクリーンショット群を検索し、ユーザーの意図と業務文脈が分かるStory/Acceptance Criteriaにしてください。",
+                  "クリップから抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
+                  "クリップの全文文字起こし、要約、操作ステップ、スクリーンショット群を検索し、ユーザーの意図と業務文脈が分かるStory/Acceptance Criteriaにしてください。",
                 ].join("\n")
               : [
                   `${application.name} の既存Capability群に紐づくユーザーストーリー案を生成してください。`,
-                  "操作動画から抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
-                  "動画の全文文字起こし、要約、操作ステップ、スクリーンショット群を検索し、Capabilityごとのユーザー目的に落とし込んでください。",
+                  "クリップから抽出してFileSpace/Vertex AI Searchへ登録したザッピング証跡を一次根拠として参照してください。",
+                  "クリップの全文文字起こし、要約、操作ステップ、スクリーンショット群を検索し、Capabilityごとのユーザー目的に落とし込んでください。",
                 ].join("\n"));
 
         const requestId = await createAdkInvokeRequest({
@@ -3505,56 +3416,64 @@ export const useStoryVaultStore = defineStore("storyVault", {
       }
     },
     async updateZappingVideoAnalysisStatus(params: {
-      videoId: string;
+      clipId: string;
       requestId: string;
       status: RequestStatus;
       errorMessage?: string;
       output?: AdkInvokeOutput;
     }): Promise<void> {
-      const video = this.operationVideos.find((item) => item.id === params.videoId);
-      if (!video || video.analysisRequestId !== params.requestId) return;
-      const nextStatus: DecodedStoryVaultOperationVideo["analysisStatus"] =
+      const clip = this.clips.find((item) => item.id === params.clipId);
+      if (!clip || clip.analysisRequestId !== params.requestId) return;
+      const nextStatus: DecodedStoryVaultClip["analysisStatus"] =
         params.status === "completed"
           ? "completed"
           : params.status === "error"
             ? "error"
             : "running";
-      void params.output;
       const completedSessionId =
         (params.output && typeof params.output === "object" && "sessionId" in params.output
           ? params.output.sessionId
-          : undefined) || video.analysisSessionId;
+          : undefined) || clip.analysisSessionId;
+      const outputResult = extractZappingAnalysisResultCandidate(params.output);
       const analysisOrganizationId =
-        video.analysisOrganizationId ||
+        clip.analysisOrganizationId ||
         useOrganizationStore().loggedInOrganizationInfo?.id ||
         "";
       const analysisSpaceId =
-        video.analysisSpaceId || useSpaceStore().selectedSpace?.id || "";
-      const analysisResult =
-        params.status === "completed" && completedSessionId
-          ? await this.fetchZappingAnalysisResultFromSession({
-              organizationId: analysisOrganizationId,
-              spaceId: analysisSpaceId,
-              sessionId: completedSessionId,
-            })
-          : undefined;
+        clip.analysisSpaceId || useSpaceStore().selectedSpace?.id || "";
+      let analysisResult = outputResult;
+      if (!analysisResult && params.status === "completed" && completedSessionId) {
+        try {
+          analysisResult = await this.fetchZappingAnalysisResultFromSession({
+            organizationId: analysisOrganizationId,
+            spaceId: analysisSpaceId,
+            sessionId: completedSessionId,
+          });
+        } catch (err) {
+          log("WARN", "StoryVault zapping analysis fetch failed", {
+            clipId: clip.id,
+            sessionId: completedSessionId,
+            err,
+          });
+        }
+      }
       const keyedAnalysisResult = analysisResult
         ? assignStoryKeysToZappingAnalysisResult({
-            applicationId: video.applicationId,
+            applicationId: clip.applicationId,
             result: normalizeZappingAnalysisResultEvidence({
               result: analysisResult,
-              video,
+              clip,
             }),
             stories: this.stories,
-            operationVideos: this.operationVideos.filter(
-              (item) => item.id !== video.id
+            clips: this.clips.filter(
+              (item) => item.id !== clip.id
             ),
           })
         : undefined;
-      await this.persistOperationVideo({
-        ...video,
+      await this.persistClip({
+        ...clip,
         analysisStatus: nextStatus,
-        analysisSessionId: completedSessionId || video.analysisSessionId,
+        analysisSessionId: completedSessionId || clip.analysisSessionId,
         analysisOrganizationId,
         analysisSpaceId,
         analysisErrorMessage:
@@ -3563,16 +3482,71 @@ export const useStoryVaultStore = defineStore("storyVault", {
               ? ""
               : "ADKは完了しましたが、解析結果をsession stateから取得できませんでした"
             : params.errorMessage || "",
-        analyzedAt: params.status === "completed" ? nowIso() : video.analyzedAt,
-        analysisResult: keyedAnalysisResult ?? video.analysisResult,
-        hasUnanalyzedClip:
-          params.status === "completed" ? false : video.hasUnanalyzedClip,
-        analysisStaleReason:
-          params.status === "completed" ? undefined : video.analysisStaleReason,
+        analyzedAt: params.status === "completed" ? nowIso() : clip.analyzedAt,
+        analysisResult: keyedAnalysisResult ?? clip.analysisResult,
       });
     },
+    async reconcileZappingVideoAnalysisRequests(): Promise<void> {
+      const candidates = this.clips
+        .filter(
+          (video) =>
+            (video.analysisStatus === "queued" ||
+              video.analysisStatus === "running") &&
+            Boolean(video.analysisRequestId)
+        )
+        .slice(0, 10);
+      if (candidates.length === 0) return;
+
+      await Promise.all(
+        candidates.map(async (clip) => {
+          const organizationId =
+            clip.analysisOrganizationId ||
+            useOrganizationStore().loggedInOrganizationInfo?.id ||
+            "";
+          const spaceId =
+            clip.analysisSpaceId || useSpaceStore().selectedSpace?.id || "";
+          const requestId = clip.analysisRequestId || "";
+          if (!organizationId || !spaceId || !requestId) return;
+          try {
+            const snap = await getDoc(
+              doc(
+                getFirestore(),
+                "organizations",
+                organizationId,
+                "spaces",
+                spaceId,
+                "requests",
+                "adkInvokeRequests",
+                "logs",
+                requestId
+              )
+            );
+            if (!snap.exists()) return;
+            const data = snap.data();
+            const status = (data.status as RequestStatus | undefined) ?? "pending";
+            if (status !== "completed" && status !== "error") return;
+            await this.updateZappingVideoAnalysisStatus({
+              clipId: clip.id,
+              requestId,
+              status,
+              errorMessage:
+                typeof data.errorMessage === "string"
+                  ? data.errorMessage
+                  : undefined,
+              output: data.output as AdkInvokeOutput | undefined,
+            });
+          } catch (err) {
+            log("WARN", "StoryVault zapping analysis reconcile failed", {
+              clipId: clip.id,
+              requestId,
+              err,
+            });
+          }
+        })
+      );
+    },
     async updateRelatedContextAnalysisStatus(params: {
-      videoId: string;
+      clipId: string;
       requestId: string;
       sessionId: string;
       organizationId: string;
@@ -3581,8 +3555,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
       errorMessage?: string;
       output?: AdkInvokeOutput;
     }): Promise<void> {
-      const video = this.operationVideos.find((item) => item.id === params.videoId);
-      if (!video) return;
+      const clip = this.clips.find((item) => item.id === params.clipId);
+      if (!clip) return;
       void params.requestId;
       const completedSessionId =
         (params.output && typeof params.output === "object" && "sessionId" in params.output
@@ -3614,19 +3588,19 @@ export const useStoryVaultStore = defineStore("storyVault", {
             ? {
                 ...result.github,
                 repoFullName:
-                  video.relatedContexts?.github?.repoFullName ||
+                  clip.relatedContexts?.github?.repoFullName ||
                   this.applications.find(
-                    (application) => application.id === video.applicationId
+                    (application) => application.id === clip.applicationId
                   )?.repoFullName ||
                   result.github.repoFullName,
               }
-            : video.relatedContexts?.github;
-      const nextSlack = result?.slack ?? video.relatedContexts?.slack;
-      const nextKnowledge = result?.knowledge ?? video.relatedContexts?.knowledge;
-      await this.persistOperationVideo({
-        ...video,
+            : clip.relatedContexts?.github;
+      const nextSlack = result?.slack ?? clip.relatedContexts?.slack;
+      const nextKnowledge = result?.knowledge ?? clip.relatedContexts?.knowledge;
+      await this.persistClip({
+        ...clip,
         relatedContexts: {
-          ...video.relatedContexts,
+          ...clip.relatedContexts,
           generatedAt: result?.generatedAt ?? nowIso(),
           status: params.status === "completed" && result ? result.status : "error",
           runningProvider: undefined,
@@ -3723,12 +3697,12 @@ export const useStoryVaultStore = defineStore("storyVault", {
               merge: true,
             })
           ),
-          ...this.operationVideos.map((item) =>
+          ...this.clips.map((item) =>
             firestoreOps.createDocument({
-              collectionName: this.operationVideoCollectionPath(),
-              docId: item.id || `operation_video_${createRandomDocId()}`,
+              collectionName: this.clipCollectionPath(),
+              docId: item.id || `clip_${createRandomDocId()}`,
               docData: item,
-              converter: storyVaultOperationVideoConverter,
+              converter: storyVaultClipConverter,
               merge: true,
             })
           ),
@@ -3796,30 +3770,29 @@ export const useStoryVaultStore = defineStore("storyVault", {
       transcriptSegments?: StoryVaultTranscriptCue[];
       transcriptSrt?: string;
       transcriptTimingStatus?: StoryVaultTranscriptTimingStatus;
-      quickScan?: StoryVaultOperationVideoSaveInput["quickScan"];
+      quickScan?: StoryVaultClipSaveInput["quickScan"];
       frameCaptures?: NonNullable<
-        DecodedStoryVaultOperationVideo["frameCaptures"]
+        DecodedStoryVaultClip["frameCaptures"]
       >;
     }): string {
       return buildOperationVideoMetadataMarkdown(params);
     },
-    async uploadOperationVideoClip(params: {
+    async uploadClipAsset(params: {
       application: DecodedStoryVaultApplication;
-      group: DecodedStoryVaultOperationVideoGroup;
-      videoId: string;
-      input: StoryVaultOperationVideoSaveInput;
+      group: DecodedStoryVaultClipGroup;
+      clipId: string;
+      input: StoryVaultClipSaveInput;
       title: string;
       description?: string;
       organizationId: string;
       spaceId: string;
-      clipIndex: number;
     }): Promise<{
       clip: StoryVaultOperationVideoClip;
       sourceAssets: DecodedStoryVaultSourceAsset[];
-      discoveryStatus: DecodedStoryVaultOperationVideo["discoveryStatus"];
+      discoveryStatus: DecodedStoryVaultClip["discoveryStatus"];
       discoveryErrorMessage?: string;
     }> {
-      const { application, group, videoId, input, title } = params;
+      const { application, group, clipId, input, title } = params;
       const fileSpaceId = application.fileSpaceId?.trim();
       const contextStore = useContextStore();
       const storageOps = useFirebaseStorageOperations();
@@ -3828,8 +3801,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
         config.public.firebase.storageBucket
       );
       const now = nowIso();
-      const clipId = `clip-${String(params.clipIndex + 1).padStart(3, "0")}`;
-      const safeTitle = toDocId(title, "operation-video");
+      const safeTitle = toDocId(title, "clip");
       const timestamp = now.replace(/[:.]/g, "-");
       const contentType = input.contentType || input.blob.type || "video/webm";
       const tags =
@@ -3852,7 +3824,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
       const extension = contentType.includes("mp4") ? "mp4" : "webm";
       const fileName = `${safeTitle}-${timestamp}.${extension}`;
       const storagePath = contextStore.baseGcsPath(
-        `storyVault/applications/${application.id}/operationVideos/${videoId}/clips/${clipId}/${fileName}`
+        `storyVault/applications/${application.id}/clips/${clipId}/${fileName}`
       );
 
       const uploaded = await storageOps.uploadPdfFile({
@@ -3862,11 +3834,11 @@ export const useStoryVaultStore = defineStore("storyVault", {
         mimeType: contentType,
       });
       if (!uploaded) {
-        throw new Error("ザッピング動画のFirebase Storage保存に失敗しました");
+        throw new Error("クリップのFirebase Storage保存に失敗しました");
       }
 
       const frameCaptures: NonNullable<
-        DecodedStoryVaultOperationVideo["frameCaptures"]
+        DecodedStoryVaultClip["frameCaptures"]
       > = [];
       for (const [index, frame] of (input.frameCaptures ?? []).entries()) {
         if (frame.blob.size <= 0) continue;
@@ -3874,7 +3846,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
         const frameContentType = frame.contentType || frame.blob.type || "image/jpeg";
         const frameFileName = `${safeTitle}-${timestamp}-${clipId}-${frameId}.jpg`;
         const frameStoragePath = contextStore.baseGcsPath(
-          `storyVault/applications/${application.id}/operationVideos/${videoId}/clips/${clipId}/frames/${frameFileName}`
+          `storyVault/applications/${application.id}/clips/${clipId}/frames/${frameFileName}`
         );
         const frameUploaded = await storageOps.uploadPdfFile({
           bucketName,
@@ -3898,13 +3870,10 @@ export const useStoryVaultStore = defineStore("storyVault", {
         });
       }
 
-      const metadataFileName =
-        params.clipIndex === 0
-          ? `${safeTitle}-${timestamp}.md`
-          : `${safeTitle}-${timestamp}-${clipId}.md`;
+      const metadataFileName = `${safeTitle}-${timestamp}.md`;
       const metadataMarkdown = this.buildOperationVideoMarkdown({
         application,
-        videoId,
+        videoId: clipId,
         title,
         description: params.description,
         bucketName,
@@ -3924,13 +3893,10 @@ export const useStoryVaultStore = defineStore("storyVault", {
         quickScan,
         frameCaptures,
       });
-      const journeyFileName =
-        params.clipIndex === 0
-          ? `${safeTitle}-${timestamp}-journey.md`
-          : `${safeTitle}-${timestamp}-${clipId}-journey.md`;
+      const journeyFileName = `${safeTitle}-${timestamp}-journey.md`;
       const journeyMarkdown = buildOperationVideoJourneyMarkdown({
         application,
-        videoId,
+        videoId: clipId,
         title,
         description: params.description,
         bucketName,
@@ -3955,14 +3921,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
       let journeyFileSpaceRequestId: string | undefined;
       let metadataStoragePath: string | undefined;
       let journeyStoragePath: string | undefined;
-      const sourceAssetId =
-        params.clipIndex === 0
-          ? `source-asset-${videoId}`
-          : `source-asset-${videoId}-${clipId}`;
-      const journeySourceAssetId =
-        params.clipIndex === 0
-          ? `source-asset-${videoId}-journey`
-          : `source-asset-${videoId}-${clipId}-journey`;
+      const sourceAssetId = `source-asset-${clipId}`;
+      const journeySourceAssetId = `source-asset-${clipId}-journey`;
 
       if (fileSpaceId) {
         metadataStoragePath = contextStore.baseGcsPath(
@@ -3987,22 +3947,18 @@ export const useStoryVaultStore = defineStore("storyVault", {
               bucketName,
               filePath: metadataStoragePath,
               mimeType: "text/markdown",
-              documentId:
-                params.clipIndex === 0
-                  ? `storyvault-operation-video-${videoId}`
-                  : `storyvault-operation-video-${videoId}-${clipId}`,
-              description: `StoryVault operation video metadata: ${title}`,
+              documentId: `storyvault-clip-${clipId}`,
+              description: `StoryVault clip metadata: ${title}`,
               customMetadata: [
-                { key: "source", value: "storyvault-operation-video" },
+                { key: "source", value: "storyvault-clip" },
                 { key: "applicationId", value: application.id },
                 { key: "applicationKey", value: application.applicationKey },
-                { key: "operationVideoId", value: videoId },
-                { key: "operationVideoClipId", value: clipId },
-                { key: "operationVideoGroupId", value: group.id },
-                { key: "operationVideoGroupName", value: group.name },
+                { key: "clipId", value: clipId },
+                { key: "clipGroupId", value: group.id },
+                { key: "clipGroupName", value: group.name },
                 { key: "sourceAssetId", value: sourceAssetId },
-                { key: "videoStoragePath", value: storagePath },
-                { key: "documentKind", value: "operation_video_metadata" },
+                { key: "clipStoragePath", value: storagePath },
+                { key: "documentKind", value: "clip_metadata" },
               ],
               originalFileInfo: {
                 fileName: metadataFileName,
@@ -4014,7 +3970,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
           if (requestDoc?.id) {
             fileSpaceRequestId = requestDoc.id;
           } else {
-            requestErrors.push("動画メタデータのFileSpace upload RequestDoc作成に失敗しました");
+            requestErrors.push("クリップメタデータのFileSpace upload RequestDoc作成に失敗しました");
           }
         } else {
           requestErrors.push("検索用メタデータMarkdownの保存に失敗しました");
@@ -4035,24 +3991,20 @@ export const useStoryVaultStore = defineStore("storyVault", {
               bucketName,
               filePath: journeyStoragePath,
               mimeType: "text/markdown",
-              documentId:
-                params.clipIndex === 0
-                  ? `storyvault-operation-video-journey-${videoId}`
-                  : `storyvault-operation-video-journey-${videoId}-${clipId}`,
+              documentId: `storyvault-clip-journey-${clipId}`,
               description: `StoryVault operation journey evidence: ${title}`,
               customMetadata: [
-                { key: "source", value: "storyvault-operation-video-journey" },
+                { key: "source", value: "storyvault-clip-journey" },
                 { key: "applicationId", value: application.id },
                 { key: "applicationKey", value: application.applicationKey },
                 { key: "applicationName", value: application.name },
                 { key: "repoFullName", value: application.repoFullName },
-                { key: "operationVideoId", value: videoId },
-                { key: "operationVideoClipId", value: clipId },
-                { key: "operationVideoGroupId", value: group.id },
-                { key: "operationVideoGroupName", value: group.name },
+                { key: "clipId", value: clipId },
+                { key: "clipGroupId", value: group.id },
+                { key: "clipGroupName", value: group.name },
                 { key: "sourceAssetId", value: journeySourceAssetId },
-                { key: "videoStoragePath", value: storagePath },
-                { key: "documentKind", value: "operation_video_journey" },
+                { key: "clipStoragePath", value: storagePath },
+                { key: "documentKind", value: "clip_journey" },
               ],
               originalFileInfo: {
                 fileName: journeyFileName,
@@ -4071,7 +4023,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
         }
       }
 
-      const discoveryStatus: DecodedStoryVaultOperationVideo["discoveryStatus"] =
+      const discoveryStatus: DecodedStoryVaultClip["discoveryStatus"] =
         fileSpaceId
           ? fileSpaceRequestId || journeyFileSpaceRequestId
             ? "queued"
@@ -4082,7 +4034,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
           ? requestErrors.join(" / ")
           : fileSpaceId
             ? undefined
-            : "アプリ専用FileSpaceが未設定のため、動画のみ保存しました";
+            : "アプリ専用FileSpaceが未設定のため、クリップのみ保存しました";
 
       const clip: StoryVaultOperationVideoClip = {
         id: clipId,
@@ -4130,18 +4082,14 @@ export const useStoryVaultStore = defineStore("storyVault", {
               ? "queued"
               : "error"
             : "not_registered",
-          discoveryDocumentId:
-            params.clipIndex === 0
-              ? `storyvault-operation-video-${videoId}`
-              : `storyvault-operation-video-${videoId}-${clipId}`,
+          discoveryDocumentId: `storyvault-clip-${clipId}`,
           discoveryErrorMessage: !fileSpaceId
             ? "アプリ専用FileSpaceが未設定のため、Discovery Engine登録は未実行です"
             : fileSpaceRequestId
               ? undefined
-              : "動画メタデータのDiscovery Engine登録に失敗しました",
+              : "クリップメタデータのDiscovery Engine登録に失敗しました",
           metadata: {
-            operationVideoId: videoId,
-            operationVideoClipId: clipId,
+            clipId,
             contentType,
             sizeBytes: input.blob.size,
             durationMs: input.durationMs,
@@ -4156,8 +4104,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
             tags,
             metadataStoragePath,
             sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
-            operationVideoGroupId: group.id,
-            operationVideoGroupName: group.name,
+            clipGroupId: group.id,
+            clipGroupName: group.name,
           },
         },
       ];
@@ -4171,24 +4119,20 @@ export const useStoryVaultStore = defineStore("storyVault", {
           title: `Operation Journey: ${title}`,
           summary:
             params.description ||
-            "ザッピング動画から生成したユーザージャーニー検索用証跡",
+            "クリップから生成したユーザージャーニー検索用証跡",
           uri: `gs://${bucketName}/${journeyStoragePath}`,
           gcsPath: `gs://${bucketName}/${journeyStoragePath}`,
           storagePath: journeyStoragePath,
           fileSpaceId: fileSpaceId || undefined,
           fileSpaceRequestId: journeyFileSpaceRequestId,
           discoveryStatus: journeyFileSpaceRequestId ? "queued" : "error",
-          discoveryDocumentId:
-            params.clipIndex === 0
-              ? `storyvault-operation-video-journey-${videoId}`
-              : `storyvault-operation-video-journey-${videoId}-${clipId}`,
+          discoveryDocumentId: `storyvault-clip-journey-${clipId}`,
           discoveryErrorMessage: journeyFileSpaceRequestId
             ? undefined
             : "操作JourneyのDiscovery Engine登録に失敗しました",
           metadata: {
-            operationVideoId: videoId,
-            operationVideoClipId: clipId,
-            videoStoragePath: storagePath,
+            clipId,
+            clipStoragePath: storagePath,
             transcriptProvider,
             transcriptText,
             transcriptSummary,
@@ -4197,17 +4141,17 @@ export const useStoryVaultStore = defineStore("storyVault", {
             transcriptTimingStatus,
             tags,
             sourceDisplaySurface: input.sourceDisplaySurface ?? "unknown",
-            operationVideoGroupId: group.id,
-            operationVideoGroupName: group.name,
+            clipGroupId: group.id,
+            clipGroupName: group.name,
           },
         });
       }
 
       return { clip, sourceAssets, discoveryStatus, discoveryErrorMessage };
     },
-    async saveOperationVideoCapture(
-      input: StoryVaultOperationVideoSaveInput
-    ): Promise<DecodedStoryVaultOperationVideo> {
+    async saveClipCapture(
+      input: StoryVaultClipSaveInput
+    ): Promise<DecodedStoryVaultClip> {
       const application = this.applications.find(
         (item) => item.id === input.applicationId
       );
@@ -4226,15 +4170,15 @@ export const useStoryVaultStore = defineStore("storyVault", {
 
       const title = input.title.trim();
       if (!title) {
-        throw new Error("動画タイトルを入力してください");
+        throw new Error("クリップタイトルを入力してください");
       }
-      const group = this.operationVideoGroups.find(
+      const group = this.clipGroups.find(
         (item) =>
-          item.id === input.groupId &&
+          item.id === input.clipGroupId &&
           item.applicationId === application.id
       );
       if (!group) {
-        throw new Error("動画グループを選択してください");
+        throw new Error("クリップグループを選択してください");
       }
       if (input.blob.size <= 0) {
         throw new Error("録画データが空です");
@@ -4244,87 +4188,55 @@ export const useStoryVaultStore = defineStore("storyVault", {
       this.error = null;
 
       try {
-        {
-        const videoId = `operation-video-${createRandomDocId()}`;
+        const clipId = `clip-${createRandomDocId()}`;
         const description = input.description?.trim() || undefined;
         const { clip, sourceAssets, discoveryStatus, discoveryErrorMessage } =
-          await this.uploadOperationVideoClip({
+          await this.uploadClipAsset({
             application,
             group,
-            videoId,
+            clipId,
             input,
             title,
             description,
             organizationId,
             spaceId,
-            clipIndex: 0,
           });
-        const video = normalizeOperationVideo({
-          id: videoId,
+        const savedClip: DecodedStoryVaultClip = {
+          ...clip,
+          id: clipId,
           applicationId: application.id,
           applicationKey: application.applicationKey,
-          groupId: group.id,
-          groupNameSnapshot: group.name,
+          clipGroupId: group.id,
+          clipGroupNameSnapshot: group.name,
           title,
           description,
-          fileName: clip.fileName,
-          bucketName: clip.bucketName,
-          storagePath: clip.storagePath,
-          contentType: clip.contentType,
-          sizeBytes: clip.sizeBytes,
-          durationMs: clip.durationMs,
-          transcriptText: clip.transcriptText,
-          transcriptProvider: clip.transcriptProvider,
-          transcriptSummary: clip.transcriptSummary,
-          transcriptSegments: clip.transcriptSegments,
-          transcriptSrt: clip.transcriptSrt,
-          transcriptTimingStatus: clip.transcriptTimingStatus,
-          quickScan: clip.quickScan,
-          frameCaptures: clip.frameCaptures,
-          clips: [clip],
-          clipCount: 1,
-          totalDurationMs: clip.durationMs,
-          hasUnanalyzedClip: false,
-          lastClipAddedAt: clip.recordedAt,
           tags:
             input.tags
               ?.map((tag) => tag.trim())
               .filter((tag, index, arr) => tag && arr.indexOf(tag) === index) ?? [],
           fileSpaceId,
-          fileSpaceRequestId: clip.fileSpaceRequestId,
-          metadataFileName: clip.metadataFileName,
-          metadataStoragePath: clip.metadataStoragePath,
-          journeyFileName: clip.journeyFileName,
-          journeyStoragePath: clip.journeyStoragePath,
-          journeyFileSpaceRequestId: clip.journeyFileSpaceRequestId,
-          sourceAssetId: clip.sourceAssetId,
-          journeySourceAssetId: clip.journeySourceAssetId,
           discoveryStatus,
           discoveryErrorMessage,
           analysisStatus: "not_analyzed",
-          sourceDisplaySurface: clip.sourceDisplaySurface,
-          recordedAt: clip.recordedAt,
-        });
-        const nextGroup: DecodedStoryVaultOperationVideoGroup = {
+        };
+        const nextGroup: DecodedStoryVaultClipGroup = {
           ...group,
-          videoCount: this.operationVideos.filter(
-            (item) => item.groupId === group.id && item.id !== video.id
-          ).length + 1,
+          clipCount: this.clipCountForGroup(group.id) + 1,
         };
         const firestoreOps = useFirestoreDocOperation();
         await Promise.all([
           firestoreOps.createDocument({
-            collectionName: this.operationVideoCollectionPath(),
-            docId: video.id,
-            docData: video,
-            converter: storyVaultOperationVideoConverter,
+            collectionName: this.clipCollectionPath(),
+            docId: savedClip.id,
+            docData: savedClip,
+            converter: storyVaultClipConverter,
             merge: true,
           }),
           firestoreOps.createDocument({
-            collectionName: this.operationVideoGroupCollectionPath(),
+            collectionName: this.clipGroupCollectionPath(),
             docId: nextGroup.id,
             docData: nextGroup,
-            converter: storyVaultOperationVideoGroupConverter,
+            converter: storyVaultClipGroupConverter,
             merge: true,
           }),
           ...sourceAssets.map((asset) =>
@@ -4337,11 +4249,11 @@ export const useStoryVaultStore = defineStore("storyVault", {
             })
           ),
         ]);
-        this.operationVideos = [
-          video,
-          ...this.operationVideos.filter((item) => item.id !== video.id),
+        this.clips = [
+          savedClip,
+          ...this.clips.filter((item) => item.id !== savedClip.id),
         ];
-        this.operationVideoGroups = this.operationVideoGroups.map((item) =>
+        this.clipGroups = this.clipGroups.map((item) =>
           item.id === nextGroup.id ? nextGroup : item
         );
         this.sourceAssets = [
@@ -4351,158 +4263,33 @@ export const useStoryVaultStore = defineStore("storyVault", {
           ),
         ];
         this.lastRunLog.unshift(
-          `Operation Video: ${application.name} に ${title} を保存`
+          `Clip: ${application.name} に ${title} を保存`
         );
-        return video;
-        }
+        return savedClip;
       } catch (err) {
-        log("ERROR", "StoryVault operation video save failed", err);
+        log("ERROR", "StoryVault clip save failed", err);
         reportDatadogError(err, {
-          feature: "storyvault_zapping_video_save",
+          feature: "storyvault_clip_save",
           applicationId: input.applicationId,
           blobSize: input.blob.size,
           contentType: input.contentType || input.blob.type || "video/webm",
         });
         this.error =
-          err instanceof Error ? err.message : "ザッピング動画の保存に失敗しました";
+          err instanceof Error ? err.message : "クリップの保存に失敗しました";
         throw err;
       } finally {
         this.isSavingOperationVideo = false;
       }
     },
-    async appendOperationVideoClip(
-      input: StoryVaultOperationVideoAppendInput
-    ): Promise<DecodedStoryVaultOperationVideo> {
-      const targetVideo = this.operationVideos.find(
-        (item) => item.id === input.videoId && item.applicationId === input.applicationId
-      );
-      if (!targetVideo) {
-        throw new Error("追加先の操作セットが見つかりません");
+    async updateClipAnalysis(
+      input: StoryVaultClipAnalysisInput
+    ): Promise<DecodedStoryVaultClip> {
+      const clip = this.clips.find((item) => item.id === input.clipId);
+      if (!clip) {
+        throw new Error("更新対象のクリップが見つかりません");
       }
       const application = this.applications.find(
-        (item) => item.id === input.applicationId
-      );
-      if (!application) {
-        throw new Error("対象アプリが見つかりません");
-      }
-      const group = this.operationVideoGroups.find(
-        (item) =>
-          item.id === (targetVideo.groupId || input.groupId) &&
-          item.applicationId === application.id
-      );
-      if (!group) {
-        throw new Error("動画グループを選択してください");
-      }
-      if (input.blob.size <= 0) {
-        throw new Error("録画データが空です");
-      }
-
-      const organizationStore = useOrganizationStore();
-      const spaceStore = useSpaceStore();
-      const organizationId = organizationStore.getLoggedInOrganizationId;
-      const spaceId = spaceStore.selectedSpace?.id ?? "";
-      if (!organizationId || !spaceId) {
-        throw new Error("組織・スペースを確認してください");
-      }
-
-      const normalizedVideo = normalizeOperationVideo(targetVideo);
-      const title = input.title.trim() || normalizedVideo.title;
-      const description =
-        input.description?.trim() || normalizedVideo.description || undefined;
-      this.isSavingOperationVideo = true;
-      this.error = null;
-      try {
-        const { clip, sourceAssets, discoveryStatus, discoveryErrorMessage } =
-          await this.uploadOperationVideoClip({
-            application,
-            group,
-            videoId: normalizedVideo.id,
-            input,
-            title,
-            description,
-            organizationId,
-            spaceId,
-            clipIndex: normalizedVideo.clips.length,
-          });
-        const clips = [...normalizedVideo.clips, clip].sort((a, b) =>
-          (a.recordedAt || "").localeCompare(b.recordedAt || "")
-        );
-        const existingError = normalizedVideo.discoveryErrorMessage?.trim();
-        const nextVideo = normalizeOperationVideo({
-          ...normalizedVideo,
-          clips,
-          fileSpaceId: application.fileSpaceId?.trim() || normalizedVideo.fileSpaceId,
-          discoveryStatus:
-            discoveryStatus === "error" || normalizedVideo.discoveryStatus === "error"
-              ? "error"
-              : discoveryStatus === "queued" || normalizedVideo.discoveryStatus === "queued"
-                ? "queued"
-                : normalizedVideo.discoveryStatus,
-          discoveryErrorMessage: [existingError, discoveryErrorMessage]
-            .filter(Boolean)
-            .join(" / ") || undefined,
-          hasUnanalyzedClip: true,
-          lastClipAddedAt: clip.recordedAt,
-          analysisStaleReason:
-            "追加された動画があります。再解析すると最新の操作セットに反映されます。",
-        });
-        const firestoreOps = useFirestoreDocOperation();
-        await Promise.all([
-          firestoreOps.createDocument({
-            collectionName: this.operationVideoCollectionPath(),
-            docId: nextVideo.id,
-            docData: nextVideo,
-            converter: storyVaultOperationVideoConverter,
-            merge: true,
-          }),
-          ...sourceAssets.map((asset) =>
-            firestoreOps.createDocument({
-              collectionName: this.sourceAssetCollectionPath(),
-              docId: asset.id,
-              docData: asset,
-              converter: storyVaultSourceAssetConverter,
-              merge: true,
-            })
-          ),
-        ]);
-        this.operationVideos = this.operationVideos.map((item) =>
-          item.id === nextVideo.id ? nextVideo : item
-        );
-        this.sourceAssets = [
-          ...sourceAssets,
-          ...this.sourceAssets.filter(
-            (item) => !sourceAssets.some((asset) => asset.id === item.id)
-          ),
-        ];
-        this.lastRunLog.unshift(
-          `Operation Video: ${normalizedVideo.title} にクリップを追加`
-        );
-        return nextVideo;
-      } catch (err) {
-        log("ERROR", "StoryVault operation video clip append failed", err);
-        reportDatadogError(err, {
-          feature: "storyvault_zapping_video_clip_append",
-          applicationId: input.applicationId,
-          videoId: input.videoId,
-          blobSize: input.blob.size,
-          contentType: input.contentType || input.blob.type || "video/webm",
-        });
-        this.error =
-          err instanceof Error ? err.message : "動画クリップの追加に失敗しました";
-        throw err;
-      } finally {
-        this.isSavingOperationVideo = false;
-      }
-    },
-    async updateOperationVideoClipAnalysis(
-      input: StoryVaultOperationVideoClipAnalysisInput
-    ): Promise<DecodedStoryVaultOperationVideo> {
-      const video = this.operationVideos.find((item) => item.id === input.videoId);
-      if (!video) {
-        throw new Error("更新対象のザッピング動画が見つかりません");
-      }
-      const application = this.applications.find(
-        (item) => item.id === video.applicationId
+        (item) => item.id === clip.applicationId
       );
       if (!application) {
         throw new Error("対象アプリが見つかりません");
@@ -4512,14 +4299,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
         input.transcriptSegments.length === 0 ||
         !input.transcriptSrt.trim()
       ) {
-        throw new Error("動画解析にはGeminiのタイムスタンプ付き文字起こしが必要です");
-      }
-
-      const normalizedVideo = normalizeOperationVideo(video);
-      const targetClipId = input.clipId || normalizedVideo.clips[0]?.id || "clip-001";
-      const targetClip = normalizedVideo.clips.find((clip) => clip.id === targetClipId);
-      if (!targetClip) {
-        throw new Error("更新対象の動画クリップが見つかりません");
+        throw new Error("クリップ解析にはGeminiのタイムスタンプ付き文字起こしが必要です");
       }
 
       this.isSavingOperationVideo = true;
@@ -4527,22 +4307,22 @@ export const useStoryVaultStore = defineStore("storyVault", {
       try {
         const contextStore = useContextStore();
         const storageOps = useFirebaseStorageOperations();
-        const bucketName = targetClip.bucketName || resolveStorageBucketName(
+        const bucketName = clip.bucketName || resolveStorageBucketName(
           useRuntimeConfig().public.firebase.storageBucket
         );
-        const safeTitle = toDocId(input.title || normalizedVideo.title, "operation-video");
+        const safeTitle = toDocId(input.title || clip.title, "clip");
         const timestamp = nowIso().replace(/[:.]/g, "-");
         const frameCaptures: NonNullable<
-          DecodedStoryVaultOperationVideo["frameCaptures"]
+          DecodedStoryVaultClip["frameCaptures"]
         > = [];
 
         for (const [index, frame] of input.frameCaptures.entries()) {
           if (frame.blob.size <= 0) continue;
           const frameId = `frame-${String(index + 1).padStart(3, "0")}`;
           const frameContentType = frame.contentType || frame.blob.type || "image/jpeg";
-          const frameFileName = `${safeTitle}-${timestamp}-${targetClipId}-${frameId}.jpg`;
+          const frameFileName = `${safeTitle}-${timestamp}-${clip.id}-${frameId}.jpg`;
           const frameStoragePath = contextStore.baseGcsPath(
-            `storyVault/applications/${application.id}/operationVideos/${normalizedVideo.id}/clips/${targetClipId}/frames/${frameFileName}`
+            `storyVault/applications/${application.id}/clips/${clip.id}/frames/${frameFileName}`
           );
           const uploaded = await storageOps.uploadPdfFile({
             bucketName,
@@ -4563,96 +4343,86 @@ export const useStoryVaultStore = defineStore("storyVault", {
           });
         }
 
-        const nextClips = normalizedVideo.clips.map((clip) =>
-          clip.id === targetClipId
-            ? {
-                ...clip,
-                transcriptText: input.transcriptText.trim() || undefined,
-                transcriptProvider: input.transcriptProvider?.trim() || undefined,
-                transcriptSummary: input.transcriptSummary?.trim() || undefined,
-                transcriptSegments: input.transcriptSegments,
-                transcriptSrt: input.transcriptSrt.trim(),
-                transcriptTimingStatus: "timestamped" as const,
-                quickScan: input.quickScan,
-                frameCaptures,
-              }
-            : clip
-        );
-        const nextVideo = normalizeOperationVideo({
-          ...normalizedVideo,
+        const nextClip: DecodedStoryVaultClip = {
+          ...clip,
           title:
             input.title?.trim() ||
             input.quickScan?.title?.trim() ||
-            normalizedVideo.title,
+            clip.title,
           description:
             input.description?.trim() ||
             input.quickScan?.description?.trim() ||
-            normalizedVideo.description,
-          clips: nextClips,
-          hasUnanalyzedClip: false,
-          analysisStaleReason: undefined,
+            clip.description,
+          transcriptText: input.transcriptText.trim() || undefined,
+          transcriptProvider: input.transcriptProvider?.trim() || undefined,
+          transcriptSummary: input.transcriptSummary?.trim() || undefined,
+          transcriptSegments: input.transcriptSegments,
+          transcriptSrt: input.transcriptSrt.trim(),
+          transcriptTimingStatus: "timestamped",
+          quickScan: input.quickScan,
+          frameCaptures,
           analysisStatus: "not_analyzed",
           analysisErrorMessage: undefined,
           analysisResult: undefined,
-        });
+        };
 
         const firestoreOps = useFirestoreDocOperation();
         await firestoreOps.createDocument({
-          collectionName: this.operationVideoCollectionPath(),
-          docId: nextVideo.id,
-          docData: nextVideo,
-          converter: storyVaultOperationVideoConverter,
+          collectionName: this.clipCollectionPath(),
+          docId: nextClip.id,
+          docData: nextClip,
+          converter: storyVaultClipConverter,
           merge: true,
         });
-        this.operationVideos = this.operationVideos.map((item) =>
-          item.id === nextVideo.id ? nextVideo : item
+        this.clips = this.clips.map((item) =>
+          item.id === nextClip.id ? nextClip : item
         );
         this.lastRunLog.unshift(
-          `Operation Video: ${nextVideo.title} の動画解析結果を保存`
+          `Clip: ${nextClip.title} の解析結果を保存`
         );
-        return nextVideo;
+        return nextClip;
       } catch (err) {
-        log("ERROR", "StoryVault operation video analysis update failed", err);
+        log("ERROR", "StoryVault clip analysis update failed", err);
         reportDatadogError(err, {
-          feature: "storyvault_zapping_video_analysis_update",
-          applicationId: video.applicationId,
-          videoId: video.id,
+          feature: "storyvault_clip_analysis_update",
+          applicationId: clip.applicationId,
+          clipId: clip.id,
         });
         this.error =
-          err instanceof Error ? err.message : "動画解析結果の保存に失敗しました";
+          err instanceof Error ? err.message : "クリップ解析結果の保存に失敗しました";
         throw err;
       } finally {
         this.isSavingOperationVideo = false;
       }
     },
-    async updateOperationVideoTitle(params: {
-      videoId: string;
+    async updateClipTitle(params: {
+      clipId: string;
       title: string;
     }): Promise<void> {
-      const video = this.operationVideos.find((item) => item.id === params.videoId);
-      if (!video) {
-        throw new Error("更新対象のザッピング動画が見つかりません");
+      const clip = this.clips.find((item) => item.id === params.clipId);
+      if (!clip) {
+        throw new Error("更新対象のクリップが見つかりません");
       }
       const title = params.title.trim();
       if (!title) {
-        throw new Error("動画タイトルを入力してください");
+        throw new Error("クリップタイトルを入力してください");
       }
-      if (title === video.title) return;
+      if (title === clip.title) return;
 
       this.isLoading = true;
       this.error = null;
       try {
-        const nextVideo: DecodedStoryVaultOperationVideo = {
-          ...video,
+        const nextClip: DecodedStoryVaultClip = {
+          ...clip,
           title,
         };
-        const sourceAssetIds = operationVideoSourceAssetIds(video);
+        const sourceAssetIds = clipSourceAssetIds(clip);
         const nextSourceAssets = this.sourceAssets.map((asset) => {
           if (!sourceAssetIds.includes(asset.id)) return asset;
-          if (asset.id === video.journeySourceAssetId || asset.id === `source-asset-${video.id}-journey`) {
+          if (asset.id === clip.journeySourceAssetId || asset.id === `source-asset-${clip.id}-journey`) {
             return {
               ...asset,
-              title: `Operation Journey: ${title}`,
+              title: `Clip Journey: ${title}`,
             };
           }
           return {
@@ -4664,10 +4434,10 @@ export const useStoryVaultStore = defineStore("storyVault", {
         const firestoreOps = useFirestoreDocOperation();
         await Promise.all([
           firestoreOps.createDocument({
-            collectionName: this.operationVideoCollectionPath(),
-            docId: nextVideo.id,
-            docData: nextVideo,
-            converter: storyVaultOperationVideoConverter,
+            collectionName: this.clipCollectionPath(),
+            docId: nextClip.id,
+            docData: nextClip,
+            converter: storyVaultClipConverter,
             merge: true,
           }),
           ...nextSourceAssets
@@ -4683,65 +4453,55 @@ export const useStoryVaultStore = defineStore("storyVault", {
             ),
         ]);
 
-        this.operationVideos = this.operationVideos.map((item) =>
-          item.id === nextVideo.id ? nextVideo : item
+        this.clips = this.clips.map((item) =>
+          item.id === nextClip.id ? nextClip : item
         );
         this.sourceAssets = nextSourceAssets;
-        this.lastRunLog.unshift(`Operation Video: ${video.title} を ${title} に変更`);
+        this.lastRunLog.unshift(`Clip: ${clip.title} を ${title} に変更`);
       } catch (err) {
-        log("ERROR", "StoryVault operation video title update failed", err);
+        log("ERROR", "StoryVault clip title update failed", err);
         reportDatadogError(err, {
-          feature: "storyvault_zapping_video_title_update",
-          videoId: params.videoId,
-          applicationId: video.applicationId,
+          feature: "storyvault_clip_title_update",
+          clipId: params.clipId,
+          applicationId: clip.applicationId,
         });
         this.error =
-          err instanceof Error ? err.message : "ザッピング動画タイトルの更新に失敗しました";
+          err instanceof Error ? err.message : "クリップタイトルの更新に失敗しました";
         throw err;
       } finally {
         this.isLoading = false;
       }
     },
-    async deleteOperationVideoClip(params: {
-      videoId: string;
-      clipId: string;
-    }): Promise<void> {
-      const video = this.operationVideos.find((item) => item.id === params.videoId);
-      if (!video) {
-        throw new Error("削除対象のザッピング動画が見つかりません");
+    async deleteClip(clipId: string): Promise<void> {
+      const clip = this.clips.find((item) => item.id === clipId);
+      if (!clip) {
+        throw new Error("削除対象のクリップが見つかりません");
       }
-      const normalizedVideo = normalizeOperationVideo(video);
-      if (normalizedVideo.clips.length <= 1) {
-        throw new Error("最後のクリップは動画全体の削除から実行してください");
-      }
-      const targetClip = normalizedVideo.clips.find((clip) => clip.id === params.clipId);
-      if (!targetClip) {
-        throw new Error("削除対象の動画クリップが見つかりません");
-      }
-
       this.isLoading = true;
       this.error = null;
       try {
         const firestoreOps = useFirestoreDocOperation();
+        const sourceAssetIds = clipSourceAssetIds(clip);
+
         const storageTargets = [
           {
-            bucketName: targetClip.bucketName,
-            storagePath: targetClip.storagePath,
+            bucketName: clip.bucketName,
+            storagePath: clip.storagePath,
           },
-          ...targetClip.frameCaptures.map((frame) => ({
+          ...clip.frameCaptures.map((frame) => ({
             bucketName: frame.bucketName,
             storagePath: frame.storagePath,
           })),
-          targetClip.metadataStoragePath
+          clip.metadataStoragePath
             ? {
-                bucketName: targetClip.bucketName,
-                storagePath: targetClip.metadataStoragePath,
+                bucketName: clip.bucketName,
+                storagePath: clip.metadataStoragePath,
               }
             : undefined,
-          targetClip.journeyStoragePath
+          clip.journeyStoragePath
             ? {
-                bucketName: targetClip.bucketName,
-                storagePath: targetClip.journeyStoragePath,
+                bucketName: clip.bucketName,
+                storagePath: clip.journeyStoragePath,
               }
             : undefined,
         ].filter(
@@ -4766,136 +4526,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
                   ? String((err as { code?: unknown }).code)
                   : "";
               if (code !== "storage/object-not-found") {
-                log("WARN", "Operation video clip storage delete skipped", {
-                  videoId: params.videoId,
-                  clipId: params.clipId,
-                  storagePath: target.storagePath,
-                  err,
-                });
-              }
-            }
-          })
-        );
-
-        const nextVideo = normalizeOperationVideo({
-          ...normalizedVideo,
-          clips: normalizedVideo.clips.filter((clip) => clip.id !== targetClip.id),
-          analysisStatus: "not_analyzed",
-          analysisRequestId: undefined,
-          analysisSessionId: undefined,
-          analysisOrganizationId: undefined,
-          analysisSpaceId: undefined,
-          analysisErrorMessage: undefined,
-          analyzedAt: undefined,
-          analysisResult: undefined,
-          hasUnanalyzedClip: true,
-          analysisStaleReason:
-            "動画クリップが削除されました。再解析すると最新の操作セットに反映されます。",
-        });
-        await firestoreOps.createDocument({
-          collectionName: this.operationVideoCollectionPath(),
-          docId: nextVideo.id,
-          docData: nextVideo,
-          converter: storyVaultOperationVideoConverter,
-          merge: true,
-        });
-
-        const sourceAssetIds = [
-          targetClip.sourceAssetId,
-          targetClip.journeySourceAssetId,
-        ].filter((id, index, arr): id is string => Boolean(id) && arr.indexOf(id) === index);
-        await Promise.all(
-          sourceAssetIds.map((assetId) =>
-            firestoreOps.deleteDocument({
-              collectionName: this.sourceAssetCollectionPath(),
-              docId: assetId,
-            })
-          )
-        );
-
-        this.operationVideos = this.operationVideos.map((item) =>
-          item.id === nextVideo.id ? nextVideo : item
-        );
-        this.sourceAssets = this.sourceAssets.filter(
-          (asset) => !sourceAssetIds.includes(asset.id)
-        );
-        this.lastRunLog.unshift(
-          `Operation Video: ${video.title} からクリップ ${targetClip.fileName} を削除`
-        );
-      } catch (err) {
-        log("ERROR", "StoryVault operation video clip delete failed", err);
-        reportDatadogError(err, {
-          feature: "storyvault_zapping_video_clip_delete",
-          videoId: params.videoId,
-          clipId: params.clipId,
-          applicationId: video.applicationId,
-        });
-        this.error =
-          err instanceof Error ? err.message : "動画クリップの削除に失敗しました";
-        throw err;
-      } finally {
-        this.isLoading = false;
-      }
-    },
-    async deleteOperationVideo(videoId: string): Promise<void> {
-      const video = this.operationVideos.find((item) => item.id === videoId);
-      if (!video) {
-        throw new Error("削除対象のザッピング動画が見つかりません");
-      }
-      this.isLoading = true;
-      this.error = null;
-      try {
-        const firestoreOps = useFirestoreDocOperation();
-        const normalizedVideo = normalizeOperationVideo(video);
-        const sourceAssetIds = operationVideoSourceAssetIds(normalizedVideo);
-
-        const storageTargets = [
-          ...normalizedVideo.clips.flatMap((clip) => [
-            {
-              bucketName: clip.bucketName,
-              storagePath: clip.storagePath,
-            },
-            ...clip.frameCaptures.map((frame) => ({
-              bucketName: frame.bucketName,
-              storagePath: frame.storagePath,
-            })),
-            clip.metadataStoragePath
-              ? {
-                  bucketName: clip.bucketName,
-                  storagePath: clip.metadataStoragePath,
-                }
-              : undefined,
-            clip.journeyStoragePath
-              ? {
-                  bucketName: clip.bucketName,
-                  storagePath: clip.journeyStoragePath,
-                }
-              : undefined,
-          ]),
-        ].filter(
-          (
-            target
-          ): target is { bucketName: string; storagePath: string } =>
-            Boolean(target?.bucketName && target.storagePath)
-        );
-
-        await Promise.all(
-          storageTargets.map(async (target) => {
-            try {
-              await deleteObject(
-                storageRefForBucketPath({
-                  bucketName: target.bucketName,
-                  filePath: target.storagePath,
-                })
-              );
-            } catch (err) {
-              const code =
-                typeof err === "object" && err !== null && "code" in err
-                  ? String((err as { code?: unknown }).code)
-                  : "";
-              if (code !== "storage/object-not-found") {
-                log("WARN", "Operation video storage delete skipped", {
-                  videoId,
+                log("WARN", "Clip storage delete skipped", {
+                  clipId,
                   storagePath: target.storagePath,
                   err,
                 });
@@ -4906,8 +4538,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
 
         const deleteResults = await Promise.all([
           firestoreOps.deleteDocument({
-            collectionName: this.operationVideoCollectionPath(),
-            docId: video.id,
+            collectionName: this.clipCollectionPath(),
+            docId: clip.id,
           }),
           ...sourceAssetIds.map((assetId) =>
             firestoreOps.deleteDocument({
@@ -4917,31 +4549,31 @@ export const useStoryVaultStore = defineStore("storyVault", {
           ),
         ]);
         if (deleteResults.some((deleted) => !deleted)) {
-          throw new Error("Firestore上のザッピング動画または関連素材を削除できませんでした");
+          throw new Error("Firestore上のクリップまたは関連素材を削除できませんでした");
         }
 
-        this.operationVideos = this.operationVideos.filter(
-          (item) => item.id !== video.id
+        this.clips = this.clips.filter(
+          (item) => item.id !== clip.id
         );
-        if (video.groupId) {
-          const group = this.operationVideoGroups.find(
-            (item) => item.id === video.groupId
+        if (clip.clipGroupId) {
+          const group = this.clipGroups.find(
+            (item) => item.id === clip.clipGroupId
           );
           if (group) {
-            const nextGroup: DecodedStoryVaultOperationVideoGroup = {
+            const nextGroup: DecodedStoryVaultClipGroup = {
               ...group,
-              videoCount: this.operationVideos.filter(
-                (item) => item.groupId === group.id
+              clipCount: this.clips.filter(
+                (item) => item.clipGroupId === group.id
               ).length,
             };
             await firestoreOps.createDocument({
-              collectionName: this.operationVideoGroupCollectionPath(),
+              collectionName: this.clipGroupCollectionPath(),
               docId: nextGroup.id,
               docData: nextGroup,
-              converter: storyVaultOperationVideoGroupConverter,
+              converter: storyVaultClipGroupConverter,
               merge: true,
             });
-            this.operationVideoGroups = this.operationVideoGroups.map((item) =>
+            this.clipGroups = this.clipGroups.map((item) =>
               item.id === nextGroup.id ? nextGroup : item
             );
           }
@@ -4949,16 +4581,16 @@ export const useStoryVaultStore = defineStore("storyVault", {
         this.sourceAssets = this.sourceAssets.filter(
           (asset) => !sourceAssetIds.includes(asset.id)
         );
-        this.lastRunLog.unshift(`Operation Video: ${video.title} を削除`);
+        this.lastRunLog.unshift(`Clip: ${clip.title} を削除`);
       } catch (err) {
-        log("ERROR", "StoryVault operation video delete failed", err);
+        log("ERROR", "StoryVault clip delete failed", err);
         reportDatadogError(err, {
-          feature: "storyvault_zapping_video_delete",
-          videoId,
-          applicationId: video.applicationId,
+          feature: "storyvault_clip_delete",
+          clipId,
+          applicationId: clip.applicationId,
         });
         this.error =
-          err instanceof Error ? err.message : "ザッピング動画の削除に失敗しました";
+          err instanceof Error ? err.message : "クリップの削除に失敗しました";
         throw err;
       } finally {
         this.isLoading = false;

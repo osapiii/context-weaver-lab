@@ -3,14 +3,19 @@
     <section class="rounded-lg border border-slate-200 bg-white p-5">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="min-w-0">
-          <p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-            StoryVault Agent Setup
-          </p>
-          <h2 class="mt-1 text-lg font-semibold text-slate-950">
+          <div class="flex flex-wrap items-center gap-2">
+            <EnBadge color="success" variant="soft" leading-icon="material-symbols:hub">
+              MCP設定
+            </EnBadge>
+            <p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+              StoryVault Agent Setup
+            </p>
+          </div>
+          <h2 class="mt-2 text-2xl font-semibold tracking-normal text-slate-950">
             AIツールへStoryVaultを接続する
           </h2>
-          <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            必要なのは、トークン発行、AIツール選択、Skill InstallとMCP Setupコマンドの実行だけです。
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            Codex、Claude、AntigravityなどのAIツールから、StoryVaultのクリップ・ストーリー・関連コンテキストをそのまま呼び出せます。
           </p>
         </div>
         <EnButton
@@ -31,64 +36,183 @@
         title="トークンは1回だけ表示されます。外部に見えた可能性がある場合は、下の接続一覧から無効化して作り直してください。"
       />
 
-      <div class="mt-5 grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <div class="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <div>
-            <p class="text-sm font-semibold text-slate-900">1. トークン発行</p>
-            <p class="mt-1 text-xs leading-5 text-slate-500">
-              AIツールからStoryVaultを読むための接続を作ります。
-            </p>
+      <div class="mt-5 grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <aside class="space-y-4">
+          <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-slate-900">1. 接続するAIツールを選択</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">
+                  デモで見せたいツールを選ぶと、コマンドも自動で切り替わります。
+                </p>
+              </div>
+              <EnBadge color="neutral">{{ activeConnectionCount }} active</EnBadge>
+            </div>
+
+            <div class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+              <button
+                v-for="agent in agentCards"
+                :key="agent.value"
+                type="button"
+                class="group flex min-h-[92px] items-start gap-3 rounded-lg border bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                :class="
+                  connectionForm.externalAgent === agent.value
+                    ? 'border-emerald-300 ring-2 ring-emerald-100'
+                    : 'border-slate-200 hover:border-slate-300'
+                "
+                @click="selectAgent(agent.value)"
+              >
+                <span
+                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border"
+                  :class="[agent.logoClass, agent.logoSurfaceClass]"
+                >
+                  <UIcon :name="agent.icon" class="h-6 w-6" />
+                </span>
+                <span class="min-w-0">
+                  <span class="flex items-center gap-2">
+                    <span class="font-semibold text-slate-950">{{ agent.label }}</span>
+                    <span
+                      v-if="connectionForm.externalAgent === agent.value"
+                      class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
+                    >
+                      選択中
+                    </span>
+                  </span>
+                  <span class="mt-1 block text-xs leading-5 text-slate-500">{{ agent.description }}</span>
+                </span>
+              </button>
+            </div>
+
+            <div class="mt-4 space-y-3">
+              <UFormField
+                label="接続名"
+                help="あとで一覧で見分けるための名前です。"
+              >
+                <UInput
+                  v-model="connectionForm.name"
+                  placeholder="Codex local"
+                  class="w-full"
+                />
+              </UFormField>
+
+              <EnButton
+                variant="ai"
+                size="sm"
+                leading-icon="material-symbols:vpn-key"
+                :loading="isCreating"
+                :disabled="!canCreateConnection"
+                @click="createConnection"
+              >
+                トークンを発行
+              </EnButton>
+            </div>
           </div>
 
-          <UFormField
-            label="接続名"
-            help="あとで一覧で見分けるための名前です。"
-          >
-            <UInput
-              v-model="connectionForm.name"
-              placeholder="Codex local"
-              class="w-full"
-            />
-          </UFormField>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-slate-950">作成済みの接続</h3>
+                <p class="mt-1 text-xs text-slate-500">
+                  デモではここで対応ツールをロゴ付きで見せられます。
+                </p>
+              </div>
+              <EnBadge color="neutral">{{ connections.length }} connections</EnBadge>
+            </div>
 
-          <UFormField label="AIツール">
-            <USelect
-              v-model="connectionForm.externalAgent"
-              :items="agentOptions"
-              class="w-full"
-            />
-          </UFormField>
+            <div class="mt-3 space-y-2">
+              <div
+                v-for="connection in connectionsWithMeta"
+                :key="connection.id"
+                class="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <div class="flex items-start gap-3">
+                  <span
+                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border"
+                    :class="[connection.agent.logoClass, connection.agent.logoSurfaceClass]"
+                  >
+                    <UIcon :name="connection.agent.icon" class="h-5 w-5" />
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <p class="truncate text-sm font-semibold text-slate-950">
+                        {{ connection.name || connection.id }}
+                      </p>
+                      <EnBadge
+                        :color="connection.revokedAt ? 'error' : 'success'"
+                        variant="soft"
+                      >
+                        {{ connection.revokedAt ? "無効" : "有効" }}
+                      </EnBadge>
+                    </div>
+                    <p class="mt-1 text-xs font-medium text-slate-600">
+                      {{ connection.agent.label }} / {{ allowedApplicationLabel(connection.allowedApplicationIds) }}
+                    </p>
+                    <p class="mt-1 truncate text-[11px] text-slate-400">
+                      {{ connection.id }}
+                    </p>
+                    <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <span class="text-[11px] text-slate-500">
+                        最終利用 {{ formatMaybeTimestamp(connection.lastUsedAt) }}
+                      </span>
+                      <EnButton
+                        v-if="!connection.revokedAt"
+                        variant="ghost"
+                        color="error"
+                        size="xs"
+                        leading-icon="material-symbols:link-off"
+                        :loading="revokingConnectionId === connection.id"
+                        @click="revokeConnection(connection.id)"
+                      >
+                        無効化
+                      </EnButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-          <EnButton
-            variant="ai"
-            size="sm"
-            leading-icon="material-symbols:vpn-key"
-            :loading="isCreating"
-            :disabled="!canCreateConnection"
-            @click="createConnection"
-          >
-            トークンを発行
-          </EnButton>
-        </div>
+              <div
+                v-if="connections.length === 0"
+                class="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-7 text-center"
+              >
+                <div class="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-white text-slate-400 shadow-sm">
+                  <UIcon name="material-symbols:hub" class="h-5 w-5" />
+                </div>
+                <p class="mt-3 text-sm font-semibold text-slate-700">接続はまだ作成されていません</p>
+                <p class="mt-1 text-xs text-slate-500">
+                  トークンを発行すると、ここにAIツール別の接続が並びます。
+                </p>
+              </div>
+            </div>
+          </div>
+        </aside>
 
-        <div class="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p class="text-sm font-semibold text-slate-900">2. コマンドを実行</p>
-              <p class="mt-1 text-xs leading-5 text-slate-500">
-                Skillを入れてから、MCP接続をAIツールへ登録します。
-              </p>
+        <div class="space-y-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="flex min-w-0 items-start gap-3">
+              <span
+                class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border"
+                :class="[selectedSetupAgentCard.logoClass, selectedSetupAgentCard.logoSurfaceClass]"
+              >
+                <UIcon :name="selectedSetupAgentCard.icon" class="h-7 w-7" />
+              </span>
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-900">2. コマンドをコピーして実行</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">
+                  {{ selectedSetupAgentCard.label }} にSkillとMCP接続を追加します。
+                </p>
+              </div>
             </div>
             <USelect
               v-model="selectedSetupAgent"
               :items="agentOptions"
-              class="w-44"
+              class="w-48"
             />
           </div>
 
           <CopyLineList
             v-if="createdToken"
             title="1回だけ表示されるトークン"
+            tone="secret"
             :lines="[createdToken]"
             @copy="copyText"
           />
@@ -96,107 +220,38 @@
           <EnAlert
             v-else
             color="info"
-            title="左でトークンを発行すると、下のMCP Setupコマンドに自動で入ります。"
+            title="左でトークンを発行すると、MCP Setupコマンドに自動で入ります。"
           />
 
           <CopyLineList
             title="StoryVault Skill Install"
+            subtitle="まずAIツールへStoryVaultの使い方を追加します。"
             :lines="skillInstallLines"
             @copy="copyText"
           />
 
           <CopyLineList
             title="StoryVault MCP Setup"
+            subtitle="次にStoryVault MCPサーバーと発行済みトークンを登録します。"
+            tone="primary"
             :lines="mcpSetupLines"
             @copy="copyText"
           />
 
-          <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p class="text-xs font-semibold text-slate-700">実行後</p>
-            <p class="mt-1 text-xs leading-5 text-slate-500">
-              AIツールを開き直してください。既に開いているスレッドには、後から追加したMCPやSkillが反映されないことがあります。
-            </p>
+          <div class="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+            <div class="flex items-start gap-3">
+              <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-sm">
+                <UIcon name="material-symbols:rocket-launch" class="h-5 w-5" />
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-emerald-950">実行後</p>
+                <p class="mt-1 text-xs leading-5 text-emerald-800">
+                  AIツールを開き直してください。既に開いているスレッドには、後から追加したMCPやSkillが反映されないことがあります。
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
-
-    <section class="rounded-lg border border-slate-200 bg-white p-5">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 class="text-base font-semibold text-slate-950">作成済みの接続</h3>
-          <p class="mt-1 text-xs text-slate-500">
-            使わなくなった接続は無効化できます。
-          </p>
-        </div>
-        <EnBadge color="neutral">{{ connections.length }} connections</EnBadge>
-      </div>
-
-      <div class="mt-4 overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-200 text-sm">
-          <thead class="bg-slate-50 text-left text-xs font-semibold text-slate-500">
-            <tr>
-              <th class="px-3 py-2">接続名</th>
-              <th class="px-3 py-2">AIツール</th>
-              <th class="px-3 py-2">対象アプリ</th>
-              <th class="px-3 py-2">最終利用</th>
-              <th class="px-3 py-2">状態</th>
-              <th class="px-3 py-2">
-                <span class="sr-only">操作</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            <tr
-              v-for="connection in connections"
-              :key="connection.id"
-              class="align-top"
-            >
-              <td class="px-3 py-3 font-semibold text-slate-900">
-                {{ connection.name || connection.id }}
-                <p class="mt-1 break-all text-xs font-normal text-slate-400">
-                  {{ connection.id }}
-                </p>
-              </td>
-              <td class="px-3 py-3 text-slate-700">{{ connection.externalAgent }}</td>
-              <td class="px-3 py-3 text-slate-700">
-                {{ allowedApplicationLabel(connection.allowedApplicationIds) }}
-              </td>
-              <td class="px-3 py-3 text-slate-500">
-                {{ formatMaybeTimestamp(connection.lastUsedAt) }}
-              </td>
-              <td class="px-3 py-3">
-                <EnBadge
-                  :color="connection.revokedAt ? 'error' : 'success'"
-                  variant="soft"
-                >
-                  {{ connection.revokedAt ? "無効" : "有効" }}
-                </EnBadge>
-              </td>
-              <td class="px-3 py-3 text-right">
-                <EnButton
-                  v-if="!connection.revokedAt"
-                  variant="ghost"
-                  color="error"
-                  size="xs"
-                  leading-icon="material-symbols:link-off"
-                  :loading="revokingConnectionId === connection.id"
-                  @click="revokeConnection(connection.id)"
-                >
-                  無効化
-                </EnButton>
-              </td>
-            </tr>
-            <tr v-if="connections.length === 0">
-              <td
-                colspan="6"
-                class="px-3 py-8 text-center text-sm text-slate-500"
-              >
-                接続はまだ作成されていません。
-              </td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </section>
   </div>
@@ -226,21 +281,40 @@ type McpConnectionRow = {
 const CopyLineList = defineComponent({
   props: {
     title: { type: String, required: true },
+    subtitle: { type: String, default: "" },
+    tone: { type: String as () => "default" | "primary" | "secret", default: "default" },
     lines: { type: Array as () => string[], required: true },
   },
   emits: ["copy"],
   setup(props, { emit }) {
     return () =>
-      h("div", { class: "rounded-lg border border-slate-200 bg-slate-50 p-3" }, [
-        h("p", { class: "text-xs font-semibold uppercase tracking-[0.12em] text-slate-500" }, props.title),
+      h("div", {
+        class: [
+          "rounded-lg border p-4",
+          props.tone === "primary"
+            ? "border-emerald-200 bg-emerald-50"
+            : props.tone === "secret"
+              ? "border-violet-200 bg-violet-50"
+              : "border-slate-200 bg-slate-50",
+        ],
+      }, [
+        h("div", { class: "flex items-start justify-between gap-3" }, [
+          h("div", { class: "min-w-0" }, [
+            h("p", { class: "text-xs font-semibold uppercase tracking-[0.12em] text-slate-500" }, props.title),
+            props.subtitle
+              ? h("p", { class: "mt-1 text-xs leading-5 text-slate-500" }, props.subtitle)
+              : null,
+          ]),
+          h("span", { class: "rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-slate-500 shadow-sm" }, "COPY READY"),
+        ]),
         h(
           "div",
-          { class: "mt-2 space-y-2" },
+          { class: "mt-3 space-y-3" },
           props.lines.map((line, index) =>
-            h("div", { class: "flex min-w-0 items-center gap-2", key: `${index}-${line}` }, [
+            h("div", { class: "grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_104px]", key: `${index}-${line}` }, [
               h("input", {
                 class:
-                  "min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 shadow-sm",
+                  "min-w-0 rounded-lg border border-slate-200 bg-white px-4 py-3 font-mono text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100",
                 readOnly: true,
                 value: line,
                 onFocus: (event: FocusEvent) => {
@@ -252,7 +326,7 @@ const CopyLineList = defineComponent({
                 "button",
                 {
                   class:
-                    "shrink-0 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-100",
+                    "shrink-0 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800",
                   onClick: () => emit("copy", line),
                 },
                 "Copy"
@@ -297,6 +371,41 @@ const agentOptions = [
   { label: "Antigravity", value: "antigravity" },
 ];
 
+const agentCards = [
+  {
+    label: "Codex",
+    value: "codex",
+    icon: "simple-icons:openai",
+    description: "CLIとCodexスレッドからStoryVaultを呼び出します。",
+    logoClass: "text-slate-950",
+    logoSurfaceClass: "border-slate-200 bg-white",
+  },
+  {
+    label: "Claude",
+    value: "claude",
+    icon: "simple-icons:anthropic",
+    description: "Claude DesktopのMCP接続として登録できます。",
+    logoClass: "text-orange-700",
+    logoSurfaceClass: "border-orange-200 bg-orange-50",
+  },
+  {
+    label: "Antigravity",
+    value: "antigravity",
+    icon: "material-symbols:orbit",
+    description: "Agentic IDEの作業文脈にStoryVaultを追加します。",
+    logoClass: "text-sky-700",
+    logoSurfaceClass: "border-sky-200 bg-sky-50",
+  },
+  {
+    label: "Cursor",
+    value: "cursor",
+    icon: "material-symbols:near-me",
+    description: "エディター内のAIチャットから参照できます。",
+    logoClass: "text-violet-700",
+    logoSurfaceClass: "border-violet-200 bg-violet-50",
+  },
+];
+
 const connectionForm = reactive({
   name: "Codex local",
   externalAgent: "codex",
@@ -309,6 +418,18 @@ const createdToken = ref("");
 const isLoading = ref(false);
 const isCreating = ref(false);
 const revokingConnectionId = ref("");
+
+const fallbackAgentCard = agentCards[0];
+const activeConnectionCount = computed(() => connections.value.filter((connection) => !connection.revokedAt).length);
+const findAgentCard = (value: string) =>
+  agentCards.find((agent) => agent.value === value) ?? fallbackAgentCard;
+const selectedSetupAgentCard = computed(() => findAgentCard(selectedSetupAgent.value));
+const connectionsWithMeta = computed(() =>
+  connections.value.map((connection) => ({
+    ...connection,
+    agent: findAgentCard(connection.externalAgent),
+  }))
+);
 
 const canCreateConnection = computed(
   () =>
@@ -435,6 +556,13 @@ const createConnection = async (): Promise<void> => {
   } finally {
     isCreating.value = false;
   }
+};
+
+const selectAgent = (agent: string): void => {
+  connectionForm.externalAgent = agent;
+  selectedSetupAgent.value = agent;
+  const label = findAgentCard(agent).label;
+  connectionForm.name = `${label} local`;
 };
 
 const revokeConnection = async (connectionId: string): Promise<void> => {
