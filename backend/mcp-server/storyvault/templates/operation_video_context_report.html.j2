@@ -98,6 +98,7 @@
       <nav class="nav" aria-label="Report sections">
         <a href="#overview">Overview</a>
         <a href="#video">Operation Video</a>
+        <a href="#generated-assets">External Editing Assets</a>
         <a href="#clips">Operation Clips</a>
         <a href="#story-candidates">Story Candidates</a>
         <a href="#transcript">Timestamped Transcript</a>
@@ -127,6 +128,7 @@
           <div class="metric"><span>Assets</span><strong>{{ source_assets|length }}</strong></div>
           <div class="metric"><span>Clips</span><strong>{{ video.clips|default([])|length }}</strong></div>
           <div class="metric"><span>Screenshots</span><strong>{{ counts.screenshots|default(video.screenshots|default([])|length) }}</strong></div>
+          <div class="metric"><span>Generated Assets</span><strong>{{ counts.generatedAssets|default(video.generatedAssets|default([])|length) }}</strong></div>
           <div class="metric"><span>Story Candidates</span><strong>{{ video.storyCandidates|default([])|length }}</strong></div>
           <div class="metric"><span>Transcript Cues</span><strong>{{ video.transcriptSegmentCount|default(video.transcriptSegments|default([])|length) }}</strong></div>
           <div class="metric"><span>PRs</span><strong>{{ pull_requests|length }}</strong></div>
@@ -151,6 +153,7 @@
             <div class="kv"><b>Transcript timing</b><span>{{ video.transcriptTimingStatus|text("n/a") }}</span></div>
             <div class="kv"><b>Analysis status</b><span>{{ video.analysisStatus|text("n/a") }}</span></div>
             <div class="kv"><b>Story candidates</b><span>{{ video.storyCandidateCount|default(video.storyCandidates|default([])|length) }}</span></div>
+            <div class="kv"><b>Generated assets</b><span>{{ video.generatedAssetCount|default(video.generatedAssets|default([])|length) }}</span></div>
             <div class="kv"><b>GCS path</b><span>{{ video.gcsPath|text("n/a") }}</span></div>
           </div>
           {% if video_group.description %}
@@ -161,6 +164,25 @@
             <h3>Transcript Summary</h3>
             <p>{{ video.transcriptSummary }}</p>
           {% endif %}
+        </div>
+      </section>
+
+      <section id="generated-assets">
+        <h2>External Editing Assets</h2>
+        <div class="grid cols-2">
+          {% for asset in video.generatedAssets|default([]) %}
+            <article class="panel">
+              <h3>{{ asset.label|text(asset.kind|text("Generated asset")) }}</h3>
+              <div class="kv"><b>Kind</b><span>{{ asset.kind|text("n/a") }}</span></div>
+              <div class="kv"><b>Role</b><span>{{ asset.role|text("n/a") }}</span></div>
+              <div class="kv"><b>MIME</b><span>{{ asset.contentType|text("n/a") }}</span></div>
+              <div class="kv"><b>Project</b><span>{{ asset.projectName|text(asset.projectId|text("n/a")) }}</span></div>
+              {% if asset.downloadUrl %}<div class="kv"><b>Download</b><span><a href="{{ asset.downloadUrl }}" target="_blank" rel="noopener noreferrer">{{ asset.downloadUrl }}</a></span></div>{% endif %}
+              {% if asset.gcsPath %}<div class="kv"><b>GCS</b><span>{{ asset.gcsPath }}</span></div>{% endif %}
+            </article>
+          {% else %}
+            <div class="panel"><p class="muted">No Video Studio generated assets were found for this operation video.</p></div>
+          {% endfor %}
         </div>
       </section>
 

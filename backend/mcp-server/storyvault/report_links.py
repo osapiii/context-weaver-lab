@@ -274,6 +274,20 @@ def build_operation_video_report_link_response(
             "id": context_manifest.get("operationVideoId"),
             "downloadUrl": (context_manifest.get("operationVideo") or {}).get("downloadUrl"),
             "screenshotCount": len(_as_list((context_manifest.get("operationVideo") or {}).get("screenshots"))),
+            "generatedAssetCount": len(_as_list((context_manifest.get("operationVideo") or {}).get("generatedAssets"))),
+            "generatedAssets": [
+                {
+                    "kind": asset.get("kind"),
+                    "role": asset.get("role"),
+                    "label": asset.get("label"),
+                    "contentType": asset.get("contentType"),
+                    "gcsPath": asset.get("gcsPath"),
+                    "downloadUrl": asset.get("downloadUrl"),
+                    "downloadUrlExpiresAt": asset.get("downloadUrlExpiresAt"),
+                }
+                for asset in _as_list((context_manifest.get("operationVideo") or {}).get("generatedAssets"))
+                if isinstance(asset, dict)
+            ][:12],
         },
         "counts": context_manifest.get("counts") or {},
         "linkedStories": [
@@ -310,6 +324,20 @@ def _compact_assets(asset_manifest: dict[str, Any]) -> dict[str, Any]:
                 "downloadUrl": video.get("downloadUrl"),
                 "downloadUrlExpiresAt": video.get("downloadUrlExpiresAt"),
                 "screenshotCount": len([frame for frame in _as_list(video.get("screenshots")) if isinstance(frame, dict)]),
+                "generatedAssetCount": len([asset for asset in _as_list(video.get("generatedAssets")) if isinstance(asset, dict)]),
+                "generatedAssets": [
+                    {
+                        "kind": asset.get("kind"),
+                        "role": asset.get("role"),
+                        "label": asset.get("label"),
+                        "contentType": asset.get("contentType"),
+                        "gcsPath": asset.get("gcsPath"),
+                        "downloadUrl": asset.get("downloadUrl"),
+                        "downloadUrlExpiresAt": asset.get("downloadUrlExpiresAt"),
+                    }
+                    for asset in _as_list(video.get("generatedAssets"))
+                    if isinstance(asset, dict)
+                ][:12],
             }
         )
     return {

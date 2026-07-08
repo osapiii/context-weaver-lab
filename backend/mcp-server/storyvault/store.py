@@ -102,6 +102,81 @@ def _storage_ref_from_values(
     return "", path
 
 
+def _storage_ref_from_output(
+    value: Any,
+    *,
+    preferred_nested_key: str = "",
+    default_bucket_name: Any = "",
+) -> tuple[str, str]:
+    if not isinstance(value, dict):
+        return "", ""
+
+    candidates: list[Any] = []
+    if preferred_nested_key:
+        nested = value.get(preferred_nested_key)
+        if isinstance(nested, dict):
+            candidates.append(nested)
+    candidates.append(value)
+
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        bucket_name = (
+            candidate.get("resultBucketName")
+            or candidate.get("bucketName")
+            or candidate.get("outputBucketName")
+            or default_bucket_name
+        )
+        storage_path = (
+            candidate.get("resultFilePath")
+            or candidate.get("filePath")
+            or candidate.get("storagePath")
+            or candidate.get("outputPath")
+            or candidate.get("outputFilePath")
+            or candidate.get("gcsFilePath")
+        )
+        bucket, path = _storage_ref_from_values(
+            bucket_name=bucket_name,
+            storage_path=storage_path,
+            gcs_path=candidate.get("gcsPath") or candidate.get("gcsUrl"),
+            uri=candidate.get("uri"),
+        )
+        if bucket and path:
+            return bucket, path
+    return "", ""
+
+
+def _content_type_from_path(storage_path: str) -> str | None:
+    path = storage_path.lower().split("?", 1)[0]
+    if path.endswith(".mp4"):
+        return "video/mp4"
+    if path.endswith(".webm"):
+        return "video/webm"
+    if path.endswith(".mov"):
+        return "video/quicktime"
+    if path.endswith(".m4v"):
+        return "video/x-m4v"
+    if path.endswith(".mp3"):
+        return "audio/mpeg"
+    if path.endswith(".m4a"):
+        return "audio/mp4"
+    if path.endswith(".wav"):
+        return "audio/wav"
+    if path.endswith(".aac"):
+        return "audio/aac"
+    if path.endswith(".ogg"):
+        return "audio/ogg"
+    if path.endswith(".srt"):
+        return "application/x-subrip"
+    if path.endswith(".ass"):
+        return "text/x-ssa"
+    if path.endswith(".json"):
+        return "application/json"
+    if path.endswith(".zip"):
+        return "application/zip"
+    return None
+
+
 class StoryVaultStore:
     def __init__(
         self,
@@ -606,6 +681,7 @@ class StoryVaultStore:
                     item,
                     include_signed_urls=include_signed_urls,
                     expires_at=expires_at,
+                    include_video_studio_assets=True,
                 )
                 for item in operation_videos
             ],
@@ -630,6 +706,11 @@ class StoryVaultStore:
             "githubPullRequests": len(manifest["githubPullRequests"]),
             "slackMessages": len(manifest["slackMessages"]),
             "knowledgeDocuments": len(manifest["knowledgeDocuments"]),
+            "generatedAssets": sum(
+                len(_as_list(item.get("generatedAssets")))
+                for item in manifest["operationVideos"]
+                if isinstance(item, dict)
+            ),
         }
         return manifest
 
@@ -682,6 +763,7 @@ class StoryVaultStore:
             video,
             include_signed_urls=include_signed_urls,
             expires_at=expires_at,
+            include_video_studio_assets=True,
         )
         source_asset_refs = [
             self._source_asset_ref(item, include_signed_urls=include_signed_urls, expires_at=expires_at)
@@ -729,6 +811,7 @@ class StoryVaultStore:
                 "githubPullRequests": len(pull_requests),
                 "slackMessages": len(slack_messages),
                 "knowledgeDocuments": len(knowledge_documents),
+                "generatedAssets": len(_as_list(video_ref.get("generatedAssets"))),
             },
             "agentInstructions": [
                 "Treat the operation video as the primary context object.",
@@ -921,6 +1004,7 @@ class StoryVaultStore:
         *,
         include_signed_urls: bool,
         expires_at: datetime,
+        include_video_studio_assets: bool = False,
     ) -> dict[str, Any]:
         clips = self._operation_video_clips(item)
         primary_clip = clips[0] if clips else {}
@@ -948,6 +1032,21 @@ class StoryVaultStore:
             analysis_result.get("storyCandidates"),
             screenshots=screenshots,
         )
+        video_studio_projects = (
+            self._video_studio_project_refs(
+                operation_video_id=str(item.get("id") or ""),
+                include_signed_urls=include_signed_urls,
+                expires_at=expires_at,
+            )
+            if include_video_studio_assets
+            else []
+        )
+        generated_assets = [
+            asset
+            for project in video_studio_projects
+            for asset in _as_list(project.get("generatedAssets"))
+            if isinstance(asset, dict)
+        ]
         video_ref = {
             "id": item.get("id"),
             "kind": "operation_video",
@@ -985,6 +1084,15 @@ class StoryVaultStore:
             "journeyStoragePath": primary_clip.get("journeyStoragePath") or item.get("journeyStoragePath"),
             "clipCount": len(clip_refs),
             "clips": clip_refs,
+            "videoStudio": {
+                "videoId": f"storyvault_{item.get('id')}",
+                "projectCount": len(video_studio_projects),
+                "projects": video_studio_projects,
+            }
+            if include_video_studio_assets
+            else None,
+            "generatedAssetCount": len(generated_assets),
+            "generatedAssets": generated_assets,
             "videoGroup": self._operation_video_group_ref(
                 None,
                 fallback_id=str(item.get("groupId") or ""),
@@ -994,6 +1102,330 @@ class StoryVaultStore:
         }
         self._attach_signed_url(video_ref, bucket_name, storage_path, include_signed_urls=include_signed_urls, expires_at=expires_at)
         return video_ref
+
+    def _video_studio_project_refs(
+        self,
+        *,
+        operation_video_id: str,
+        include_signed_urls: bool,
+        expires_at: datetime,
+    ) -> list[dict[str, Any]]:
+        if not operation_video_id:
+            return []
+        video_id = f"storyvault_{operation_video_id}"
+        preferred_project_id = f"storyvault_narration_{operation_video_id}"
+        collection = self._collection("videos").document(video_id).collection("narrationProjects")
+        projects: dict[str, dict[str, Any]] = {}
+
+        try:
+            snap = collection.document(preferred_project_id).get()
+            if snap.exists:
+                projects[snap.id] = _serialize_firestore(_doc_to_dict(snap))
+        except Exception:
+            pass
+
+        if not projects:
+            try:
+                for snap in collection.limit(10).stream():
+                    projects[snap.id] = _serialize_firestore(_doc_to_dict(snap))
+            except Exception:
+                return []
+
+        refs = [
+            self._video_studio_project_ref(
+                project,
+                video_id=video_id,
+                include_signed_urls=include_signed_urls,
+                expires_at=expires_at,
+            )
+            for project in projects.values()
+        ]
+        return [
+            ref
+            for ref in sorted(refs, key=lambda item: str(item.get("updatedAt") or item.get("lastEditedAt") or ""), reverse=True)
+            if ref.get("generatedAssets")
+        ]
+
+    def _video_studio_project_ref(
+        self,
+        project: dict[str, Any],
+        *,
+        video_id: str,
+        include_signed_urls: bool,
+        expires_at: datetime,
+    ) -> dict[str, Any]:
+        generated_assets = self._video_studio_generated_assets(
+            project,
+            video_id=video_id,
+            include_signed_urls=include_signed_urls,
+            expires_at=expires_at,
+        )
+        return {
+            "id": project.get("id"),
+            "videoId": video_id,
+            "name": project.get("name"),
+            "description": project.get("description"),
+            "status": project.get("status"),
+            "currentStep": project.get("currentStep"),
+            "completedSteps": _as_list(project.get("completedSteps")),
+            "updatedAt": project.get("updatedAt"),
+            "lastEditedAt": project.get("lastEditedAt"),
+            "subtitleSettings": project.get("subtitleSettings"),
+            "silenceCutSettings": project.get("silenceCutSettings"),
+            "generatedAssetCount": len(generated_assets),
+            "generatedAssets": generated_assets,
+        }
+
+    def _video_studio_generated_assets(
+        self,
+        project: dict[str, Any],
+        *,
+        video_id: str,
+        include_signed_urls: bool,
+        expires_at: datetime,
+    ) -> list[dict[str, Any]]:
+        assets: list[dict[str, Any]] = []
+        default_bucket_name = _default_storage_bucket()
+        project_id = _clean_text(project.get("id"))
+        project_name = _clean_text(project.get("name"))
+
+        def add_asset(
+            *,
+            key: str,
+            kind: str,
+            label: str,
+            role: str,
+            source_field: str,
+            bucket_name: str,
+            storage_path: str,
+            request_id: Any = None,
+            generated_at: Any = None,
+            statistics: Any = None,
+            settings: Any = None,
+        ) -> None:
+            if not bucket_name or not storage_path:
+                return
+            content_type = _content_type_from_path(storage_path)
+            if role == "audio" and storage_path.lower().split("?", 1)[0].endswith(".webm"):
+                content_type = "audio/webm"
+            ref = {
+                "id": f"{project_id}:{key}" if project_id else key,
+                "key": key,
+                "kind": kind,
+                "role": role,
+                "label": label,
+                "sourceField": source_field,
+                "projectId": project_id or None,
+                "projectName": project_name or None,
+                "videoStudioVideoId": video_id,
+                "bucketName": bucket_name,
+                "storagePath": storage_path,
+                "filePath": storage_path,
+                "gcsPath": f"gs://{bucket_name}/{storage_path}",
+                "contentType": content_type,
+                "requestId": request_id,
+                "generatedAt": generated_at,
+                "statistics": statistics if isinstance(statistics, dict) else None,
+                "settings": settings if isinstance(settings, dict) else None,
+                "externalEditingHint": "downloadUrl is a signed URL suitable for DaVinci Resolve or other external video tools until downloadUrlExpiresAt.",
+            }
+            self._attach_signed_url(ref, bucket_name, storage_path, include_signed_urls=include_signed_urls, expires_at=expires_at)
+            assets.append(ref)
+
+        merged_output = _as_dict(project.get("mergedVideoOutput"))
+        bucket_name, storage_path = _storage_ref_from_output(
+            merged_output,
+            preferred_nested_key="mergedVideoPath",
+            default_bucket_name=default_bucket_name,
+        )
+        add_asset(
+            key="final-video",
+            kind="final_video",
+            role="video",
+            label="字幕なし最終動画",
+            source_field="mergedVideoOutput",
+            bucket_name=bucket_name,
+            storage_path=storage_path,
+            request_id=merged_output.get("requestId"),
+            generated_at=merged_output.get("generatedAt"),
+            statistics=merged_output.get("statistics"),
+        )
+
+        legacy_silence_output = _as_dict(project.get("mergedVideoOutputSilenceCut"))
+        bucket_name, storage_path = _storage_ref_from_output(
+            legacy_silence_output,
+            default_bucket_name=default_bucket_name,
+        )
+        add_asset(
+            key="legacy-silence-cut-video",
+            kind="silence_cut_video",
+            role="video",
+            label="無音カット版動画",
+            source_field="mergedVideoOutputSilenceCut",
+            bucket_name=bucket_name,
+            storage_path=storage_path,
+            request_id=legacy_silence_output.get("requestId"),
+            generated_at=legacy_silence_output.get("generatedAt"),
+            statistics=legacy_silence_output.get("statistics"),
+            settings=legacy_silence_output.get("settings") or project.get("silenceCutSettings"),
+        )
+
+        silence_output = _as_dict(project.get("silenceCutOutput"))
+        bucket_name, storage_path = _storage_ref_from_output(
+            silence_output,
+            preferred_nested_key="trimmedVideo",
+            default_bucket_name=default_bucket_name,
+        )
+        add_asset(
+            key="silence-cut-video",
+            kind="silence_cut_video",
+            role="video",
+            label="無音カット版動画",
+            source_field="silenceCutOutput.trimmedVideo",
+            bucket_name=bucket_name,
+            storage_path=storage_path,
+            request_id=silence_output.get("requestId"),
+            generated_at=silence_output.get("generatedAt"),
+            statistics=silence_output.get("statistics"),
+            settings=silence_output.get("settings") or project.get("silenceCutSettings"),
+        )
+        bucket_name, storage_path = _storage_ref_from_output(
+            silence_output,
+            preferred_nested_key="manifest",
+            default_bucket_name=default_bucket_name,
+        )
+        add_asset(
+            key="silence-cut-manifest",
+            kind="silence_cut_manifest",
+            role="json_manifest",
+            label="無音カット manifest JSON",
+            source_field="silenceCutOutput.manifest",
+            bucket_name=bucket_name,
+            storage_path=storage_path,
+            request_id=silence_output.get("requestId"),
+            generated_at=silence_output.get("generatedAt"),
+            statistics=silence_output.get("statistics"),
+            settings=silence_output.get("settings") or project.get("silenceCutSettings"),
+        )
+
+        subtitle_output = _as_dict(project.get("subtitleOutput"))
+        bucket_name, storage_path = _storage_ref_from_output(
+            subtitle_output,
+            preferred_nested_key="subtitledVideo",
+            default_bucket_name=default_bucket_name,
+        )
+        add_asset(
+            key="subtitled-video",
+            kind="subtitled_video",
+            role="video",
+            label="字幕付き最終動画",
+            source_field="subtitleOutput.subtitledVideo",
+            bucket_name=bucket_name,
+            storage_path=storage_path,
+            request_id=subtitle_output.get("requestId"),
+            generated_at=subtitle_output.get("generatedAt"),
+            statistics=subtitle_output.get("statistics"),
+            settings=project.get("subtitleSettings"),
+        )
+        for nested_key, kind, label, role in [
+            ("srt", "subtitle_srt", "字幕 SRT", "subtitle"),
+            ("ass", "subtitle_ass", "字幕 ASS", "subtitle"),
+        ]:
+            bucket_name, storage_path = _storage_ref_from_output(
+                subtitle_output,
+                preferred_nested_key=nested_key,
+                default_bucket_name=default_bucket_name,
+            )
+            add_asset(
+                key=f"subtitle-{nested_key}",
+                kind=kind,
+                role=role,
+                label=label,
+                source_field=f"subtitleOutput.{nested_key}",
+                bucket_name=bucket_name,
+                storage_path=storage_path,
+                request_id=subtitle_output.get("requestId"),
+                generated_at=subtitle_output.get("generatedAt"),
+                statistics=subtitle_output.get("statistics"),
+                settings=project.get("subtitleSettings"),
+            )
+
+        for section_index, section in enumerate(_as_list(project.get("sections"))):
+            if not isinstance(section, dict):
+                continue
+            section_id = _clean_text(section.get("id")) or str(section_index + 1)
+            section_label = _clean_text(section.get("title")) or f"セクション {section_index + 1}"
+            section_output = _as_dict(section.get("mergedVideoOutput"))
+            bucket_name, storage_path = _storage_ref_from_output(
+                section_output,
+                default_bucket_name=default_bucket_name,
+            )
+            add_asset(
+                key=f"section-video-{section_id}",
+                kind="section_video",
+                role="video",
+                label=f"{section_label} / 音声付き動画",
+                source_field=f"sections[{section_index}].mergedVideoOutput",
+                bucket_name=bucket_name,
+                storage_path=storage_path,
+                request_id=section_output.get("requestId"),
+                generated_at=section_output.get("generatedAt"),
+                statistics=section_output.get("statistics"),
+            )
+
+            recording = _as_dict(section.get("recording"))
+            bucket_name, storage_path = _storage_ref_from_values(
+                bucket_name=recording.get("audioBucketName"),
+                storage_path=recording.get("audioFilePath"),
+            )
+            add_asset(
+                key=f"recording-audio-{section_id}",
+                kind="recording_audio",
+                role="audio",
+                label=f"{section_label} / 録音音声",
+                source_field=f"sections[{section_index}].recording",
+                bucket_name=bucket_name,
+                storage_path=storage_path,
+                request_id=recording.get("transcriptionRequestId"),
+                generated_at=recording.get("recordedAt"),
+            )
+
+            for segment_index, segment in enumerate(_as_list(section.get("finalyNarrations"))):
+                if not isinstance(segment, dict):
+                    continue
+                request_output = _as_dict(segment.get("requestOutput"))
+                bucket_name, storage_path = _storage_ref_from_output(
+                    request_output,
+                    default_bucket_name=default_bucket_name,
+                )
+                add_asset(
+                    key=f"ai-audio-{section_id}-{segment_index}",
+                    kind="ai_audio",
+                    role="audio",
+                    label=f"{section_label} / AI音声 {segment_index + 1}",
+                    source_field=f"sections[{section_index}].finalyNarrations[{segment_index}].requestOutput",
+                    bucket_name=bucket_name,
+                    storage_path=storage_path,
+                    request_id=request_output.get("requestId"),
+                    generated_at=request_output.get("generatedAt"),
+                    statistics={"durationSeconds": request_output.get("durationSeconds")}
+                    if request_output.get("durationSeconds") is not None
+                    else None,
+                )
+
+        seen: set[tuple[str, str, str]] = set()
+        unique_assets: list[dict[str, Any]] = []
+        for asset in assets:
+            key = (
+                _clean_text(asset.get("kind")),
+                _clean_text(asset.get("bucketName")),
+                _clean_text(asset.get("storagePath")),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_assets.append(asset)
+        return unique_assets
 
     def _operation_video_clips(self, item: dict[str, Any]) -> list[dict[str, Any]]:
         clips = [clip for clip in _as_list(item.get("clips")) if isinstance(clip, dict)]

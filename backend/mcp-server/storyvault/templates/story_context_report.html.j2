@@ -211,6 +211,7 @@
         <div class="metric"><span>Source Assets</span><strong>{{ counts.sourceAssets|default(source_asset_refs|length) }}</strong></div>
         <div class="metric"><span>Videos</span><strong>{{ counts.operationVideos|default(operation_videos|length) }}</strong></div>
         <div class="metric"><span>Screenshots</span><strong>{{ counts.screenshots|default(screenshot_count) }}</strong></div>
+        <div class="metric"><span>Generated Assets</span><strong>{{ counts.generatedAssets|default("n/a") }}</strong></div>
         <div class="metric"><span>Knowledge</span><strong>{{ counts.knowledgeDocuments|default(knowledge_documents|length) }}</strong></div>
         <div class="metric"><span>Slack</span><strong>{{ counts.slackMessages|default(slack_messages|length) }}</strong></div>
       </div>
@@ -321,6 +322,17 @@
               <p class="muted"><a href="{{ video.downloadUrl }}" target="_blank" rel="noopener noreferrer">動画ファイルを開く</a></p>
             {% else %}
               <p class="muted">{{ video.gcsPath|text("No video URL") }}</p>
+            {% endif %}
+            {% set generated_assets = video.generatedAssets if video.generatedAssets is sequence else [] %}
+            {% if generated_assets %}
+              <div class="media">
+                <h3>外部編集用生成アセット</h3>
+                <ul>
+                  {% for asset in generated_assets %}
+                    <li><strong>{{ asset.label|text(asset.kind|text("asset")) }}</strong>: {% if asset.downloadUrl %}<a href="{{ asset.downloadUrl }}" target="_blank" rel="noopener noreferrer">{{ asset.downloadUrl }}</a>{% else %}{{ asset.gcsPath|text("n/a") }}{% endif %} / {{ asset.contentType|text(asset.role|text("n/a")) }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
             {% endif %}
             {% set clips = video.clips if video.clips is sequence else [] %}
             {% if clips %}
