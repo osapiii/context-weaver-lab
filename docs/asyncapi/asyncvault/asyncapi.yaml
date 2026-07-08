@@ -1,0 +1,828 @@
+asyncapi: 3.1.0
+info:
+  title: AsyncVault RequestDoc Event API
+  version: "2026.07.07"
+  description: |
+    AsyncVault は、このリポジトリで採用されている Firestore RequestDoc ベースの非同期 API 群を指す社内ドキュメント名です。
+
+    画面や Store は RequestDoc を Firestore に作成し、Firebase Functions が onCreate で Cloud Run worker、ADK Agent、または GCP Workflows を起動します。UI は同じ RequestDoc を購読し、`status`、`logs`、`output`、`progress`、`steps`、`workflow` を使って進捗と結果を表示します。
+
+    この仕様書は StoryVault の動画生成・文字起こし・ADK エージェント連携を中心に、関連する取り込み系 RequestDoc も横断して整理しています。
+defaultContentType: application/json
+servers:
+  firestore:
+    host: firestore.googleapis.com
+    protocol: firestore
+    description: Firestore RequestDoc コレクション
+  firebaseFunctions:
+    host: asia-northeast1
+    protocol: firebase-functions
+    description: Firestore trigger / callable function
+  cloudRun:
+    host: run.app
+    protocol: https
+    description: StoryVault worker、ADK Agent、Workflow kicker
+  workflows:
+    host: workflowexecutions.googleapis.com
+    protocol: https
+    description: GCP Workflows 実行 API
+channels:
+  adkInvokeRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/adkInvokeRequests/logs/{requestId}
+    title: ADK エージェント会話
+    summary: StoryVault/EN AIstudio の各 ADK モードを RequestDoc 経由で実行します。
+    description: |
+      ### 何のジョブか
+      `guide`、`writing`、`sheet`、`image`、`research`、`storyvault_related_context`、`storyvault_zapping_analysis`、`storyvault_capability_structuring`、`storyvault_story_generation` などの ADK Agent 呼び出しを非同期化します。
+
+      ### 作成元
+      - `app/stores/enAiStudioAssistant.ts`
+      - `app/stores/storyVault.ts`
+      - `app/components/storyVault/StoryVaultOperationVideoPanel.vue`
+      - `backend/adk-agents/storyvault_related_context/smoke_related_context.py`
+
+      ### 処理チェーン
+      Frontend/Tool -> Firestore RequestDoc -> `backend/app/triggers/adk_invoke_requests.py::on_adk_invoke_request_created` -> Cloud Run ADK Agent `/v1/agents/{mode}/invoke` -> SSE 消費 -> RequestDoc 更新。
+
+      ### UI が見る主な writeback
+      `status`、`logs`、`microServicePayload`、`output.responseTextLength`、`output.artifactCount`、`output.sourceReferenceCount`、`output.sessionId`、`output.storyvault_related_context`、`output.storyvault_zapping_analysis`、`errorMessage`。
+    parameters:
+      organizationId:
+        $ref: '#/components/parameters/organizationId'
+      spaceId:
+        $ref: '#/components/parameters/spaceId'
+      requestId:
+        $ref: '#/components/parameters/requestId'
+    messages:
+      created:
+        $ref: '#/components/messages/AdkInvokeRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      screens:
+        - app/components/storyVault/StoryVaultOperationVideoPanel.vue
+        - app/pages/admin/storyvault/*.vue
+      callers:
+        - app/stores/enAiStudioAssistant.ts
+        - app/stores/storyVault.ts
+      trigger: backend/app/triggers/adk_invoke_requests.py::on_adk_invoke_request_created
+      processor: Firebase Function -> Cloud Run ADK Agent -> SSE -> Firestore RequestDoc
+  autoSectionVideoRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/autoSectionVideoRequests/logs/{requestId}
+    title: 動画 自動セクション分割
+    summary: アップロード済み動画を解析し、StoryVault 編集用のセクション候補を生成します。
+    description: |
+      ### 何のジョブか
+      動画ファイルを Gemini 解析し、セクション境界、タイトル、説明、切り出し候補を生成します。
+
+      ### 作成元
+      `app/components/AgentWorkspace/VideoStudioWorkspace.vue` のプロジェクト作成/自動セクション化操作。
+
+      ### 処理チェーン
+      Video Studio -> RequestDoc -> `storyvault_video_requests.py::on_auto_section_video_request_created` -> Cloud Run `backend/microservice/storyvaultVideo/aiVideoSectioning` `/auto-section` -> RequestDoc `output.sections`。
+
+      ### UI が見る主な writeback
+      `status`、`logs`、`output.sections`、`errorMessage`。
+    messages:
+      created:
+        $ref: '#/components/messages/VideoRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      screens:
+        - app/components/AgentWorkspace/VideoStudioWorkspace.vue
+      trigger: backend/app/triggers/storyvault_video_requests.py::on_auto_section_video_request_created
+      processor: Firebase Function -> aiVideoSectioning /auto-section
+      cloudRun:
+        service: backend/microservice/storyvaultVideo/aiVideoSectioning
+        route: /auto-section
+  splitVideoRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/splitVideoRequests/logs/{requestId}
+    title: 動画 分割
+    summary: 指定タイムスタンプで動画を複数セクションに分割します。
+    description: |
+      ### 何のジョブか
+      StoryVault のセクション編集結果をもとに、元動画をセクション単位の動画ファイルへ分割します。
+
+      ### 処理チェーン
+      Video Studio -> RequestDoc -> `on_split_video_request_created` -> Cloud Run `splitVideoByTimestamps` `/split` -> RequestDoc `output`。
+    messages:
+      created:
+        $ref: '#/components/messages/VideoRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/storyvault_video_requests.py::on_split_video_request_created
+      processor: Firebase Function -> splitVideoByTimestamps /split
+  videoTranscriptionRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/videoTranscriptionRequests/logs/{requestId}
+    title: 動画/音声 文字起こし
+    summary: セクション音声または元動画音声を文字起こしし、JSON/SRT 相当の結果を保存します。
+    description: |
+      ### 何のジョブか
+      録音音声、元動画音声、セクション音声を GCP Speech-to-Text/Aqua 系処理で文字起こしします。
+
+      ### 作成元
+      `app/components/AgentWorkspace/VideoStudioWorkspace.vue` のナレーション録音後、または既存音声の文字起こし操作。
+
+      ### 処理チェーン
+      Video Studio -> RequestDoc -> `on_video_transcription_request_created` -> Cloud Run `transcribeAudioWithGcpSpeechToText` `/transcribe` -> RequestDoc `output.transcriptionBucketName` / `output.transcriptionFilePath`。
+
+      ### UI が見る主な writeback
+      `status`、`output.transcriptionFilePath`、`output.transcript` 系、`errorMessage`。
+    messages:
+      created:
+        $ref: '#/components/messages/VideoRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/storyvault_video_requests.py::on_video_transcription_request_created
+      processor: Firebase Function -> transcribeAudioWithGcpSpeechToText /transcribe
+  textToSpeechRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/textToSpeechRequests/logs/{requestId}
+    title: AI ナレーション音声生成
+    summary: テキストから StoryVault セクション用の音声ファイルを生成します。
+    description: |
+      ### 何のジョブか
+      ナレーション本文や音声プレビュー文を Google TTS 系 worker へ渡し、GCS に音声を保存します。
+
+      ### 作成元
+      `app/components/AgentWorkspace/VideoStudioWorkspace.vue` の音声プレビュー、個別ナレーション生成、一括生成。
+
+      ### 処理チェーン
+      Video Studio -> RequestDoc -> `on_text_to_speech_request_created` -> Cloud Run `textToSpeechWithGoogle` `/synthesize` -> RequestDoc `output.outputPath` / `output.durationSeconds`。
+    messages:
+      created:
+        $ref: '#/components/messages/VideoRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/storyvault_video_requests.py::on_text_to_speech_request_created
+      processor: Firebase Function -> textToSpeechWithGoogle /synthesize
+  mergeVideoAudioNarrationRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/mergeVideoAudioNarrationRequests/logs/{requestId}
+    title: 動画と AI ナレーションの合成
+    summary: セクション動画にナレーション音声を重ねた最終素材を生成します。
+    description: |
+      ### 何のジョブか
+      セクション動画、AI ナレーション、BGM/音量設定をもとに、音声付き動画を生成します。
+
+      ### 処理チェーン
+      Video Studio -> RequestDoc -> `on_merge_video_audio_narration_request_created` -> Cloud Run `mergeVideoAudioNarration` `/merge` -> RequestDoc `output`。
+    messages:
+      created:
+        $ref: '#/components/messages/VideoRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/storyvault_video_requests.py::on_merge_video_audio_narration_request_created
+      processor: Firebase Function -> mergeVideoAudioNarration /merge
+  concatenateSectionVideosRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/concatenateSectionVideosRequests/logs/{requestId}
+    title: セクション動画の連結
+    summary: 複数のセクション動画を 1 本の最終動画に連結します。
+    description: |
+      ### 何のジョブか
+      生成済みセクション動画の順序、トリム設定、音声ベッドを反映して最終動画を出力します。
+
+      ### 処理チェーン
+      Video Studio -> RequestDoc -> `on_concatenate_section_videos_request_created` -> Cloud Run `concatenateSectionVideos` `/concatenate` -> RequestDoc `output`。
+    messages:
+      created:
+        $ref: '#/components/messages/VideoRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/storyvault_video_requests.py::on_concatenate_section_videos_request_created
+      processor: Firebase Function -> concatenateSectionVideos /concatenate
+  addVideoSubtitleRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/addVideoSubtitleRequests/logs/{requestId}
+    title: 字幕焼き込み
+    summary: ナレーション文から SRT/ASS を生成し、動画に字幕を焼き込みます。
+    description: |
+      ### 何のジョブか
+      字幕プリセット、字幕サイズ、captionSegments を使い、最終動画に字幕を焼き込みます。
+
+      ### 作成元
+      `app/components/AgentWorkspace/VideoStudioWorkspace.vue::requestSubtitleGeneration`
+
+      ### 処理チェーン
+      Video Studio -> RequestDoc -> `on_add_video_subtitle_request_created` -> Cloud Run `addVideoSubtitle` `/add-subtitles` -> RequestDoc `output.subtitledVideo` / `output.srt` / `output.ass`。
+    messages:
+      created:
+        $ref: '#/components/messages/VideoRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/storyvault_video_requests.py::on_add_video_subtitle_request_created
+      processor: Firebase Function -> addVideoSubtitle /add-subtitles
+  trimSilenceVideoRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/trimSilenceVideoRequests/logs/{requestId}
+    title: 無音カット動画生成
+    summary: 動画内の無音区間を検出し、字幕生成前の最終動画を再構成します。
+    description: |
+      ### 何のジョブか
+      `settings.thresholdDb`、`settings.minSilenceMs`、`settings.keepPaddingMs` などをもとに無音区間をカットし、manifest と動画を GCS に保存します。
+
+      ### 作成元
+      `app/components/AgentWorkspace/VideoStudioWorkspace.vue::requestSilenceCut`
+
+      ### 処理チェーン
+      Video Studio -> RequestDoc -> `on_trim_silence_video_request_created` -> Cloud Run `trimSilenceVideo` `/trim-silence` -> RequestDoc `output.trimmedVideo` / `output.manifest` / `output.statistics`。
+    messages:
+      created:
+        $ref: '#/components/messages/VideoRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/storyvault_video_requests.py::on_trim_silence_video_request_created
+      processor: Firebase Function -> trimSilenceVideo /trim-silence
+  googleDriveSyncRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/googleDriveSyncRequests/logs/{requestId}
+    title: Google Drive 同期
+    summary: Google Drive フォルダを GCS mirror と FileSpace に同期します。
+    description: |
+      ### 何のジョブか
+      Drive ファイルの import/remove 差分を GCS artifact に退避し、`gdrive-sync` Workflow で mirror と FileSpace 登録を実行します。
+
+      ### 作成元
+      `app/stores/googleDriveSync.ts`、`app/composables/useGoogleDriveSyncRequestSnapshot.ts`、Web クロール完了後の backend 発行。
+
+      ### 処理チェーン
+      RequestDoc -> `backend/app/triggers/google_drive_sync.py::google_drive_sync_request_handler` -> Cloud Run `googleDriveWorkflowKicker` `/kick` -> GCP Workflows `gdrive-sync` -> RequestDoc writeback。
+
+      ### UI が見る主な writeback
+      `input.inputArtifactUri`、`progress`、`steps`、`stepLogs`、`fileItems`、`workflow.executionName`、`workflow.consoleUrl`、`workflow.state`。
+    messages:
+      created:
+        $ref: '#/components/messages/GoogleDriveSyncRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/google_drive_sync.py::google_drive_sync_request_handler
+      processor: Firebase Function -> googleDriveWorkflowKicker /kick -> gdrive-sync Workflow
+  webCrawlRequests:
+    address: organizations/{organizationId}/requests/webCrawlRequests/logs/{requestId}
+    title: Web ページ取り込み
+    summary: URL をクロールして Markdown/画像を保存し、FileSpace に登録します。
+    description: |
+      ### 何のジョブか
+      指定 URL からページと画像を収集し、GCS 保存後に FileSpace へ登録します。
+
+      ### 作成元
+      `app/stores/webCrawlRequest.ts`、`app/components/dataSource/WebPageIngestSetupCard.vue`、`app/pages/admin/data-source/web-folders/[folderId].vue`。
+
+      ### 処理チェーン
+      Data Source UI -> RequestDoc -> `backend/app/triggers/web_crawl_requests.py::web_crawl_request_handler` -> Cloud Run `webCrawlWorkflowKicker` `/kick` -> GCP Workflows `web-crawl` -> RequestDoc writeback。
+
+      ### UI が見る主な writeback
+      `input.inputArtifactUri`、`progress.totalPages`、`progress.processedPages`、`progress.totalImages`、`steps`、`stepLogs`、`workflow`、`output.savedFiles`、`output.images`、`output.filespaceRegisteredCount`。
+    messages:
+      created:
+        $ref: '#/components/messages/WebCrawlRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/web_crawl_requests.py::web_crawl_request_handler
+      processor: Firebase Function -> webCrawlWorkflowKicker /kick -> web-crawl Workflow
+  contextStoreRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/contextStoreRequests/logs/{requestId}
+    title: Context Store / FileSpace 操作
+    summary: Agent Search/FileSpace の作成、取得、アップロード、削除、一覧取得を非同期実行します。
+    description: |
+      ### 何のジョブか
+      FileSpace と Discovery Engine/Agent Search 関連の create/get/upload/delete/list 操作を RequestDoc 化します。
+
+      ### 作成元
+      `app/stores/geminiFileSpaceOperator.ts`、`app/composables/useDefaultFileSpace.ts`、`app/composables/useGeminiFileSpaceSnapshot.ts`。
+
+      ### 処理チェーン
+      UI/Store -> RequestDoc -> `backend/app/triggers/context_store_requests.py::on_context_store_request_created` -> Cloud Run `contextStore` -> RequestDoc `output` と FileSpace metadata 永続化。
+    messages:
+      created:
+        $ref: '#/components/messages/ContextStoreRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/context_store_requests.py::on_context_store_request_created
+      processor: Firebase Function -> contextStore Cloud Run
+  transactionalEmailRequests:
+    address: organizations/{organizationId}/spaces/{spaceId}/requests/transactionalEmailRequests/logs/{requestId}
+    title: トランザクションメール送信
+    summary: 研究完了通知などのメール送信を RequestDoc 経由で実行します。
+    description: |
+      ### 何のジョブか
+      メール本文、宛先、テンプレート/件名を RequestDoc に記録し、send-mail worker へ送ります。
+
+      ### 処理チェーン
+      Producer -> RequestDoc -> `backend/app/triggers/transactional_email_requests.py::on_transactional_email_request_created` -> Cloud Run `send-mail` -> RequestDoc 更新。
+
+      `adkInvokeRequests` の research 完了時には `research_completion_email.py` からこの RequestDoc が enqueue されます。
+    messages:
+      created:
+        $ref: '#/components/messages/TransactionalEmailRequestCreated'
+      updated:
+        $ref: '#/components/messages/RequestDocUpdated'
+    x-haiff:
+      trigger: backend/app/triggers/transactional_email_requests.py::on_transactional_email_request_created
+      processor: Firebase Function -> send-mail Cloud Run
+  firebaseFunctionsCatalog:
+    address: backend/app/triggers/*.py
+    title: Firebase Functions 一覧
+    summary: AsyncVault に関係する Firestore trigger / callable function のカタログです。
+    description: |
+      | Function | Type | 役割 | Source |
+      | --- | --- | --- | --- |
+      | `on_adk_invoke_request_created` | firestore.onCreate | ADK Agent を SSE で実行し RequestDoc に集約 | `backend/app/triggers/adk_invoke_requests.py` |
+      | `on_auto_section_video_request_created` | firestore.onCreate | 動画自動セクション分割 worker 起動 | `backend/app/triggers/storyvault_video_requests.py` |
+      | `on_split_video_request_created` | firestore.onCreate | 動画分割 worker 起動 | `backend/app/triggers/storyvault_video_requests.py` |
+      | `on_video_transcription_request_created` | firestore.onCreate | 動画/音声文字起こし worker 起動 | `backend/app/triggers/storyvault_video_requests.py` |
+      | `on_text_to_speech_request_created` | firestore.onCreate | TTS worker 起動 | `backend/app/triggers/storyvault_video_requests.py` |
+      | `on_merge_video_audio_narration_request_created` | firestore.onCreate | 動画とナレーション音声の合成 worker 起動 | `backend/app/triggers/storyvault_video_requests.py` |
+      | `on_concatenate_section_videos_request_created` | firestore.onCreate | セクション動画連結 worker 起動 | `backend/app/triggers/storyvault_video_requests.py` |
+      | `on_add_video_subtitle_request_created` | firestore.onCreate | 字幕焼き込み worker 起動 | `backend/app/triggers/storyvault_video_requests.py` |
+      | `on_trim_silence_video_request_created` | firestore.onCreate | 無音カット worker 起動 | `backend/app/triggers/storyvault_video_requests.py` |
+      | `google_drive_sync_request_handler` | firestore.onCreate | Google Drive Workflow kicker 起動 | `backend/app/triggers/google_drive_sync.py` |
+      | `web_crawl_request_handler` | firestore.onCreate | Web Crawl Workflow kicker 起動 | `backend/app/triggers/web_crawl_requests.py` |
+      | `on_context_store_request_created` | firestore.onCreate | Context Store worker 起動 | `backend/app/triggers/context_store_requests.py` |
+      | `on_transactional_email_request_created` | firestore.onCreate | send-mail worker 起動 | `backend/app/triggers/transactional_email_requests.py` |
+      | `connect_github` / `list_github_merged_pull_requests` | https.onCall | StoryVault 関連文脈取得用 GitHub OAuth/API | `backend/app/triggers/github_oauth.py` |
+      | `connect_slack` / `list_slack_messages` | https.onCall | StoryVault 関連文脈取得用 Slack OAuth/API | `backend/app/triggers/slack_oauth.py` |
+    messages:
+      catalog:
+        $ref: '#/components/messages/FirebaseFunctionsCatalog'
+operations:
+  createAdkInvokeRequest:
+    action: send
+    channel:
+      $ref: '#/channels/adkInvokeRequests'
+    messages:
+      - $ref: '#/channels/adkInvokeRequests/messages/created'
+  watchAdkInvokeRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/adkInvokeRequests'
+    messages:
+      - $ref: '#/channels/adkInvokeRequests/messages/updated'
+  createAutoSectionVideoRequest:
+    action: send
+    channel:
+      $ref: '#/channels/autoSectionVideoRequests'
+  watchAutoSectionVideoRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/autoSectionVideoRequests'
+  createVideoTranscriptionRequest:
+    action: send
+    channel:
+      $ref: '#/channels/videoTranscriptionRequests'
+  watchVideoTranscriptionRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/videoTranscriptionRequests'
+  createTextToSpeechRequest:
+    action: send
+    channel:
+      $ref: '#/channels/textToSpeechRequests'
+  watchTextToSpeechRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/textToSpeechRequests'
+  createAddVideoSubtitleRequest:
+    action: send
+    channel:
+      $ref: '#/channels/addVideoSubtitleRequests'
+  watchAddVideoSubtitleRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/addVideoSubtitleRequests'
+  createTrimSilenceVideoRequest:
+    action: send
+    channel:
+      $ref: '#/channels/trimSilenceVideoRequests'
+  watchTrimSilenceVideoRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/trimSilenceVideoRequests'
+  createGoogleDriveSyncRequest:
+    action: send
+    channel:
+      $ref: '#/channels/googleDriveSyncRequests'
+  watchGoogleDriveSyncRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/googleDriveSyncRequests'
+  createWebCrawlRequest:
+    action: send
+    channel:
+      $ref: '#/channels/webCrawlRequests'
+  watchWebCrawlRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/webCrawlRequests'
+components:
+  parameters:
+    organizationId:
+      description: Organization ID
+    spaceId:
+      description: Space ID
+    requestId:
+      description: RequestDoc ID
+  messages:
+    AdkInvokeRequestCreated:
+      title: ADK Invoke Request 作成
+      summary: ADK Agent を起動する RequestDoc が作成されました。
+      payload:
+        $ref: '#/components/schemas/AdkInvokeRequest'
+      examples:
+        - name: storyvault_related_context
+          payload:
+            status: pending
+            input:
+              mode: storyvault_related_context
+              sessionId: sv-session-1
+              organizationId: org_123
+              spaceId: space_123
+              userId: user_123
+              prompt: 関連する PR と Slack 文脈を探してください
+              responseId: response_123
+              modeState:
+                storyvault:
+                  applicationId: app_123
+                  operationVideoId: video_123
+            operationMetadata:
+              loggingCollectionId: requests/adkInvokeRequests/logs
+              loggingDocumentId: req_123
+    VideoRequestCreated:
+      title: StoryVault Video Request 作成
+      summary: StoryVault 動画 worker を起動する RequestDoc が作成されました。
+      payload:
+        $ref: '#/components/schemas/VideoRequest'
+      examples:
+        - name: addVideoSubtitleRequests
+          payload:
+            status: pending
+            input:
+              videoBucketName: storyvault-assets
+              videoFilePath: videos/final.mp4
+              outputBucketName: storyvault-assets
+              outputFilePath: videos/subtitles/final_subtitled.mp4
+              captionSegments:
+                - startMs: 0
+                  endMs: 3500
+                  text: 最初のナレーション
+              preset: readable
+            operationMetadata:
+              loggingCollectionId: requests/addVideoSubtitleRequests/logs
+    GoogleDriveSyncRequestCreated:
+      title: Google Drive Sync Request 作成
+      summary: gdrive-sync Workflow を起動する RequestDoc が作成されました。
+      payload:
+        $ref: '#/components/schemas/GoogleDriveSyncRequest'
+    WebCrawlRequestCreated:
+      title: Web Crawl Request 作成
+      summary: web-crawl Workflow を起動する RequestDoc が作成されました。
+      payload:
+        $ref: '#/components/schemas/WebCrawlRequest'
+    ContextStoreRequestCreated:
+      title: Context Store Request 作成
+      summary: Context Store Cloud Run を起動する RequestDoc が作成されました。
+      payload:
+        $ref: '#/components/schemas/GenericRequestDoc'
+    TransactionalEmailRequestCreated:
+      title: Transactional Email Request 作成
+      summary: メール送信 worker を起動する RequestDoc が作成されました。
+      payload:
+        $ref: '#/components/schemas/GenericRequestDoc'
+    RequestDocUpdated:
+      title: RequestDoc 更新
+      summary: worker / Workflow / trigger が進捗や結果を書き戻しました。
+      payload:
+        $ref: '#/components/schemas/RequestDocUpdate'
+    FirebaseFunctionsCatalog:
+      title: Firebase Functions カタログ
+      summary: AsyncVault 関連 Functions の説明用メッセージです。
+      payload:
+        type: object
+        additionalProperties: true
+  schemas:
+    RequestStatus:
+      type: string
+      enum:
+        - pending
+        - processing
+        - completed
+        - error
+    RequestLogEntry:
+      type: object
+      properties:
+        timestamp:
+          oneOf:
+            - type: string
+            - type: object
+        message:
+          type: string
+        type:
+          type: string
+          enum:
+            - info
+            - warn
+            - warning
+            - error
+    OperationMetadata:
+      type: object
+      additionalProperties: true
+      properties:
+        loggingCollectionId:
+          type: string
+        loggingDocumentId:
+          type: string
+        requestedBy:
+          type: object
+          additionalProperties: true
+        organizationId:
+          type: string
+        spaceId:
+          type: string
+    GenericRequestDoc:
+      type: object
+      required:
+        - input
+        - operationMetadata
+        - status
+      properties:
+        input:
+          type: object
+          additionalProperties: true
+        operationMetadata:
+          $ref: '#/components/schemas/OperationMetadata'
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestLogEntry'
+        output:
+          type: object
+          additionalProperties: true
+        errorMessage:
+          type: string
+      additionalProperties: true
+    AdkInvokeRequest:
+      allOf:
+        - $ref: '#/components/schemas/GenericRequestDoc'
+        - type: object
+          properties:
+            input:
+              type: object
+              required:
+                - mode
+                - sessionId
+                - organizationId
+                - spaceId
+                - userId
+                - prompt
+                - responseId
+              properties:
+                mode:
+                  type: string
+                  enum:
+                    - guide
+                    - writing
+                    - sheet
+                    - image
+                    - consultation
+                    - research
+                    - data_analysis
+                    - web_page
+                    - application_scan
+                    - business_partner
+                    - storyvault_related_context
+                    - storyvault_zapping_analysis
+                    - storyvault_capability_structuring
+                    - storyvault_story_generation
+                sessionId:
+                  type: string
+                organizationId:
+                  type: string
+                spaceId:
+                  type: string
+                userId:
+                  type: string
+                prompt:
+                  type: string
+                responseId:
+                  type: string
+                model:
+                  type: string
+                modeState:
+                  type: object
+                  additionalProperties: true
+                attachments:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+                selectedKnowledge:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+                referenceImages:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+            output:
+              type: object
+              properties:
+                responseTextLength:
+                  type: number
+                artifactCount:
+                  type: number
+                sourceReferenceCount:
+                  type: number
+                sessionId:
+                  type: string
+                storyvault_related_context:
+                  type: object
+                  additionalProperties: true
+                storyvault_zapping_analysis:
+                  type: object
+                  additionalProperties: true
+              additionalProperties: true
+            microServicePayload:
+              type: object
+              additionalProperties: true
+    VideoRequest:
+      allOf:
+        - $ref: '#/components/schemas/GenericRequestDoc'
+        - type: object
+          properties:
+            input:
+              type: object
+              additionalProperties: true
+              properties:
+                sourceBucketName:
+                  type: string
+                sourceFilePath:
+                  type: string
+                videoBucketName:
+                  type: string
+                videoFilePath:
+                  type: string
+                outputBucketName:
+                  type: string
+                outputFilePath:
+                  type: string
+                projectId:
+                  type: string
+                videoId:
+                  type: string
+                captionSegments:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+                settings:
+                  type: object
+                  additionalProperties: true
+            output:
+              type: object
+              additionalProperties: true
+    GoogleDriveSyncRequest:
+      allOf:
+        - $ref: '#/components/schemas/GenericRequestDoc'
+        - type: object
+          properties:
+            input:
+              type: object
+              properties:
+                operationType:
+                  type: string
+                  enum:
+                    - syncFolder
+                    - syncSingleFolder
+                connectionId:
+                  type: string
+                rootFolderId:
+                  type: string
+                rootFolderResourceKey:
+                  type: string
+                  nullable: true
+                targetFolderId:
+                  type: string
+                  nullable: true
+                fileSpaceId:
+                  type: string
+                inputArtifactUri:
+                  type: string
+                  nullable: true
+                importCount:
+                  type: number
+                removeCount:
+                  type: number
+              additionalProperties: true
+            workflow:
+              type: object
+              additionalProperties: true
+            progress:
+              type: object
+              additionalProperties: true
+            steps:
+              type: object
+              additionalProperties: true
+            stepLogs:
+              type: object
+              additionalProperties: true
+            fileItems:
+              type: object
+              additionalProperties: true
+    WebCrawlRequest:
+      allOf:
+        - $ref: '#/components/schemas/GenericRequestDoc'
+        - type: object
+          properties:
+            input:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                bucketName:
+                  type: string
+                folderPath:
+                  type: string
+                maxDepth:
+                  type: number
+                maxUrls:
+                  type: number
+                fileSpaceId:
+                  type: string
+                includeImages:
+                  type: boolean
+                inputArtifactUri:
+                  type: string
+                  nullable: true
+              additionalProperties: true
+            workflow:
+              type: object
+              additionalProperties: true
+            progress:
+              type: object
+              additionalProperties: true
+            steps:
+              type: object
+              additionalProperties: true
+            stepLogs:
+              type: object
+              additionalProperties: true
+            output:
+              type: object
+              properties:
+                totalPages:
+                  type: number
+                markdownCount:
+                  type: number
+                imageCount:
+                  type: number
+                filespaceRegisteredCount:
+                  type: number
+                savedFiles:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+                images:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+              additionalProperties: true
+    RequestDocUpdate:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestLogEntry'
+        output:
+          type: object
+          additionalProperties: true
+        progress:
+          type: object
+          additionalProperties: true
+        steps:
+          type: object
+          additionalProperties: true
+        stepLogs:
+          type: object
+          additionalProperties: true
+        workflow:
+          type: object
+          additionalProperties: true
+        errorMessage:
+          type: string
+      additionalProperties: true
