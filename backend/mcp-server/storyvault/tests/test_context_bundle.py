@@ -62,6 +62,17 @@ def _bundle_kwargs():
                     "id": "video-1",
                     "title": "Demo operation",
                     "downloadUrl": "https://storage.example.test/video.webm",
+                    "generatedAssetCount": 1,
+                    "generatedAssets": [
+                        {
+                            "kind": "subtitled_video",
+                            "role": "video",
+                            "label": "字幕付き最終動画",
+                            "contentType": "video/mp4",
+                            "gcsPath": "gs://bucket/subtitled.mp4",
+                            "downloadUrl": "https://storage.example.test/subtitled.mp4",
+                        }
+                    ],
                     "screenshots": [
                         {"id": "frame-001", "timestampMs": 1000, "downloadUrl": "https://storage.example.test/frame.jpg"}
                     ],
@@ -109,6 +120,7 @@ def test_build_story_context_markdown_contains_story_evidence_and_instructions()
     assert "# Journey report" in markdown
     assert "Media And Implementation References" in markdown
     assert "https://storage.example.test/video.webm" in markdown
+    assert "https://storage.example.test/subtitled.mp4" in markdown
     assert "https://github.com/org/repo/pull/12" in markdown
     assert "https://example.slack.com/archives/C123/p1782640000000100" in markdown
     assert "https://storage.example.test/architecture.md" in markdown
@@ -123,6 +135,7 @@ def test_build_story_context_html_contains_visual_report_refs():
     assert "APP-ST-001" in html
     assert "ev-1" in html
     assert "https://storage.example.test/video.webm" in html
+    assert "https://storage.example.test/subtitled.mp4" in html
     assert "https://storage.example.test/frame.jpg" in html
     assert "architecture.md" in html
     assert "https://github.com/org/repo/pull/12" in html
@@ -145,6 +158,17 @@ def _operation_video_manifest():
             "title": "Invoice scan demo",
             "description": "Invoice workflow is recorded.",
             "downloadUrl": "https://storage.example.test/video.webm",
+            "generatedAssetCount": 1,
+            "generatedAssets": [
+                {
+                    "kind": "silence_cut_manifest",
+                    "role": "json_manifest",
+                    "label": "無音カット manifest JSON",
+                    "contentType": "application/json",
+                    "gcsPath": "gs://bucket/silence-cut.json",
+                    "downloadUrl": "https://storage.example.test/silence-cut.json",
+                }
+            ],
             "videoGroup": {"id": "group-1", "name": "Operation videos"},
             "transcriptProvider": "gemini-stt:gemini-2.5-flash",
             "transcriptTimingStatus": "timestamped",
@@ -232,6 +256,7 @@ def test_build_operation_video_context_markdown_includes_timestamped_story_candi
     assert "cue-0001" in markdown
     assert "8.0s - 19.0s" in markdown
     assert "https://storage.example.test/frame-001.jpg" in markdown
+    assert "https://storage.example.test/silence-cut.json" in markdown
     assert "Slack Messages" in markdown
     assert "https://example.slack.com/archives/C123/p1782640000000100" in markdown
 
@@ -244,6 +269,7 @@ def test_build_operation_video_context_html_includes_timestamped_story_candidate
     assert "Who / 誰が" in html
     assert "請求書一覧画面では合計金額を確認できます。" in html
     assert "https://storage.example.test/frame-001.jpg" in html
+    assert "https://storage.example.test/silence-cut.json" in html
     assert "gemini-stt:gemini-2.5-flash" in html
     assert "Slack Messages" in html
     assert "請求書一覧の合計金額について相談しています。" in html

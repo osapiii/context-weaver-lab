@@ -13,6 +13,7 @@
 - Source assets: {{ source_assets|length }}
 - Video clips: {{ video.clips|default([])|length }}
 - Screenshots: {{ counts.screenshots|default(video.screenshots|default([])|length) }}
+- Generated editing assets: {{ counts.generatedAssets|default(video.generatedAssets|default([])|length) }}
 - Story candidates: {{ video.storyCandidates|default([])|length }}
 - Timestamped transcript cues: {{ video.transcriptSegmentCount|default(video.transcriptSegments|default([])|length) }}
 - GitHub pull requests: {{ pull_requests|length }}
@@ -32,6 +33,20 @@
 - Transcript timing status: {{ video.transcriptTimingStatus|text("n/a") }}
 - Analysis status: {{ video.analysisStatus|text("n/a") }}
 - Story candidates: {{ video.storyCandidateCount|default(video.storyCandidates|default([])|length) }}
+- Generated editing assets: {{ video.generatedAssetCount|default(video.generatedAssets|default([])|length) }}
+
+## External Editing Assets
+{% for asset in video.generatedAssets|default([]) -%}
+- {{ asset.label|text(asset.kind|text("generated_asset")) }}
+  - Kind: {{ asset.kind|text("n/a") }}
+  - Role: {{ asset.role|text("n/a") }}
+  - MIME: {{ asset.contentType|text("n/a") }}
+  - Project: {{ asset.projectName|text(asset.projectId|text("n/a")) }}
+  - GCS path: {{ asset.gcsPath|text("n/a") }}
+  - Download URL: {{ asset.downloadUrl|text("n/a") }}
+{% else -%}
+- No Video Studio generated assets were found for this operation video.
+{% endfor %}
 
 ## Operation Clips
 {% for clip in video.clips|default([]) %}

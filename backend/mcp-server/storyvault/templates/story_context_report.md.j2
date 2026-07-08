@@ -91,7 +91,7 @@
 - Manifest schema: {{ manifest.schemaVersion|text("n/a") }}
 - Generated at: {{ manifest.generatedAt|text("n/a") }}
 - Signed URL expires at: {{ manifest.signedUrlExpiresAt|text("n/a") }}
-- Asset counts: sourceAssets={{ counts.sourceAssets|default("n/a") }}, operationVideos={{ counts.operationVideos|default("n/a") }}, screenshots={{ counts.screenshots|default("n/a") }}, githubPullRequests={{ counts.githubPullRequests|default("n/a") }}, slackMessages={{ counts.slackMessages|default("n/a") }}, knowledgeDocuments={{ counts.knowledgeDocuments|default("n/a") }}
+- Asset counts: sourceAssets={{ counts.sourceAssets|default("n/a") }}, operationVideos={{ counts.operationVideos|default("n/a") }}, screenshots={{ counts.screenshots|default("n/a") }}, generatedAssets={{ counts.generatedAssets|default("n/a") }}, githubPullRequests={{ counts.githubPullRequests|default("n/a") }}, slackMessages={{ counts.slackMessages|default("n/a") }}, knowledgeDocuments={{ counts.knowledgeDocuments|default("n/a") }}
 
 ### Source Asset Files
 {% for asset in source_asset_refs -%}
@@ -112,6 +112,10 @@
   - Download URL: {{ video.downloadUrl|text("n/a") }}
   - Video clips: {{ video.clips|default([])|length }}
   - Screenshots: {{ video.screenshots|default([])|length }}
+  - Generated editing assets: {{ video.generatedAssetCount|default(video.generatedAssets|default([])|length) }}
+{% for asset in video.generatedAssets|default([]) %}
+  - Generated {{ asset.label|text(asset.kind|text("asset")) }}: {{ asset.downloadUrl|text(asset.gcsPath|text("n/a")) }} ({{ asset.contentType|text(asset.role|text("n/a")) }})
+{% endfor %}
 {% for clip in video.clips|default([]) %}
   - Clip {{ clip.id|text("clip") }}: {{ clip.downloadUrl|text(clip.gcsPath|text("n/a")) }} ({{ clip.durationMs|format_ms }})
 {% endfor %}

@@ -74,6 +74,17 @@ def _asset_manifest():
                 "title": "知識取り込み操作",
                 "downloadUrl": "https://storage.example.test/video.webm",
                 "downloadUrlExpiresAt": "2026-06-29T01:00:00+00:00",
+                "generatedAssets": [
+                    {
+                        "kind": "subtitled_video",
+                        "role": "video",
+                        "label": "字幕付き最終動画",
+                        "contentType": "video/mp4",
+                        "gcsPath": "gs://bucket/subtitled.mp4",
+                        "downloadUrl": "https://storage.example.test/subtitled.mp4",
+                        "downloadUrlExpiresAt": "2026-06-29T01:00:00+00:00",
+                    }
+                ],
                 "screenshots": [
                     {
                         "id": "frame-001",
@@ -124,6 +135,8 @@ def test_build_report_link_response_shape_is_compact_and_agent_oriented():
     assert payload["assets"]["counts"]["operationVideos"] == 1
     assert payload["assets"]["videos"][0]["downloadUrl"] == "https://storage.example.test/video.webm"
     assert payload["assets"]["videos"][0]["screenshotCount"] == 1
+    assert payload["assets"]["videos"][0]["generatedAssetCount"] == 1
+    assert payload["assets"]["videos"][0]["generatedAssets"][0]["downloadUrl"] == "https://storage.example.test/subtitled.mp4"
     assert "screenshots" not in payload["assets"]["videos"][0]
     assert "content" not in payload
 
