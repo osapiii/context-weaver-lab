@@ -44,18 +44,44 @@ paths:
                     settings:
                       type: object
                       properties:
+                        noiseReductionEnabled:
+                          type: boolean
+                          default: false
+                        noiseReductionStrengthDb:
+                          type: number
+                          minimum: 0
+                          maximum: 30
+                          default: 12
+                        noiseFloorDb:
+                          type: number
+                          minimum: -80
+                          maximum: -20
+                          default: -40
                         thresholdDb:
                           type: number
                           default: -38
                         minSilenceMs:
                           type: integer
-                          default: 700
+                          default: 5000
                         keepPaddingMs:
                           type: integer
                           default: 180
                         minSegmentMs:
                           type: integer
                           default: 450
+                        cutRangesSeconds:
+                          type: array
+                          nullable: true
+                          items:
+                            type: object
+                            required: [start, end]
+                            properties:
+                              start:
+                                type: number
+                                minimum: 0
+                              end:
+                                type: number
+                                exclusiveMinimum: 0
                 systemMetadata:
                   type: object
       responses:
