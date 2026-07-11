@@ -14,6 +14,8 @@
 #                  "storyvault_capability_structuring" / "storyvault_story_generation" / "all" (既定 unified)
 #   GITHUB_TOKEN_ENCRYPTION_KEY — GitHub OAuth token 復号キー
 #   SLACK_TOKEN_ENCRYPTION_KEY  — Slack OAuth token 復号キー
+#   JIRA_OAUTH_CLIENT_ID / JIRA_OAUTH_CLIENT_SECRET — Atlassian 3LO app
+#   JIRA_TOKEN_ENCRYPTION_KEY   — Jira OAuth token 復号キー
 #   DD_*         — Datadog LLM Observability non-secret env (API key は Secret Manager 推奨)
 
 set -euo pipefail
@@ -66,6 +68,23 @@ if [[ -z "${SLACK_TOKEN_ENCRYPTION_KEY:-}" ]]; then
     fi
   fi
 fi
+
+for jira_env_name in JIRA_OAUTH_CLIENT_ID JIRA_OAUTH_CLIENT_SECRET JIRA_TOKEN_ENCRYPTION_KEY; do
+  current_jira_value="${!jira_env_name-}"
+  if [[ -n "${current_jira_value}" ]]; then
+    continue
+  fi
+  project_env_file="${BACKEND_ROOT}/app/.env.${PROJECT_ID}"
+  if [[ ! -f "${project_env_file}" ]]; then
+    continue
+  fi
+  loaded_jira_value="$(
+    awk -F= -v key="${jira_env_name}" '$1 == key {print substr($0, index($0, "=") + 1); exit}' "${project_env_file}"
+  )"
+  if [[ -n "${loaded_jira_value}" ]]; then
+    printf -v "${jira_env_name}" '%s' "${loaded_jira_value}"
+  fi
+done
 
 deploy_one() {
   local mode="$1"
@@ -156,6 +175,15 @@ deploy_unified() {
   fi
   if [[ -n "${SLACK_TOKEN_ENCRYPTION_KEY:-}" ]]; then
     sub="${sub},_SLACK_TOKEN_ENCRYPTION_KEY=${SLACK_TOKEN_ENCRYPTION_KEY}"
+  fi
+  if [[ -n "${JIRA_OAUTH_CLIENT_ID:-}" ]]; then
+    sub="${sub},_JIRA_OAUTH_CLIENT_ID=${JIRA_OAUTH_CLIENT_ID}"
+  fi
+  if [[ -n "${JIRA_OAUTH_CLIENT_SECRET:-}" ]]; then
+    sub="${sub},_JIRA_OAUTH_CLIENT_SECRET=${JIRA_OAUTH_CLIENT_SECRET}"
+  fi
+  if [[ -n "${JIRA_TOKEN_ENCRYPTION_KEY:-}" ]]; then
+    sub="${sub},_JIRA_TOKEN_ENCRYPTION_KEY=${JIRA_TOKEN_ENCRYPTION_KEY}"
   fi
   gcloud builds submit "${BACKEND_ROOT}" \
     --project="${PROJECT_ID}" \

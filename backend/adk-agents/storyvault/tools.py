@@ -312,6 +312,11 @@ def build_story_ssot_package(
             "acceptanceCriteria": _normalize_acceptance_criteria(
                 raw.get("acceptanceCriteria"), story_key=story_key
             ),
+            "detailedSpecifications": [
+                str(value).strip()
+                for value in _as_list(raw.get("detailedSpecifications"))
+                if str(value).strip()
+            ],
             "evidenceIds": evidence_ids,
             "codeRefs": _as_list(raw.get("codeRefs")),
             "generationTrace": _as_list(raw.get("generationTrace")),

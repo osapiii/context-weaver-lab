@@ -328,6 +328,7 @@ export const StoryVaultStorySchema = z.object({
     staleSources: z.array(z.string()).default([]),
   }),
   acceptanceCriteria: z.array(StoryVaultAcceptanceCriterionSchema).default([]),
+  detailedSpecifications: z.array(z.string()).default([]),
   evidenceIds: z.array(z.string()).default([]),
   codeRefs: z.array(StoryVaultCodeRefSchema).default([]),
   generationTrace: z.array(StoryVaultGenerationTraceSchema).default([]),
@@ -416,6 +417,7 @@ export const StoryVaultZappingAnalysisStoryCandidateSchema = z.object({
   goal: z.string().optional(),
   benefit: z.string().optional(),
   acceptanceCriteria: z.array(z.string()).default([]),
+  detailedSpecifications: z.array(z.string()).default([]),
   summary: z.string().optional(),
   userStory: z.string().optional(),
   asA: z.string().optional(),
@@ -504,6 +506,36 @@ export const StoryVaultRelatedContextKnowledgeDocumentSchema = z.object({
   downloadUrl: z.string().optional().nullable(),
 });
 
+export const StoryVaultRelatedContextJiraNamedFieldSchema = z.object({
+  id: z.string().default(""),
+  name: z.string().default(""),
+});
+
+export const StoryVaultRelatedContextJiraIssueSchema = z.object({
+  id: z.string().default(""),
+  key: z.string().min(1),
+  cloudId: z.string().default(""),
+  siteUrl: z.string().default(""),
+  htmlUrl: z.string().default(""),
+  summary: z.string().min(1),
+  description: z.string().default(""),
+  issueType: StoryVaultRelatedContextJiraNamedFieldSchema.default({ id: "", name: "" }),
+  status: StoryVaultRelatedContextJiraNamedFieldSchema.default({ id: "", name: "" }),
+  priority: StoryVaultRelatedContextJiraNamedFieldSchema.default({ id: "", name: "" }),
+  assignee: StoryVaultRelatedContextJiraNamedFieldSchema.default({ id: "", name: "" }),
+  reporter: StoryVaultRelatedContextJiraNamedFieldSchema.default({ id: "", name: "" }),
+  project: StoryVaultRelatedContextJiraNamedFieldSchema.default({ id: "", name: "" }),
+  labels: z.array(z.string()).default([]),
+  components: z.array(StoryVaultRelatedContextJiraNamedFieldSchema).default([]),
+  fixVersions: z.array(StoryVaultRelatedContextJiraNamedFieldSchema).default([]),
+  parentKey: z.string().default(""),
+  createdAt: z.string().default(""),
+  updatedAt: z.string().default(""),
+  relevanceScore: z.number().min(0).max(100).default(0),
+  reason: z.string().optional(),
+  matchedSignals: z.array(z.string()).default([]),
+});
+
 export const StoryVaultRelatedContextResultSchema = z.object({
   schemaVersion: z
     .literal("storyvault-related-context-v1")
@@ -541,6 +573,16 @@ export const StoryVaultRelatedContextResultSchema = z.object({
       errorMessage: z.string().optional(),
     })
     .optional(),
+  jira: z
+    .object({
+      cloudId: z.string().default(""),
+      siteName: z.string().default(""),
+      siteUrl: z.string().default(""),
+      checkedAt: z.string(),
+      issues: z.array(StoryVaultRelatedContextJiraIssueSchema).default([]),
+      errorMessage: z.string().optional(),
+    })
+    .optional(),
   notes: z.array(z.string()).default([]),
 });
 
@@ -548,9 +590,10 @@ export const StoryVaultOperationVideoRelatedContextsSchema = z.object({
   github: StoryVaultRelatedContextResultSchema.shape.github.optional(),
   slack: StoryVaultRelatedContextResultSchema.shape.slack.optional(),
   knowledge: StoryVaultRelatedContextResultSchema.shape.knowledge.optional(),
+  jira: StoryVaultRelatedContextResultSchema.shape.jira.optional(),
   generatedAt: z.string().optional(),
   status: z.enum(["running", "completed", "error"]).optional(),
-  runningProvider: z.enum(["github", "slack", "knowledge"]).optional(),
+  runningProvider: z.enum(["github", "slack", "knowledge", "jira"]).optional(),
   notes: z.array(z.string()).default([]),
 });
 
@@ -881,6 +924,9 @@ export type StoryVaultRelatedContextSlackMessage = z.infer<
 >;
 export type StoryVaultRelatedContextKnowledgeDocument = z.infer<
   typeof StoryVaultRelatedContextKnowledgeDocumentSchema
+>;
+export type StoryVaultRelatedContextJiraIssue = z.infer<
+  typeof StoryVaultRelatedContextJiraIssueSchema
 >;
 export type StoryVaultRelatedContextResult = z.infer<
   typeof StoryVaultRelatedContextResultSchema

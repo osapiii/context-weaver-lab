@@ -409,6 +409,23 @@
       </div>
     </section>
 
+    <section id="jira">
+      <h2>Jira Issues</h2>
+      <div class="grid">
+        {% for issue in jira_issues %}
+          <article class="panel">
+            <h3>{% if issue.htmlUrl %}<a href="{{ issue.htmlUrl }}" target="_blank" rel="noopener noreferrer">{{ issue.key|text("JIRA") }} {{ issue.summary|text("Untitled issue") }}</a>{% else %}{{ issue.key|text("JIRA") }} {{ issue.summary|text("Untitled issue") }}{% endif %}</h3>
+            <div class="kv"><b>Status</b><span>{{ issue.status.name|text("n/a") if issue.status else "n/a" }}</span></div>
+            <div class="kv"><b>Assignee</b><span>{{ issue.assignee.name|text("unassigned") if issue.assignee else "unassigned" }}</span></div>
+            <div class="kv"><b>Score</b><span>{{ issue.relevanceScore|text("n/a") }}</span></div>
+            <div class="kv"><b>Reason</b><span>{{ issue.reason|text("n/a") }}</span></div>
+          </article>
+        {% else %}
+          <div class="panel"><p class="muted">No Jira issue refs.</p></div>
+        {% endfor %}
+      </div>
+    </section>
+
     <section id="references" class="grid cols-2">
       <div>
         <h2>元ファイル</h2>

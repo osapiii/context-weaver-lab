@@ -60,6 +60,7 @@ import type {
   StoryVaultReviewState,
   StoryVaultScanAuthMode,
   StoryVaultRelatedContextResult,
+  StoryVaultRelatedContextJiraIssue,
   StoryVaultStoryStatus,
   StoryVaultZappingAnalysisResult,
 } from "@models/storyVault";
@@ -203,7 +204,7 @@ export type StoryVaultZappingVideoAnalysisInput = {
 export type StoryVaultRelatedContextAnalysisInput = {
   applicationId: string;
   clipId: string;
-  provider: "github" | "slack" | "knowledge";
+  provider: "github" | "slack" | "knowledge" | "jira";
   prompt?: string;
 };
 
@@ -275,10 +276,14 @@ const extractFileSpaceIdFromCreateRequest = (
   request: DecodedFileSpaceOperationRequest
 ): string => {
   const output = request.output;
-  if (!output || typeof output !== "object" || !("name" in output)) {
-    return "";
-  }
-  const name = output.name;
+  if (!output || typeof output !== "object") return "";
+  const record = output as Record<string, unknown>;
+  const response = record.response;
+  const responseRecord =
+    response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : null;
+  const name = record.name ?? responseRecord?.name;
   if (typeof name !== "string" || !name.trim()) return "";
   return name.split("/").filter(Boolean).at(-1) ?? "";
 };
@@ -2606,6 +2611,91 @@ export const useStoryVaultStore = defineStore("storyVault", {
         merge: true,
       });
     },
+    async linkJiraIssuesToClip(input: {
+      clipId: string;
+      issues: StoryVaultRelatedContextJiraIssue[];
+      siteName?: string;
+      siteUrl?: string;
+    }): Promise<void> {
+      const clip = this.clips.find((item) => item.id === input.clipId);
+      if (!clip) {
+        throw new Error("紐付け対象のクリップが見つかりません");
+      }
+      const existing = clip.relatedContexts?.jira?.issues ?? [];
+      const merged = new Map(
+        existing.map((issue) => [`${issue.cloudId}:${issue.key}`, issue])
+      );
+      for (const issue of input.issues) {
+        if (!issue.key.trim() || !issue.summary.trim()) continue;
+        const key = `${issue.cloudId}:${issue.key}`;
+        merged.set(key, {
+          ...issue,
+          relevanceScore: issue.relevanceScore || 100,
+          reason: issue.reason || "ユーザーが手動でクリップに紐付けました",
+          matchedSignals:
+            issue.matchedSignals.length > 0
+              ? issue.matchedSignals
+              : ["手動紐付け"],
+        });
+      }
+      const firstIssue = input.issues[0] ?? existing[0];
+      const jira = {
+        cloudId:
+          firstIssue?.cloudId || clip.relatedContexts?.jira?.cloudId || "",
+        siteName:
+          input.siteName || clip.relatedContexts?.jira?.siteName || "",
+        siteUrl: input.siteUrl || clip.relatedContexts?.jira?.siteUrl || "",
+        checkedAt: nowIso(),
+        issues: Array.from(merged.values()),
+        errorMessage: undefined,
+      };
+      await this.persistClip({
+        ...clip,
+        relatedContexts: {
+          ...clip.relatedContexts,
+          jira,
+          generatedAt: nowIso(),
+          status: "completed",
+          runningProvider: undefined,
+          notes: (clip.relatedContexts?.notes ?? []).filter(Boolean),
+        },
+      });
+      this.lastRunLog.unshift(
+        `Jira: ${input.issues.length}件のIssueを「${clip.title}」に紐付け`
+      );
+    },
+    async unlinkJiraIssueFromClip(input: {
+      clipId: string;
+      issueKey: string;
+      cloudId?: string;
+    }): Promise<void> {
+      const clip = this.clips.find((item) => item.id === input.clipId);
+      const jira = clip?.relatedContexts?.jira;
+      if (!clip || !jira) return;
+      const issues = jira.issues.filter(
+        (issue) =>
+          !(
+            issue.key === input.issueKey &&
+            (!input.cloudId || issue.cloudId === input.cloudId)
+          )
+      );
+      await this.persistClip({
+        ...clip,
+        relatedContexts: {
+          ...clip.relatedContexts,
+          jira: {
+            ...jira,
+            issues,
+            checkedAt: nowIso(),
+          },
+          generatedAt: nowIso(),
+          status: "completed",
+          runningProvider: undefined,
+          notes: clip.relatedContexts?.notes ?? [],
+        },
+      });
+      this.lastRunLog.unshift(`Jira: ${input.issueKey}の紐付けを解除`);
+    },
     buildZappingAnalysisModeState(params: {
       application: DecodedStoryVaultApplication;
       clip: DecodedStoryVaultClip;
@@ -2697,7 +2787,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
       organizationId: string;
       spaceId: string;
       userId: string;
-      provider: "github" | "slack" | "knowledge";
+      provider: "github" | "slack" | "knowledge" | "jira";
       prompt?: string;
     }): Record<string, unknown> {
       const clip = params.clip;
@@ -2751,7 +2841,9 @@ export const useStoryVaultStore = defineStore("storyVault", {
                 ? ["slack_messages", "related_reasons"]
                 : params.provider === "knowledge"
                   ? ["knowledge_documents", "downloadable_file_refs", "related_reasons"]
-                  : ["github_pull_requests", "related_reasons"],
+                  : params.provider === "jira"
+                    ? ["jira_issues", "related_reasons"]
+                    : ["github_pull_requests", "related_reasons"],
           },
         },
       };
@@ -2854,6 +2946,12 @@ export const useStoryVaultStore = defineStore("storyVault", {
       );
       if (!clip) {
         throw new Error("対象クリップが見つかりません");
+      }
+      if (
+        clip.analysisStatus === "completed" ||
+        Boolean(clip.analysisResult)
+      ) {
+        throw new Error("ユーザーストーリー解析は完了済みです");
       }
       const fileSpaceId = application.fileSpaceId?.trim();
       if (!fileSpaceId) {
@@ -2981,7 +3079,9 @@ export const useStoryVaultStore = defineStore("storyVault", {
         (video) =>
           video.applicationId === applicationId &&
           video.analysisStatus !== "queued" &&
-          video.analysisStatus !== "running"
+          video.analysisStatus !== "running" &&
+          video.analysisStatus !== "completed" &&
+          !video.analysisResult
       );
       const requestIds: string[] = [];
       for (const clip of targets) {
@@ -3051,6 +3151,12 @@ export const useStoryVaultStore = defineStore("storyVault", {
               "クリップ解析結果、操作メモ、文字起こし要約、Story候補と、Slack投稿・スレッド・チャンネルを照合してください。",
               "関連する理由を日本語で付け、関連度の高い会話だけを返してください。",
             ]
+          : input.provider === "jira"
+          ? [
+              `${application.name} の操作クリップ「${clip.title}」に関連するJira Issueを探してください。`,
+              "クリップ解析結果、操作メモ、文字起こし要約、Story候補と、Jira Issueの要約・説明・ステータス・ラベル・プロジェクトを照合してください。",
+              "関連する理由を日本語で付け、関連度の高いIssueだけを最大10件返してください。",
+            ]
           : [
               `${application.name} の操作クリップ「${clip.title}」に関連するGitHub Pull Requestを探してください。`,
               "クリップ解析結果、操作メモ、文字起こし要約、Story候補と、GitHub PRのタイトル・本文・ラベル・変更ファイルを照合してください。",
@@ -3091,6 +3197,16 @@ export const useStoryVaultStore = defineStore("storyVault", {
                     documents: [],
                   }
                 : clip.relatedContexts?.knowledge,
+            jira:
+              input.provider === "jira"
+                ? clip.relatedContexts?.jira ?? {
+                    cloudId: "",
+                    siteName: "",
+                    siteUrl: "",
+                    checkedAt: nowIso(),
+                    issues: [],
+                  }
+                : clip.relatedContexts?.jira,
           },
         });
 
@@ -3119,6 +3235,8 @@ export const useStoryVaultStore = defineStore("storyVault", {
               ? "Slack会話"
               : input.provider === "knowledge"
                 ? "ナレッジ"
+                : input.provider === "jira"
+                  ? "Jira Issue"
                 : "GitHub PR"
           }取得を開始`
         );
@@ -3163,6 +3281,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
             github: clip.relatedContexts?.github,
             slack: clip.relatedContexts?.slack,
             knowledge: clip.relatedContexts?.knowledge,
+            jira: clip.relatedContexts?.jira,
           },
         });
         this.error = message;
@@ -3597,6 +3716,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
             : clip.relatedContexts?.github;
       const nextSlack = result?.slack ?? clip.relatedContexts?.slack;
       const nextKnowledge = result?.knowledge ?? clip.relatedContexts?.knowledge;
+      const nextJira = result?.jira ?? clip.relatedContexts?.jira;
       await this.persistClip({
         ...clip,
         relatedContexts: {
@@ -3608,6 +3728,7 @@ export const useStoryVaultStore = defineStore("storyVault", {
           github: nextGithub,
           slack: nextSlack,
           knowledge: nextKnowledge,
+          jira: nextJira,
         },
       });
     },

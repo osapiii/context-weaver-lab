@@ -103,6 +103,7 @@ def build_story_context_html(
     pull_requests = _list(manifest.get("githubPullRequests"))
     knowledge_documents = _list(manifest.get("knowledgeDocuments"))
     slack_messages = _list(manifest.get("slackMessages"))
+    jira_issues = _list(manifest.get("jiraIssues"))
     screenshot_count = sum(len(_list(video.get("screenshots"))) for video in operation_videos if isinstance(video, dict))
     evidence_ids = [
         str(item.get("id"))
@@ -126,6 +127,7 @@ def build_story_context_html(
         operation_videos=operation_videos,
         pull_requests=pull_requests,
         slack_messages=slack_messages,
+        jira_issues=jira_issues,
         knowledge_documents=knowledge_documents,
         criteria=criteria,
         labels=_list(story.get("labels")),
@@ -160,6 +162,7 @@ def build_story_context_markdown(
         pull_requests=_list(manifest.get("githubPullRequests")),
         knowledge_documents=_list(manifest.get("knowledgeDocuments")),
         slack_messages=_list(manifest.get("slackMessages")),
+        jira_issues=_list(manifest.get("jiraIssues")),
         criteria=[item for item in _list(story.get("acceptanceCriteria")) if isinstance(item, dict)],
         labels=_list(story.get("labels")),
         counts=_dict(manifest.get("assetCounts")),
@@ -180,6 +183,7 @@ def _operation_video_template_context(context_manifest: dict[str, Any]) -> dict[
         "source_assets": _list(manifest.get("sourceAssets")),
         "pull_requests": _list(manifest.get("githubPullRequests")),
         "slack_messages": _list(manifest.get("slackMessages")),
+        "jira_issues": _list(manifest.get("jiraIssues")),
         "knowledge_documents": _list(manifest.get("knowledgeDocuments")),
         "counts": _dict(manifest.get("counts")),
     }

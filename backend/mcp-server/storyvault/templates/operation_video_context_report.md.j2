@@ -200,6 +200,18 @@
 - No Slack message refs.
 {% endfor %}
 
+## Jira Issues
+{% for issue in jira_issues -%}
+- {{ issue.key|text("JIRA") }}: {{ issue.summary|text("n/a") }} ({{ issue.htmlUrl|text("n/a") }})
+  - Site: {{ issue.siteName|text(issue.siteUrl|text("n/a")) }}
+  - Status: {{ issue.status.name|text("n/a") if issue.status else "n/a" }}
+  - Assignee: {{ issue.assignee.name|text("unassigned") if issue.assignee else "unassigned" }}
+  - Reason: {{ issue.reason|text("n/a") }}
+  - Score: {{ issue.relevanceScore|text("n/a") }}
+{% else -%}
+- No Jira issue refs.
+{% endfor %}
+
 ## Agent Instructions
 - Treat this as an operation-video bundle report.
 - Summarize the operation video first, then use linked user stories as interpretations attached to the video.

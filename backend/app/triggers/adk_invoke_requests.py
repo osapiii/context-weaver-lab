@@ -10,10 +10,13 @@ import json
 import os
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 from firebase_functions import firestore_fn
+import google.auth.transport.requests
 from google.cloud import firestore
+import google.oauth2.id_token
 
 db = firestore.Client()
 
@@ -49,6 +52,18 @@ def _adk_service_name(mode: str) -> str:
 
 def _internal_secret() -> str:
     return (os.getenv("ADK_INTERNAL_INVOKE_SECRET") or "").strip()
+
+
+def _cloud_run_audience(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return url
+
+
+def _cloud_run_id_token(url: str) -> str:
+    request = google.auth.transport.requests.Request()
+    return google.oauth2.id_token.fetch_id_token(request, _cloud_run_audience(url))
 
 
 def _extract_event_info(
@@ -317,10 +332,13 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
         pull_requests = github.get("pullRequests") if isinstance(github, dict) else []
         slack = related_context.get("slack")
         slack_messages = slack.get("messages") if isinstance(slack, dict) else []
+        jira = related_context.get("jira")
+        jira_issues = jira.get("issues") if isinstance(jira, dict) else []
         summary["storyvault_related_context"] = {
             "related_context_result": related_context,
             "github_pull_request_count": len(pull_requests or []),
             "slack_message_count": len(slack_messages or []),
+            "jira_issue_count": len(jira_issues or []),
             "knowledge_document_count": len(knowledge_documents or []),
         }
     return summary
@@ -400,8 +418,9 @@ def on_adk_invoke_request_created(
             or input_data.get("caller_id_token")
             or ""
         ).strip()
+        headers["Authorization"] = f"Bearer {_cloud_run_id_token(url)}"
         if caller_token:
-            headers["Authorization"] = f"Bearer {caller_token}"
+            headers["X-En-AIStudio-Caller-Id-Token"] = caller_token
         micro_payload = {
             "name": _adk_service_name(mode),
             "endpoint": url,

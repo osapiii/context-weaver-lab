@@ -687,6 +687,7 @@ class StoryVaultStore:
             ],
             "githubPullRequests": self._github_pull_requests(operation_videos),
             "slackMessages": self._slack_messages(operation_videos),
+            "jiraIssues": self._jira_issues(operation_videos),
             "knowledgeDocuments": self._knowledge_documents(
                 operation_videos,
                 include_signed_urls=include_signed_urls,
@@ -705,6 +706,7 @@ class StoryVaultStore:
             ),
             "githubPullRequests": len(manifest["githubPullRequests"]),
             "slackMessages": len(manifest["slackMessages"]),
+            "jiraIssues": len(manifest["jiraIssues"]),
             "knowledgeDocuments": len(manifest["knowledgeDocuments"]),
             "generatedAssets": sum(
                 len(_as_list(item.get("generatedAssets")))
@@ -771,6 +773,7 @@ class StoryVaultStore:
         ]
         pull_requests = self._github_pull_requests([video])
         slack_messages = self._slack_messages([video])
+        jira_issues = self._jira_issues([video])
         knowledge_documents = self._knowledge_documents(
             [video],
             include_signed_urls=include_signed_urls,
@@ -797,6 +800,7 @@ class StoryVaultStore:
             "sourceAssets": source_asset_refs,
             "githubPullRequests": pull_requests,
             "slackMessages": slack_messages,
+            "jiraIssues": jira_issues,
             "knowledgeDocuments": knowledge_documents,
             "counts": {
                 "linkedStories": len(stories),
@@ -810,6 +814,7 @@ class StoryVaultStore:
                 ),
                 "githubPullRequests": len(pull_requests),
                 "slackMessages": len(slack_messages),
+                "jiraIssues": len(jira_issues),
                 "knowledgeDocuments": len(knowledge_documents),
                 "generatedAssets": len(_as_list(video_ref.get("generatedAssets"))),
             },
@@ -914,6 +919,7 @@ class StoryVaultStore:
             "capabilityKey": item.get("capabilityKey"),
             "capabilityName": item.get("capabilityName"),
             "acceptanceCriteria": item.get("acceptanceCriteria") if isinstance(item.get("acceptanceCriteria"), list) else [],
+            "detailedSpecifications": item.get("detailedSpecifications") if isinstance(item.get("detailedSpecifications"), list) else [],
             "evidenceIds": item.get("evidenceIds") if isinstance(item.get("evidenceIds"), list) else [],
             "labels": item.get("labels") if isinstance(item.get("labels"), list) else [],
             "driftLevel": item.get("driftLevel"),
@@ -1568,6 +1574,11 @@ class StoryVaultStore:
                 for item in _as_list(candidate.get("acceptanceCriteria"))
                 if str(item).strip()
             ],
+            "detailedSpecifications": [
+                str(item).strip()
+                for item in _as_list(candidate.get("detailedSpecifications"))
+                if str(item).strip()
+            ],
             "confidenceScore": confidence,
             "unverified": candidate.get("unverified"),
             "evidence": evidence,
@@ -1748,6 +1759,39 @@ class StoryVaultStore:
         return sorted(
             by_key.values(),
             key=lambda item: (-(item.get("relevanceScore") or 0), item.get("postedAt") or ""),
+        )
+
+    def _jira_issues(self, operation_videos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        by_key: dict[str, dict[str, Any]] = {}
+        for video in operation_videos:
+            related = video.get("relatedContexts") if isinstance(video.get("relatedContexts"), dict) else {}
+            jira = related.get("jira") if isinstance(related.get("jira"), dict) else {}
+            cloud_id = _clean_text(jira.get("cloudId"))
+            site_name = _clean_text(jira.get("siteName"))
+            site_url = _clean_text(jira.get("siteUrl"))
+            checked_at = _clean_text(jira.get("checkedAt"))
+            for issue in _as_list(jira.get("issues")):
+                if not isinstance(issue, dict):
+                    continue
+                issue_key = _clean_text(issue.get("key"))
+                resolved_cloud_id = _clean_text(issue.get("cloudId")) or cloud_id
+                if not issue_key:
+                    continue
+                key = f"{resolved_cloud_id}:{issue_key}"
+                by_key[key] = {
+                    **issue,
+                    "cloudId": resolved_cloud_id,
+                    "siteName": site_name,
+                    "siteUrl": _clean_text(issue.get("siteUrl")) or site_url,
+                    "checkedAt": checked_at,
+                    "labels": _as_list(issue.get("labels")),
+                    "components": _as_list(issue.get("components")),
+                    "fixVersions": _as_list(issue.get("fixVersions")),
+                    "matchedSignals": _as_list(issue.get("matchedSignals")),
+                }
+        return sorted(
+            by_key.values(),
+            key=lambda item: (-(item.get("relevanceScore") or 0), item.get("updatedAt") or ""),
         )
 
     def _knowledge_documents(

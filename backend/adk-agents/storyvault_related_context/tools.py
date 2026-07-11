@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
@@ -14,6 +14,8 @@ from common.tool_state import read_tool_state  # type: ignore
 
 GITHUB_API = "https://api.github.com"
 SLACK_API = "https://slack.com/api"
+JIRA_TOKEN_URL = "https://auth.atlassian.com/oauth/token"
+JIRA_API_BASE = "https://api.atlassian.com/ex/jira"
 MAX_CANDIDATES = 50
 
 
@@ -154,6 +156,154 @@ def unprotect_slack_token(payload: Any) -> str:
         raise RuntimeError("Stored Slack token cannot be decrypted") from exc
 
 
+def _jira_fernet() -> Fernet | None:
+    raw = (
+        os.getenv("JIRA_TOKEN_ENCRYPTION_KEY", "").strip()
+        or os.getenv("SLACK_TOKEN_ENCRYPTION_KEY", "").strip()
+        or os.getenv("GITHUB_TOKEN_ENCRYPTION_KEY", "").strip()
+    )
+    if not raw:
+        return None
+    try:
+        return Fernet(raw.encode("utf-8"))
+    except Exception:
+        return None
+
+
+def unprotect_jira_token(payload: Any) -> str:
+    """Decode Jira token saved by backend/app/triggers/jira_oauth.py."""
+    if isinstance(payload, str):
+        return payload
+    if not isinstance(payload, dict):
+        return ""
+    value = str(payload.get("value") or "")
+    if payload.get("mode") != "fernet":
+        return value
+    f = _jira_fernet()
+    if not f:
+        raise RuntimeError("JIRA_TOKEN_ENCRYPTION_KEY is required")
+    try:
+        return f.decrypt(value.encode("utf-8")).decode("utf-8")
+    except InvalidToken as exc:
+        raise RuntimeError("Stored Jira token cannot be decrypted") from exc
+
+
+def _protect_jira_token(value: str) -> dict[str, str]:
+    f = _jira_fernet()
+    if not f:
+        return {"mode": "plain", "value": value}
+    return {
+        "mode": "fernet",
+        "value": f.encrypt(value.encode("utf-8")).decode("utf-8"),
+    }
+
+
+def _jira_configs_ref(organization_id: str) -> firestore.CollectionReference:
+    return (
+        firestore.Client()
+        .collection("organizations")
+        .document(organization_id)
+        .collection("externalServiceConfigs")
+        .document("jiraIntegration")
+        .collection("configs")
+    )
+
+
+def _jira_connection(
+    organization_id: str,
+    cloud_id: str = "",
+) -> tuple[str, dict[str, Any]]:
+    configs = _jira_configs_ref(organization_id)
+    if cloud_id:
+        snap = configs.document(cloud_id).get()
+        if not snap.exists:
+            raise RuntimeError("Jira site connection was not found.")
+        return snap.id, snap.to_dict() or {}
+    rows = list(configs.limit(1).stream())
+    if not rows:
+        raise RuntimeError("Jira が未接続です。Jira Cloud siteを接続してください。")
+    return rows[0].id, rows[0].to_dict() or {}
+
+
+def _jira_access_token(
+    organization_id: str,
+    cloud_id: str = "",
+) -> tuple[str, str, dict[str, Any]]:
+    resolved_cloud_id, connection = _jira_connection(organization_id, cloud_id)
+    expires_at = connection.get("expiresAt")
+    if isinstance(expires_at, datetime) and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    needs_refresh = not isinstance(expires_at, datetime) or (
+        expires_at <= datetime.now(timezone.utc) + timedelta(minutes=2)
+    )
+    if needs_refresh:
+        refresh_token = unprotect_jira_token(connection.get("refreshToken"))
+        client_id = os.getenv("JIRA_OAUTH_CLIENT_ID", "").strip()
+        client_secret = os.getenv("JIRA_OAUTH_CLIENT_SECRET", "").strip()
+        if not refresh_token or not client_id or not client_secret:
+            raise RuntimeError("Jira tokenを更新できません。Jiraを再接続してください。")
+        response = requests.post(
+            JIRA_TOKEN_URL,
+            json={
+                "grant_type": "refresh_token",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+            },
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(f"Jira token refresh failed: {response.text[:300]}")
+        token = response.json()
+        access_token = _clean_text(token.get("access_token"))
+        if not access_token:
+            raise RuntimeError("Jira token refresh returned no access token.")
+        try:
+            expires_in = max(60, min(86400, int(token.get("expires_in") or 3600)))
+        except (TypeError, ValueError):
+            expires_in = 3600
+        update = {
+            "accessToken": _protect_jira_token(access_token),
+            "refreshToken": _protect_jira_token(
+                _clean_text(token.get("refresh_token"), refresh_token)
+            ),
+            "expiresAt": datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+            "scopes": _clean_text(token.get("scope")).split(),
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        configs = _jira_configs_ref(organization_id)
+        configs.document(resolved_cloud_id).set(update, merge=True)
+        return access_token, resolved_cloud_id, {**connection, **update}
+    access_token = unprotect_jira_token(connection.get("accessToken"))
+    if not access_token:
+        raise RuntimeError("Jira access token is missing. Reconnect Jira.")
+    return access_token, resolved_cloud_id, connection
+
+
+def _jira_request(
+    access_token: str,
+    cloud_id: str,
+    method: str,
+    path: str,
+    *,
+    json_body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    response = requests.request(
+        method,
+        f"{JIRA_API_BASE}/{cloud_id}{path}",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        json=json_body,
+        timeout=45,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Jira API failed: {response.status_code} {response.text[:300]}")
+    return response.json() if response.text else {}
+
+
 def _slack_access_token_for_user(organization_id: str, user_id: str) -> tuple[str, str, dict[str, Any]]:
     db = firestore.Client()
     snap = (
@@ -274,7 +424,9 @@ def read_related_context_request(tool_context: Any = None) -> dict[str, Any]:
     setup = _setup_from_bucket(bucket)
     payload = _payload_from_bucket(bucket)
     application = _as_dict(payload.get("application"))
-    operation_video = _as_dict(payload.get("operation_video"))
+    operation_video = _as_dict(payload.get("operation_video")) or _as_dict(
+        payload.get("clip")
+    )
     analysis_result = _as_dict(payload.get("analysis_result"))
     repo = _clean_text(
         setup.get("repo_full_name"),
@@ -295,6 +447,7 @@ def read_related_context_request(tool_context: Any = None) -> dict[str, Any]:
         "analysisResult": analysis_result,
         "repoFullName": repo,
         "fileSpaceId": file_space_id,
+        "jiraCloudId": _clean_text(setup.get("jira_cloud_id")),
         "slackQuery": _clean_text(setup.get("slack_query")),
         "defaultBranch": _clean_text(
             setup.get("default_branch"),
@@ -650,6 +803,149 @@ def _recent_slack_messages(access_token: str, limit: int) -> list[dict[str, Any]
             if len(out) >= limit:
                 return out
     return out
+
+
+def _jira_adf_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        return "\n".join(part for part in (_jira_adf_text(item) for item in value) if part)
+    if not isinstance(value, dict):
+        return ""
+    own_text = _clean_text(value.get("text"))
+    child_text = _jira_adf_text(value.get("content"))
+    return "\n".join(part for part in (own_text, child_text) if part).strip()
+
+
+def _jira_named_field(value: Any) -> dict[str, str]:
+    data = _as_dict(value)
+    return {
+        "id": _clean_text(data.get("id")),
+        "name": _clean_text(data.get("name"), _clean_text(data.get("displayName"))),
+    }
+
+
+def normalize_jira_issue(
+    issue: dict[str, Any],
+    *,
+    cloud_id: str = "",
+    site_url: str = "",
+) -> dict[str, Any]:
+    fields = _as_dict(issue.get("fields"))
+    key = _clean_text(issue.get("key"))
+    parent = _as_dict(fields.get("parent"))
+    return {
+        "id": _clean_text(issue.get("id")),
+        "key": key,
+        "cloudId": cloud_id,
+        "siteUrl": site_url,
+        "htmlUrl": f"{site_url.rstrip('/')}/browse/{key}" if site_url and key else "",
+        "summary": _clean_text(fields.get("summary")),
+        "description": _jira_adf_text(fields.get("description"))[:4000],
+        "issueType": _jira_named_field(fields.get("issuetype")),
+        "status": _jira_named_field(fields.get("status")),
+        "priority": _jira_named_field(fields.get("priority")),
+        "assignee": _jira_named_field(fields.get("assignee")),
+        "reporter": _jira_named_field(fields.get("reporter")),
+        "project": _jira_named_field(fields.get("project")),
+        "labels": [str(item) for item in _as_list(fields.get("labels")) if str(item)],
+        "components": [
+            _jira_named_field(item)
+            for item in _as_list(fields.get("components"))
+            if isinstance(item, dict)
+        ],
+        "fixVersions": [
+            _jira_named_field(item)
+            for item in _as_list(fields.get("fixVersions"))
+            if isinstance(item, dict)
+        ],
+        "parentKey": _clean_text(parent.get("key")),
+        "createdAt": _clean_text(fields.get("created")),
+        "updatedAt": _clean_text(fields.get("updated")),
+    }
+
+
+def _jira_search_jql(keywords: list[str]) -> str:
+    escaped = [
+        keyword.replace("\\", "\\\\").replace('"', '\\"')
+        for keyword in keywords[:4]
+        if keyword.strip()
+    ]
+    if not escaped:
+        return "updated >= -180d ORDER BY updated DESC"
+    clauses = " OR ".join(f'text ~ "{keyword}"' for keyword in escaped)
+    return f"({clauses}) ORDER BY updated DESC"
+
+
+def fetch_jira_issue_candidates(tool_context: Any = None) -> dict[str, Any]:
+    """Fetch Jira issue candidates for the current related-context request."""
+    context = read_related_context_request(tool_context)
+    if context.get("provider") != "jira":
+        return {"ok": False, "error": "provider is not jira"}
+    organization_id = _clean_text(context.get("organizationId"))
+    cloud_id = _clean_text(context.get("jiraCloudId"))
+    if not organization_id:
+        return {"ok": False, "error": "organizationId is required"}
+    try:
+        access_token, resolved_cloud_id, connection = _jira_access_token(
+            organization_id,
+            cloud_id,
+        )
+        keywords = _extract_keywords(context)
+        payload = _jira_request(
+            access_token,
+            resolved_cloud_id,
+            "POST",
+            "/rest/api/3/search/jql",
+            json_body={
+                "jql": _jira_search_jql(keywords),
+                "maxResults": MAX_CANDIDATES,
+                "fields": [
+                    "summary",
+                    "description",
+                    "issuetype",
+                    "status",
+                    "priority",
+                    "assignee",
+                    "reporter",
+                    "project",
+                    "labels",
+                    "components",
+                    "fixVersions",
+                    "updated",
+                    "created",
+                    "parent",
+                ],
+            },
+        )
+        site_url = _clean_text(connection.get("siteUrl"))
+        issues = [
+            normalize_jira_issue(
+                item,
+                cloud_id=resolved_cloud_id,
+                site_url=site_url,
+            )
+            for item in _as_list(payload.get("issues"))
+            if isinstance(item, dict)
+        ]
+        return {
+            "ok": True,
+            "cloudId": resolved_cloud_id,
+            "siteName": _clean_text(connection.get("siteName")),
+            "siteUrl": site_url,
+            "checkedAt": _now_iso(),
+            "issues": issues,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "cloudId": cloud_id,
+            "siteName": "",
+            "siteUrl": "",
+            "checkedAt": _now_iso(),
+            "error": str(exc)[:500],
+            "issues": [],
+        }
 
 
 def fetch_github_pull_request_candidates(tool_context: Any = None) -> dict[str, Any]:

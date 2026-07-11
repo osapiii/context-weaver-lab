@@ -18,6 +18,10 @@ def _valid_result_payload() -> dict:
                 "goal": "スキャンされた請求書の明細を確認したい",
                 "benefit": "誤った仕訳登録を防げる",
                 "acceptanceCriteria": ["明細行ごとの数量と金額を確認できる"],
+                "detailedSpecifications": [
+                    "明細テーブルには品番、数量、単価、金額を表示する",
+                    "補足発話から分かる確認ポイントをストーリーに紐付ける",
+                ],
                 "evidence": [
                     {
                         "videoId": "video-1",
@@ -42,6 +46,7 @@ def test_zapping_analysis_schema_accepts_timestamped_evidence():
     assert parsed.storyCandidates[0].evidence[0].transcriptCueIds == [
         "clip-001:cue-0001"
     ]
+    assert parsed.storyCandidates[0].detailedSpecifications[0].startswith("明細")
 
 
 def test_zapping_analysis_schema_rejects_missing_evidence():
