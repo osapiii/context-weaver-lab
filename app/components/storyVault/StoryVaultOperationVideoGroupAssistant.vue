@@ -276,9 +276,9 @@ function applyPlan(): void {
 }
 
 async function askFirebaseAiForPlan(instruction: string): Promise<ClipGroupAssistantPlan> {
-  const [{ getApp }, { getAI, getGenerativeModel, VertexAIBackend }] =
+  const [{ getApp }, { getAI, getGenerativeModel, GoogleAIBackend }] =
     await Promise.all([import("firebase/app"), import("firebase/ai")]);
-  const ai = getAI(getApp(), { backend: new VertexAIBackend("us-central1") });
+  const ai = getAI(getApp(), { backend: new GoogleAIBackend() });
   const model = getGenerativeModel(ai, {
     model: "gemini-2.5-flash-lite",
     generationConfig: {
