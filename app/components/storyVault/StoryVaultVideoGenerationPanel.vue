@@ -1,113 +1,25 @@
 <template>
   <section class="space-y-4">
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
-            <UIcon name="material-symbols:movie-edit-outline" class="h-5 w-5 text-slate-500" />
-            動画生成
-          </h4>
-          <p class="mt-1 text-sm leading-6 text-slate-600">
-            この操作動画をVideo Studio素材として登録し、ナレーション、字幕、無音カット、書き出しを行います。
-          </p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <EnButton
-            v-if="!hasPreparedProject"
-            variant="ai"
-            size="xs"
-            leading-icon="material-symbols:movie-edit-outline"
-            :loading="activeGenerationAction === 'start'"
-            :global-loading="false"
-            :disabled="!canStartGeneration"
-            @click="openInVideoStudio('start')"
-          >
-            新しく始める
-          </EnButton>
-          <template v-else>
-            <EnButton
-              variant="ai"
-              size="xs"
-              leading-icon="material-symbols:resume"
-              :loading="activeGenerationAction === 'resume'"
-              :global-loading="false"
-              :disabled="!canStartGeneration"
-              @click="openInVideoStudio('resume')"
-            >
-              途中から再開
-            </EnButton>
-            <EnButton
-              variant="outline"
-              color="warning"
-              size="xs"
-              leading-icon="material-symbols:restart-alt"
-              :loading="activeGenerationAction === 'restart'"
-              :global-loading="false"
-              :disabled="!canStartGeneration"
-              @click="openInVideoStudio('restart')"
-            >
-              最初からやり直す
-            </EnButton>
-          </template>
-        </div>
-      </div>
-
-      <div class="mt-4 grid gap-3 md:grid-cols-4">
-        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">素材</p>
-          <p class="mt-1 truncate text-sm font-bold text-slate-950">{{ primaryClip?.fileName || video.fileName }}</p>
-        </div>
-        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">時間</p>
-          <p class="mt-1 text-sm font-bold text-slate-950">{{ durationLabel }}</p>
-        </div>
-        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">字幕素材</p>
-          <p class="mt-1 text-sm font-bold text-slate-950">{{ transcriptLabel }}</p>
-        </div>
-        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Video Studio ID</p>
-          <p class="mt-1 truncate text-sm font-bold text-slate-950">{{ videoStudioVideoId }}</p>
-        </div>
-      </div>
-
-      <EnAlert
-        v-if="notice"
-        class="mt-4"
-        :color="noticeKind === 'error' ? 'error' : 'success'"
-        :title="notice"
-      />
-    </div>
-
-    <div
-      v-if="showPreparingOverlay"
-      class="fixed inset-0 z-[240] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
-      role="status"
-      aria-live="polite"
-    >
-      <div class="w-full max-w-md rounded-2xl border border-white/20 bg-white p-6 text-center shadow-2xl">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
-          <UIcon name="material-symbols:movie-edit-outline" class="h-7 w-7" />
-        </div>
-        <h4 class="mt-4 text-lg font-bold text-slate-950">動画エディターを準備しています</h4>
-        <p class="mt-2 text-sm leading-6 text-slate-600">
-          解析済みの字幕とストーリー根拠から、編集セクションを読み込んでいます。
-        </p>
-        <div class="mt-5 h-2 overflow-hidden rounded-full bg-slate-100">
-          <div class="h-full w-2/3 animate-pulse rounded-full bg-teal-500" />
-        </div>
-      </div>
-    </div>
-
-    <VideoStudioWorkspace
-      v-if="isEditorReady"
-      embedded
+    <EnAlert
+      v-if="notice"
+      color="error"
+      title="動画エディターを開けませんでした"
+      :description="notice"
     />
+
+    <EnAlert
+      v-else-if="hasCheckedPreparedProject && !hasPreparedProject && !canStartGeneration"
+      color="warning"
+      title="動画生成の準備がまだ完了していません"
+      description="タイムスタンプ付き文字起こしとSRT字幕が揃うと、動画エディターを自動で開きます。"
+    />
+
+    <VideoStudioWorkspace embedded />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useVideoStudioStore } from "@stores/videoStudio";
 import type { VideoStudioSection } from "@models/videoStudio";
 import type {
@@ -122,10 +34,10 @@ const props = defineProps<{
 
 const videoStudio = useVideoStudioStore();
 const isPreparing = ref(false);
-const activeGenerationAction = ref<"start" | "resume" | "restart" | null>(null);
 const hasPreparedProject = ref(false);
+const hasCheckedPreparedProject = ref(false);
 const notice = ref("");
-const noticeKind = ref<"success" | "error">("success");
+let initializationSequence = 0;
 
 const videoStudioVideoId = computed(() => `storyvault_${props.video.id}`);
 const preparedProjectId = computed(() => `storyvault_narration_${props.video.id}`);
@@ -134,7 +46,6 @@ const isEditorReady = computed(
     videoStudio.view === "editor" &&
     videoStudio.selectedProject?.videoId === videoStudioVideoId.value
 );
-const showPreparingOverlay = computed(() => isPreparing.value && !isEditorReady.value);
 
 const primaryClip = computed<StoryVaultOperationVideoClip | null>(() => {
   return {
@@ -166,20 +77,6 @@ const primaryClip = computed<StoryVaultOperationVideoClip | null>(() => {
   };
 });
 
-const durationLabel = computed(() => {
-  const ms = primaryClip.value?.durationMs ?? props.video.durationMs ?? 0;
-  const totalSeconds = Math.max(0, Math.round(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-});
-
-const transcriptLabel = computed(() =>
-  activeTranscriptSegments.value.length > 0 && activeTranscriptSrt.value
-    ? "SRT字幕あり"
-    : "SRT字幕なし"
-);
-
 const activeTranscriptSegments = computed(() =>
   primaryClip.value?.transcriptSegments?.length
     ? primaryClip.value.transcriptSegments
@@ -196,91 +93,113 @@ const canStartGeneration = computed(() =>
   Boolean(activeTranscriptSrt.value)
 );
 
-async function refreshPreparedProjectState(): Promise<void> {
-  try {
-    hasPreparedProject.value = await videoStudio.preparedProjectExists({
-      videoId: videoStudioVideoId.value,
-      projectId: preparedProjectId.value,
-    });
-  } catch {
-    hasPreparedProject.value = false;
-  }
-}
-
-onMounted(() => {
-  void refreshPreparedProjectState();
-});
-
 watch(
-  () => props.video.id,
-  () => {
-    hasPreparedProject.value = false;
-    void refreshPreparedProjectState();
-  }
+  () => [
+    props.video.id,
+    videoStudio.organizationId,
+    videoStudio.spaceId,
+    activeTranscriptSegments.value.length,
+    activeTranscriptSrt.value,
+    videoStudio.view,
+    videoStudio.selectedProject?.id ?? "",
+  ] as const,
+  ([videoId], previous) => {
+    if (previous?.[0] !== videoId) {
+      initializationSequence += 1;
+      isPreparing.value = false;
+      hasPreparedProject.value = false;
+      hasCheckedPreparedProject.value = false;
+      notice.value = "";
+    }
+    void ensureVideoEditorOpen();
+  },
+  { immediate: true, flush: "post" }
 );
 
-async function openInVideoStudio(
-  action: "start" | "resume" | "restart" = "resume"
-): Promise<void> {
-  const clip = primaryClip.value;
-  if (!clip || !canStartGeneration.value) return;
+async function ensureVideoEditorOpen(): Promise<void> {
+  if (isEditorReady.value || isPreparing.value) return;
+  if (
+    videoStudio.selectedProject &&
+    (videoStudio.selectedProject.videoId === videoStudioVideoId.value ||
+      videoStudio.selectedProject.id === preparedProjectId.value)
+  ) {
+    videoStudio.view = "editor";
+    return;
+  }
+  if (!videoStudio.organizationId || !videoStudio.spaceId) return;
+
+  const sequence = ++initializationSequence;
+  const targetVideoId = props.video.id;
   isPreparing.value = true;
-  activeGenerationAction.value = action;
   notice.value = "";
   try {
-    const transcriptSegments = normalizedTranscriptSegments(activeTranscriptSegments.value);
-    await videoStudio.createStorageBackedVideo({
-      videoId: videoStudioVideoId.value,
-      title: props.video.title || props.video.quickScan?.title || clip.fileName,
-      description:
-        props.video.analysisResult?.operationIntent ||
-        props.video.quickScan?.description ||
-        props.video.description,
-      tags: ["storyvault", props.video.applicationId].filter(Boolean),
-      storageBucket: clip.bucketName,
-      storagePath: clip.storagePath,
-      fileName: clip.fileName,
-      contentType: clip.contentType,
-      duration: (clip.durationMs ?? props.video.durationMs ?? 0) / 1000,
-      sourceType: "screen_recording",
-      transcriptSegments,
-      transcriptSrt: activeTranscriptSrt.value,
-      openAfterCreate: false,
-    });
-    await videoStudio.openVideo(videoStudioVideoId.value);
-    if (!videoStudio.selectedVideo) {
-      throw new Error("Video Studio素材を読み込めませんでした。");
+    try {
+      await videoStudio.openProject(videoStudioVideoId.value, preparedProjectId.value);
+      return;
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== "ナレーションプロジェクトが見つかりません。") {
+        throw error;
+      }
     }
-    await videoStudio.createOrOpenPreparedProject({
-      video: videoStudio.selectedVideo,
-      projectId: preparedProjectId.value,
-      name: `${props.video.title || props.video.quickScan?.title || clip.fileName} 編集`,
-      description:
-        props.video.analysisResult?.operationIntent ||
-        props.video.quickScan?.description ||
-        props.video.description ||
-        "StoryVaultの解析済み操作動画から作成した編集プロジェクト",
-      voiceName: "Puck",
-      sections: buildPreparedSections(clip),
-      refreshPreparedSections: false,
-      resetPreparedProject: action === "restart",
-    });
-    hasPreparedProject.value = true;
-    noticeKind.value = "success";
-    notice.value =
-      action === "restart"
-        ? "既存の動画プロジェクトを初期化して、最初から開きました。"
-        : "解析済み字幕を読み込んで動画エディターを開きました。";
+
+    if (sequence !== initializationSequence || props.video.id !== targetVideoId) return;
+    hasPreparedProject.value = false;
+    hasCheckedPreparedProject.value = true;
+    if (!canStartGeneration.value) return;
+    await createVideoEditorProject();
   } catch (error) {
-    noticeKind.value = "error";
+    if (sequence !== initializationSequence || props.video.id !== targetVideoId) return;
     notice.value =
       error instanceof Error
         ? error.message
         : "Video Studioへの登録に失敗しました。";
   } finally {
-    isPreparing.value = false;
-    activeGenerationAction.value = null;
+    if (sequence === initializationSequence) {
+      isPreparing.value = false;
+    }
   }
+}
+
+async function createVideoEditorProject(): Promise<void> {
+  const clip = primaryClip.value;
+  if (!clip || !canStartGeneration.value) return;
+  const transcriptSegments = normalizedTranscriptSegments(activeTranscriptSegments.value);
+  await videoStudio.createStorageBackedVideo({
+    videoId: videoStudioVideoId.value,
+    title: props.video.title || props.video.quickScan?.title || clip.fileName,
+    description:
+      props.video.analysisResult?.operationIntent ||
+      props.video.quickScan?.description ||
+      props.video.description,
+    tags: ["storyvault", props.video.applicationId].filter(Boolean),
+    storageBucket: clip.bucketName,
+    storagePath: clip.storagePath,
+    fileName: clip.fileName,
+    contentType: clip.contentType,
+    duration: (clip.durationMs ?? props.video.durationMs ?? 0) / 1000,
+    sourceType: "screen_recording",
+    transcriptSegments,
+    transcriptSrt: activeTranscriptSrt.value,
+    openAfterCreate: false,
+  });
+  await videoStudio.openVideo(videoStudioVideoId.value);
+  if (!videoStudio.selectedVideo) {
+    throw new Error("Video Studio素材を読み込めませんでした。");
+  }
+  await videoStudio.createOrOpenPreparedProject({
+    video: videoStudio.selectedVideo,
+    projectId: preparedProjectId.value,
+    name: `${props.video.title || props.video.quickScan?.title || clip.fileName} 編集`,
+    description:
+      props.video.analysisResult?.operationIntent ||
+      props.video.quickScan?.description ||
+      props.video.description ||
+      "StoryVaultの解析済み操作動画から作成した編集プロジェクト",
+    voiceName: "Puck",
+    sections: buildPreparedSections(clip),
+    refreshPreparedSections: false,
+  });
+  hasPreparedProject.value = true;
 }
 
 function buildPreparedSections(clip: StoryVaultOperationVideoClip): VideoStudioSection[] {
