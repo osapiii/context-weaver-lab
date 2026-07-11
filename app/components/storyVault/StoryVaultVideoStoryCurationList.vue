@@ -23,9 +23,10 @@
       title="根拠クリップを再生"
       subtitle="発話根拠のタイムスタンプ周辺を字幕と一緒に確認します。"
       title-icon="material-symbols:play-circle-outline"
-      size="xl"
+      size="full"
+      :ui="{ content: 'sm:max-w-6xl' }"
     >
-      <div v-if="selectedEvidencePreview" class="grid items-start gap-5 lg:grid-cols-[minmax(18rem,0.78fr)_minmax(0,1.62fr)]">
+      <div v-if="selectedEvidencePreview" class="grid items-start gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
         <aside class="space-y-4 lg:sticky lg:top-0">
           <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
             <div class="flex flex-wrap items-center gap-2">

@@ -202,6 +202,7 @@ export function useStoryVaultClipPreparation() {
           minSilenceMs: 5000,
           keepPaddingMs: 180,
           minSegmentMs: 450,
+          mergeGapMs: 10_000,
           cutRangesSeconds: params.silenceRanges.map((range) => ({
             start: range.startMs / 1000,
             end: range.endMs / 1000,

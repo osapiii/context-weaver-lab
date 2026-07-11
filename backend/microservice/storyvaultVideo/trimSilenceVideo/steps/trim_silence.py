@@ -175,6 +175,27 @@ def detect_silence_ranges(
     return [item for item in silence_ranges if item["end"] > item["start"]]
 
 
+def merge_nearby_silence_ranges(
+    silence_ranges: list[dict[str, float]],
+    *,
+    maximum_gap_seconds: float = 10.0,
+) -> list[dict[str, float]]:
+    """Treat brief speech/noise islands between silence candidates as silence."""
+    gap_limit = max(0.0, float(maximum_gap_seconds))
+    sorted_ranges = sorted(
+        (dict(item) for item in silence_ranges if item["end"] > item["start"]),
+        key=lambda item: (item["start"], item["end"]),
+    )
+    merged: list[dict[str, float]] = []
+    for item in sorted_ranges:
+        previous = merged[-1] if merged else None
+        if previous is None or item["start"] - previous["end"] > gap_limit:
+            merged.append(item)
+        else:
+            previous["end"] = max(previous["end"], item["end"])
+    return merged
+
+
 def compute_kept_ranges(
     *,
     duration_seconds: float,
@@ -475,6 +496,7 @@ def trim_silence_video(params: dict[str, Any]) -> dict[str, Any]:
     min_silence_seconds = max(0.1, float(settings.get("minSilenceMs", 5000)) / 1000)
     keep_padding_seconds = max(0.0, float(settings.get("keepPaddingMs", 180)) / 1000)
     min_segment_seconds = max(0.1, float(settings.get("minSegmentMs", 450)) / 1000)
+    merge_gap_seconds = max(0.0, float(settings.get("mergeGapMs", 10000)) / 1000)
     noise_reduction_enabled = bool(settings.get("noiseReductionEnabled", False))
     noise_reduction_strength_db = float(settings.get("noiseReductionStrengthDb", 12))
     noise_floor_db = float(settings.get("noiseFloorDb", -40))
@@ -500,6 +522,10 @@ def trim_silence_video(params: dict[str, Any]) -> dict[str, Any]:
                 threshold_db=threshold_db,
                 min_silence_seconds=min_silence_seconds,
             )
+        silence_ranges = merge_nearby_silence_ranges(
+            silence_ranges,
+            maximum_gap_seconds=merge_gap_seconds,
+        )
     kept_ranges = compute_kept_ranges(
         duration_seconds=original_duration,
         silence_ranges=silence_ranges,

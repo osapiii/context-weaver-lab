@@ -5,6 +5,7 @@ const baseVideo = {
   id: "video-1",
   applicationId: "app-1",
   applicationKey: "APP",
+  clipGroupId: "group-1",
   title: "AIにファイルを取り込ませる",
   fileName: "video.webm",
   bucketName: "bucket",
@@ -21,6 +22,17 @@ describe("StoryVault operation video relatedContexts", () => {
     const parsed = DecodedStoryVaultClipSchema.parse(baseVideo);
 
     expect(parsed.relatedContexts).toBeUndefined();
+  });
+
+  it("decodes legacy background clips that persisted an optional description as null", () => {
+    const parsed = DecodedStoryVaultClipSchema.parse({
+      ...baseVideo,
+      description: null,
+      quickScan: null,
+    });
+
+    expect(parsed.description).toBeUndefined();
+    expect(parsed.quickScan).toBeUndefined();
   });
 
   it("decodes GitHub related PR results", () => {

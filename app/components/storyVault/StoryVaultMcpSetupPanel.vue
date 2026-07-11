@@ -214,6 +214,7 @@
             title="1回だけ表示されるトークン"
             tone="secret"
             :lines="[createdToken]"
+            :display-lines="maskedCreatedTokenLines"
             @copy="copyText"
           />
 
@@ -235,6 +236,7 @@
             subtitle="次にStoryVault MCPサーバーと発行済みトークンを登録します。"
             tone="primary"
             :lines="mcpSetupLines"
+            :display-lines="maskedMcpSetupLines"
             @copy="copyText"
           />
 
@@ -265,6 +267,7 @@ import { getAuth } from "firebase/auth";
 import type { DecodedStoryVaultApplication } from "@models/storyVault";
 import { storyVaultApplicationConverter } from "@models/storyVault";
 import log from "@utils/logger";
+import { maskStoryVaultMcpTokenForDisplay } from "@utils/storyVaultMcpTokenDisplay";
 
 type McpConnectionRow = {
   id: string;
@@ -284,6 +287,7 @@ const CopyLineList = defineComponent({
     subtitle: { type: String, default: "" },
     tone: { type: String as () => "default" | "primary" | "secret", default: "default" },
     lines: { type: Array as () => string[], required: true },
+    displayLines: { type: Array as () => string[], default: undefined },
   },
   emits: ["copy"],
   setup(props, { emit }) {
@@ -310,13 +314,16 @@ const CopyLineList = defineComponent({
         h(
           "div",
           { class: "mt-3 space-y-3" },
-          props.lines.map((line, index) =>
-            h("div", { class: "grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_104px]", key: `${index}-${line}` }, [
+          props.lines.map((line, index) => {
+            const displayLine = props.displayLines?.[index] ?? line;
+            return h("div", { class: "grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_104px]", key: index }, [
               h("input", {
                 class:
                   "min-w-0 rounded-lg border border-slate-200 bg-white px-4 py-3 font-mono text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100",
                 readOnly: true,
-                value: line,
+                value: displayLine,
+                autocomplete: "off",
+                "aria-label": `${props.title}（セキュリティ保護のため画面上では非表示）`,
                 onFocus: (event: FocusEvent) => {
                   const input = event.target as HTMLInputElement;
                   input.select();
@@ -331,8 +338,8 @@ const CopyLineList = defineComponent({
                 },
                 "Copy"
               ),
-            ])
-          )
+            ]);
+          })
         ),
       ]);
   },
@@ -454,6 +461,14 @@ const mcpSetupLines = computed(() => {
     `npx -y "${setupPackageUrl.value}" --client ${selectedSetupAgent.value} --token '${token}' --url "${mcpServerUrl.value}"`,
   ];
 });
+const maskedCreatedTokenLines = computed(() => [
+  maskStoryVaultMcpTokenForDisplay(createdToken.value, createdToken.value),
+]);
+const maskedMcpSetupLines = computed(() =>
+  mcpSetupLines.value.map((line) =>
+    maskStoryVaultMcpTokenForDisplay(line, createdToken.value)
+  )
+);
 
 const encodeBase64Url = (input: string): string =>
   btoa(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");

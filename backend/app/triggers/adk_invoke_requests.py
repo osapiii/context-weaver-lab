@@ -256,6 +256,7 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
         "sessionId": None,
         "resolvedModel": None,
         "businessPartner": None,
+        "storyvaultArtifacts": [],
     }
     event_name = ""
     response_text_parts: list[str] = []
@@ -287,6 +288,11 @@ def _consume_sse(response: requests.Response) -> dict[str, Any]:
             summary["artifactCount"] += 1
             if payload.get("kind") == "json_document":
                 doc = _parse_json_document_body(payload.get("body"))
+                if doc and doc.get("schemaVersion") in {
+                    "storyvault-capability-structure-v1",
+                    "storyvault-story-generation-v1",
+                }:
+                    summary["storyvaultArtifacts"].append(doc)
                 if doc and isinstance(doc.get("fields"), dict):
                     summary["businessPartner"] = {
                         "draft": doc,

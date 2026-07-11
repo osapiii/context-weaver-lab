@@ -2,6 +2,7 @@ from steps import trim_silence
 from endpoints.trim_silence.request_schema import SilenceTrimSettings
 from steps.trim_silence import (
     build_noise_reduction_filter,
+    merge_nearby_silence_ranges,
     map_source_time_to_output,
     output_split_points,
 )
@@ -67,6 +68,24 @@ def test_output_split_points_are_sorted_and_skip_edges():
     ]
 
     assert output_split_points([20.0, 0.1, 10.0], timeline, 30.0) == [10.0, 20.0]
+
+
+def test_silence_ranges_with_at_most_ten_second_gap_are_merged():
+    assert merge_nearby_silence_ranges([
+        {"start": 5.0, "end": 15.0},
+        {"start": 25.0, "end": 30.0},
+        {"start": 39.99, "end": 45.0},
+    ]) == [{"start": 5.0, "end": 45.0}]
+
+
+def test_silence_ranges_over_ten_second_gap_stay_separate():
+    assert merge_nearby_silence_ranges([
+        {"start": 5.0, "end": 15.0},
+        {"start": 25.01, "end": 30.0},
+    ]) == [
+        {"start": 5.0, "end": 15.0},
+        {"start": 25.01, "end": 30.0},
+    ]
 
 
 def test_noise_reduction_filter_uses_conservative_speech_settings():

@@ -102,6 +102,15 @@ export const WebCrawlOutputSchema = z.object({
 
 export type WebCrawlOutput = z.infer<typeof WebCrawlOutputSchema>;
 
+const WebCrawlOutputFirestoreSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+}, WebCrawlOutputSchema.nullable().optional());
+
 export const WebCrawlProgressSchema = z.object({
   currentStep: z.string().nullable().optional(),
   totalPages: z.number().int().nonnegative().optional().default(0),
@@ -213,7 +222,9 @@ export const WebCrawlUiMetadataSchema = z.object({
 export const WebCrawlRequestSchema = z.object({
   input: WebCrawlInputSchema,
   operationMetadata: RequestMetadataSchema,
-  output: WebCrawlOutputSchema.nullable().optional(),
+  // GCP Workflows の Firestore REST writeback は JSON を stringValue で保存する。
+  // 過去・進行中の RequestDoc を含め、読み取り境界で object に正規化する。
+  output: WebCrawlOutputFirestoreSchema,
   status: RequestStatusEnum.default("pending"),
   errorMessage: z.string().nullable().optional(),
   workflow: WebCrawlWorkflowMetaSchema.nullable().optional(),

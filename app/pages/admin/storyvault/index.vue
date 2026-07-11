@@ -515,12 +515,15 @@
         @collect-related-contexts="collectAllRelatedContexts"
         @link-jira-issues="linkJiraIssuesToClip"
         @unlink-jira-issue="unlinkJiraIssueFromClip"
+        @link-knowledge-documents="linkKnowledgeDocumentsToClip"
+        @unlink-knowledge-document="unlinkKnowledgeDocumentFromClip"
         @save="saveOperationVideo"
         @update-clip-analysis="updateOperationVideoClipAnalysis"
         @create-clip-group="createClipGroup"
         @update-clip-group="updateClipGroup"
         @delete-clip-group="deleteClipGroup"
         @apply-clip-group-organization-plan="applyClipGroupOrganizationPlan"
+        @move-clip="moveClipToGroup"
         @update-title="updateClipTitle"
         @delete="deleteClip"
         @refresh="store.fetchFromFirestore()"
@@ -561,6 +564,7 @@ import StoryVaultApplicationKnowledgeSpacePanel from "@components/storyVault/Sto
 import type {
   DecodedStoryVaultApplication,
   DecodedStoryVaultClip,
+  StoryVaultRelatedContextKnowledgeDocument,
   StoryVaultRelatedContextJiraIssue,
 } from "@models/storyVault";
 import type {
@@ -1784,6 +1788,24 @@ async function deleteClip(clipId: string): Promise<void> {
   }
 }
 
+async function moveClipToGroup(clipId: string, groupId: string): Promise<void> {
+  try {
+    await store.moveClipsToGroup({ clipIds: [clipId], groupId });
+    const groupName = store.clipGroups.find((group) => group.id === groupId)?.name || "選択したグループ";
+    toast.add({
+      title: "クリップを移動しました",
+      description: `${groupName}へ移動しました`,
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "クリップの移動に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
 async function startZappingVideoAnalysis(
   clipId: string,
   options?: { inline?: boolean },
@@ -1903,6 +1925,39 @@ async function unlinkJiraIssueFromClip(
   } catch (err) {
     toast.add({
       title: "Jira Issueの紐付け解除に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function linkKnowledgeDocumentsToClip(
+  clipId: string,
+  fileSpaceId: string,
+  documents: StoryVaultRelatedContextKnowledgeDocument[]
+): Promise<void> {
+  try {
+    await store.linkKnowledgeDocumentsToClip({ clipId, fileSpaceId, documents });
+    toast.add({ title: `${documents.length}件のナレッジを紐付けました`, color: "success" });
+  } catch (err) {
+    toast.add({
+      title: "ナレッジの紐付けに失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function unlinkKnowledgeDocumentFromClip(
+  clipId: string,
+  documentId: string
+): Promise<void> {
+  try {
+    await store.unlinkKnowledgeDocumentFromClip({ clipId, documentId });
+    toast.add({ title: "ナレッジの紐付けを解除しました", color: "success" });
+  } catch (err) {
+    toast.add({
+      title: "ナレッジの紐付け解除に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });

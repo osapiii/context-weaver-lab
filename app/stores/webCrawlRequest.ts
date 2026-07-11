@@ -21,7 +21,6 @@ import {
 } from "@utils/webCrawlSession";
 import { isWebCrawlCancelled, isWebCrawlPipelineActive, isWebCrawlTerminal } from "@utils/webCrawlTerminal";
 import { getWebCrawlWorkflowKickerUrl } from "@utils/webCrawlServiceUrl";
-import { kickWebCrawlWorkflow } from "@utils/kickWebCrawlWorkflow";
 import { resolveWebCrawlImportFolder } from "@utils/webCrawlImportFolder";
 
 const REQUESTS_SUBPATH = "requests/webCrawlRequests/logs";
@@ -174,39 +173,6 @@ export const useWebCrawlRequestStore = defineStore("webCrawlRequest", {
         );
         if (!active) return;
 
-        if (
-          active.status === "pending" &&
-          !active.workflow?.executionName &&
-          active.input?.url &&
-          active.operationMetadata
-        ) {
-          const collectionPath = contextStore.organizationFirestorePath(
-            REQUESTS_SUBPATH
-          );
-          const kick = await kickWebCrawlWorkflow({
-            requestPath: `${collectionPath}/${active.id}`,
-            requestId: active.id,
-            organizationId: active.operationMetadata.organizationId,
-            input: {
-              url: active.input.url,
-              bucketName: active.input.bucketName,
-              folderPath: active.input.folderPath,
-              maxDepth: active.input.maxDepth,
-              maxUrls: active.input.maxUrls,
-              fileSpaceId: active.input.fileSpaceId,
-              description: active.input.description,
-              includeImages: active.input.includeImages,
-            },
-            operationMetadata: active.operationMetadata,
-          });
-          if (!kick.ok) {
-            log("WARN", "recoverActiveIngestRequest kick failed", {
-              requestId: active.id,
-              error: kick.error,
-            });
-          }
-        }
-
         this.snapshotWatchingRequests.set(active.id, active);
         this.activeIngestRequestId = active.id;
         this.activeIngestSession = projectWebCrawlRequestToSession(
@@ -354,34 +320,6 @@ export const useWebCrawlRequestStore = defineStore("webCrawlRequest", {
         if (!created) {
           this.crudError = "Failed to create request";
           this.createRequestError = "リクエストの作成に失敗しました";
-          return null;
-        }
-
-        const requestPath = `${collectionName}/${requestId}`;
-        const kick = await kickWebCrawlWorkflow({
-          requestPath,
-          requestId,
-          organizationId: params.organizationId,
-          input: {
-            url: params.url,
-            bucketName: params.bucketName,
-            folderPath: params.folderPath,
-            maxDepth: params.maxDepth,
-            maxUrls: params.maxUrls,
-            fileSpaceId: params.fileSpaceId,
-            description: params.description ?? null,
-            includeImages: params.includeImages ?? true,
-          },
-          operationMetadata,
-        });
-        if (!kick.ok) {
-          this.createRequestError =
-            kick.error ??
-            "Workflow の起動に失敗しました。しばらくしてから再度お試しください";
-          log("ERROR", "kickWebCrawlWorkflow failed", {
-            requestId,
-            error: kick.error,
-          });
           return null;
         }
 

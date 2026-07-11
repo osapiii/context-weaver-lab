@@ -123,7 +123,9 @@ export const StoryVaultOperationVideoClipSchema = z.object({
   transcriptTimingStatus: StoryVaultTranscriptTimingStatusSchema.default(
     "unavailable"
   ),
-  quickScan: StoryVaultOperationVideoQuickScanSchema.optional(),
+  quickScan: StoryVaultOperationVideoQuickScanSchema.nullish().transform(
+    (value) => value ?? undefined
+  ),
   frameCaptures: z.array(StoryVaultOperationVideoFrameSchema).default([]),
   metadataFileName: z.string().optional(),
   metadataStoragePath: z.string().optional(),
@@ -620,7 +622,10 @@ export const StoryVaultClipSchema = StoryVaultOperationVideoClipSchema.extend({
   clipGroupId: z.string(),
   clipGroupNameSnapshot: z.string().optional(),
   title: z.string(),
-  description: z.string().optional(),
+  // Older background-pipeline records were persisted with Firestore null.
+  // Decode null as an omitted optional field so one legacy record cannot hide
+  // every clip in the list.
+  description: z.string().nullish().transform((value) => value ?? undefined),
   tags: z.array(z.string()).default([]),
   fileSpaceId: z.string().optional(),
   discoveryStatus: StoryVaultOperationVideoDiscoveryStatusSchema.default(

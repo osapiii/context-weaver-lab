@@ -60,6 +60,7 @@ import type {
   StoryVaultReviewState,
   StoryVaultScanAuthMode,
   StoryVaultRelatedContextResult,
+  StoryVaultRelatedContextKnowledgeDocument,
   StoryVaultRelatedContextJiraIssue,
   StoryVaultStoryStatus,
   StoryVaultZappingAnalysisResult,
@@ -2664,6 +2665,76 @@ export const useStoryVaultStore = defineStore("storyVault", {
         `Jira: ${input.issues.length}件のIssueを「${clip.title}」に紐付け`
       );
     },
+    async linkKnowledgeDocumentsToClip(input: {
+      clipId: string;
+      fileSpaceId: string;
+      documents: StoryVaultRelatedContextKnowledgeDocument[];
+    }): Promise<void> {
+      const clip = this.clips.find((item) => item.id === input.clipId);
+      if (!clip) throw new Error("紐付け対象のクリップが見つかりません");
+      if (!input.fileSpaceId) throw new Error("FileSpaceが設定されていません");
+      const existing = clip.relatedContexts?.knowledge?.documents ?? [];
+      const merged = new Map(
+        existing.map((document) => [document.documentId || document.name || "", document])
+      );
+      for (const document of input.documents) {
+        const key = document.documentId || document.name || "";
+        if (!key) continue;
+        merged.set(key, {
+          ...document,
+          relevanceScore: document.relevanceScore || 100,
+          reason: document.reason || "ユーザーがナレッジ一覧から手動でクリップに紐付けました",
+          matchedSignals: document.matchedSignals.length ? document.matchedSignals : ["手動紐付け"],
+        });
+      }
+      await this.persistClip({
+        ...clip,
+        relatedContexts: {
+          ...clip.relatedContexts,
+          knowledge: {
+            fileSpaceId: input.fileSpaceId,
+            checkedAt: nowIso(),
+            documents: Array.from(merged.values()),
+            errorMessage: undefined,
+          },
+          generatedAt: nowIso(),
+          status: "completed",
+          runningProvider: undefined,
+          notes: (clip.relatedContexts?.notes ?? []).filter(Boolean),
+        },
+      });
+      this.lastRunLog.unshift(
+        `ボルトナレッジ: ${input.documents.length}件を「${clip.title}」に紐付け`
+      );
+    },
+    async unlinkKnowledgeDocumentFromClip(input: {
+      clipId: string;
+      documentId: string;
+    }): Promise<void> {
+      const clip = this.clips.find((item) => item.id === input.clipId);
+      const knowledge = clip?.relatedContexts?.knowledge;
+      if (!clip || !knowledge) return;
+      await this.persistClip({
+        ...clip,
+        relatedContexts: {
+          ...clip.relatedContexts,
+          knowledge: {
+            ...knowledge,
+            documents: knowledge.documents.filter(
+              (document) => (document.documentId || document.name || "") !== input.documentId
+            ),
+            checkedAt: nowIso(),
+          },
+          generatedAt: nowIso(),
+          status: "completed",
+          runningProvider: undefined,
+          notes: knowledge.errorMessage
+            ? (clip.relatedContexts?.notes ?? []).filter(Boolean)
+            : clip.relatedContexts?.notes ?? [],
+        },
+      });
+      this.lastRunLog.unshift(`ボルトナレッジ: ${input.documentId}の紐付けを解除`);
+    },
     async unlinkJiraIssueFromClip(input: {
       clipId: string;
       issueKey: string;
@@ -2919,18 +2990,24 @@ export const useStoryVaultStore = defineStore("storyVault", {
     async startCapabilityStructuring(
       input: StoryVaultGenerationAgentInput
     ): Promise<string> {
-      return this.startSeparatedGenerationAgent({
-        ...input,
-        mode: "storyvault_capability_structuring",
+      const started = await useStoryVaultClipCommands().create({
+        operation: "capabilityStructuring",
+        applicationId: input.applicationId,
+        payload: { prompt: input.prompt },
       });
+      void useStoryVaultClipCommands().wait(started.requestPath).then(() => this.fetchData());
+      return started.requestId;
     },
     async startStoryGeneration(
       input: StoryVaultGenerationAgentInput
     ): Promise<string> {
-      return this.startSeparatedGenerationAgent({
-        ...input,
-        mode: "storyvault_story_generation",
+      const started = await useStoryVaultClipCommands().create({
+        operation: "storyGeneration",
+        applicationId: input.applicationId,
+        payload: { prompt: input.prompt, capabilityId: input.capabilityId },
       });
+      void useStoryVaultClipCommands().wait(started.requestPath).then(() => this.fetchData());
+      return started.requestId;
     },
     async startZappingVideoAnalysis(
       input: StoryVaultZappingVideoAnalysisInput
@@ -2997,33 +3074,15 @@ export const useStoryVaultStore = defineStore("storyVault", {
         };
         await this.persistClip(queuedClip);
 
-        const requestId = await createAdkInvokeRequest({
-          organizationId: orgId,
-          spaceId,
-          input: buildAdkInvokeInput({
-            mode: "storyvault_zapping_analysis",
-            sessionId: analysisSessionId,
-            organizationId: orgId,
-            spaceId,
-            userId: uid,
-            prompt,
-            responseId,
-            model: defaultLlmModelSelectionForAdkMode(
-              "storyvault_zapping_analysis"
-            ),
-            fileSpaceId,
-            workspaceId: application.id,
-            history: [],
-            modeState,
-            attachments: [
-              {
-                gcsPath: `gs://${clip.bucketName}/${clip.storagePath}`,
-                mimeType: clip.contentType || "video/webm",
-                fileName: clip.fileName,
-              },
-            ],
-          }),
+        const commandApi = useStoryVaultClipCommands();
+        const started = await commandApi.create({
+          operation: "zappingAnalysis",
+          applicationId: application.id,
+          clipGroupId: clip.clipGroupId,
+          clipIds: [clip.id],
+          payload: { prompt, modeState, responseId },
         });
+        const requestId = started.requestId;
 
         await this.persistClip({
           ...queuedClip,
@@ -3034,27 +3093,20 @@ export const useStoryVaultStore = defineStore("storyVault", {
           `ユーザーストーリー解析: ${application.name} / ${clip.title} の解析を開始`
         );
 
-        const stopWatch = watchAdkInvokeRequest({
-          organizationId: orgId,
-          spaceId,
-          requestId,
-          onUpdate: (
-            status: RequestStatus,
-            errorMessage?: string,
-            output?: AdkInvokeOutput
-          ) => {
-            void this.updateZappingVideoAnalysisStatus({
-              clipId: clip.id,
-              requestId,
-              status,
-              errorMessage,
-              output,
-            });
-            if (status === "completed" || status === "error") {
-              stopWatch();
-            }
+        void commandApi.wait(started.requestPath).then(
+          async () => {
+            await this.fetchData();
           },
-        });
+          async (error) => {
+            await this.persistClip({
+              ...queuedClip,
+              analysisRequestId: requestId,
+              analysisStatus: "error",
+              analysisErrorMessage:
+                error instanceof Error ? error.message : "解析に失敗しました",
+            });
+          }
+        );
 
         return requestId;
       } catch (err) {

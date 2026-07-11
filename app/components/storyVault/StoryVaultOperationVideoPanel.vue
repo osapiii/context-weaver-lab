@@ -344,11 +344,23 @@
             :src="editingPreviewUrl"
             controls
             class="aspect-video max-h-full w-full bg-black object-contain"
+            @loadedmetadata="reconcileRecordedPreviewDuration"
+            @durationchange="reconcileRecordedPreviewDuration"
             @timeupdate="updateRecordedPreviewTime"
             @play="isRecordedPreviewPlaying = true"
             @pause="isRecordedPreviewPlaying = false"
             @ended="isRecordedPreviewPlaying = false"
           />
+          <button
+            v-if="editingPreviewUrl && !isRecording"
+            type="button"
+            class="absolute right-3 top-3 inline-flex h-9 items-center gap-1.5 rounded-md border border-white/20 bg-slate-950/80 px-3 text-xs font-semibold text-white shadow-lg transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+            title="動画を全画面で再生"
+            @click="requestRecordedPreviewFullscreen"
+          >
+            <UIcon name="material-symbols:fullscreen" class="h-4 w-4" />
+            全画面
+          </button>
           <div
             v-if="!isRecording && !editingPreviewUrl"
             class="flex aspect-video w-full items-center justify-center text-sm text-slate-300"
@@ -365,21 +377,6 @@
                 選択ダイアログでは、説明したいアプリ画面とマイク音声の共有を許可してください。
               </p>
             </div>
-          </div>
-        </div>
-
-        <div class="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
-          <div class="mb-2 flex items-center justify-between gap-2 text-xs">
-            <span class="font-semibold text-slate-100">音声波形</span>
-            <span class="text-slate-400">{{ Math.round(audioLevel * 100) }}%</span>
-          </div>
-          <div class="flex h-16 items-end gap-1">
-            <span
-              v-for="(bar, index) in waveformBars"
-              :key="index"
-              class="min-w-0 flex-1 rounded-t bg-primary-400/80 transition-[height]"
-              :style="{ height: `${Math.max(6, bar * 100)}%` }"
-            />
           </div>
         </div>
 
@@ -797,6 +794,20 @@
           </div>
         </div>
 
+        <div v-if="recordedBlob && !isRecording" class="mt-4 rounded-lg border border-white/10 bg-white/5 p-3">
+          <p class="text-xs font-semibold text-slate-100">録画後の処理方法</p>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <button type="button" class="rounded-lg border p-3 text-left text-xs transition" :class="recordingProcessingMode === 'automatic' ? 'border-primary-300 bg-primary-400/15 text-primary-50' : 'border-white/10 text-slate-300 hover:bg-white/5'" @click="recordingProcessingMode = 'automatic'">
+              <span class="block font-semibold">バックグラウンド全自動（推奨）</span>
+              <span class="mt-1 block opacity-75">AI分割案を自動採用し、ブラウザを閉じてもStory生成と通知まで続けます。</span>
+            </button>
+            <button type="button" class="rounded-lg border p-3 text-left text-xs transition" :class="recordingProcessingMode === 'manual' ? 'border-primary-300 bg-primary-400/15 text-primary-50' : 'border-white/10 text-slate-300 hover:bg-white/5'" @click="recordingProcessingMode = 'manual'">
+              <span class="block font-semibold">手動編集</span>
+              <span class="mt-1 block opacity-75">無音候補とAI分割案を確認してから保存します。</span>
+            </button>
+          </div>
+        </div>
+
         <div class="mt-4 flex flex-wrap justify-end gap-2 border-t border-white/10 pt-4">
           <EnButton
             v-if="!isRecording && !recordedBlob"
@@ -829,7 +840,18 @@
             撮り直す
           </EnButton>
           <EnButton
-            v-if="recordedBlob && !isRecording && clipEditingStep === 1"
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'automatic'"
+            variant="ai"
+            size="md"
+            leading-icon="material-symbols:rocket-launch-outline"
+            :disabled="isSavingClipDraft || !activeClipDraftIsPersisted || isStartingAutomaticPipeline"
+            :loading="isStartingAutomaticPipeline"
+            @click="startAutomaticPipeline"
+          >
+            バックグラウンド解析を開始
+          </EnButton>
+          <EnButton
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'manual' && clipEditingStep === 1"
             variant="ghost"
             color="neutral"
             size="md"
@@ -840,7 +862,7 @@
             {{ noiseReductionEnabled ? "カットせずノイズ低減して文字起こし" : "カットせず文字起こし" }}
           </EnButton>
           <EnButton
-            v-if="recordedBlob && !isRecording && clipEditingStep === 1"
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'manual' && clipEditingStep === 1"
             variant="ai"
             size="md"
             leading-icon="material-symbols:auto-awesome"
@@ -851,7 +873,7 @@
             {{ manualCutRanges.length > 0 ? "選択範囲をカットして文字起こし" : silenceCutEnabled && cutSilenceRanges.length > 0 ? "無音カットして文字起こし" : noiseReductionEnabled ? "ノイズ低減して分割案を作る" : "文字起こしして分割案を作る" }}
           </EnButton>
           <EnButton
-            v-if="recordedBlob && !isRecording && clipEditingStep === 2"
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'manual' && clipEditingStep === 2"
             variant="ghost"
             color="neutral"
             size="md"
@@ -862,7 +884,7 @@
             戻る
           </EnButton>
           <EnButton
-            v-if="recordedBlob && !isRecording && clipEditingStep === 2"
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'manual' && clipEditingStep === 2"
             variant="ai"
             size="md"
             leading-icon="material-symbols:auto-awesome"
@@ -872,6 +894,33 @@
           >
             AIタイトルで{{ splitPointsMs.length + 1 }}クリップを取り込む
           </EnButton>
+        </div>
+      </div>
+    </EnModal>
+
+    <EnModal
+      v-model:open="continueRecordingPromptOpen"
+      title="バックグラウンド解析を開始しました"
+      subtitle="解析を待たずに、続けて次の操作クリップを撮影できます。"
+      title-icon="material-symbols:playlist-add-check-circle-outline"
+      size="lg"
+      :close-on-backdrop="false"
+      :hide-close="true"
+    >
+      <div class="space-y-5">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p class="font-semibold">{{ lastSubmittedRecordingTitle }}</p>
+          <p class="mt-1">この撮影セッションで {{ submittedPipelineCount }} 本を解析へ投入しました。</p>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <button type="button" class="rounded-xl border border-primary-200 bg-primary-50 p-4 text-left transition hover:bg-primary-100" @click="recordNextClip">
+            <span class="flex items-center gap-2 font-semibold text-primary-900"><UIcon name="material-symbols:video-camera-back-outline" class="h-5 w-5" />続けて次を撮影</span>
+            <span class="mt-1 block text-xs text-primary-700">録画画面を初期化し、次のWindow・マイク選択へ進みます。</span>
+          </button>
+          <button type="button" class="rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:bg-slate-50" @click="finishRecordingBatch">
+            <span class="flex items-center gap-2 font-semibold text-slate-900"><UIcon name="material-symbols:bedtime-outline" class="h-5 w-5" />いったん撮影を終了</span>
+            <span class="mt-1 block text-xs text-slate-600">解析は継続します。ヘッダーの解析ステータスや完了メールで確認できます。</span>
+          </button>
         </div>
       </div>
     </EnModal>
@@ -3473,6 +3522,76 @@
             </EnButton>
           </div>
 
+          <div class="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-bold text-slate-900">ナレッジ一覧から手動で紐付け</p>
+                <p class="mt-1 text-xs leading-relaxed text-slate-600">
+                  自動検索に出ないファイルも、対象FileSpaceから選択してクリップの関連コンテキストへ保存できます。
+                </p>
+              </div>
+              <EnButton
+                variant="outline"
+                color="neutral"
+                size="xs"
+                leading-icon="material-symbols:folder-open"
+                :loading="isKnowledgeManualLoading"
+                :disabled="!application?.fileSpaceId"
+                @click="loadKnowledgeDocumentsForManualLink"
+              >
+                ナレッジ一覧を表示
+              </EnButton>
+            </div>
+
+            <div v-if="knowledgeFileSpaceStore.documents.length > 0 || isKnowledgeManualLoading" class="mt-3 space-y-3">
+              <input
+                v-model="knowledgeManualSearchQuery"
+                type="search"
+                class="h-9 w-full rounded-md border border-emerald-200 bg-white px-3 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                placeholder="ファイル名・説明で絞り込み"
+              >
+              <div v-if="isKnowledgeManualLoading" class="rounded-lg border border-emerald-100 bg-white p-4 text-xs text-slate-500">
+                FileSpaceのナレッジ一覧を読み込んでいます…
+              </div>
+              <div v-else class="max-h-[26rem] overflow-y-auto rounded-lg border border-emerald-100 bg-white p-3">
+                <label
+                  v-for="document in knowledgeManualDocuments"
+                  :key="`knowledge-manual-${knowledgeDocumentSelectionKey(document)}`"
+                  class="flex cursor-pointer items-start gap-3 border-b border-slate-100 px-2 py-3 last:border-0 hover:bg-emerald-50/50"
+                >
+                  <input
+                    v-model="selectedKnowledgeDocumentIds"
+                    type="checkbox"
+                    :value="knowledgeDocumentSelectionKey(document)"
+                    class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  >
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-xs font-bold text-slate-900">{{ document.displayName || document.title || document.name || "名称未設定" }}</span>
+                    <span class="mt-1 block line-clamp-2 text-[11px] leading-relaxed text-slate-500">{{ document.description || document.mimeType || document.filePath || "FileSpaceナレッジ" }}</span>
+                  </span>
+                </label>
+                <p v-if="knowledgeManualDocuments.length === 0" class="p-4 text-center text-xs text-slate-500">
+                  該当するナレッジファイルはありません
+                </p>
+              </div>
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-slate-500">{{ knowledgeManualDocuments.length }}件表示 / {{ selectedKnowledgeDocumentIds.length }}件選択中</p>
+                <EnButton
+                  variant="solid"
+                  color="neutral"
+                  size="xs"
+                  custom-class="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700 disabled:!bg-slate-300"
+                  leading-icon="material-symbols:link"
+                  :disabled="selectedKnowledgeDocumentIds.length === 0"
+                  @click="linkSelectedKnowledgeDocuments"
+                >
+                  選択したナレッジを紐付け
+                </EnButton>
+              </div>
+            </div>
+            <EnAlert v-if="knowledgeManualError" class="mt-3" color="warning" :title="knowledgeManualError" />
+          </div>
+
           <div
             v-if="isRelatedContextProviderRunning(detailVideo, 'knowledge')"
             class="mb-4 overflow-hidden rounded-xl border border-slate-900 bg-slate-950 text-white shadow-sm"
@@ -3554,6 +3673,16 @@
                   >
                     {{ doc.relevanceScore }}
                   </EnBadge>
+                  <button
+                    v-if="doc.documentId || doc.name"
+                    type="button"
+                    class="absolute bottom-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200 hover:text-red-600"
+                    :aria-label="`${doc.displayName || doc.name || 'ナレッジ'}の紐付けを解除`"
+                    title="紐付けを解除"
+                    @click="emit('unlink-knowledge-document', detailVideo.id, doc.documentId || doc.name || '')"
+                  >
+                    <UIcon name="material-symbols:close" class="h-4 w-4" />
+                  </button>
                 </div>
                 <p
                   v-if="doc.reason"
@@ -4368,6 +4497,39 @@
                   {{ analysisLabel(item.clip.analysisStatus) }}
                 </EnBadge>
               </div>
+              <div class="absolute right-3 top-3" @click.stop>
+                <button
+                  type="button"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/20 bg-slate-950/80 text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                  :aria-label="`${clipTitle(item.clip, 0)}の操作メニュー`"
+                  title="クリップ操作"
+                  @click="toggleClipActionMenu(item.clip.id)"
+                >
+                  <UIcon name="material-symbols:more-vert" class="h-4 w-4" />
+                </button>
+                <div
+                  v-if="clipActionMenuId === item.clip.id"
+                  class="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-xl"
+                >
+                  <p class="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">グループへ移動</p>
+                  <select
+                    class="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                    :value="item.clip.clipGroupId"
+                    @change="moveClipToGroup(item.clip.id, ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option v-for="group in clipGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
+                  </select>
+                  <div class="my-2 border-t border-slate-100" />
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                    @click="openVideoDeleteConfirm(item.clip)"
+                  >
+                    <UIcon name="material-symbols:delete-outline" class="h-4 w-4" />
+                    削除
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="space-y-3 p-4">
@@ -4482,6 +4644,7 @@
 </template>
 
 <script setup lang="ts">
+import { getAuth } from "firebase/auth";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import * as XLSX from "xlsx";
@@ -4517,6 +4680,7 @@ import {
 } from "@utils/transcriptTiming";
 import KnowledgeDocumentCompactCard from "@components/knowledge/KnowledgeDocumentCompactCard.vue";
 import { useJiraOAuth, type JiraIssuePreview } from "@composables/useJiraOAuth";
+import { useGeminiFileSpaceOperatorStore } from "@stores/geminiFileSpaceOperator";
 import type {
   DecodedStoryVaultApplication,
   DecodedStoryVaultClipGroup,
@@ -4793,6 +4957,12 @@ const emit = defineEmits<{
     site?: { name?: string; url?: string },
   ];
   "unlink-jira-issue": [clipId: string, issueKey: string, cloudId?: string];
+  "link-knowledge-documents": [
+    clipId: string,
+    fileSpaceId: string,
+    documents: StoryVaultRelatedContextKnowledgeDocument[],
+  ];
+  "unlink-knowledge-document": [clipId: string, documentId: string];
   "create-clip-group": [input: { applicationId: string; name: string; description?: string }];
   "update-clip-group": [input: { groupId: string; name: string; description?: string }];
   "delete-clip-group": [groupId: string];
@@ -4800,6 +4970,7 @@ const emit = defineEmits<{
     plan: ClipGroupAssistantPlan,
     callbacks?: ClipGroupOrganizationCallbacks,
   ];
+  "move-clip": [clipId: string, groupId: string];
   "create-file-space": [];
   delete: [clipId: string];
   refresh: [];
@@ -4807,6 +4978,8 @@ const emit = defineEmits<{
 
 const toast = useToast();
 const jiraOAuth = useJiraOAuth();
+const clipPipelineApi = useStoryVaultClipPipelines();
+const clipCommandApi = useStoryVaultClipCommands();
 const {
   prepare: prepareRecordedClips,
   resume: resumeRecordedClipPreparation,
@@ -4828,6 +5001,7 @@ const errorMessage = ref("");
 const sourceDisplaySurface = ref<StoryVaultOperationVideoDisplaySurface>("unknown");
 const isRecording = ref(false);
 const recordingModalOpen = ref(false);
+const clipActionMenuId = ref("");
 const assistantPanelOpen = ref(false);
 const elapsedMs = ref(0);
 const recordedDurationMs = ref<number | undefined>();
@@ -4870,6 +5044,11 @@ const audioLevelSamples = ref<StoryVaultAudioLevelSample[]>([]);
 const keptSilenceRangeIndexes = ref<number[]>([]);
 const splitPointsMs = ref<number[]>([]);
 const clipEditingStep = ref<1 | 2>(1);
+const recordingProcessingMode = ref<"automatic" | "manual">("automatic");
+const isStartingAutomaticPipeline = ref(false);
+const continueRecordingPromptOpen = ref(false);
+const submittedPipelineCount = ref(0);
+const lastSubmittedRecordingTitle = ref("");
 const isAnalyzingSilence = ref(false);
 const isPreparingClips = ref(false);
 const parallelAnalysisCompleted = ref(0);
@@ -4927,6 +5106,21 @@ const bulkContextSteps = ref<BulkContextStep[]>([
   { key: "jira", label: "Jira", icon: "i-simple-icons-jira", status: "pending" },
 ]);
 const jiraConnections = computed(() => jiraOAuth.connections.value);
+const knowledgeFileSpaceStore = useGeminiFileSpaceOperatorStore();
+const knowledgeManualSearchQuery = ref("");
+const selectedKnowledgeDocumentIds = ref<string[]>([]);
+const isKnowledgeManualLoading = ref(false);
+const knowledgeManualError = ref("");
+const knowledgeManualDocuments = computed(() => {
+  const query = knowledgeManualSearchQuery.value.trim().toLocaleLowerCase();
+  const documents = knowledgeFileSpaceStore.documents ?? [];
+  if (!query) return documents;
+  return documents.filter((document) =>
+    [document.displayName, document.title, document.name, document.description]
+      .filter(Boolean)
+      .some((value) => String(value).toLocaleLowerCase().includes(query))
+  );
+});
 const jiraSelectedCloudId = ref("");
 const jiraSearchQuery = ref("");
 const jiraSearchResults = ref<JiraIssuePreview[]>([]);
@@ -5036,7 +5230,11 @@ const selectedGroupClipItems = computed<GroupClipItem[]>(() => {
 });
 const applicationClipDrafts = computed(() =>
   clipDrafts.value.filter(
-    (draft) => draft.applicationId === (props.application?.id || "")
+    (draft) =>
+      draft.applicationId === (props.application?.id || "") &&
+      // A submitted recording belongs to the background pipeline, not the
+      // manual-editor draft queue. Pipeline failures restore it as `error`.
+      draft.status !== "processing"
   )
 );
 const activeClipDraft = computed(() =>
@@ -6819,7 +7017,6 @@ async function startCapture(): Promise<void> {
       (track) => track.readyState === "live"
     );
     setupAudioAnalyser(microphoneStream);
-    startAudioOnlyRecorder(microphoneStream);
 
     displayStream = await navigator.mediaDevices.getDisplayMedia({
       video: { displaySurface: "window" } as MediaTrackConstraints,
@@ -6852,7 +7049,10 @@ async function startCapture(): Promise<void> {
     mediaRecorder.onstop = () => {
       const blobType = mediaRecorder?.mimeType || mimeType || "video/webm";
       const blob = new Blob(chunks, { type: blobType });
-      const durationMs = elapsedMs.value;
+      // The interval display is intentionally coarse and can be up to 500 ms
+      // behind the actual recording. Persist the shared recorder clock instead.
+      const durationMs = Math.max(0, Date.now() - startedAt);
+      elapsedMs.value = durationMs;
       recordedBlob.value = blob;
       recordedDurationMs.value = durationMs;
       previewUrl.value = URL.createObjectURL(blob);
@@ -6862,11 +7062,15 @@ async function startCapture(): Promise<void> {
       mediaRecorder = null;
       isRecording.value = false;
     };
+    // Start both MediaRecorders from the same origin. Starting the audio-only
+    // recorder before getDisplayMedia() included time spent in the browser's
+    // screen picker and shifted silence/waveform data ahead of the video.
     startedAt = Date.now();
     elapsedMs.value = 0;
     elapsedTimer = window.setInterval(() => {
       elapsedMs.value = Date.now() - startedAt;
     }, 500);
+    startAudioOnlyRecorder(microphoneStream);
     mediaRecorder.start(1000);
     isRecording.value = true;
   } catch (error) {
@@ -6955,6 +7159,7 @@ function resetRecording(): void {
   clipDraftSaveError.value = "";
   clipDraftLastSavedAt.value = "";
   clipEditingStep.value = 1;
+  recordingProcessingMode.value = "automatic";
   isAnalyzingSilence.value = false;
   isPreparingClips.value = false;
   parallelAnalysisCompleted.value = 0;
@@ -7006,6 +7211,36 @@ function updateRecordedPreviewTime(event: Event): void {
     0,
     Math.round((event.currentTarget as HTMLVideoElement).currentTime * 1000)
   );
+}
+
+function reconcileRecordedPreviewDuration(event: Event): void {
+  if (clipEditingStep.value !== 1 || isRecording.value) return;
+  const video = event.currentTarget as HTMLVideoElement;
+  const mediaDurationMs = Math.round(video.duration * 1000);
+  if (!Number.isFinite(mediaDurationMs) || mediaDurationMs <= 0) return;
+  const previousDurationMs = sourceRecordingDurationMs.value;
+  if (Math.abs(mediaDurationMs - previousDurationMs) < 20) return;
+
+  recordedDurationMs.value = mediaDurationMs;
+  elapsedMs.value = mediaDurationMs;
+  silenceRanges.value = normalizeStoryVaultCutRanges(
+    silenceRanges.value,
+    mediaDurationMs
+  );
+  manualCutRanges.value = normalizeStoryVaultCutRanges(
+    manualCutRanges.value,
+    mediaDurationMs
+  );
+  splitPointsMs.value = splitPointsMs.value.filter(
+    (point) => point > 250 && point < mediaDurationMs - 250
+  );
+
+  const draft = activeClipDraft.value;
+  if (draft?.source && draft.source.durationMs !== mediaDurationMs) {
+    void persistActiveClipDraft({
+      source: { ...draft.source, durationMs: mediaDurationMs },
+    });
+  }
 }
 
 function timelinePercent(timeMs: number): number {
@@ -7138,6 +7373,23 @@ async function toggleRecordedPreviewPlayback(): Promise<void> {
   } else {
     video.pause();
   }
+}
+
+async function requestRecordedPreviewFullscreen(): Promise<void> {
+  const video = recordedPreviewVideo.value;
+  if (!video) return;
+  await video.requestFullscreen?.().catch(() => undefined);
+}
+
+function toggleClipActionMenu(clipId: string): void {
+  clipActionMenuId.value = clipActionMenuId.value === clipId ? "" : clipId;
+}
+
+function moveClipToGroup(clipId: string, groupId: string): void {
+  clipActionMenuId.value = "";
+  const clip = props.clips.find((item) => item.id === clipId);
+  if (!clip || !groupId || clip.clipGroupId === groupId) return;
+  emit("move-clip", clipId, groupId);
 }
 
 function addSplitPoint(timeMs: number): void {
@@ -7498,6 +7750,75 @@ async function resumeClipDraft(draft: StoryVaultClipDraft): Promise<void> {
   }
 }
 
+async function startAutomaticPipeline(): Promise<void> {
+  if (!props.application || !recordedBlob.value || !activeClipDraft.value?.source) return;
+  const group = selectedVideoGroup.value;
+  if (!group) {
+    errorMessage.value = "クリップグループを選択してください";
+    return;
+  }
+  isStartingAutomaticPipeline.value = true;
+  errorMessage.value = "";
+  try {
+    const submittedTitle = title.value.trim() || buildFallbackRecordingTitle();
+    const pipelineId = await clipPipelineApi.createPipeline({
+      applicationId: props.application.id,
+      applicationName: props.application.name,
+      clipGroupId: group.id,
+      clipGroupName: group.name,
+      title: submittedTitle,
+      sourceDraftId: activeClipDraft.value.id,
+      sourceGcsUri: activeClipDraft.value.source.gcsUri,
+      sourceContentType: activeClipDraft.value.source.contentType,
+      durationMs: activeClipDraft.value.source.durationMs,
+      notificationEmail: getAuth().currentUser?.email || undefined,
+    });
+    submittedPipelineCount.value += 1;
+    lastSubmittedRecordingTitle.value = submittedTitle;
+    await persistActiveClipDraft({
+      status: "processing",
+      statusMessage: `バックグラウンド解析中 (${pipelineId})`,
+    });
+    toast.add({
+      title: "バックグラウンド解析を開始しました",
+      description: "ヘッダーの「解析ステータス」から進捗を確認できます。",
+      color: "success",
+    });
+    recordingModalOpen.value = false;
+    continueRecordingPromptOpen.value = true;
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "バックグラウンド解析を開始できませんでした";
+    reportDatadogError(error, {
+      feature: "storyvault_clip_pipeline_start",
+      applicationId: props.application.id,
+    });
+  } finally {
+    isStartingAutomaticPipeline.value = false;
+  }
+}
+
+async function recordNextClip(): Promise<void> {
+  continueRecordingPromptOpen.value = false;
+  resetRecording();
+  title.value = "";
+  recordingModalOpen.value = true;
+  await nextTick();
+  await startCapture();
+}
+
+function finishRecordingBatch(): void {
+  continueRecordingPromptOpen.value = false;
+  resetRecording();
+  title.value = "";
+  toast.add({
+    title: `${submittedPipelineCount.value}本のバックグラウンド解析を実行中です`,
+    description: "ヘッダーの「解析ステータス」または完了メールから確認できます。",
+    color: "success",
+  });
+  submittedPipelineCount.value = 0;
+  lastSubmittedRecordingTitle.value = "";
+}
+
 async function saveRecording(): Promise<void> {
   if (!props.application || !recordedBlob.value || !canSave.value) return;
   const preparedBase = preparedBaseClip.value;
@@ -7586,23 +7907,20 @@ async function saveRecording(): Promise<void> {
     parallelAnalysisCompleted.value = 0;
     parallelAnalysisTotal.value = analysisJobs.length;
     isExtractingFrames.value = true;
-    const settled = await Promise.allSettled(
-      analysisJobs.map((job) => analyzePreparedRecordingClip(job))
-    );
-    const failures = settled.filter(
-      (result): result is PromiseRejectedResult => result.status === "rejected"
-    );
-    if (failures.length > 0) {
-      const firstReason = failures[0]?.reason;
-      throw new Error(
-        `${failures.length}件のクリップ解析に失敗しました${
-          firstReason instanceof Error ? `: ${firstReason.message}` : ""
-        }`
-      );
+    const command = await clipCommandApi.execute({
+      operation: "quickScan",
+      applicationId: props.application.id,
+      clipGroupId: group.id,
+      clipIds: analysisJobs.map((job) => job.video.id),
+    });
+    const failedClipIds = Array.isArray(command.output?.failedClipIds)
+      ? command.output.failedClipIds
+      : [];
+    if (failedClipIds.length > 0) {
+      throw new Error(`${failedClipIds.length}件のクリップ解析に失敗しました`);
     }
-    const analyzedVideos = settled.flatMap((result) =>
-      result.status === "fulfilled" ? [result.value] : []
-    );
+    emit("refresh");
+    const analyzedVideos = analysisJobs.map((job) => job.video);
     const selected = analyzedVideos[0];
     if (selected) {
       workflowVideoId.value = selected.id;
@@ -7690,17 +8008,6 @@ function completePreparedRecordingWorkflow(): void {
   }, 900);
 }
 
-function persistVideoAnalysis(
-  input: StoryVaultClipAnalysisInput
-): Promise<DecodedStoryVaultClip> {
-  return new Promise((resolve, reject) => {
-    emit("update-clip-analysis", input, {
-      onSuccess: resolve,
-      onError: (message) => reject(new Error(message)),
-    });
-  });
-}
-
 function transcriptionForClipRange(
   transcription: GeminiTranscriptionResult,
   startMs: number,
@@ -7727,62 +8034,6 @@ function transcriptionForClipRange(
     srt: transcriptCuesToSrt(segments),
     timingStatus: "timestamped",
   };
-}
-
-async function analyzePreparedRecordingClip(params: {
-  video: DecodedStoryVaultClip;
-  blob: Blob;
-  durationMs: number;
-  transcription: GeminiTranscriptionResult;
-}): Promise<DecodedStoryVaultClip> {
-  let frames: LocalFrameCapture[] = [];
-  try {
-    frames = await extractVideoFrames(params.blob, params.durationMs);
-    const summary = await summarizeTranscriptWithGemini(
-      params.transcription.text
-    );
-    const scan = await generateQuickScanFromContext({
-      frames,
-      videoBlob: params.blob,
-      transcriptText: params.transcription.text,
-      transcriptSummary: summary,
-    });
-    const resolvedSummary =
-      summary.trim() ||
-      scan?.transcriptSummary?.trim() ||
-      scan?.description?.trim() ||
-      scan?.operationMemo?.trim() ||
-      compactPreviewText(params.transcription.text, 420);
-    const analyzed = await persistVideoAnalysis({
-      clipId: params.video.id,
-      title:
-        scan?.title?.trim() ||
-        params.video.title ||
-        buildFallbackRecordingTitle(),
-      description: scan?.description?.trim() || params.video.description,
-      transcriptText: params.transcription.text,
-      transcriptProvider: params.transcription.provider,
-      transcriptSummary: resolvedSummary,
-      transcriptSegments: params.transcription.segments,
-      transcriptSrt: params.transcription.srt,
-      transcriptTimingStatus: params.transcription.timingStatus,
-      quickScan: scan,
-      frameCaptures: frames.map((frame) => ({
-        timestampMs: frame.timestampMs,
-        blob: frame.blob,
-        contentType: frame.contentType,
-        width: frame.width,
-        height: frame.height,
-      })),
-    });
-    quickScan.value = scan;
-    transcriptSummary.value = resolvedSummary;
-    applyTranscriptionToPanel(params.transcription);
-    return analyzed;
-  } finally {
-    parallelAnalysisCompleted.value += 1;
-    frames.forEach((frame) => URL.revokeObjectURL(frame.previewUrl));
-  }
 }
 
 async function downloadOperationVideoClip(
@@ -8673,6 +8924,57 @@ function unlinkJiraIssue(issue: StoryVaultRelatedContextJiraIssue): void {
   emit("unlink-jira-issue", detailVideoId.value, issue.key, issue.cloudId);
 }
 
+function knowledgeDocumentSelectionKey(document: Document): string {
+  return document.id || document.name || "";
+}
+
+async function loadKnowledgeDocumentsForManualLink(): Promise<void> {
+  const fileSpaceId = props.application?.fileSpaceId;
+  if (!fileSpaceId) return;
+  isKnowledgeManualLoading.value = true;
+  knowledgeManualError.value = "";
+  try {
+    await knowledgeFileSpaceStore.fetchDocumentsFromFirestore(fileSpaceId);
+    selectedKnowledgeDocumentIds.value = [];
+  } catch (error) {
+    knowledgeManualError.value =
+      error instanceof Error ? error.message : "ナレッジ一覧の取得に失敗しました";
+  } finally {
+    isKnowledgeManualLoading.value = false;
+  }
+}
+
+function knowledgeDocumentToRelatedContext(
+  document: Document
+): StoryVaultRelatedContextKnowledgeDocument {
+  return {
+    documentId: knowledgeDocumentSelectionKey(document),
+    name: document.name ?? undefined,
+    displayName: document.displayName,
+    description: document.description,
+    mimeType: document.mimeType,
+    sourceKind: document.sourceKind,
+    gcsUrl: document.gcsUrl,
+    bucketName: document.bucketName,
+    filePath: document.filePath,
+    relevanceScore: 100,
+    reason: "ユーザーがナレッジ一覧から手動でクリップに紐付けました",
+    matchedSignals: ["手動紐付け"],
+    downloadUrl: document.driveWebViewLink ?? document.entryUrl ?? document.url,
+  };
+}
+
+function linkSelectedKnowledgeDocuments(): void {
+  const fileSpaceId = props.application?.fileSpaceId;
+  if (!fileSpaceId) return;
+  const documents = (knowledgeFileSpaceStore.documents ?? [])
+    .filter((document) => selectedKnowledgeDocumentIds.value.includes(knowledgeDocumentSelectionKey(document)))
+    .map(knowledgeDocumentToRelatedContext);
+  if (!documents.length) return;
+  emit("link-knowledge-documents", detailVideoId.value, fileSpaceId, documents);
+  selectedKnowledgeDocumentIds.value = [];
+}
+
 function navigateToJiraSettings(): void {
   void navigateTo("/admin/preferences?tab=oauth-connections");
 }
@@ -9440,110 +9742,6 @@ function nearestFrames(
     .sort((a, b) => a.timestampMs - b.timestampMs);
 }
 
-async function extractVideoFrames(
-  blob: Blob,
-  durationMs: number
-): Promise<LocalFrameCapture[]> {
-  revokeFramePreviewUrls();
-  const sourceUrl = URL.createObjectURL(blob);
-  const video = document.createElement("video");
-  video.src = sourceUrl;
-  video.muted = true;
-  video.playsInline = true;
-  video.preload = "metadata";
-
-  try {
-    await waitForVideoEvent(video, "loadedmetadata");
-    const resolvedDurationMs =
-      Number.isFinite(video.duration) && video.duration > 0
-        ? video.duration * 1000
-        : durationMs;
-    const captureTimes = buildFrameCaptureTimes(resolvedDurationMs);
-    const canvas = document.createElement("canvas");
-    const width = Math.max(1, video.videoWidth || 1280);
-    const height = Math.max(1, video.videoHeight || 720);
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Canvasを初期化できませんでした");
-
-    const frames: LocalFrameCapture[] = [];
-    for (const timestampMs of captureTimes) {
-      video.currentTime = Math.min(
-        Math.max(0, timestampMs / 1000),
-        Math.max(0, (resolvedDurationMs - 200) / 1000)
-      );
-      await waitForVideoEvent(video, "seeked");
-      context.drawImage(video, 0, 0, width, height);
-      const frameBlob = await canvasToBlob(canvas, "image/jpeg", 0.78);
-      const previewUrl = URL.createObjectURL(frameBlob);
-      frames.push({
-        id: `frame-${String(frames.length + 1).padStart(3, "0")}`,
-        timestampMs,
-        blob: frameBlob,
-        contentType: frameBlob.type || "image/jpeg",
-        width,
-        height,
-        previewUrl,
-      });
-    }
-    return frames;
-  } finally {
-    URL.revokeObjectURL(sourceUrl);
-  }
-}
-
-function buildFrameCaptureTimes(durationMs: number): number[] {
-  const safeDuration = Math.max(0, Math.round(durationMs));
-  if (safeDuration <= 0) return [0];
-  const interval = 5000;
-  const times: number[] = [];
-  for (let timestamp = 0; timestamp <= safeDuration; timestamp += interval) {
-    times.push(timestamp);
-  }
-  if (times.length === 0) times.push(0);
-  return times;
-}
-
-function waitForVideoEvent(
-  video: HTMLVideoElement,
-  eventName: "loadedmetadata" | "seeked"
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      video.removeEventListener(eventName, onEvent);
-      video.removeEventListener("error", onError);
-    };
-    const onEvent = () => {
-      cleanup();
-      resolve();
-    };
-    const onError = () => {
-      cleanup();
-      reject(new Error("クリップフレームを読み込めませんでした"));
-    };
-    video.addEventListener(eventName, onEvent, { once: true });
-    video.addEventListener("error", onError, { once: true });
-  });
-}
-
-function canvasToBlob(
-  canvas: HTMLCanvasElement,
-  type: string,
-  quality: number
-): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error("スクリーンショット画像を生成できませんでした"));
-      },
-      type,
-      quality
-    );
-  });
-}
-
 type GeminiTranscriptionResult = {
   text: string;
   provider: string;
@@ -9624,162 +9822,6 @@ async function transcribeRecordingWithGemini(
         : "Gemini文字起こしに失敗しました"
     );
   }
-}
-
-async function summarizeTranscriptWithGemini(text: string): Promise<string> {
-  const transcript = text.trim();
-  if (!transcript) return "";
-  try {
-    const [{ getApp }, { getAI, getGenerativeModel, GoogleAIBackend }] =
-      await Promise.all([import("firebase/app"), import("firebase/ai")]);
-    const ai = getAI(getApp(), { backend: new GoogleAIBackend() });
-    const model = getGenerativeModel(ai, {
-      model: "gemini-2.5-flash-lite",
-      generationConfig: {
-        temperature: 0.15,
-        maxOutputTokens: 512,
-      },
-    });
-    const result = await model.generateContent([
-      [
-        "以下はプロダクト担当者がクリップを説明しながら話した文字起こし全文です。",
-        "クリップ解析の補助文脈として使うため、操作意図、確認した対象、期待結果、気づいた差分を日本語で簡潔に要約してください。",
-        "",
-        transcript.slice(0, 12000),
-      ].join("\n"),
-    ]);
-    return result.response.text().trim();
-  } catch {
-    return "";
-  }
-}
-
-async function generateQuickScanFromContext(params: {
-  frames: LocalFrameCapture[];
-  videoBlob: Blob | null;
-  transcriptText: string;
-  transcriptSummary: string;
-}): Promise<DecodedStoryVaultClip["quickScan"] | undefined> {
-  const { frames, videoBlob, transcriptText, transcriptSummary } = params;
-  if (frames.length === 0 && !transcriptText.trim() && !transcriptSummary.trim()) {
-    return undefined;
-  }
-  try {
-    const [{ getApp }, { getAI, getGenerativeModel, GoogleAIBackend }] =
-      await Promise.all([import("firebase/app"), import("firebase/ai")]);
-    const ai = getAI(getApp(), { backend: new GoogleAIBackend() });
-    const model = getGenerativeModel(ai, {
-      model: "gemini-2.5-flash-lite",
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 900,
-        responseMimeType: "application/json",
-      },
-    });
-    const sampled = sampleFramesForQuickScan(frames, 6);
-    const imageParts = await Promise.all(
-      sampled.map(async (frame) => ({
-        inlineData: {
-          mimeType: frame.contentType,
-          data: await blobToBase64(frame.blob),
-        },
-      }))
-    );
-    const videoParts =
-      videoBlob && videoBlob.size <= 7 * 1024 * 1024
-        ? [
-            {
-              inlineData: {
-                mimeType: videoBlob.type || "video/webm",
-                data: await blobToBase64(videoBlob),
-              },
-            },
-          ]
-        : [];
-    const result = await model.generateContent([
-      [
-        "StoryVaultのクリップをクリップ解析します。",
-        "入力には、クリップ本体、5秒ごとの操作スクリーンショット、Gemini文字起こし全文、文字起こし要約が含まれます。",
-        "これらを総合して、タイトル、説明、操作ステップを日本語で作成してください。",
-        "操作ステップは実際の操作順序がわかる短い文の配列にしてください。",
-        "JSONだけを返してください。",
-        '形式: {"title":"短いタイトル","description":"1文の説明","operationSteps":["操作1","操作2"],"operationMemo":"操作1\\n操作2","transcriptSummary":"文字起こし要約"}',
-        "",
-        "## Gemini文字起こし要約",
-        transcriptSummary.trim() || "なし",
-        "",
-        "## Gemini文字起こし全文",
-        transcriptText.trim().slice(0, 14000) || "なし",
-      ].join("\n"),
-      ...videoParts,
-      ...imageParts,
-    ]);
-    const parsed = parseQuickScanJson(result.response.text());
-    return {
-      ...parsed,
-      transcriptSummary: parsed.transcriptSummary || transcriptSummary || undefined,
-      provider: "firebase-ai-vertex",
-      generatedAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    reportDatadogError(error, {
-      feature: "storyvault_zapping_quick_scan",
-      frameCount: frames.length,
-      sampledFrameCount: Math.min(frames.length, 6),
-      videoSizeBytes: videoBlob?.size ?? 0,
-      transcriptLength: transcriptText.length,
-      transcriptSummaryLength: transcriptSummary.length,
-      videoIncluded: Boolean(videoBlob && videoBlob.size <= 7 * 1024 * 1024),
-    });
-    return {
-      provider: "firebase-ai-vertex",
-      generatedAt: new Date().toISOString(),
-      operationSteps: [],
-      errorMessage:
-        error instanceof Error ? error.message : "簡易スキャンに失敗しました",
-    };
-  }
-}
-
-function sampleFramesForQuickScan(
-  frames: LocalFrameCapture[],
-  maxCount: number
-): LocalFrameCapture[] {
-  if (frames.length <= maxCount) return frames;
-  return Array.from({ length: maxCount }, (_, index) => {
-    const frameIndex = Math.round((index / (maxCount - 1)) * (frames.length - 1));
-    return frames[frameIndex]!;
-  });
-}
-
-function parseQuickScanJson(
-  text: string
-): Pick<
-  NonNullable<DecodedStoryVaultClip["quickScan"]>,
-  "title" | "description" | "operationMemo" | "operationSteps" | "transcriptSummary"
-> {
-  const normalized = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "");
-  const data = JSON.parse(normalized) as Record<string, unknown>;
-  const operationSteps = Array.isArray(data.operationSteps)
-    ? data.operationSteps
-        .map((item) => (typeof item === "string" ? item.trim() : ""))
-        .filter(Boolean)
-    : [];
-  const operationMemo =
-    typeof data.operationMemo === "string"
-      ? data.operationMemo.trim()
-      : operationSteps.join("\n");
-  return {
-    title: typeof data.title === "string" ? data.title.trim() : undefined,
-    description:
-      typeof data.description === "string" ? data.description.trim() : undefined,
-    operationMemo: operationMemo || undefined,
-    operationSteps,
-    transcriptSummary:
-      typeof data.transcriptSummary === "string"
-        ? data.transcriptSummary.trim()
-        : undefined,
-  };
 }
 
 function blobToBase64(blob: Blob): Promise<string> {

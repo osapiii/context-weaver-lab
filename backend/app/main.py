@@ -23,6 +23,8 @@ from triggers import saas_onboarding  # noqa: F401
 from triggers import transactional_email_requests  # noqa: F401
 from triggers import verify_ai_studio_spreadsheet  # noqa: F401
 from triggers import storyvault_video_requests  # noqa: F401
+from triggers import storyvault_clip_pipeline_requests  # noqa: F401
+from triggers import storyvault_clip_command_requests  # noqa: F401
 from triggers import web_crawl_requests  # noqa: F401
 from triggers.adk_artifact_signed_url import get_artifact_signed_url  # noqa: F401
 from triggers.adk_artifact_storage import on_adk_artifact_object_finalized  # noqa: F401
@@ -75,4 +77,7 @@ from triggers.storyvault_video_requests import on_split_video_request_created  #
 from triggers.storyvault_video_requests import on_text_to_speech_request_created  # noqa: F401
 from triggers.storyvault_video_requests import on_trim_silence_video_request_created  # noqa: F401
 from triggers.storyvault_video_requests import on_video_transcription_request_created  # noqa: F401
+from triggers.storyvault_clip_pipeline_requests import on_storyvault_clip_pipeline_command_created  # noqa: F401
+from triggers.storyvault_clip_pipeline_requests import on_storyvault_clip_pipeline_request_created  # noqa: F401
+from triggers.storyvault_clip_command_requests import on_storyvault_clip_command_request_created  # noqa: F401
 from triggers.web_crawl_requests import web_crawl_request_handler  # noqa: F401

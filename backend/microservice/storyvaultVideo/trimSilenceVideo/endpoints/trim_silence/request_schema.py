@@ -19,6 +19,7 @@ class SilenceTrimSettings(BaseModel):
     minSilenceMs: int = Field(default=5000, ge=100)
     keepPaddingMs: int = Field(default=180, ge=0)
     minSegmentMs: int = Field(default=450, ge=100)
+    mergeGapMs: int = Field(default=10000, ge=0)
     cutRangesSeconds: list[SilenceCutRange] | None = None
 
 

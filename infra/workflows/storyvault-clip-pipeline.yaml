@@ -1,0 +1,60 @@
+main:
+  params: [args]
+  steps:
+    - init:
+        assign:
+          - projectId: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - workerUrl: ${sys.get_env("STORYVAULT_CLIP_PIPELINE_WORKER_URL")}
+          - requestPath: ${args.requestPath}
+          - requestId: ${args.requestId}
+          - artifactUri: ${args.inputArtifactUri}
+          - attempt: ${default(map.get(args, "attempt"), 1)}
+          - stepIds: [upload, trimSilence, transcribe, section, split, registerClips, quickScan, zappingAnalysis, capabilityStructuring, storyGeneration, verifyUiAssets, notification]
+          - state: {}
+    - runSteps:
+        for:
+          value: stepId
+          in: ${stepIds}
+          steps:
+            - runStep:
+                try:
+                  call: http.post
+                  args:
+                    url: ${workerUrl + "/run-step"}
+                    auth:
+                      type: OIDC
+                      audience: ${workerUrl}
+                    timeout: 1800
+                    body:
+                      requestPath: ${requestPath}
+                      requestId: ${requestId}
+                      inputArtifactUri: ${artifactUri}
+                      stepId: ${stepId}
+                      attempt: ${attempt}
+                      state: ${state}
+                  result: stepResponse
+                retry:
+                  predicate: ${http.default_retry_predicate}
+                  max_retries: 3
+                  backoff:
+                    initial_delay: 5
+                    max_delay: 120
+                    multiplier: 2
+            - saveState:
+                assign:
+                  - state: ${default(map.get(stepResponse.body, "state"), state)}
+    - done:
+        call: http.post
+        args:
+          url: ${workerUrl + "/finalize"}
+          auth:
+            type: OIDC
+            audience: ${workerUrl}
+          body:
+            requestPath: ${requestPath}
+            requestId: ${requestId}
+            attempt: ${attempt}
+            state: ${state}
+        result: finalResponse
+    - returnResult:
+        return: ${finalResponse.body}
