@@ -34,6 +34,7 @@ export type StoryVaultClipPipelineStepState = {
   message?: string;
   retryCount?: number;
   errorMessage?: string;
+  output?: Record<string, unknown>;
 };
 
 export type StoryVaultClipPipelineClipState = {

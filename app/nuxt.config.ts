@@ -238,6 +238,9 @@ export default defineNuxtConfig({
       /** "true" のときのみ Emulator（local:dev:emulator / E2E）。未設定は実 Firebase */
       useFirebaseEmulator: useFirebaseEmulator ? "true" : "false",
       environment: process.env.NODE_ENV ?? "development",
+      /** Firebase App Check (Web / reCAPTCHA Enterprise) public site key. */
+      firebaseAppCheckRecaptchaEnterpriseSiteKey:
+        process.env.NUXT_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_ENTERPRISE_SITE_KEY || "",
       /** Google Workspace OAuth auth-code flow client id. Secret is backend-only. */
       googleWorkspaceOAuthClientId:
         process.env.NUXT_PUBLIC_GOOGLE_WORKSPACE_OAUTH_CLIENT_ID || "",

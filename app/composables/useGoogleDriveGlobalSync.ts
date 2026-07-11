@@ -56,8 +56,11 @@ export function useGoogleDriveGlobalSync(): {
   const resolveSyncContext = () => {
     const organizationId = organizationStore.getLoggedInOrganizationId;
     const spaceId = spaceStore.selectedSpace?.id;
+    // The current system FileSpace is the SSOT used by the knowledge list.
+    // A persisted linkedFileSpaceId may point at a previously recreated pool,
+    // so only use it while the current default is still being resolved.
     const fsId =
-      config.value?.linkedFileSpaceId?.trim() || fileSpaceId.value?.trim();
+      fileSpaceId.value?.trim() || config.value?.linkedFileSpaceId?.trim();
     const rootFolderId = config.value?.rootFolderId;
     if (!organizationId || !spaceId || !fsId || !rootFolderId) return null;
     return { organizationId, spaceId, fileSpaceId: fsId, rootFolderId };
@@ -94,6 +97,9 @@ export function useGoogleDriveGlobalSync(): {
     const ctx = resolveSyncContext();
     if (!ctx) return false;
     driveStore.lastTerminalSyncNotice = null;
+    // Persist the effective destination before creating the RequestDoc. This
+    // keeps subsequent header imports and the knowledge list on the same pool.
+    await driveStore.ensureLinkedFileSpaceId(ctx.fileSpaceId);
     const created = await driveStore.triggerImportFromDrive(ctx);
     if (created) {
       toast.add({
