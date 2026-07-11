@@ -333,52 +333,6 @@
       </template>
     </EnModal>
 
-    <EnModal
-      v-model:open="zappingAnalysisRerunConfirmOpen"
-      title="ユーザーストーリー解析をやり直しますか?"
-      subtitle="既存のストーリー候補が新しい解析結果で置き換わります。"
-      header-variant="warning"
-      title-icon="material-symbols:warning-outline"
-      size="md"
-    >
-      <div class="space-y-3">
-        <div
-          v-if="zappingAnalysisRerunTargetClip"
-          class="rounded-lg border border-amber-100 bg-amber-50 p-3"
-        >
-          <p class="text-sm font-semibold text-slate-950">
-            {{ zappingAnalysisRerunTargetClip.title || "クリップ" }}
-          </p>
-          <p class="mt-1 text-xs leading-relaxed text-slate-600">
-            現在の解析結果には {{ zappingAnalysisRerunStoryCount }} 件のストーリー候補があります。
-          </p>
-        </div>
-        <p class="text-sm leading-relaxed text-slate-700">
-          再解析すると、操作意図・ストーリー候補・根拠シーンが新しい結果で上書きされます。前回と内容が変わり、確認済みの内容と差分が出る場合があります。
-        </p>
-      </div>
-
-      <template #footer>
-        <EnButton
-          variant="ghost"
-          color="neutral"
-          size="sm"
-          @click="cancelZappingAnalysisRerun"
-        >
-          キャンセル
-        </EnButton>
-        <EnButton
-          variant="soft"
-          color="warning"
-          size="sm"
-          leading-icon="material-symbols:refresh"
-          @click="confirmZappingAnalysisRerun"
-        >
-          上書きして再解析
-        </EnButton>
-      </template>
-    </EnModal>
-
     <UBreadcrumb
       v-if="currentView !== 'application-detail'"
       :items="breadcrumbItems"
@@ -558,12 +512,18 @@
         @create-file-space="provisionSelectedApplicationFileSpace"
         @analyze="startZappingVideoAnalysis"
         @fetch-related-context="startRelatedContextAnalysis"
+        @collect-related-contexts="collectAllRelatedContexts"
+        @link-jira-issues="linkJiraIssuesToClip"
+        @unlink-jira-issue="unlinkJiraIssueFromClip"
+        @link-knowledge-documents="linkKnowledgeDocumentsToClip"
+        @unlink-knowledge-document="unlinkKnowledgeDocumentFromClip"
         @save="saveOperationVideo"
         @update-clip-analysis="updateOperationVideoClipAnalysis"
         @create-clip-group="createClipGroup"
         @update-clip-group="updateClipGroup"
         @delete-clip-group="deleteClipGroup"
         @apply-clip-group-organization-plan="applyClipGroupOrganizationPlan"
+        @move-clip="moveClipToGroup"
         @update-title="updateClipTitle"
         @delete="deleteClip"
         @refresh="store.fetchFromFirestore()"
@@ -604,8 +564,13 @@ import StoryVaultApplicationKnowledgeSpacePanel from "@components/storyVault/Sto
 import type {
   DecodedStoryVaultApplication,
   DecodedStoryVaultClip,
+  StoryVaultRelatedContextKnowledgeDocument,
+  StoryVaultRelatedContextJiraIssue,
 } from "@models/storyVault";
-import type { Document } from "@models/geminiFileSpaceRequest";
+import type {
+  DecodedFileSpaceOperationRequest,
+  Document,
+} from "@models/geminiFileSpaceRequest";
 import type {
   StoryVaultApplicationInput,
   StoryVaultClipAnalysisInput,
@@ -689,10 +654,8 @@ const applicationKnowledgeDocumentsByFileSpace = ref<Record<string, Document[]>>
 const applicationModalOpen = ref(false);
 const deleteConfirmOpen = ref(false);
 const zappingAnalysisModalOpen = ref(false);
-const zappingAnalysisRerunConfirmOpen = ref(false);
 const activeZappingAnalysisClipId = ref("");
 const activeZappingAnalysisRequestId = ref("");
-const pendingZappingAnalysisClipId = ref("");
 const zappingAnalysisPreviewFrameUrl = ref("");
 const zappingAnalysisPreviewFrameIndex = ref(0);
 const editingApplicationId = ref<string | null>(null);
@@ -700,6 +663,10 @@ const initialApplicationRepository = ref<GitHubRepositorySummary | null>(null);
 const isUploadingApplicationKnowledge = ref(false);
 let zappingAnalysisPreviewFrameLoadToken = 0;
 let zappingAnalysisPreviewFrameTimer: ReturnType<typeof setInterval> | null = null;
+let applicationFileSpaceProvisioningWatcher: ReturnType<
+  typeof useGeminiFileSpaceSnapshot
+> | null = null;
+let applicationFileSpaceProvisioningWatchKey = "";
 
 const showPageHeader = computed(() => currentView.value !== "application-detail");
 const pageShellClass = computed(() =>
@@ -729,17 +696,6 @@ const activeZappingAnalysisClip = computed(
     store.clips.find(
       (clip) => clip.id === activeZappingAnalysisClipId.value
     ) ?? null
-);
-const zappingAnalysisRerunTargetClip = computed(
-  () =>
-    store.clips.find(
-      (clip) => clip.id === pendingZappingAnalysisClipId.value
-    ) ?? null
-);
-const zappingAnalysisRerunStoryCount = computed(
-  () =>
-    zappingAnalysisRerunTargetClip.value?.analysisResult?.storyCandidates
-      .length ?? 0
 );
 const zappingAnalysisProgressPercent = computed(() => {
   const status = activeZappingAnalysisClip.value?.analysisStatus;
@@ -1122,6 +1078,22 @@ watch(
   }
 );
 
+watch(
+  () => ({
+    applicationId: selectedApplication.value?.id ?? "",
+    requestId: selectedApplication.value?.fileSpaceCreateRequestId ?? "",
+    status: selectedApplication.value?.fileSpaceProvisioningStatus ?? "",
+  }),
+  ({ applicationId, requestId, status }) => {
+    if (applicationId && requestId && status === "creating") {
+      startApplicationFileSpaceProvisioningWatcher(applicationId, requestId);
+      return;
+    }
+    stopApplicationFileSpaceProvisioningWatcher();
+  },
+  { immediate: true }
+);
+
 watch(syncCompletedTick, () => {
   if (activeApplicationTab.value !== "knowledge-space") return;
   void refreshApplicationKnowledgeDocuments();
@@ -1170,12 +1142,77 @@ watch(
 
 onBeforeUnmount(() => {
   stopZappingAnalysisPreviewFrameTimer();
+  stopApplicationFileSpaceProvisioningWatcher();
 });
 
 function stopZappingAnalysisPreviewFrameTimer(): void {
   if (!zappingAnalysisPreviewFrameTimer) return;
   clearInterval(zappingAnalysisPreviewFrameTimer);
   zappingAnalysisPreviewFrameTimer = null;
+}
+
+function stopApplicationFileSpaceProvisioningWatcher(): void {
+  applicationFileSpaceProvisioningWatcher?.unsubscribe();
+  applicationFileSpaceProvisioningWatcher = null;
+  applicationFileSpaceProvisioningWatchKey = "";
+}
+
+function startApplicationFileSpaceProvisioningWatcher(
+  applicationId: string,
+  requestId: string
+): void {
+  const watchKey = `${applicationId}:${requestId}`;
+  if (applicationFileSpaceProvisioningWatchKey === watchKey) return;
+  stopApplicationFileSpaceProvisioningWatcher();
+  applicationFileSpaceProvisioningWatchKey = watchKey;
+  applicationFileSpaceProvisioningWatcher = useGeminiFileSpaceSnapshot(
+    requestId,
+    (request) => {
+      void handleApplicationFileSpaceProvisioningSnapshot(applicationId, request);
+    }
+  );
+}
+
+async function handleApplicationFileSpaceProvisioningSnapshot(
+  applicationId: string,
+  request: DecodedFileSpaceOperationRequest
+): Promise<void> {
+  const updatedApplication = await store.resolveApplicationFileSpaceProvisioning({
+    applicationId,
+    request,
+  });
+  if (request.status === "completed") {
+    if (updatedApplication?.fileSpaceProvisioningStatus === "error") {
+      toast.add({
+        title: "専用FileSpaceの作成に失敗しました",
+        description:
+          updatedApplication.fileSpaceErrorMessage ||
+          "FileSpace IDを取得できませんでした",
+        color: "error",
+      });
+      stopApplicationFileSpaceProvisioningWatcher();
+      return;
+    }
+    toast.add({
+      title: "アプリに専用FileSpaceを紐付けました",
+      description: updatedApplication?.fileSpaceId,
+      color: "success",
+    });
+    if (activeApplicationTab.value === "knowledge-space") {
+      void refreshApplicationKnowledgeDocuments();
+    }
+    stopApplicationFileSpaceProvisioningWatcher();
+  } else if (request.status === "error") {
+    toast.add({
+      title: "専用FileSpaceの作成に失敗しました",
+      description:
+        request.errorMessage ||
+        updatedApplication?.fileSpaceErrorMessage ||
+        "解析ジョブを確認してください",
+      color: "error",
+    });
+    stopApplicationFileSpaceProvisioningWatcher();
+  }
 }
 
 function routeView(): RouteView {
@@ -1447,37 +1484,7 @@ async function provisionApplicationFileSpace(
       color: "success",
     });
 
-    let watcher: ReturnType<typeof useGeminiFileSpaceSnapshot> | null = null;
-    watcher = useGeminiFileSpaceSnapshot(requestId, (request) => {
-      void store
-        .resolveApplicationFileSpaceProvisioning({
-          applicationId: application.id,
-          request,
-        })
-        .then((updatedApplication) => {
-          if (request.status === "completed") {
-            toast.add({
-              title: "アプリに専用FileSpaceを紐付けました",
-              description: updatedApplication?.fileSpaceId,
-              color: "success",
-            });
-            if (activeApplicationTab.value === "knowledge-space") {
-              void refreshApplicationKnowledgeDocuments();
-            }
-            watcher?.unsubscribe();
-          } else if (request.status === "error") {
-            toast.add({
-              title: "専用FileSpaceの作成に失敗しました",
-              description:
-                request.errorMessage ||
-                updatedApplication?.fileSpaceErrorMessage ||
-                "解析ジョブを確認してください",
-              color: "error",
-            });
-            watcher?.unsubscribe();
-          }
-        });
-    });
+    startApplicationFileSpaceProvisioningWatcher(application.id, requestId);
   } catch (err) {
     toast.add({
       title: "専用FileSpaceの作成に失敗しました",
@@ -1781,6 +1788,24 @@ async function deleteClip(clipId: string): Promise<void> {
   }
 }
 
+async function moveClipToGroup(clipId: string, groupId: string): Promise<void> {
+  try {
+    await store.moveClipsToGroup({ clipIds: [clipId], groupId });
+    const groupName = store.clipGroups.find((group) => group.id === groupId)?.name || "選択したグループ";
+    toast.add({
+      title: "クリップを移動しました",
+      description: `${groupName}へ移動しました`,
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "クリップの移動に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
 async function startZappingVideoAnalysis(
   clipId: string,
   options?: { inline?: boolean },
@@ -1788,28 +1813,13 @@ async function startZappingVideoAnalysis(
 ): Promise<void> {
   const clip = store.clips.find((item) => item.id === clipId);
   if (
-    !options?.inline &&
     clip &&
     (clip.analysisStatus === "completed" || Boolean(clip.analysisResult))
   ) {
-    pendingZappingAnalysisClipId.value = clipId;
-    zappingAnalysisRerunConfirmOpen.value = true;
+    callbacks?.onError?.("ユーザーストーリー解析は完了済みです");
     return;
   }
   await runZappingVideoAnalysis(clipId, options, callbacks);
-}
-
-function cancelZappingAnalysisRerun(): void {
-  zappingAnalysisRerunConfirmOpen.value = false;
-  pendingZappingAnalysisClipId.value = "";
-}
-
-async function confirmZappingAnalysisRerun(): Promise<void> {
-  const clipId = pendingZappingAnalysisClipId.value;
-  if (!clipId) return;
-  zappingAnalysisRerunConfirmOpen.value = false;
-  pendingZappingAnalysisClipId.value = "";
-  await runZappingVideoAnalysis(clipId);
 }
 
 async function runZappingVideoAnalysis(
@@ -1852,7 +1862,7 @@ async function runZappingVideoAnalysis(
 
 async function startRelatedContextAnalysis(
   clipId: string,
-  provider: "github" | "slack" | "knowledge"
+  provider: "github" | "slack" | "knowledge" | "jira"
 ): Promise<void> {
   if (!selectedApplication.value) return;
   try {
@@ -1864,6 +1874,90 @@ async function startRelatedContextAnalysis(
   } catch (err) {
     toast.add({
       title: "関連コンテキスト取得に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function collectAllRelatedContexts(clipId: string): Promise<void> {
+  if (!selectedApplication.value) return;
+  await Promise.all(
+    (["knowledge", "github", "jira"] as const).map((provider) =>
+      startRelatedContextAnalysis(clipId, provider)
+    )
+  );
+}
+
+async function linkJiraIssuesToClip(
+  clipId: string,
+  issues: StoryVaultRelatedContextJiraIssue[],
+  site?: { name?: string; url?: string }
+): Promise<void> {
+  try {
+    await store.linkJiraIssuesToClip({
+      clipId,
+      issues,
+      siteName: site?.name,
+      siteUrl: site?.url,
+    });
+    toast.add({
+      title: `${issues.length}件のJira Issueを紐付けました`,
+      color: "success",
+    });
+  } catch (err) {
+    toast.add({
+      title: "Jira Issueの紐付けに失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function unlinkJiraIssueFromClip(
+  clipId: string,
+  issueKey: string,
+  cloudId?: string
+): Promise<void> {
+  try {
+    await store.unlinkJiraIssueFromClip({ clipId, issueKey, cloudId });
+    toast.add({ title: `${issueKey}の紐付けを解除しました`, color: "success" });
+  } catch (err) {
+    toast.add({
+      title: "Jira Issueの紐付け解除に失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function linkKnowledgeDocumentsToClip(
+  clipId: string,
+  fileSpaceId: string,
+  documents: StoryVaultRelatedContextKnowledgeDocument[]
+): Promise<void> {
+  try {
+    await store.linkKnowledgeDocumentsToClip({ clipId, fileSpaceId, documents });
+    toast.add({ title: `${documents.length}件のナレッジを紐付けました`, color: "success" });
+  } catch (err) {
+    toast.add({
+      title: "ナレッジの紐付けに失敗しました",
+      description: err instanceof Error ? err.message : String(err),
+      color: "error",
+    });
+  }
+}
+
+async function unlinkKnowledgeDocumentFromClip(
+  clipId: string,
+  documentId: string
+): Promise<void> {
+  try {
+    await store.unlinkKnowledgeDocumentFromClip({ clipId, documentId });
+    toast.add({ title: "ナレッジの紐付けを解除しました", color: "success" });
+  } catch (err) {
+    toast.add({
+      title: "ナレッジの紐付け解除に失敗しました",
       description: err instanceof Error ? err.message : String(err),
       color: "error",
     });

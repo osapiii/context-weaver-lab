@@ -23,11 +23,12 @@
       title="根拠クリップを再生"
       subtitle="発話根拠のタイムスタンプ周辺を字幕と一緒に確認します。"
       title-icon="material-symbols:play-circle-outline"
-      size="xl"
+      size="full"
+      :ui="{ content: 'sm:max-w-6xl' }"
     >
-      <div v-if="selectedEvidencePreview" class="space-y-4">
-        <div class="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 lg:flex-row lg:items-start lg:justify-between">
-          <div class="min-w-0">
+      <div v-if="selectedEvidencePreview" class="grid items-start gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        <aside class="space-y-4 lg:sticky lg:top-0">
+          <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
             <div class="flex flex-wrap items-center gap-2">
               <span class="rounded-md bg-slate-950 px-2 py-1 font-mono text-xs font-bold text-white">
                 {{ displayStoryKey(selectedEvidencePreview.story, selectedEvidencePreview.storyIndex) }}
@@ -39,50 +40,23 @@
                 {{ formatEvidenceRange(selectedEvidencePreview.evidence.tRange) }}
               </EnBadge>
             </div>
-            <h3 class="mt-2 text-base font-bold leading-snug text-slate-950">
+            <h3 class="mt-3 text-lg font-bold leading-snug text-slate-950">
               {{ selectedEvidencePreview.story.title }}
             </h3>
-            <p class="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-500">
+            <p class="mt-2 text-sm leading-relaxed text-slate-500">
               {{ selectedEvidencePreview.evidence.summary || selectedEvidencePreview.evidence.title || displayVideoTitle(selectedEvidencePreview.video) }}
             </p>
-          </div>
-          <button
-            type="button"
-            class="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-            @click="openStoryDetailFromEvidencePreview"
-          >
-            <UIcon name="material-symbols:open-in-new" class="h-4 w-4" />
-            詳細を開く
-          </button>
-        </div>
-
-        <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <div class="overflow-hidden rounded-lg border border-slate-200 bg-slate-950">
-            <video
-              v-if="selectedEvidencePreviewUrl"
-              :key="selectedEvidencePreviewVideoKey"
-              ref="evidencePreviewVideo"
-              :src="selectedEvidencePreviewUrl"
-              controls
-              preload="metadata"
-              class="aspect-video w-full bg-slate-950"
-              @loadedmetadata="seekEvidencePreviewVideo($event, selectedEvidencePreview.evidence)"
-            />
-            <div
-              v-else
-              class="flex aspect-video w-full items-center justify-center text-xs font-semibold text-slate-300"
+            <button
+              type="button"
+              class="mt-4 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+              @click="openStoryDetailFromEvidencePreview"
             >
-              クリップURLを取得中
-            </div>
-            <div class="flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 text-xs font-bold text-slate-700">
-              <span class="truncate">発話区間の周辺クリップ</span>
-              <span class="shrink-0 font-mono text-slate-950">
-                {{ formatEvidencePreviewRange(selectedEvidencePreview.evidence.tRange) }}
-              </span>
-            </div>
+              <UIcon name="material-symbols:open-in-new" class="h-4 w-4" />
+              詳細を開く
+            </button>
           </div>
 
-          <aside class="rounded-lg border border-slate-200 bg-white p-4">
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
             <div class="flex items-center justify-between gap-2">
               <h4 class="flex items-center gap-1.5 text-sm font-bold text-slate-950">
                 <UIcon name="material-symbols:subtitles-outline" class="h-4 w-4 text-primary-600" />
@@ -92,7 +66,7 @@
                 {{ selectedEvidenceTranscriptCues.length }}件
               </EnBadge>
             </div>
-            <div class="mt-3 max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+            <div class="mt-3 max-h-[28rem] space-y-2 overflow-y-auto pr-1">
               <button
                 v-for="cue in selectedEvidenceTranscriptCues"
                 :key="cue.id"
@@ -114,7 +88,32 @@
                 {{ selectedEvidencePreview.evidence.transcriptQuote || "この根拠に紐づく字幕が見つかりませんでした。" }}
               </div>
             </div>
-          </aside>
+          </div>
+        </aside>
+
+        <div class="overflow-hidden rounded-lg border border-slate-200 bg-slate-950 shadow-sm">
+          <video
+            v-if="selectedEvidencePreviewUrl"
+            :key="selectedEvidencePreviewVideoKey"
+            ref="evidencePreviewVideo"
+            :src="selectedEvidencePreviewUrl"
+            controls
+            preload="metadata"
+            class="aspect-video w-full bg-slate-950"
+            @loadedmetadata="seekEvidencePreviewVideo($event, selectedEvidencePreview.evidence)"
+          />
+          <div
+            v-else
+            class="flex aspect-video w-full items-center justify-center text-xs font-semibold text-slate-300"
+          >
+            クリップURLを取得中
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2 text-xs font-bold text-slate-700">
+            <span class="truncate">発話区間の周辺クリップ</span>
+            <span class="shrink-0 font-mono text-slate-950">
+              {{ formatEvidencePreviewRange(selectedEvidencePreview.evidence.tRange) }}
+            </span>
+          </div>
         </div>
       </div>
     </EnModal>

@@ -15,6 +15,8 @@ from typing import Any
 import requests
 from firebase_functions import firestore_fn
 from google.cloud import firestore
+import google.auth.transport.requests
+import google.oauth2.id_token
 
 db = firestore.Client()
 
@@ -132,7 +134,12 @@ def on_transactional_email_request_created(
         response = requests.post(
             url,
             json=request_body,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + google.oauth2.id_token.fetch_id_token(
+                    google.auth.transport.requests.Request(), SEND_MAIL_SERVICE_URL
+                ),
+            },
             timeout=90,
         )
         if response.status_code >= 400:

@@ -42,6 +42,20 @@
         {{ errorMessage }}
       </div>
 
+      <details
+        v-if="debugEntries.length"
+        open
+        class="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700"
+      >
+        <summary class="cursor-pointer font-semibold text-neutral-800">
+          Slack OAuth debug log
+          <span v-if="latestDebugEvent" class="ml-2 font-normal text-neutral-500">
+            最新: {{ latestDebugEvent }}
+          </span>
+        </summary>
+        <pre class="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-all">{{ formattedDebugEntries }}</pre>
+      </details>
+
       <div class="flex flex-wrap gap-2">
         <EnButton
           variant="solid"
@@ -148,7 +162,26 @@ const slack = useSlackOAuth();
 const errorMessage = ref("");
 const testingConnectionId = ref("");
 const removingConnectionId = ref("");
+const debugEntries = ref<unknown[]>([]);
 const connections = computed(() => slack.connections.value);
+const latestDebugEvent = computed(() => {
+  const first = debugEntries.value[0];
+  if (!first || typeof first !== "object") return "";
+  return String((first as { event?: unknown }).event || "");
+});
+const formattedDebugEntries = computed(() =>
+  JSON.stringify(debugEntries.value, null, 2)
+);
+
+const loadDebugEntries = (): void => {
+  try {
+    const raw = localStorage.getItem("storyvault-slack-oauth-debug") || "[]";
+    const parsed = JSON.parse(raw);
+    debugEntries.value = Array.isArray(parsed) ? parsed.slice(-12).reverse() : [];
+  } catch {
+    debugEntries.value = [];
+  }
+};
 
 const refresh = async (): Promise<void> => {
   errorMessage.value = "";
@@ -157,6 +190,8 @@ const refresh = async (): Promise<void> => {
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "Slack 接続状態の取得に失敗しました";
+  } finally {
+    loadDebugEntries();
   }
 };
 
@@ -199,6 +234,11 @@ const testConnection = async (connectionId?: string): Promise<void> => {
 };
 
 onMounted(() => {
+  const route = useRoute();
+  if (typeof route.query.slackOAuthError === "string") {
+    errorMessage.value = route.query.slackOAuthError;
+  }
+  loadDebugEntries();
   void refresh();
 });
 </script>

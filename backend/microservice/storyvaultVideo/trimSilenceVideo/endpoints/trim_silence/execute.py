@@ -17,8 +17,13 @@ from .request_schema import (
     TrimSilenceOutput,
     TrimSilenceStatistics,
     TrimmedAssetOutput,
+    TrimmedSegmentOutput,
 )
-from steps.trim_silence import trim_silence_video
+from steps.trim_silence import (
+    output_split_points,
+    render_video_segments,
+    trim_silence_video,
+)
 
 
 def _response_success(request_id: str, output: dict[str, Any]):
@@ -130,6 +135,16 @@ def handle(flask_request):
         )
         _download_blob(input_data.videoBucketName, input_data.videoFilePath, local_input)
 
+        if input_data.settings.noiseReductionEnabled:
+            _log_progress(
+                system_metadata=system_metadata,
+                message=(
+                    "Reducing steady background noise before transcription "
+                    f"(strength={input_data.settings.noiseReductionStrengthDb}dB)"
+                ),
+                current_step="reduce_noise",
+            )
+
         _log_progress(
             system_metadata=system_metadata,
             message=(
@@ -139,6 +154,15 @@ def handle(flask_request):
             ),
             current_step="detect_silence",
         )
+        if input_data.settings.cutRangesSeconds is not None:
+            _log_progress(
+                system_metadata=system_metadata,
+                message=(
+                    "Normalizing video timeline and rendering selected cut ranges "
+                    f"(ranges={len(input_data.settings.cutRangesSeconds)})"
+                ),
+                current_step="render",
+            )
         trim_result = trim_silence_video(
             {
                 "input_path": local_input,
@@ -148,6 +172,44 @@ def handle(flask_request):
             }
         )
         manifest = trim_result["manifest"]
+
+        segment_uploads: list[dict[str, Any]] = []
+        if input_data.segmentOutputFilePaths:
+            mapped_split_points = output_split_points(
+                input_data.splitPointsSeconds,
+                manifest["timelineMap"],
+                manifest["trimmedDurationSeconds"],
+            )
+            if len(mapped_split_points) + 1 != len(input_data.segmentOutputFilePaths):
+                raise RuntimeError(
+                    "One or more split points collapsed into a removed silence range. "
+                    "Move the split marker outside the silence range and retry."
+                )
+            if mapped_split_points:
+                local_segment_paths = [
+                    os.path.join(temp_dir, f"segment-{index + 1:03d}.mp4")
+                    for index in range(len(input_data.segmentOutputFilePaths))
+                ]
+                rendered_segments = render_video_segments(
+                    input_path=local_output,
+                    output_paths=local_segment_paths,
+                    split_points=mapped_split_points,
+                    duration_seconds=manifest["trimmedDurationSeconds"],
+                )
+            else:
+                rendered_segments = [{
+                    "path": local_output,
+                    "startTimeSeconds": 0.0,
+                    "endTimeSeconds": manifest["trimmedDurationSeconds"],
+                    "durationSeconds": manifest["trimmedDurationSeconds"],
+                }]
+            for index, rendered in enumerate(rendered_segments):
+                upload = _upload_blob(
+                    input_data.outputBucketName,
+                    input_data.segmentOutputFilePaths[index],
+                    str(rendered["path"]),
+                )
+                segment_uploads.append({**upload, **rendered})
 
         _log_progress(
             system_metadata=system_metadata,
@@ -163,6 +225,12 @@ def handle(flask_request):
                 "originalDurationSeconds": manifest["originalDurationSeconds"],
                 "trimmedDurationSeconds": manifest["trimmedDurationSeconds"],
             },
+        )
+
+        _log_progress(
+            system_metadata=system_metadata,
+            message="Uploading trimmed video and manifest",
+            current_step="upload",
         )
 
         video_upload = _upload_blob(
@@ -183,6 +251,7 @@ def handle(flask_request):
             removedDurationSeconds=manifest["removedDurationSeconds"],
             cutCount=manifest["cutCount"],
             noAudioStream=manifest["noAudioStream"],
+            noiseReductionApplied=manifest["noiseReductionApplied"],
         )
         output = TrimSilenceOutput(
             resultBucketName=video_upload["bucket_name"],
@@ -197,6 +266,18 @@ def handle(flask_request):
                 resultFilePath=manifest_upload["file_path"],
                 fileSizeBytes=manifest_upload["file_size"],
             ),
+            segments=[
+                TrimmedSegmentOutput(
+                    segmentNumber=index + 1,
+                    resultBucketName=item["bucket_name"],
+                    resultFilePath=item["file_path"],
+                    fileSizeBytes=item["file_size"],
+                    startTimeSeconds=item["startTimeSeconds"],
+                    endTimeSeconds=item["endTimeSeconds"],
+                    durationSeconds=item["durationSeconds"],
+                )
+                for index, item in enumerate(segment_uploads)
+            ],
             processingTime=processing_time,
             statistics=statistics,
         )

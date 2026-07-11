@@ -1,6 +1,6 @@
 <template>
-  <section class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+  <section class="grid min-h-[calc(100dvh-13rem)] items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div class="flex min-h-[680px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -18,7 +18,7 @@
         </div>
       </div>
 
-      <div ref="messageListRef" class="h-[520px] overflow-y-auto bg-slate-50/60 p-4">
+      <div ref="messageListRef" class="min-h-[480px] flex-1 overflow-y-auto bg-slate-50/60 p-4">
         <div class="space-y-3">
           <div
             v-for="message in messages"
@@ -88,7 +88,7 @@
       </div>
     </div>
 
-    <aside class="space-y-3">
+    <aside class="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
       <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h5 class="flex items-center gap-2 text-sm font-bold text-slate-950">
           <UIcon name="material-symbols:data-object" class="h-4 w-4 text-slate-500" />
@@ -114,7 +114,7 @@
         </dl>
       </div>
 
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="flex min-h-[480px] flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div class="mb-3 flex items-center justify-between gap-2">
           <h5 class="flex items-center gap-2 text-sm font-bold text-slate-950">
             <UIcon name="material-symbols:data-object" class="h-4 w-4 text-slate-500" />
@@ -125,7 +125,7 @@
         <textarea
           :value="contextJson"
           readonly
-          class="h-[360px] w-full resize-none rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-100"
+          class="min-h-[420px] w-full flex-1 resize-none rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-100"
         />
       </div>
     </aside>
@@ -221,9 +221,9 @@ async function sendMessage(): Promise<void> {
 }
 
 async function askFirebaseAi(question: string): Promise<string> {
-  const [{ getApp }, { getAI, getGenerativeModel, VertexAIBackend }] =
+  const [{ getApp }, { getAI, getGenerativeModel, GoogleAIBackend }] =
     await Promise.all([import("firebase/app"), import("firebase/ai")]);
-  const ai = getAI(getApp(), { backend: new VertexAIBackend("us-central1") });
+  const ai = getAI(getApp(), { backend: new GoogleAIBackend() });
   const model = getGenerativeModel(ai, {
     model: "gemini-2.5-flash-lite",
     generationConfig: {

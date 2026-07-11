@@ -87,6 +87,51 @@ class RelatedKnowledgeContext(BaseModel):
     errorMessage: str | None = None
 
 
+class RelatedJiraNamedField(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = ""
+    name: str = ""
+
+
+class RelatedJiraIssue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = ""
+    key: str = Field(min_length=1)
+    cloudId: str = ""
+    siteUrl: str = ""
+    htmlUrl: str = ""
+    summary: str = Field(min_length=1)
+    description: str = ""
+    issueType: RelatedJiraNamedField = Field(default_factory=RelatedJiraNamedField)
+    status: RelatedJiraNamedField = Field(default_factory=RelatedJiraNamedField)
+    priority: RelatedJiraNamedField = Field(default_factory=RelatedJiraNamedField)
+    assignee: RelatedJiraNamedField = Field(default_factory=RelatedJiraNamedField)
+    reporter: RelatedJiraNamedField = Field(default_factory=RelatedJiraNamedField)
+    project: RelatedJiraNamedField = Field(default_factory=RelatedJiraNamedField)
+    labels: list[str] = Field(default_factory=list)
+    components: list[RelatedJiraNamedField] = Field(default_factory=list)
+    fixVersions: list[RelatedJiraNamedField] = Field(default_factory=list)
+    parentKey: str = ""
+    createdAt: str = ""
+    updatedAt: str = ""
+    relevanceScore: int = Field(ge=0, le=100)
+    reason: str = Field(min_length=1)
+    matchedSignals: list[str] = Field(default_factory=list)
+
+
+class RelatedJiraContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cloudId: str = ""
+    siteName: str = ""
+    siteUrl: str = ""
+    checkedAt: str = ""
+    issues: list[RelatedJiraIssue] = Field(default_factory=list)
+    errorMessage: str | None = None
+
+
 class RelatedContextResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -98,4 +143,5 @@ class RelatedContextResult(BaseModel):
     github: RelatedGitHubContext | None = None
     slack: RelatedSlackContext | None = None
     knowledge: RelatedKnowledgeContext | None = None
+    jira: RelatedJiraContext | None = None
     notes: list[str] = Field(default_factory=list)

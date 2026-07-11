@@ -39,6 +39,15 @@ type DatadogViewContext = {
   fullPath: string;
 };
 
+const SENSITIVE_QUERY_KEYS = [
+  "code",
+  "state",
+  "access_token",
+  "refresh_token",
+  "id_token",
+  "client_secret",
+];
+
 declare global {
   interface Window {
     __STORYVAULT_DATADOG_INITIALIZED__?: boolean;
@@ -64,6 +73,16 @@ const isNonEmptyString = (value: unknown): value is string =>
 const isDatadogObservabilityActive = (): boolean =>
   import.meta.client && window.__STORYVAULT_DATADOG_INITIALIZED__ === true;
 
+export const waitForDatadogObservability = async (
+  timeoutMs = 4_000
+): Promise<void> => {
+  if (!import.meta.client || isDatadogObservabilityActive()) return;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && !isDatadogObservabilityActive()) {
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+  }
+};
+
 const compactObject = <T extends Record<string, unknown>>(value: T): T => {
   const entries = Object.entries(value).filter(([, entryValue]) => {
     if (entryValue === null || entryValue === undefined) return false;
@@ -71,6 +90,17 @@ const compactObject = <T extends Record<string, unknown>>(value: T): T => {
     return true;
   });
   return Object.fromEntries(entries) as T;
+};
+
+const redactRouteQuery = (fullPath: string): string => {
+  if (!fullPath) return "";
+  try {
+    const url = new URL(fullPath, window.location.origin);
+    for (const key of SENSITIVE_QUERY_KEYS) url.searchParams.delete(key);
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return fullPath;
+  }
 };
 
 const shouldSendDatadogEvent = (event: DatadogBeforeSendEvent): boolean => {
@@ -160,7 +190,7 @@ export const startDatadogView = ({
       name,
       context: {
         routePath: path,
-        routeFullPath: fullPath,
+        routeFullPath: redactRouteQuery(fullPath),
       },
     });
   });

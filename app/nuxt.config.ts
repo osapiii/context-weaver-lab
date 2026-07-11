@@ -253,6 +253,12 @@ export default defineNuxtConfig({
       /** Slack OAuth callback URL. Localhost is normalized in the client when omitted. */
       slackOAuthRedirectUri:
         process.env.NUXT_PUBLIC_SLACK_OAUTH_REDIRECT_URI || "",
+      /** Atlassian Jira Cloud OAuth 2.0 (3LO) client id. */
+      jiraOAuthClientId:
+        process.env.NUXT_PUBLIC_JIRA_OAUTH_CLIENT_ID || "",
+      /** Jira OAuth callback URL. Localhost is normalized in the client when omitted. */
+      jiraOAuthRedirectUri:
+        process.env.NUXT_PUBLIC_JIRA_OAUTH_REDIRECT_URI || "",
       /** StoryVault remote MCP endpoint for coding agents. */
       storyVaultMcpUrl:
         process.env.NUXT_PUBLIC_STORYVAULT_MCP_URL ||

@@ -291,6 +291,7 @@ def _normalize_story(
             "staleSources": [],
         },
         "acceptanceCriteria": criteria,
+        "detailedSpecifications": _string_list(raw.get("detailedSpecifications")),
         "evidenceIds": evidence_ids,
         "codeRefs": _as_list(raw.get("codeRefs")),
         "generationTrace": _as_list(raw.get("generationTrace")),

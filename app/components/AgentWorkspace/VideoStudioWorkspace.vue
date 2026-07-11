@@ -539,10 +539,13 @@
 
     <div
       v-else-if="store.view === 'editor' && store.selectedProject"
-      class="fixed inset-0 z-[1000] flex h-dvh min-h-0 w-screen flex-col overflow-hidden bg-gray-900 text-white"
-      data-testid="video-studio-fullscreen-editor"
+      class="flex min-h-0 flex-col overflow-hidden bg-gray-900 text-white"
+      :class="isEditorFullscreen
+        ? 'fixed inset-0 z-[1000] h-dvh w-screen'
+        : 'relative h-[calc(100dvh-12rem)] min-h-[720px] max-h-[960px] w-full rounded-lg border border-gray-700 shadow-sm'"
+      :data-testid="isEditorFullscreen ? 'video-studio-fullscreen-editor' : 'video-studio-embedded-editor'"
     >
-      <header class="relative z-[140] flex shrink-0 items-center gap-3 border-b border-gray-700 bg-gray-800 px-4 py-2">
+      <header class="relative z-[140] flex shrink-0 items-center gap-3 overflow-x-auto border-b border-gray-700 bg-gray-800 px-4 py-2">
         <div class="flex min-w-0 shrink-0 items-center gap-3">
           <h2 class="max-w-[12rem] truncate font-bold text-white">{{ store.selectedVideo?.title || store.selectedProject.editorState.video.title }}</h2>
           <div class="hidden min-w-0 items-center gap-1.5 text-xs text-gray-400 lg:flex">
@@ -611,6 +614,20 @@
         </div>
 
         <div class="flex shrink-0 items-center gap-2">
+          <button
+            v-if="embedded"
+            type="button"
+            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-600 bg-gray-700/50 text-gray-100 transition hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            :title="isEditorFullscreen ? 'コンテンツ内表示に戻す' : '全画面表示'"
+            :aria-label="isEditorFullscreen ? 'コンテンツ内表示に戻す' : '全画面表示'"
+            data-testid="video-studio-editor-mode-toggle"
+            @click.stop.prevent="toggleEditorFullscreen"
+          >
+            <UIcon
+              :name="isEditorFullscreen ? 'material-symbols:close-fullscreen' : 'material-symbols:open-in-full'"
+              class="h-4 w-4"
+            />
+          </button>
           <div class="flex items-center gap-1 rounded-lg border border-gray-600 bg-gray-700/50 px-1.5 py-1">
             <button class="rounded p-1 text-white hover:bg-gray-600" @click="editorZoom = Math.max(50, editorZoom - 10)">
               <UIcon name="i-heroicons-minus" class="h-4 w-4" />
@@ -2461,9 +2478,11 @@ import {
   getVideoExportStoragePath,
 } from "@utils/videoStudioStoragePaths";
 
-defineProps<{
+const props = withDefaults(defineProps<{
   embedded?: boolean;
-}>();
+}>(), {
+  embedded: false,
+});
 
 const store = useVideoStudioStore();
 const contextStore = useContextStore();
@@ -2620,6 +2639,7 @@ const isScreenRecordingModalOpen = ref(false);
 const isScreenRecordingSaving = ref(false);
 const isRegisterModalOpen = ref(false);
 const isProjectCreateModalOpen = ref(false);
+const isEditorFullscreen = ref(!props.embedded);
 const editorZoom = ref(100);
 const timelineZoom = ref(10);
 const currentTime = ref(0);
@@ -3479,15 +3499,10 @@ const completedTtsSections = computed(
   () => editorSections.value.filter((section) => sectionHasGeneratedAudio(section)).length
 );
 const pendingTtsSegmentsCount = computed(() =>
-  editorSections.value.reduce(
-    (total, section) =>
-      total +
-      section.finalyNarrations.filter((segment) => {
-        const text = (segment.rewrittenText || segment.originalText || "").trim();
-        return text && (!segment.isTtsGenerated || !ttsSegmentOutputPath(segment));
-      }).length,
-    0
-  )
+  selectedSectionForRecording.value?.finalyNarrations.filter((segment) => {
+    const text = (segment.rewrittenText || segment.originalText || "").trim();
+    return text && (!segment.isTtsGenerated || !ttsSegmentOutputPath(segment));
+  }).length ?? 0
 );
 const fixedSectionsCount = computed(
   () => editorSections.value.filter((section) => section.isFixed).length
@@ -3730,11 +3745,15 @@ const debugPanelTitle = computed(() => {
   }
 });
 
+const shouldLockEditorViewport = computed(
+  () => store.view === "editor" && (!props.embedded || isEditorFullscreen.value)
+);
+
 watch(
-  () => store.view,
-  (view) => {
+  shouldLockEditorViewport,
+  (shouldLockViewport) => {
     if (!import.meta.client) return;
-    if (view === "editor") {
+    if (shouldLockViewport) {
       if (bodyOverflowBeforeEditor === null) {
         bodyOverflowBeforeEditor = document.body.style.overflow;
       }
@@ -5043,27 +5062,19 @@ const buildSubtitleCaptionSegments = (): SubtitleSegmentInput[] => {
   let sectionOffsetSeconds = 0;
   for (const section of editorSections.value) {
     const sectionDuration = Math.max(0.1, section.endTime - section.startTime);
-    const transcriptCues = sectionSubtitleCues(section);
-    if (transcriptCues.length > 0) {
-      for (const cue of transcriptCues) {
-        const relativeStart = Math.max(0, cue.startMs / 1000 - section.startTime);
-        const relativeEnd = Math.min(
-          sectionDuration,
-          Math.max(relativeStart + 0.1, cue.endMs / 1000 - section.startTime)
-        );
-        if (relativeEnd <= relativeStart) continue;
-        const cueStartSeconds = sectionOffsetSeconds + relativeStart;
-        const cueEndSeconds = sectionOffsetSeconds + relativeEnd;
-        const chunks = splitSubtitleText(cue.text, cueEndSeconds - cueStartSeconds);
-        segments.push(...allocateSubtitleCueDrafts(chunks, cueStartSeconds, cueEndSeconds));
-      }
-    } else {
-      for (const [segmentIndex, narration] of section.finalyNarrations.entries()) {
+    const generatedNarrations = section.finalyNarrations
+      .map((narration, segmentIndex) => ({ narration, segmentIndex }))
+      .filter(({ narration }) => Boolean(narration.requestOutput?.outputPath));
+    if (generatedNarrations.length > 0) {
+      // The exported video's audio comes from these generated TTS segments, so
+      // captions must use the exact text and timing selected for that audio.
+      for (const { narration, segmentIndex } of generatedNarrations) {
         const text = cleanVideoEditorText(narration.rewrittenText || narration.originalText || "");
         if (!text) continue;
-        const startSeconds = sectionOffsetSeconds + Math.max(
-          0,
-          Number(narration.startSeconds ?? segmentIndex * 0.1)
+        const startSeconds = sectionOffsetSeconds + narrationStartSecondsInSection(
+          section,
+          narration,
+          segmentIndex * 0.1
         );
         const durationSeconds = Math.max(
           1,
@@ -5075,6 +5086,22 @@ const buildSubtitleCaptionSegments = (): SubtitleSegmentInput[] => {
         if (endSeconds <= startSeconds) continue;
         const chunks = splitSubtitleText(text, endSeconds - startSeconds);
         segments.push(...allocateSubtitleCueDrafts(chunks, startSeconds, endSeconds));
+      }
+    } else {
+      // Keep transcript-based captions only as a legacy fallback for projects
+      // that do not yet have generated AI narration audio.
+      const transcriptCues = sectionSubtitleCues(section);
+      for (const cue of transcriptCues) {
+        const relativeStart = Math.max(0, cue.startMs / 1000 - section.startTime);
+        const relativeEnd = Math.min(
+          sectionDuration,
+          Math.max(relativeStart + 0.1, cue.endMs / 1000 - section.startTime)
+        );
+        if (relativeEnd <= relativeStart) continue;
+        const cueStartSeconds = sectionOffsetSeconds + relativeStart;
+        const cueEndSeconds = sectionOffsetSeconds + relativeEnd;
+        const chunks = splitSubtitleText(cue.text, cueEndSeconds - cueStartSeconds);
+        segments.push(...allocateSubtitleCueDrafts(chunks, cueStartSeconds, cueEndSeconds));
       }
     }
     sectionOffsetSeconds += sectionDuration;
@@ -6252,6 +6279,10 @@ const setWorkflowIndex = async (index: number): Promise<void> => {
   if (!store.selectedProject) return;
   const step = workflowSteps.value[index]?.key;
   if (!step) return;
+  editorVideo.value?.pause();
+  isPlaying.value = false;
+  pauseTimingNarrationAudio();
+  pauseRecordingPlaybackAudio(true);
   await store.updateProject(store.selectedProject.videoId, store.selectedProject.id, {
     currentStep: step,
   });
@@ -6622,7 +6653,13 @@ const saveEditorSections = async (): Promise<void> => {
 
 const saveAndCloseEditor = async (): Promise<void> => {
   await saveEditorSections();
+  if (props.embedded) isEditorFullscreen.value = false;
   store.view = "detail";
+};
+
+const toggleEditorFullscreen = (): void => {
+  if (!props.embedded) return;
+  isEditorFullscreen.value = !isEditorFullscreen.value;
 };
 
 const isTypingTarget = (target: EventTarget | null): boolean => {
@@ -6642,6 +6679,9 @@ const onEditorKeydown = (event: KeyboardEvent): void => {
   if (event.key === "Escape") {
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (props.embedded && isEditorFullscreen.value) {
+      isEditorFullscreen.value = false;
+    }
     return;
   }
 
@@ -7375,13 +7415,13 @@ const selectVoiceName = async (voiceName: string): Promise<void> => {
 const requestSingleTts = async (
   sectionId: string,
   segmentIndex: number,
-  options: { skipPreSave?: boolean; quiet?: boolean } = {}
+  options: { skipPreSave?: boolean; quiet?: boolean; text?: string } = {}
 ): Promise<boolean> => {
   const project = store.selectedProject;
   const video = store.selectedVideo;
   const section = editorSections.value.find((item) => item.id === sectionId);
   const segment = section?.finalyNarrations[segmentIndex];
-  const text = (segment?.rewrittenText || segment?.originalText || "").trim();
+  const text = (options.text ?? segment?.rewrittenText ?? segment?.originalText ?? "").trim();
   if (!project || !video || !section || !segment || !text) return false;
   if (isTtsSegmentProcessing(section.id, segmentIndex)) return false;
   if (!options.skipPreSave) await saveEditorSections();
@@ -7453,19 +7493,16 @@ const requestBulkTts = async (): Promise<void> => {
   isBulkTtsProcessing.value = true;
   try {
     await saveEditorSections();
-    const targets = [...editorSections.value]
-      .sort((a, b) => a.index - b.index)
-      .flatMap((section) =>
-        section.finalyNarrations
-          .map((segment, segmentIndex) => ({
-            sectionId: section.id,
-            sectionTitle: section.title,
-            segmentIndex,
-            text: (segment.rewrittenText || segment.originalText || "").trim(),
-            hasOutput: segment.isTtsGenerated && Boolean(ttsSegmentOutputPath(segment)),
-          }))
-          .filter((target) => target.text && !target.hasOutput)
-      );
+    const section = editorSections.value[selectedSectionIndex.value];
+    const targets = section?.finalyNarrations
+      .map((segment, segmentIndex) => ({
+        sectionId: section.id,
+        sectionTitle: section.title,
+        segmentIndex,
+        text: (segment.rewrittenText || segment.originalText || "").trim(),
+        hasOutput: segment.isTtsGenerated && Boolean(ttsSegmentOutputPath(segment)),
+      }))
+      .filter((target) => target.text && !target.hasOutput) ?? [];
     if (targets.length === 0) {
       requestNotice.value = {
         kind: "success",
@@ -7477,18 +7514,21 @@ const requestBulkTts = async (): Promise<void> => {
       kind: "success",
       message: `${targets.length}件のAI音声生成を開始しました。`,
     };
+    let completedCount = 0;
     let successCount = 0;
-    for (const target of targets) {
-      requestNotice.value = {
-        kind: "success",
-        message: `${successCount}/${targets.length}件完了。${target.sectionTitle || "セクション"} のAI音声を生成中です。`,
-      };
+    await Promise.all(targets.map(async (target) => {
       const succeeded = await requestSingleTts(target.sectionId, target.segmentIndex, {
         skipPreSave: true,
         quiet: true,
+        text: target.text,
       });
       if (succeeded) successCount += 1;
-    }
+      completedCount += 1;
+      requestNotice.value = {
+        kind: "success",
+        message: `${completedCount}/${targets.length}件完了。${target.sectionTitle || "セクション"} のAI音声を生成しています。`,
+      };
+    }));
     requestNotice.value = {
       kind: successCount === targets.length ? "success" : "error",
       message:
@@ -7663,7 +7703,6 @@ const syncDuration = (): void => {
 const handleEditorVideoPlay = (): void => {
   syncCurrentTime();
   if (isTimingPreviewActive()) {
-    void syncTimingNarrationAudio({ play: true, force: true });
     return;
   }
   if (
@@ -7674,7 +7713,6 @@ const handleEditorVideoPlay = (): void => {
     resumeRecording();
     return;
   }
-  void syncRecordingPlaybackAudio({ play: true });
 };
 
 const handleEditorVideoPause = (): void => {
@@ -7822,10 +7860,26 @@ const sectionAtPlaybackTime = (time: number): VideoStudioSection | null =>
     (section) => safeNonNegativeSeconds(time) >= sectionStartSeconds(section) && safeNonNegativeSeconds(time) < sectionEndSeconds(section)
   ) ?? null;
 
-const pauseRecordingPlaybackAudio = (): void => {
+const pauseRecordingPlaybackAudio = (clearSource = false): void => {
+  recordingPlaybackSyncToken++;
   const audio = recordingPlaybackAudio.value;
   if (!audio) return;
   audio.pause();
+  if (clearSource && audio.hasAttribute("src")) {
+    audio.removeAttribute("src");
+    audio.load();
+  }
+};
+
+const shouldUseRecordingPlaybackAudio = (
+  section: VideoStudioSection | null
+): section is VideoStudioSection => {
+  const recording = section?.recording;
+  return Boolean(
+    requiresRecordingFlow.value &&
+    recording?.audioFilePath &&
+    !String(recording.audioContentType || "").startsWith("video/")
+  );
 };
 
 const syncRecordingPlaybackAudio = async (
@@ -7840,11 +7894,12 @@ const syncRecordingPlaybackAudio = async (
   }
 
   const section = sectionAtPlaybackTime(video.currentTime);
-  if (!section?.recording?.audioFilePath) {
-    pauseRecordingPlaybackAudio();
-    audio.removeAttribute("src");
+  if (!shouldUseRecordingPlaybackAudio(section)) {
+    pauseRecordingPlaybackAudio(true);
     return;
   }
+  const recording = section.recording;
+  if (!recording) return;
 
   const syncToken = ++recordingPlaybackSyncToken;
   const audioUrl = await resolveRecordingAudioUrl(section);
@@ -7857,7 +7912,7 @@ const syncRecordingPlaybackAudio = async (
   const targetTime = Math.max(
     0,
     Math.min(
-      safeNonNegativeSeconds(section.recording.durationSeconds, sectionDurationSeconds(section)),
+      safeNonNegativeSeconds(recording.durationSeconds, sectionDurationSeconds(section)),
       safeNonNegativeSeconds(video.currentTime) - sectionStartSeconds(section)
     )
   );
@@ -10113,6 +10168,7 @@ onUnmounted(() => {
   screenRecorder.dispose();
   stopTimingSegmentDrag();
   pauseTimingNarrationAudio();
+  pauseRecordingPlaybackAudio(true);
   stopVoicePreview();
   stopTtsPreview();
 });

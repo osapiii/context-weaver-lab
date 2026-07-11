@@ -22,27 +22,14 @@
       :application="application"
     />
 
-    <div
-      v-else
-      class="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center"
-    >
-      <UIcon
-        name="i-simple-icons-jira"
-        class="mx-auto h-10 w-10 text-slate-300"
-      />
-      <p class="mt-3 text-sm font-semibold text-slate-800">
-        JIRA 連携は準備中です
-      </p>
-      <p class="mt-1 text-xs text-slate-500">
-        チケット同期やストーリー連携をここに追加します。
-      </p>
-    </div>
+    <OAuthConnectionJiraCard v-else />
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import type { DecodedStoryVaultApplication } from "@models/storyVault";
+import OAuthConnectionJiraCard from "@components/preferences/OAuthConnectionJiraCard.vue";
 
 defineProps<{
   application: DecodedStoryVaultApplication | null;

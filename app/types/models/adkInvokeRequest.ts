@@ -106,6 +106,7 @@ export const AdkInvokeOutputSchema = z
     emailNotificationSentAt: z.string().optional(),
     emailRequestId: z.string().optional(),
     resolvedModel: z.string().optional(),
+    storyvaultArtifacts: z.array(z.record(z.string(), z.unknown())).optional(),
     businessPartner: z
       .object({
         phase: z.string().optional(),

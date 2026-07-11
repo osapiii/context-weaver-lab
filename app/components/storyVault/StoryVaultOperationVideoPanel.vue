@@ -53,6 +53,73 @@
       </div>
     </div>
 
+    <section
+      v-if="!detailVideo && (isLoadingDrafts || applicationClipDrafts.length > 0)"
+      class="border-y border-slate-200 bg-slate-50 py-4"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div class="flex items-center gap-2">
+          <UIcon name="material-symbols:draft-outline" class="h-5 w-5 text-slate-600" />
+          <h3 class="text-sm font-bold text-slate-950">録画の下書き</h3>
+          <span class="text-xs text-slate-500">{{ applicationClipDrafts.length }}件</span>
+        </div>
+        <span v-if="isLoadingDrafts" class="inline-flex items-center gap-1.5 text-xs text-slate-500">
+          <UIcon name="material-symbols:progress-activity" class="h-4 w-4 animate-spin" />
+          読み込み中
+        </span>
+      </div>
+      <div v-if="applicationClipDrafts.length > 0" class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <article
+          v-for="draft in applicationClipDrafts"
+          :key="draft.id"
+          class="flex min-h-32 flex-col border border-slate-200 bg-white p-3 shadow-sm"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <span
+                  class="rounded px-1.5 py-0.5 text-[10px] font-bold"
+                  :class="clipDraftStatusClass(draft)"
+                >
+                  {{ clipDraftStatusLabel(draft) }}
+                </span>
+                <span class="text-[11px] text-slate-400">{{ formatClipDraftUpdatedAt(draft.updatedAt) }}</span>
+              </div>
+              <p class="mt-2 truncate text-sm font-bold text-slate-950">{{ draft.title }}</p>
+              <p class="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">
+                {{ draft.statusMessage || "編集を再開できます" }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
+              :aria-label="`${draft.title}を破棄`"
+              :title="`${draft.title}を破棄`"
+              @click="openDiscardClipDraftConfirm(draft)"
+            >
+              <UIcon name="material-symbols:delete-outline" class="h-4 w-4" />
+            </button>
+          </div>
+          <div class="mt-auto flex items-center justify-between gap-2 pt-3">
+            <span class="text-[11px] text-slate-400">
+              {{ draft.source ? `${formatDuration(draft.source.durationMs)} / ${formatBytes(draft.source.sizeBytes)}` : "動画保存待ち" }}
+            </span>
+            <EnButton
+              variant="outline"
+              color="neutral"
+              size="xs"
+              leading-icon="material-symbols:resume"
+              :disabled="!draft.source || draft.status === 'saving' || Boolean(resumingClipDraftId)"
+              :loading="resumingClipDraftId === draft.id"
+              @click="resumeClipDraft(draft)"
+            >
+              再開
+            </EnButton>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <Teleport to="body">
       <Transition
         enter-active-class="transition duration-200 ease-out"
@@ -138,12 +205,19 @@
         <EnButton
           variant="ai"
           size="xs"
-          leading-icon="material-symbols:add-circle-outline"
+          :leading-icon="
+            application.fileSpaceProvisioningStatus === 'creating'
+              ? 'material-symbols:replay'
+              : 'material-symbols:add-circle-outline'
+          "
           :loading="isProvisioningFileSpace"
-          :disabled="application.fileSpaceProvisioningStatus === 'creating'"
           @click="$emit('create-file-space')"
         >
-          専用FileSpace作成
+          {{
+            application.fileSpaceProvisioningStatus === "creating"
+              ? "作成を再実行"
+              : "専用FileSpace作成"
+          }}
         </EnButton>
       </template>
     </EnAlert>
@@ -212,6 +286,35 @@
           </div>
         </div>
 
+        <div
+          v-if="recordedBlob && !isRecording"
+          class="mb-3 flex flex-wrap items-center gap-2 border-l-2 px-3 py-2 text-xs"
+          :class="clipDraftSaveError ? 'border-red-400 bg-red-400/10 text-red-100' : isSavingClipDraft ? 'border-cyan-400 bg-cyan-400/10 text-cyan-100' : 'border-emerald-400 bg-emerald-400/10 text-emerald-100'"
+        >
+          <UIcon
+            :name="clipDraftSaveError ? 'material-symbols:error-outline' : isSavingClipDraft ? 'material-symbols:progress-activity' : 'material-symbols:cloud-done-outline'"
+            class="h-4 w-4 shrink-0"
+            :class="isSavingClipDraft ? 'animate-spin' : ''"
+          />
+          <span class="font-semibold">
+            {{ clipDraftSaveError ? "下書き保存に失敗" : isSavingClipDraft ? "録画を下書き保存中" : "下書き保存済み" }}
+          </span>
+          <span v-if="!clipDraftSaveError && !isSavingClipDraft && clipDraftLastSavedAt" class="opacity-70">
+            {{ formatClipDraftUpdatedAt(clipDraftLastSavedAt) }}
+          </span>
+          <span v-if="clipDraftSaveError" class="min-w-0 flex-1 truncate opacity-80">{{ clipDraftSaveError }}</span>
+          <button
+            v-if="clipDraftSaveError"
+            type="button"
+            class="ml-auto inline-flex h-7 items-center gap-1 rounded bg-white/10 px-2 font-bold transition hover:bg-white/15"
+            :disabled="isSavingClipDraft"
+            @click="retryActiveClipDraftSave"
+          >
+            <UIcon name="material-symbols:refresh" class="h-4 w-4" />
+            再保存
+          </button>
+        </div>
+
         <EnAlert
           v-if="errorMessage"
           class="mb-3"
@@ -236,13 +339,30 @@
             class="aspect-video max-h-full w-full bg-black object-contain"
           />
           <video
-            v-if="previewUrl && !isRecording"
-            :src="previewUrl"
+            v-if="editingPreviewUrl && !isRecording"
+            ref="recordedPreviewVideo"
+            :src="editingPreviewUrl"
             controls
             class="aspect-video max-h-full w-full bg-black object-contain"
+            @loadedmetadata="reconcileRecordedPreviewDuration"
+            @durationchange="reconcileRecordedPreviewDuration"
+            @timeupdate="updateRecordedPreviewTime"
+            @play="isRecordedPreviewPlaying = true"
+            @pause="isRecordedPreviewPlaying = false"
+            @ended="isRecordedPreviewPlaying = false"
           />
+          <button
+            v-if="editingPreviewUrl && !isRecording"
+            type="button"
+            class="absolute right-3 top-3 inline-flex h-9 items-center gap-1.5 rounded-md border border-white/20 bg-slate-950/80 px-3 text-xs font-semibold text-white shadow-lg transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+            title="動画を全画面で再生"
+            @click="requestRecordedPreviewFullscreen"
+          >
+            <UIcon name="material-symbols:fullscreen" class="h-4 w-4" />
+            全画面
+          </button>
           <div
-            v-if="!isRecording && !previewUrl"
+            v-if="!isRecording && !editingPreviewUrl"
             class="flex aspect-video w-full items-center justify-center text-sm text-slate-300"
           >
             <div class="max-w-sm text-center">
@@ -260,18 +380,376 @@
           </div>
         </div>
 
-        <div class="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
-          <div class="mb-2 flex items-center justify-between gap-2 text-xs">
-            <span class="font-semibold text-slate-100">音声波形</span>
-            <span class="text-slate-400">{{ Math.round(audioLevel * 100) }}%</span>
+        <div
+          v-if="recordedBlob && !isRecording"
+          class="mt-3 border-y border-white/10 py-4"
+        >
+          <div class="grid grid-cols-2 overflow-hidden rounded-md ring-1 ring-white/10">
+            <button
+              type="button"
+              class="flex items-center gap-3 px-4 py-3 text-left"
+              :class="clipEditingStep === 1 ? 'bg-primary-400/15 text-primary-100' : 'bg-white/5 text-slate-400'"
+              @click="clipEditingStep = 1"
+            >
+              <span class="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-bold">1</span>
+              <span>
+                <span class="block text-xs font-semibold">無音・ノイズを整理</span>
+                <span class="mt-0.5 block text-[11px] opacity-75">待機時間と雑音を軽減</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              class="flex items-center gap-3 border-l border-white/10 px-4 py-3 text-left"
+              :class="[
+                clipEditingStep === 2 ? 'bg-primary-400/15 text-primary-100' : 'bg-white/5 text-slate-400',
+                hasCurrentPreparedClip ? '' : 'cursor-not-allowed opacity-60',
+              ]"
+              :disabled="!hasCurrentPreparedClip"
+              @click="clipEditingStep = 2"
+            >
+              <span class="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-xs font-bold">2</span>
+              <span>
+                <span class="block text-xs font-semibold">セクションを分割</span>
+                <span class="mt-0.5 block text-[11px] opacity-75">必要な位置で区切る</span>
+              </span>
+            </button>
           </div>
-          <div class="flex h-16 items-end gap-1">
-            <span
-              v-for="(bar, index) in waveformBars"
-              :key="index"
-              class="min-w-0 flex-1 rounded-t bg-primary-400/80 transition-[height]"
-              :style="{ height: `${Math.max(6, bar * 100)}%` }"
+
+          <div v-if="clipEditingStep === 1" class="mt-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="flex items-center gap-2 text-sm font-semibold text-slate-100">
+                  <UIcon name="material-symbols:graphic-eq" class="h-5 w-5 text-primary-300" />
+                  無音箇所を確認
+                </p>
+                <p class="mt-1 text-xs text-slate-400">
+                  -{{ Math.abs(silenceThresholdDb) }} dB未満が5秒以上続く区間を無音候補にします。
+                </p>
+              </div>
+              <div class="flex flex-wrap items-center justify-end gap-4 text-xs text-slate-200">
+                <label class="flex items-center gap-2">
+                  <span>無音をカット</span>
+                  <USwitch v-model="silenceCutEnabled" :disabled="isPreparingClips" />
+                </label>
+                <label class="flex items-center gap-2">
+                  <span>ノイズを低減</span>
+                  <USwitch v-model="noiseReductionEnabled" :disabled="isPreparingClips" />
+                </label>
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-md bg-black/30 p-3 ring-1 ring-white/10">
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/10 text-slate-100 transition hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+                    :aria-label="isRecordedPreviewPlaying ? '一時停止' : '再生'"
+                    @click="toggleRecordedPreviewPlayback"
+                  >
+                    <UIcon
+                      :name="isRecordedPreviewPlaying ? 'material-symbols:pause-rounded' : 'material-symbols:play-arrow-rounded'"
+                      class="h-5 w-5"
+                    />
+                  </button>
+                  <span class="font-semibold text-slate-100">音声タイムライン</span>
+                  <span class="font-mono text-slate-400">{{ formatDuration(recordedPreviewMs) }}</span>
+                </div>
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                  <span class="text-slate-400">
+                    {{ isAnalyzingSilence ? "無音を解析中" : `無音候補 ${silenceRanges.length}箇所 / カット ${selectedCutRanges.length}箇所` }}
+                    / 調整後 約{{ formatDuration(editedDurationMs) }}
+                  </span>
+                  <button
+                    type="button"
+                    class="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 font-semibold ring-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+                    :class="manualRangeSelectionActive ? 'bg-rose-400/20 text-rose-100 ring-rose-300/50' : 'bg-white/10 text-slate-200 ring-white/10 hover:bg-white/15'"
+                    :disabled="isPreparingClips"
+                    @click="toggleManualRangeSelection"
+                  >
+                    <UIcon name="material-symbols:select" class="h-4 w-4" />
+                    範囲カット
+                  </button>
+                </div>
+              </div>
+              <div
+                ref="silenceTimeline"
+                class="relative mt-3 h-16 touch-none select-none overflow-hidden rounded bg-slate-800 ring-1 ring-white/10"
+                :class="isScrubbingSilenceTimeline || isSelectingManualCutRange ? 'cursor-grabbing' : 'cursor-crosshair'"
+                :aria-label="manualRangeSelectionActive ? '音声タイムライン。ドラッグしてカット範囲を選択' : '音声タイムライン。クリックまたはドラッグで再生位置を移動'"
+                @pointerdown="handleSilenceTimelinePointerDown"
+                @pointermove="handleSilenceTimelinePointerMove"
+                @pointerup="handleSilenceTimelinePointerUp"
+                @pointercancel="handleSilenceTimelinePointerUp"
+                @lostpointercapture="handleSilenceTimelinePointerUp"
+              >
+                <div class="absolute inset-y-0 left-0 bg-primary-400/25" :style="{ width: `${previewProgressPercent}%` }" />
+                <div
+                  v-for="(range, index) in silenceRanges"
+                  :key="`silence-${index}`"
+                  class="absolute inset-y-0 flex min-w-8 items-center justify-center overflow-hidden border-x px-1 text-[10px] font-bold"
+                  :class="silenceCutEnabled && !isSilenceRangeKept(index) ? 'border-amber-300/60 bg-amber-300/35 text-amber-50' : 'border-emerald-300/30 bg-emerald-400/10 text-emerald-100'"
+                  :style="timelineRangeStyle(range.startMs, range.endMs)"
+                >
+                  <span class="truncate">{{ isSilenceRangeKept(index) ? "残す" : "無音" }}</span>
+                </div>
+                <div
+                  v-for="(range, index) in manualCutRanges"
+                  :key="`manual-cut-${index}`"
+                  class="pointer-events-none absolute inset-y-0 z-10 flex min-w-8 items-center justify-center overflow-hidden border-x border-rose-300/70 bg-rose-400/35 px-1 text-[10px] font-bold text-rose-50"
+                  :style="timelineRangeStyle(range.startMs, range.endMs)"
+                >
+                  <span class="truncate">手動</span>
+                </div>
+                <div
+                  v-if="manualRangeSelectionActive && manualCutSelectionRange"
+                  class="pointer-events-none absolute inset-y-0 z-20 border-x-2 border-white bg-rose-300/30 shadow-[0_0_14px_rgba(251,113,133,.45)]"
+                  :style="timelineRangeStyle(manualCutSelectionRange.startMs, manualCutSelectionRange.endMs)"
+                />
+                <div
+                  class="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,.7),0_0_10px_rgba(255,255,255,.65)]"
+                  :style="{ left: `${previewProgressPercent}%` }"
+                >
+                  <span class="absolute -top-1 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-white ring-2 ring-slate-900" />
+                </div>
+              </div>
+
+              <div
+                v-if="manualRangeSelectionActive"
+                class="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-rose-400/10 px-2.5 py-2 text-[11px] text-rose-100 ring-1 ring-rose-300/25"
+              >
+                <UIcon name="material-symbols:select" class="h-4 w-4 shrink-0" />
+                <span class="font-semibold">
+                  {{ manualCutSelectionRange ? `${formatDuration(manualCutSelectionRange.startMs)} - ${formatDuration(manualCutSelectionRange.endMs)}` : "タイムライン上をドラッグして範囲を選択" }}
+                </span>
+                <button
+                  type="button"
+                  class="ml-auto inline-flex h-7 items-center gap-1 rounded bg-rose-300 px-2 font-bold text-slate-950 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  :disabled="!canAddManualCutSelection"
+                  @click="addManualCutSelection"
+                >
+                  <UIcon name="material-symbols:content-cut-rounded" class="h-4 w-4" />
+                  この範囲をカット
+                </button>
+                <button
+                  v-if="manualCutSelectionRange"
+                  type="button"
+                  class="inline-flex h-7 w-7 items-center justify-center rounded text-rose-100 transition hover:bg-white/10"
+                  title="選択を解除"
+                  aria-label="選択を解除"
+                  @click="clearManualCutSelection"
+                >
+                  <UIcon name="material-symbols:close-rounded" class="h-4 w-4" />
+                </button>
+              </div>
+
+              <div class="mt-3">
+                <div class="mb-1.5 flex items-center justify-between text-[11px]">
+                  <span class="font-semibold text-slate-200">音声ボリューム</span>
+                  <span class="text-amber-200">無音しきい値 {{ silenceThresholdDb }} dB</span>
+                </div>
+                <div class="relative h-20 overflow-hidden rounded bg-slate-950/80 ring-1 ring-white/10">
+                  <div class="absolute inset-0 flex items-end gap-px px-1 pt-1">
+                    <span
+                      v-for="(sample, index) in displayedAudioLevelSamples"
+                      :key="`level-${index}`"
+                      class="min-w-0 flex-1 rounded-t-sm"
+                      :class="isAudioSampleBelowThreshold(sample) ? 'bg-amber-300/55' : 'bg-primary-300/80'"
+                      :style="{ height: `${audioLevelHeightPercent(sample.db)}%` }"
+                      :title="`${sample.db.toFixed(1)} dB / ${formatDuration(sample.startMs)}`"
+                    />
+                  </div>
+                  <div
+                    class="pointer-events-none absolute inset-x-0 z-10 border-t border-dashed border-amber-200/90"
+                    :style="{ bottom: `${thresholdLineBottomPercent(silenceThresholdDb)}%` }"
+                  >
+                    <span class="absolute right-1 top-1 rounded bg-slate-950/85 px-1 text-[9px] font-bold text-amber-100">
+                      {{ silenceThresholdDb }} dB
+                    </span>
+                  </div>
+                  <div
+                    class="pointer-events-none absolute inset-y-0 z-20 w-px -translate-x-1/2 bg-white/80"
+                    :style="{ left: `${previewProgressPercent}%` }"
+                  />
+                </div>
+              </div>
+
+              <div v-if="silenceRanges.length > 0" class="mt-3 flex flex-wrap gap-2">
+                <button
+                  v-for="(range, index) in silenceRanges"
+                  :key="`silence-choice-${index}`"
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[11px] font-semibold ring-1 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+                  :class="isSilenceRangeKept(index) ? 'bg-emerald-400/10 text-emerald-100 ring-emerald-300/30' : 'bg-amber-300/10 text-amber-100 ring-amber-300/30'"
+                  @click="toggleSilenceRangeKept(index)"
+                >
+                  <UIcon
+                    :name="isSilenceRangeKept(index) ? 'material-symbols:volume-up-outline' : 'material-symbols:content-cut-rounded'"
+                    class="h-4 w-4"
+                  />
+                  <span>{{ formatDuration(range.startMs) }} - {{ formatDuration(range.endMs) }}</span>
+                  <span class="rounded bg-black/20 px-1.5 py-0.5">{{ isSilenceRangeKept(index) ? "残す" : "カット" }}</span>
+                </button>
+              </div>
+              <div v-if="manualCutRanges.length > 0" class="mt-3 flex flex-wrap items-center gap-2">
+                <span class="text-[11px] font-semibold text-rose-200">手動カット</span>
+                <span
+                  v-for="(range, index) in manualCutRanges"
+                  :key="`manual-cut-choice-${index}`"
+                  class="inline-flex items-center gap-1.5 rounded-md bg-rose-400/10 py-1 pl-2.5 pr-1 text-[11px] font-semibold text-rose-100 ring-1 ring-rose-300/30"
+                >
+                  <UIcon name="material-symbols:content-cut-rounded" class="h-4 w-4" />
+                  {{ formatDuration(range.startMs) }} - {{ formatDuration(range.endMs) }}
+                  <button
+                    type="button"
+                    class="inline-flex h-6 w-6 items-center justify-center rounded text-rose-100 transition hover:bg-white/10"
+                    :title="`${formatDuration(range.startMs)}からの手動カットを削除`"
+                    :aria-label="`${formatDuration(range.startMs)}からの手動カットを削除`"
+                    @click="removeManualCutRange(index)"
+                  >
+                    <UIcon name="material-symbols:close-rounded" class="h-4 w-4" />
+                  </button>
+                </span>
+              </div>
+              <div class="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+                <span>0:00</span>
+                <span>{{ selectedCutRanges.length > 0 ? `${selectedCutRanges.length}箇所をカットします` : "カットせず元動画を使います" }}</span>
+                <span>{{ formatDuration(recordingDurationMs) }}</span>
+              </div>
+            </div>
+
+            <div
+              v-if="clipPreparationStatus"
+              class="mt-3 flex items-start gap-3 rounded-md bg-primary-400/10 px-3 py-3 text-xs text-primary-100 ring-1 ring-primary-300/20"
+            >
+              <UIcon :name="clipPreparationStatus.icon" class="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <p class="font-semibold">{{ clipPreparationStatus.title }}</p>
+                <p class="mt-1 text-primary-100/70">{{ clipPreparationStatus.description }}</p>
+              </div>
+            </div>
+            <EnAlert
+              v-if="clipPreparationPhase === 'error'"
+              class="mt-3"
+              color="warning"
+              title="動画の準備を完了できませんでした"
+              :description="clipPreparationError"
             />
+          </div>
+
+          <div v-else class="mt-4">
+            <div>
+              <p class="flex items-center gap-2 text-sm font-semibold text-slate-100">
+                <UIcon name="material-symbols:vertical-split" class="h-5 w-5 text-amber-300" />
+                区切り位置を決める
+              </p>
+              <p class="mt-1 text-xs text-slate-400">
+                動画を再生し、話題や機能が切り替わる位置で分割します。分割しないままでも取り込めます。
+              </p>
+            </div>
+
+            <div class="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+              <span class="inline-flex items-center gap-1.5 rounded bg-emerald-400/10 px-2 py-1 font-semibold text-emerald-100 ring-1 ring-emerald-300/20">
+                <UIcon name="material-symbols:check-circle-outline" class="h-4 w-4" />
+                Gemini文字起こし完了
+              </span>
+              <span>{{ preparedTranscription?.segments.length ?? 0 }}件の発話</span>
+              <span>AI分割案 {{ aiSectionDrafts.length }}件</span>
+            </div>
+
+            <div class="mt-4 rounded-md bg-black/30 p-3 ring-1 ring-white/10">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span class="font-semibold text-slate-100">編集タイムライン</span>
+              <span class="text-slate-400">
+                再生位置 {{ formatDuration(recordedPreviewMs) }} / {{ splitPointsMs.length + 1 }}セクション
+              </span>
+            </div>
+            <div class="relative mt-3 h-14 overflow-hidden rounded bg-slate-800 ring-1 ring-white/10">
+              <div class="absolute inset-y-0 left-0 bg-primary-400/25" :style="{ width: `${previewProgressPercent}%` }" />
+              <template v-if="!hasCurrentPreparedClip">
+                <span
+                  v-for="(range, index) in cutSilenceRanges"
+                  :key="`cut-${index}`"
+                  class="absolute inset-y-0 bg-rose-400/25"
+                  :class="silenceCutEnabled ? '' : 'hidden'"
+                  :style="timelineRangeStyle(range.startMs, range.endMs)"
+                />
+              </template>
+              <button
+                v-for="point in splitPointsMs"
+                :key="`split-${point}`"
+                type="button"
+                class="absolute inset-y-0 z-10 w-1 -translate-x-1/2 bg-amber-300 shadow-[0_0_0_1px_rgba(15,23,42,.8)]"
+                :style="{ left: `${timelinePercent(point)}%` }"
+                :title="`${formatDuration(point)} の分割点。クリックで削除`"
+                @click="removeSplitPoint(point)"
+              />
+            </div>
+            <div class="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+              <span>0:00</span>
+              <span>黄の分割線はクリックで削除できます</span>
+              <span>{{ formatDuration(recordingDurationMs) }}</span>
+            </div>
+          </div>
+
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <EnButton
+              variant="soft"
+              color="neutral"
+              size="sm"
+              leading-icon="material-symbols:vertical-split"
+              :disabled="isPreparingClips || recordedPreviewMs <= 250 || recordedPreviewMs >= recordingDurationMs - 250"
+              @click="addSplitAtCurrentTime"
+            >
+              {{ formatDuration(recordedPreviewMs) }} で分割
+            </EnButton>
+            <EnButton
+              v-if="splitPointsMs.length > 0"
+              variant="ghost"
+              color="neutral"
+              size="sm"
+              leading-icon="material-symbols:restart-alt"
+              :disabled="isPreparingClips"
+              @click="splitPointsMs = []"
+            >
+              分割を解除
+            </EnButton>
+            <EnButton
+              v-if="aiSectionDrafts.length > 0 && hasChangedAiSplitProposal"
+              variant="outline"
+              color="neutral"
+              size="sm"
+              leading-icon="material-symbols:undo"
+              :disabled="isPreparingClips"
+              @click="restoreAiSplitProposal"
+            >
+              AI案に戻す
+            </EnButton>
+            <span class="ml-auto text-xs font-semibold text-slate-200">
+              {{ splitPointsMs.length === 0 ? "分割なし" : `${splitPointsMs.length + 1}クリップに分割` }}
+            </span>
+          </div>
+
+          <div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              v-for="section in preparedSectionSummaries"
+              :key="section.index"
+              class="rounded-md bg-white/5 px-3 py-2 text-xs ring-1 ring-white/10"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <p class="min-w-0 truncate font-semibold text-slate-100">{{ section.title }}</p>
+                <span
+                  v-if="section.isAiSuggested"
+                  class="shrink-0 rounded bg-primary-400/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary-200"
+                >AI提案</span>
+              </div>
+              <p class="mt-1 text-slate-400">
+                {{ formatDuration(section.startMs) }} - {{ formatDuration(section.endMs) }}
+                / 約{{ formatDuration(section.editedDurationMs) }}
+              </p>
+              <p class="mt-1 line-clamp-2 text-[11px] text-slate-500">{{ section.summary }}</p>
+            </div>
+          </div>
           </div>
         </div>
 
@@ -301,7 +779,7 @@
           </div>
         </div>
 
-        <div class="mt-3 grid gap-2 text-xs text-slate-300 sm:grid-cols-3">
+        <div v-if="!recordedBlob" class="mt-3 grid gap-2 text-xs text-slate-300 sm:grid-cols-3">
           <div class="rounded-lg bg-white/5 p-3 ring-1 ring-white/10">
             <p class="font-semibold text-slate-100">1. マイク必須</p>
             <p class="mt-1 text-slate-400">声で意図や判断を説明します。</p>
@@ -313,6 +791,20 @@
           <div class="rounded-lg bg-white/5 p-3 ring-1 ring-white/10">
             <p class="font-semibold text-slate-100">3. 停止して保存</p>
             <p class="mt-1 text-slate-400">確認後に保存すると詳細画面に移動します。</p>
+          </div>
+        </div>
+
+        <div v-if="recordedBlob && !isRecording" class="mt-4 rounded-lg border border-white/10 bg-white/5 p-3">
+          <p class="text-xs font-semibold text-slate-100">録画後の処理方法</p>
+          <div class="mt-2 grid gap-2 sm:grid-cols-2">
+            <button type="button" class="rounded-lg border p-3 text-left text-xs transition" :class="recordingProcessingMode === 'automatic' ? 'border-primary-300 bg-primary-400/15 text-primary-50' : 'border-white/10 text-slate-300 hover:bg-white/5'" @click="recordingProcessingMode = 'automatic'">
+              <span class="block font-semibold">バックグラウンド全自動（推奨）</span>
+              <span class="mt-1 block opacity-75">AI分割案を自動採用し、ブラウザを閉じてもStory生成と通知まで続けます。</span>
+            </button>
+            <button type="button" class="rounded-lg border p-3 text-left text-xs transition" :class="recordingProcessingMode === 'manual' ? 'border-primary-300 bg-primary-400/15 text-primary-50' : 'border-white/10 text-slate-300 hover:bg-white/5'" @click="recordingProcessingMode = 'manual'">
+              <span class="block font-semibold">手動編集</span>
+              <span class="mt-1 block opacity-75">無音候補とAI分割案を確認してから保存します。</span>
+            </button>
           </div>
         </div>
 
@@ -342,24 +834,247 @@
             variant="ghost"
             color="neutral"
             size="md"
-            :disabled="isSaving || isExtractingFrames"
+            :disabled="isSaving || isExtractingFrames || isPreparingClips || isSavingClipDraft"
             @click="resetRecording"
           >
             撮り直す
           </EnButton>
           <EnButton
-            v-if="recordedBlob && !isRecording"
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'automatic'"
             variant="ai"
             size="md"
-            leading-icon="material-symbols:save-outline"
+            leading-icon="material-symbols:rocket-launch-outline"
+            :disabled="isSavingClipDraft || !activeClipDraftIsPersisted || isStartingAutomaticPipeline"
+            :loading="isStartingAutomaticPipeline"
+            @click="startAutomaticPipeline"
+          >
+            バックグラウンド解析を開始
+          </EnButton>
+          <EnButton
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'manual' && clipEditingStep === 1"
+            variant="ghost"
+            color="neutral"
+            size="md"
+            :disabled="isPreparingClips || isSavingClipDraft || !activeClipDraftIsPersisted"
+            leading-icon="material-symbols:subtitles-outline"
+            @click="prepareTranscriptAndSections(false)"
+          >
+            {{ noiseReductionEnabled ? "カットせずノイズ低減して文字起こし" : "カットせず文字起こし" }}
+          </EnButton>
+          <EnButton
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'manual' && clipEditingStep === 1"
+            variant="ai"
+            size="md"
+            leading-icon="material-symbols:auto-awesome"
+            :disabled="isAnalyzingSilence || isPreparingClips || isSavingClipDraft || !activeClipDraftIsPersisted"
+            :loading="isPreparingClips"
+            @click="prepareTranscriptAndSections(true)"
+          >
+            {{ manualCutRanges.length > 0 ? "選択範囲をカットして文字起こし" : silenceCutEnabled && cutSilenceRanges.length > 0 ? "無音カットして文字起こし" : noiseReductionEnabled ? "ノイズ低減して分割案を作る" : "文字起こしして分割案を作る" }}
+          </EnButton>
+          <EnButton
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'manual' && clipEditingStep === 2"
+            variant="ghost"
+            color="neutral"
+            size="md"
+            leading-icon="material-symbols:arrow-back"
+            :disabled="isPreparingClips"
+            @click="clipEditingStep = 1"
+          >
+            戻る
+          </EnButton>
+          <EnButton
+            v-if="recordedBlob && !isRecording && recordingProcessingMode === 'manual' && clipEditingStep === 2"
+            variant="ai"
+            size="md"
+            leading-icon="material-symbols:auto-awesome"
             :disabled="!canSave"
-            :loading="isSaving || isExtractingFrames"
+            :loading="isSaving || isExtractingFrames || isPreparingClips"
             @click="saveRecording"
           >
-            保存して次へ
+            AIタイトルで{{ splitPointsMs.length + 1 }}クリップを取り込む
           </EnButton>
         </div>
       </div>
+    </EnModal>
+
+    <EnModal
+      v-model:open="continueRecordingPromptOpen"
+      title="バックグラウンド解析を開始しました"
+      subtitle="解析を待たずに、続けて次の操作クリップを撮影できます。"
+      title-icon="material-symbols:playlist-add-check-circle-outline"
+      size="lg"
+      :close-on-backdrop="false"
+      :hide-close="true"
+    >
+      <div class="space-y-5">
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p class="font-semibold">{{ lastSubmittedRecordingTitle }}</p>
+          <p class="mt-1">この撮影セッションで {{ submittedPipelineCount }} 本を解析へ投入しました。</p>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <button type="button" class="rounded-xl border border-primary-200 bg-primary-50 p-4 text-left transition hover:bg-primary-100" @click="recordNextClip">
+            <span class="flex items-center gap-2 font-semibold text-primary-900"><UIcon name="material-symbols:video-camera-back-outline" class="h-5 w-5" />続けて次を撮影</span>
+            <span class="mt-1 block text-xs text-primary-700">録画画面を初期化し、次のWindow・マイク選択へ進みます。</span>
+          </button>
+          <button type="button" class="rounded-xl border border-slate-200 bg-white p-4 text-left transition hover:bg-slate-50" @click="finishRecordingBatch">
+            <span class="flex items-center gap-2 font-semibold text-slate-900"><UIcon name="material-symbols:bedtime-outline" class="h-5 w-5" />いったん撮影を終了</span>
+            <span class="mt-1 block text-xs text-slate-600">解析は継続します。ヘッダーの解析ステータスや完了メールで確認できます。</span>
+          </button>
+        </div>
+      </div>
+    </EnModal>
+
+    <EnModal
+      v-model:open="clipPreparationProgressOpen"
+      title="文字起こしとクリップ分割を準備中"
+      subtitle="動画調整のRequestDocログと後続処理の進み具合を表示します。"
+      title-icon="material-symbols:movie-edit-outline"
+      size="2xl"
+      :close-on-backdrop="false"
+      :hide-close="isClipPreparationBusy"
+    >
+      <div class="space-y-5">
+        <div
+          class="border-l-4 px-4 py-3"
+          :class="clipPreparationPhase === 'error' ? 'border-red-500 bg-red-50' : clipPreparationPhase === 'done' ? 'border-emerald-500 bg-emerald-50' : 'border-cyan-500 bg-cyan-50'"
+        >
+          <div class="flex items-start gap-3">
+            <span
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1"
+              :class="clipPreparationPhase === 'error' ? 'text-red-600 ring-red-100' : clipPreparationPhase === 'done' ? 'text-emerald-700 ring-emerald-100' : 'text-cyan-700 ring-cyan-100'"
+            >
+              <UIcon
+                :name="clipPreparationPhase === 'error' ? 'material-symbols:error-outline' : clipPreparationPhase === 'done' ? 'material-symbols:check-circle-outline' : 'material-symbols:progress-activity'"
+                class="h-5 w-5"
+                :class="isClipPreparationBusy ? 'animate-spin' : ''"
+              />
+            </span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="font-bold text-slate-950">{{ clipPreparationProgressTitle }}</p>
+                <span class="text-sm font-bold text-slate-700">{{ clipPreparationProgressCompletion }}%</span>
+              </div>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                {{ clipPreparationProgressDescription }}
+              </p>
+              <div class="mt-3 h-2 overflow-hidden rounded-full bg-white ring-1 ring-slate-100">
+                <div
+                  class="h-full rounded-full transition-all duration-500"
+                  :class="clipPreparationPhase === 'error' ? 'bg-red-500' : 'bg-cyan-500'"
+                  :style="{ width: `${clipPreparationProgressCompletion}%` }"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ol class="grid gap-2 sm:grid-cols-2">
+          <li
+            v-for="(step, index) in clipPreparationProgressSteps"
+            :key="step.key"
+            class="flex min-h-20 items-start gap-3 border px-3 py-3"
+            :class="step.status === 'active' ? 'border-cyan-200 bg-cyan-50/60' : step.status === 'done' ? 'border-emerald-100 bg-emerald-50/40' : step.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white'"
+          >
+            <span
+              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+              :class="step.status === 'done' ? 'bg-emerald-100 text-emerald-700' : step.status === 'active' ? 'bg-cyan-100 text-cyan-700' : step.status === 'error' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-400'"
+            >
+              <UIcon v-if="step.status === 'done'" name="material-symbols:check-small" class="h-4 w-4" />
+              <UIcon v-else-if="step.status === 'active'" name="material-symbols:progress-activity" class="h-4 w-4 animate-spin" />
+              <UIcon v-else-if="step.status === 'error'" name="material-symbols:close-small" class="h-4 w-4" />
+              <span v-else>{{ index + 1 }}</span>
+            </span>
+            <div class="min-w-0">
+              <p class="text-sm font-bold text-slate-900">{{ step.label }}</p>
+              <p class="mt-1 text-xs leading-relaxed text-slate-500">{{ step.description }}</p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="border-t border-slate-200 pt-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <UIcon name="material-symbols:receipt-long-outline" class="h-4 w-4 text-slate-500" />
+              RequestDocログ
+            </p>
+            <button
+              v-if="clipPreparationProgress?.requestId"
+              type="button"
+              class="font-mono text-[11px] text-slate-500 transition hover:text-slate-900"
+              title="リクエストIDをコピー"
+              @click="copyIdToClipboard(clipPreparationProgress.requestId, 'リクエストID')"
+            >
+              {{ compactId(clipPreparationProgress.requestId) }}
+            </button>
+          </div>
+          <div v-if="clipPreparationRequestLogs.length > 0" class="mt-3 max-h-52 overflow-y-auto border border-slate-200 bg-slate-950">
+            <div
+              v-for="(log, index) in clipPreparationRequestLogs.slice(-6).reverse()"
+              :key="`${String(log.timestamp || '')}-${index}`"
+              class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-b border-white/10 px-3 py-2.5 last:border-b-0"
+            >
+              <span class="font-mono text-[10px] text-slate-500">{{ formatClipPreparationLogTime(log.timestamp) }}</span>
+              <div class="min-w-0">
+                <p class="text-xs font-semibold text-slate-100">{{ clipPreparationLogLabel(log) }}</p>
+                <p class="mt-0.5 break-words font-mono text-[10px] leading-relaxed text-slate-400">{{ log.message }}</p>
+              </div>
+            </div>
+          </div>
+          <div v-else class="mt-3 flex h-20 items-center justify-center border border-dashed border-slate-300 text-xs text-slate-400">
+            RequestDocの更新を待っています
+          </div>
+        </div>
+      </div>
+      <template v-if="clipPreparationPhase === 'done' || clipPreparationPhase === 'error'" #footer>
+        <EnButton
+          variant="ai"
+          size="sm"
+          :leading-icon="clipPreparationPhase === 'done' ? 'material-symbols:vertical-split' : 'material-symbols:close-rounded'"
+          @click="clipPreparationProgressOpen = false"
+        >
+          {{ clipPreparationPhase === 'done' ? '分割案を確認' : '閉じる' }}
+        </EnButton>
+      </template>
+    </EnModal>
+
+    <EnModal
+      v-model:open="discardClipDraftConfirmOpen"
+      title="録画の下書きを破棄しますか?"
+      subtitle="元動画と途中の編集状態を削除します。"
+      title-icon="material-symbols:delete-outline"
+      header-variant="warning"
+      size="md"
+      :close-on-backdrop="!discardingClipDraftId"
+      :hide-close="Boolean(discardingClipDraftId)"
+    >
+      <div v-if="discardClipDraftTarget" class="border border-red-100 bg-red-50 p-3">
+        <p class="text-sm font-bold text-slate-950">{{ discardClipDraftTarget.title }}</p>
+        <p class="mt-1 text-xs text-slate-600">
+          {{ formatClipDraftUpdatedAt(discardClipDraftTarget.updatedAt) }} / {{ discardClipDraftTarget.source ? formatDuration(discardClipDraftTarget.source.durationMs) : "動画保存待ち" }}
+        </p>
+      </div>
+      <template #footer>
+        <EnButton
+          variant="ghost"
+          color="neutral"
+          size="sm"
+          :disabled="Boolean(discardingClipDraftId)"
+          @click="discardClipDraftConfirmOpen = false"
+        >
+          キャンセル
+        </EnButton>
+        <EnButton
+          variant="soft"
+          color="error"
+          size="sm"
+          leading-icon="material-symbols:delete-outline"
+          :loading="discardingClipDraftId === discardClipDraftTarget?.id"
+          @click="confirmDiscardClipDraft"
+        >
+          下書きを破棄
+        </EnButton>
+      </template>
     </EnModal>
 
     <EnModal
@@ -494,6 +1209,7 @@
         <div
           class="overflow-hidden rounded-xl border"
           :class="saveProgressPhase === 'error' ? 'border-red-200 bg-red-50' : 'border-cyan-100 bg-cyan-50'"
+          :aria-busy="isSaveWorkflowBusy"
         >
           <div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-start gap-3">
@@ -502,8 +1218,9 @@
                 :class="saveProgressPhase === 'error' ? 'bg-red-100 text-red-600' : saveProgressPhase === 'done' ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-cyan-700 shadow-sm ring-1 ring-cyan-100'"
               >
                 <UIcon
-                  :name="saveProgressPhase === 'error' ? 'material-symbols:error-outline' : saveProgressPhase === 'done' ? 'material-symbols:check-circle-outline' : 'material-symbols:smart-toy-outline'"
+                  :name="saveProgressPhase === 'error' ? 'material-symbols:error-outline' : saveProgressPhase === 'done' ? 'material-symbols:check-circle-outline' : 'material-symbols:progress-activity'"
                   class="h-6 w-6"
+                  :class="isSaveWorkflowBusy ? 'animate-spin' : ''"
                 />
               </span>
               <div class="min-w-0">
@@ -513,19 +1230,40 @@
                 <p class="mt-1 text-sm leading-relaxed text-slate-600">
                   {{ saveProgressDescription }}
                 </p>
+                <div
+                  v-if="isSaveWorkflowBusy"
+                  class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold text-cyan-700"
+                >
+                  <span>{{ saveProgressActivityLabel }}</span>
+                  <span class="font-medium text-cyan-600">{{ saveProgressElapsedLabel }}</span>
+                </div>
               </div>
             </div>
-            <div class="min-w-[180px] rounded-lg bg-white/80 p-3 ring-1 ring-white">
-              <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                <span>理解中</span>
+            <div
+              class="min-w-[200px] rounded-lg bg-white/80 p-3 ring-1"
+              :class="isSaveWorkflowBusy ? 'ring-cyan-200 shadow-sm shadow-cyan-100' : 'ring-white'"
+            >
+              <div class="flex items-center justify-between text-[11px] font-bold uppercase text-slate-400">
+                <span>{{ saveProgressActivityLabel }}</span>
                 <span>{{ saveProgressCompletion }}%</span>
               </div>
-              <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div
+                class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"
+                role="progressbar"
+                aria-label="クリップ保存の進捗"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-valuenow="saveProgressCompletion"
+              >
                 <div
                   class="h-full rounded-full bg-cyan-500 transition-all duration-500"
+                  :class="isSaveWorkflowBusy ? 'animate-pulse' : ''"
                   :style="{ width: `${saveProgressCompletion}%` }"
                 />
               </div>
+              <p v-if="isSaveWorkflowBusy" class="mt-2 text-[11px] font-medium text-slate-500">
+                {{ saveProgressElapsedLabel }}
+              </p>
             </div>
           </div>
         </div>
@@ -536,7 +1274,7 @@
               v-for="step in saveProgressSteps"
               :key="step.key"
               class="flex items-start gap-3 rounded-xl border bg-white px-3 py-3 transition"
-              :class="step.status === 'active' ? 'border-cyan-200 shadow-sm shadow-cyan-100' : step.status === 'done' ? 'border-emerald-100' : step.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-200'"
+              :class="step.status === 'active' ? 'border-cyan-300 bg-cyan-50/60 shadow-sm shadow-cyan-100' : step.status === 'done' ? 'border-emerald-100' : step.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-200'"
             >
               <span
                 class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
@@ -583,7 +1321,7 @@
               <div class="flex items-start gap-3">
                 <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white">
                   <UIcon
-                    name="material-symbols:smart-toy-outline"
+                    :name="saveProgressPhase === 'done' ? 'material-symbols:check-circle-outline' : 'material-symbols:smart-toy-outline'"
                     class="h-5 w-5"
                   />
                 </span>
@@ -596,7 +1334,12 @@
                   </p>
                 </div>
               </div>
-              <span class="rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-700">
+              <span class="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-700">
+                <UIcon
+                  v-if="isSaveWorkflowBusy"
+                  name="material-symbols:progress-activity"
+                  class="h-3.5 w-3.5 animate-spin"
+                />
                 {{ saveProgressInsight.badge }}
               </span>
             </div>
@@ -914,7 +1657,7 @@
           </p>
         </div>
         <p class="text-xs leading-relaxed text-slate-500">
-          削除後、このクリップグループの解析結果は未解析状態に戻ります。必要であれば再解析してください。
+          このクリップと保存済みのスクリーンショットは元に戻せません。
         </p>
       </div>
       <template #footer>
@@ -1293,6 +2036,16 @@
           <p class="min-w-0 max-w-[320px] truncate text-2xl font-black leading-tight tracking-normal text-slate-950">
             {{ videoGroupForVideo(detailVideo).name }}
           </p>
+          <button
+            v-if="videoGroupForVideo(detailVideo).id"
+            type="button"
+            class="inline-flex max-w-[220px] shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] font-bold text-slate-500 shadow-sm transition hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+            :title="`グループIDをコピー: ${videoGroupForVideo(detailVideo).id}`"
+            @click.stop="copyIdToClipboard(videoGroupForVideo(detailVideo).id, 'グループID')"
+          >
+            <UIcon name="material-symbols:content-copy-outline" class="h-3.5 w-3.5 shrink-0" />
+            <span class="truncate">ID {{ compactId(videoGroupForVideo(detailVideo).id) }}</span>
+          </button>
           <span class="shrink-0 text-sm font-semibold text-slate-400">
             / {{ detailVideoClips.length }} clips
           </span>
@@ -1414,7 +2167,10 @@
           >
             <UIcon name="material-symbols:add-rounded" class="h-5 w-5" />
           </button>
-          <StoryVaultAnalysisStatusTip :status="detailVideo.analysisStatus" />
+          <StoryVaultAnalysisStatusTip
+            v-if="detailVideo.analysisStatus !== 'completed'"
+            :status="detailVideo.analysisStatus"
+          />
           <button
             type="button"
             class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl bg-gradient-to-b from-blue-500 to-blue-700 px-4 py-2 text-sm font-black text-white shadow-[0_5px_0_#1d4ed8,0_14px_24px_rgba(37,99,235,0.28)] transition hover:-translate-y-0.5 hover:shadow-[0_6px_0_#1d4ed8,0_18px_28px_rgba(37,99,235,0.3)] active:translate-y-1 active:shadow-[0_2px_0_#1d4ed8,0_8px_16px_rgba(37,99,235,0.22)] focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -1425,28 +2181,17 @@
           </button>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <EnBadge
-            v-if="detailVideo.hasUnanalyzedClip"
-            color="warning"
-            variant="soft"
+          <EnButton
+            v-if="detailVideo.analysisStatus !== 'completed' && !detailVideo.analysisResult"
+            variant="ai"
+            size="xs"
+            leading-icon="material-symbols:psychology-outline"
+            :loading="isAnalyzing && detailVideo.analysisStatus === 'running'"
+            :disabled="!props.application?.fileSpaceId || detailVideo.analysisStatus === 'queued' || detailVideo.analysisStatus === 'running'"
+            @click="emit('analyze', detailVideo.id)"
           >
-            追加あり
-          </EnBadge>
-          <UDropdownMenu
-            :items="detailReanalysisItems"
-            :content="{ align: 'end', side: 'bottom' }"
-            :ui="{ content: 'z-[80] min-w-[15rem]' }"
-          >
-            <EnButton
-              variant="ai"
-              size="xs"
-              leading-icon="material-symbols:refresh-rounded"
-              :loading="isWorkflowRunningFor(detailVideo) || (isAnalyzing && detailVideo.analysisStatus === 'running')"
-              :disabled="detailVideo.analysisStatus === 'queued' || detailVideo.analysisStatus === 'running'"
-            >
-              再解析
-            </EnButton>
-          </UDropdownMenu>
+            ユーザーストーリー解析
+          </EnButton>
           <UDropdownMenu
             :items="detailMoreActionItems"
             :content="{ align: 'end', side: 'bottom' }"
@@ -1460,25 +2205,6 @@
               <UIcon name="i-heroicons-ellipsis-horizontal-20-solid" class="h-5 w-5" />
             </button>
           </UDropdownMenu>
-        </div>
-      </div>
-
-      <div
-        v-if="detailVideo.hasUnanalyzedClip"
-        class="mb-5 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-      >
-        <div class="flex min-w-0 items-start gap-3">
-          <span class="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 ring-1 ring-amber-200">
-            <UIcon name="material-symbols:sync-problem-outline" class="h-4 w-4" />
-          </span>
-          <div class="min-w-0">
-            <p class="text-sm font-bold text-slate-950">
-              追加されたクリップがあります
-            </p>
-            <p class="mt-1 text-xs leading-relaxed text-slate-600">
-              {{ detailVideo.analysisStaleReason || "ユーザーストーリー再解析を実行すると最新の操作セットに反映されます。" }}
-            </p>
-          </div>
         </div>
       </div>
 
@@ -1731,6 +2457,15 @@
                       {{ selectedDetailClip.fileName }}
                     </p>
                     <div class="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        class="inline-flex max-w-full items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 font-mono text-xs font-bold text-slate-500 shadow-sm transition hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                        :title="`クリップIDをコピー: ${selectedDetailClip.id}`"
+                        @click.stop="copyIdToClipboard(selectedDetailClip.id, 'クリップID')"
+                      >
+                        <UIcon name="material-symbols:content-copy-outline" class="h-4 w-4 shrink-0" />
+                        <span class="truncate">Clip ID {{ compactId(selectedDetailClip.id) }}</span>
+                      </button>
                       <EnButton
                         variant="outline"
                         color="neutral"
@@ -2040,11 +2775,12 @@
                 <UIcon name="material-symbols:summarize-outline" class="h-4 w-4 text-slate-500" />
                 文字起こしの読みどころ
               </h4>
-              <div class="mt-3 grid gap-3 md:grid-cols-3">
+              <div class="mt-3 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
                 <div
                   v-for="section in richTranscriptSummarySections(detailVideo).slice(0, 3)"
                   :key="`${detailVideo.id}-detail-summary-${section.title}`"
                   class="rounded-2xl border border-slate-200 bg-white p-3"
+                  :class="richTranscriptSummarySections(detailVideo).length === 1 ? 'md:col-span-2 2xl:col-span-3' : ''"
                 >
                   <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
                     {{ section.title }}
@@ -2071,7 +2807,7 @@
               </div>
               <div
                 v-if="transcriptCueRows(detailVideo).length > 0"
-                class="max-h-[420px] space-y-2 overflow-auto rounded-2xl border border-slate-100 bg-slate-50 p-3"
+                class="min-h-[320px] max-h-[calc(100dvh-18rem)] space-y-2 overflow-auto rounded-2xl border border-slate-100 bg-slate-50 p-3 2xl:min-h-[420px]"
               >
                 <div
                   v-for="cue in transcriptCueRows(detailVideo)"
@@ -2086,7 +2822,7 @@
               </div>
               <p
                 v-else
-                class="max-h-[420px] overflow-auto whitespace-pre-line rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm leading-7 text-slate-700"
+                class="min-h-[320px] max-h-[calc(100dvh-18rem)] overflow-auto whitespace-pre-line rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm leading-7 text-slate-700 2xl:min-h-[420px]"
               >
                 {{ detailVideo.transcriptText }}
               </p>
@@ -2103,7 +2839,7 @@
 
       <div
         v-else-if="detailTab === 'report'"
-        class="space-y-3"
+        class="flex min-h-[calc(100dvh-13rem)] flex-col gap-3"
       >
         <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -2181,7 +2917,7 @@
           v-if="reportMode === 'html' && reportHtmlUrl"
           :src="reportHtmlUrl"
           title="Operation video bundle report preview"
-          class="h-[min(780px,calc(100vh-250px))] min-h-[560px] w-full rounded-2xl border border-slate-200 bg-white shadow-sm"
+          class="min-h-[680px] w-full flex-1 rounded-2xl border border-slate-200 bg-white shadow-sm"
         />
         <section
           v-else-if="reportMode === 'excel'"
@@ -2213,7 +2949,7 @@
           v-else
           :value="reportBody"
           readonly
-          class="h-[min(780px,calc(100vh-250px))] min-h-[560px] w-full rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-100 shadow-sm"
+          class="min-h-[680px] w-full flex-1 rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-100 shadow-sm"
         />
       </div>
 
@@ -2411,6 +3147,31 @@
                     {{ selectedAnalysisStory.userStory }}
                   </p>
 
+                  <div
+                    v-if="selectedAnalysisStory.detailedSpecifications.length > 0"
+                    class="rounded-3xl border border-cyan-100 bg-cyan-50/60 p-4"
+                  >
+                    <p class="flex items-center gap-2 text-base font-bold text-slate-950">
+                      <UIcon name="material-symbols:format-list-bulleted-rounded" class="h-4 w-4 text-cyan-700" />
+                      詳細仕様
+                    </p>
+                    <p class="mt-1 text-sm leading-6 text-slate-600">
+                      動画内の補足説明・細かい機能特徴・制約を、このストーリーに紐付けて保持します
+                    </p>
+                    <ul class="mt-3 space-y-2">
+                      <li
+                        v-for="(specification, index) in selectedAnalysisStory.detailedSpecifications"
+                        :key="`${selectedAnalysisStory.id}-spec-${index}`"
+                        class="flex gap-2 text-sm leading-relaxed text-slate-700"
+                      >
+                        <span class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-cyan-700 ring-1 ring-cyan-100">
+                          {{ index + 1 }}
+                        </span>
+                        <span>{{ specification }}</span>
+                      </li>
+                    </ul>
+                  </div>
+
                   <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <div>
@@ -2562,6 +3323,64 @@
         v-else
         class="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]"
       >
+        <EnModal
+          v-model:open="bulkContextModalOpen"
+          title="コンテキストを一括収集中"
+          subtitle="クリップに関係する情報を各サービスから集めています"
+          title-icon="material-symbols:auto-awesome"
+          size="lg"
+          :close-on-backdrop="bulkContextCompleted"
+        >
+          <div class="space-y-5">
+            <div class="overflow-hidden rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-5">
+              <div class="flex items-center gap-4">
+                <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/25">
+                  <UIcon
+                    :name="bulkContextCompleted ? 'material-symbols:check' : 'material-symbols:autorenew'"
+                    class="h-6 w-6"
+                    :class="bulkContextCompleted ? '' : 'animate-spin'"
+                  />
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-black text-slate-950">
+                    {{ bulkContextCompleted ? "収集リクエストを送信しました" : "関連情報を探索しています" }}
+                  </p>
+                  <p class="mt-1 text-xs leading-relaxed text-slate-600">
+                    {{ bulkContextCompleted ? "各サービスの解析はバックグラウンドで続きます。結果はこの画面に反映されます。" : "クリップの内容を手がかりに、関連性の高い情報を自動で照合しています。" }}
+                  </p>
+                </div>
+              </div>
+              <div class="mt-5 h-2 overflow-hidden rounded-full bg-blue-100">
+                <div
+                  class="h-full rounded-full bg-gradient-to-r from-blue-600 via-cyan-500 to-teal-400 transition-all duration-700"
+                  :class="bulkContextCompleted ? 'w-full' : 'w-2/3 animate-pulse'"
+                />
+              </div>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-3">
+              <div
+                v-for="step in bulkContextSteps"
+                :key="step.key"
+                class="rounded-xl border p-4 transition"
+                :class="step.status === 'done' ? 'border-emerald-200 bg-emerald-50' : step.status === 'running' ? 'border-blue-200 bg-blue-50 shadow-sm' : 'border-slate-200 bg-slate-50'"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <UIcon :name="step.icon" class="h-5 w-5" :class="step.status === 'done' ? 'text-emerald-600' : step.status === 'running' ? 'text-blue-600' : 'text-slate-400'" />
+                  <UIcon v-if="step.status === 'running'" name="material-symbols:progress-activity" class="h-4 w-4 animate-spin text-blue-600" />
+                  <UIcon v-else-if="step.status === 'done'" name="material-symbols:check-circle" class="h-4 w-4 text-emerald-600" />
+                </div>
+                <p class="mt-3 text-xs font-bold text-slate-900">{{ step.label }}</p>
+                <p class="mt-1 text-[11px] text-slate-500">{{ step.status === 'done' ? '取得リクエスト送信済み' : step.status === 'running' ? '解析を開始しています' : '待機中' }}</p>
+              </div>
+            </div>
+          </div>
+          <template #footer>
+            <EnButton v-if="bulkContextCompleted" variant="solid" color="primary" size="sm" @click="bulkContextModalOpen = false">
+              閉じる
+            </EnButton>
+          </template>
+        </EnModal>
+
         <aside class="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm xl:sticky xl:top-4 xl:self-start">
           <div class="mb-3 px-2">
             <p class="text-xs font-bold uppercase tracking-wide text-slate-400">
@@ -2571,6 +3390,20 @@
               取得元を選ぶと右側に結果を表示します
             </p>
           </div>
+          <button
+            type="button"
+            class="mb-3 flex w-full items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-500 px-3 py-3 text-left text-white shadow-lg shadow-blue-600/20 transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="!detailVideo || isRelatedContextBusy(detailVideo)"
+            @click="startBulkContextCollection"
+          >
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
+              <UIcon name="material-symbols:auto-awesome" class="h-5 w-5" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-bold">コンテキスト一括収集</span>
+              <span class="mt-0.5 block text-[11px] text-blue-100">AIで関連情報を自動照合</span>
+            </span>
+          </button>
           <nav class="space-y-1" aria-label="関連コンテキストツール">
             <button
               type="button"
@@ -2631,34 +3464,6 @@
             <button
               type="button"
               class="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition"
-              :class="relatedContextProviderTab === 'slack' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'"
-              @click="relatedContextProviderTab = 'slack'"
-            >
-              <span
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                :class="relatedContextProviderTab === 'slack' ? 'bg-white/10' : 'bg-slate-100'"
-              >
-                <UIcon name="i-simple-icons-slack" class="h-4 w-4" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-sm font-bold">Slack</span>
-                <span
-                  class="mt-0.5 block truncate text-xs"
-                  :class="relatedContextProviderTab === 'slack' ? 'text-slate-300' : 'text-slate-500'"
-                >
-                  会話とスレッド
-                </span>
-              </span>
-              <span
-                class="inline-flex min-w-6 shrink-0 items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                :class="relatedContextProviderTab === 'slack' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-700'"
-              >
-                {{ relatedSlackMessageCount(detailVideo) }}
-              </span>
-            </button>
-            <button
-              type="button"
-              class="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition"
               :class="relatedContextProviderTab === 'jira' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'"
               @click="relatedContextProviderTab = 'jira'"
             >
@@ -2681,7 +3486,7 @@
                 class="inline-flex min-w-6 shrink-0 items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-semibold"
                 :class="relatedContextProviderTab === 'jira' ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-700'"
               >
-                0
+                {{ relatedJiraIssueCount(detailVideo) }}
               </span>
             </button>
           </nav>
@@ -2713,8 +3518,78 @@
               :disabled="!application?.fileSpaceId || isRelatedContextProviderRunning(detailVideo, 'knowledge')"
               @click="$emit('fetch-related-context', detailVideo.id, 'knowledge')"
             >
-              {{ detailVideo.relatedContexts?.knowledge ? "ナレッジ再取得" : "ナレッジ取得" }}
+              {{ hasRelatedKnowledgeContext(detailVideo) ? "ナレッジ再取得" : "ナレッジ取得" }}
             </EnButton>
+          </div>
+
+          <div class="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-bold text-slate-900">ナレッジ一覧から手動で紐付け</p>
+                <p class="mt-1 text-xs leading-relaxed text-slate-600">
+                  自動検索に出ないファイルも、対象FileSpaceから選択してクリップの関連コンテキストへ保存できます。
+                </p>
+              </div>
+              <EnButton
+                variant="outline"
+                color="neutral"
+                size="xs"
+                leading-icon="material-symbols:folder-open"
+                :loading="isKnowledgeManualLoading"
+                :disabled="!application?.fileSpaceId"
+                @click="loadKnowledgeDocumentsForManualLink"
+              >
+                ナレッジ一覧を表示
+              </EnButton>
+            </div>
+
+            <div v-if="knowledgeFileSpaceStore.documents.length > 0 || isKnowledgeManualLoading" class="mt-3 space-y-3">
+              <input
+                v-model="knowledgeManualSearchQuery"
+                type="search"
+                class="h-9 w-full rounded-md border border-emerald-200 bg-white px-3 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                placeholder="ファイル名・説明で絞り込み"
+              >
+              <div v-if="isKnowledgeManualLoading" class="rounded-lg border border-emerald-100 bg-white p-4 text-xs text-slate-500">
+                FileSpaceのナレッジ一覧を読み込んでいます…
+              </div>
+              <div v-else class="max-h-[26rem] overflow-y-auto rounded-lg border border-emerald-100 bg-white p-3">
+                <label
+                  v-for="document in knowledgeManualDocuments"
+                  :key="`knowledge-manual-${knowledgeDocumentSelectionKey(document)}`"
+                  class="flex cursor-pointer items-start gap-3 border-b border-slate-100 px-2 py-3 last:border-0 hover:bg-emerald-50/50"
+                >
+                  <input
+                    v-model="selectedKnowledgeDocumentIds"
+                    type="checkbox"
+                    :value="knowledgeDocumentSelectionKey(document)"
+                    class="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  >
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-xs font-bold text-slate-900">{{ document.displayName || document.title || document.name || "名称未設定" }}</span>
+                    <span class="mt-1 block line-clamp-2 text-[11px] leading-relaxed text-slate-500">{{ document.description || document.mimeType || document.filePath || "FileSpaceナレッジ" }}</span>
+                  </span>
+                </label>
+                <p v-if="knowledgeManualDocuments.length === 0" class="p-4 text-center text-xs text-slate-500">
+                  該当するナレッジファイルはありません
+                </p>
+              </div>
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-slate-500">{{ knowledgeManualDocuments.length }}件表示 / {{ selectedKnowledgeDocumentIds.length }}件選択中</p>
+                <EnButton
+                  variant="solid"
+                  color="neutral"
+                  size="xs"
+                  custom-class="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700 disabled:!bg-slate-300"
+                  leading-icon="material-symbols:link"
+                  :disabled="selectedKnowledgeDocumentIds.length === 0"
+                  @click="linkSelectedKnowledgeDocuments"
+                >
+                  選択したナレッジを紐付け
+                </EnButton>
+              </div>
+            </div>
+            <EnAlert v-if="knowledgeManualError" class="mt-3" color="warning" :title="knowledgeManualError" />
           </div>
 
           <div
@@ -2761,20 +3636,20 @@
           />
 
           <div
-            v-else-if="!isRelatedContextProviderRunning(detailVideo, 'knowledge') && !detailVideo.relatedContexts?.knowledge"
+            v-else-if="!isRelatedContextProviderRunning(detailVideo, 'knowledge') && !hasRelatedKnowledgeContext(detailVideo)"
             class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
           >
             ナレッジ取得を実行すると、クリップに関連する投入ファイルや設計書がここに表示されます
           </div>
 
-          <div v-else-if="detailVideo.relatedContexts?.knowledge" class="space-y-4">
+          <div v-else-if="hasRelatedKnowledgeContext(detailVideo)" class="space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              <span>{{ detailVideo.relatedContexts.knowledge.fileSpaceId }}</span>
-              <span>{{ formatRecordedAt(detailVideo.relatedContexts.knowledge.checkedAt) }}</span>
+              <span>{{ relatedKnowledgeFileSpaceId(detailVideo) }}</span>
+              <span>{{ formatRecordedAt(relatedKnowledgeCheckedAt(detailVideo)) }}</span>
             </div>
 
             <div
-              v-if="detailVideo.relatedContexts.knowledge.documents.length === 0"
+              v-if="relatedKnowledgeDocuments(detailVideo).length === 0"
               class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
             >
               関連するナレッジファイルは見つかりませんでした
@@ -2782,7 +3657,7 @@
 
             <div v-else class="grid gap-3 md:grid-cols-3 2xl:grid-cols-4">
               <article
-                v-for="doc in detailVideo.relatedContexts.knowledge.documents"
+                v-for="doc in relatedKnowledgeDocuments(detailVideo)"
                 :key="`${detailVideo.id}-related-knowledge-${doc.documentId || doc.name}`"
                 class="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
               >
@@ -2798,6 +3673,16 @@
                   >
                     {{ doc.relevanceScore }}
                   </EnBadge>
+                  <button
+                    v-if="doc.documentId || doc.name"
+                    type="button"
+                    class="absolute bottom-2 right-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-500 shadow-sm ring-1 ring-slate-200 hover:text-red-600"
+                    :aria-label="`${doc.displayName || doc.name || 'ナレッジ'}の紐付けを解除`"
+                    title="紐付けを解除"
+                    @click="emit('unlink-knowledge-document', detailVideo.id, doc.documentId || doc.name || '')"
+                  >
+                    <UIcon name="material-symbols:close" class="h-4 w-4" />
+                  </button>
                 </div>
                 <p
                   v-if="doc.reason"
@@ -2824,24 +3709,320 @@
             v-if="relatedContextProviderTab === 'jira'"
             class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
           >
-          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
-                <UIcon name="material-symbols:confirmation-number-outline" class="h-4 w-4 text-slate-500" />
-                Jira チケット
-              </h4>
-              <p class="mt-1 text-xs text-slate-500">
-                チケット管理ツールの関連Issueを表示する枠です
+            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h4 class="flex items-center gap-2 text-base font-bold text-slate-950">
+                  <UIcon name="i-simple-icons-jira" class="h-4 w-4 text-[#1868DB]" />
+                  Jira Issue
+                </h4>
+                <p class="mt-1 text-xs text-slate-500">
+                  {{ relatedJiraSiteLabel(detailVideo) }}
+                </p>
+              </div>
+              <EnButton
+                variant="solid"
+                color="neutral"
+                size="xs"
+                custom-class="!border-[#1868DB] !bg-[#1868DB] !text-white shadow-lg shadow-blue-900/15 hover:!bg-[#1558b7] disabled:!bg-slate-400"
+                leading-icon="i-simple-icons-jira"
+                :loading="isRelatedContextProviderRunning(detailVideo, 'jira')"
+                :global-loading="false"
+                :disabled="isRelatedContextBusy(detailVideo)"
+                @click="$emit('fetch-related-context', detailVideo.id, 'jira')"
+              >
+                {{ hasRelatedJiraContext(detailVideo) ? "Issueを再取得" : "Issueを取得" }}
+              </EnButton>
+            </div>
+
+            <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm font-bold text-slate-900">Issueを検索して手動で紐付け</p>
+                  <p class="mt-1 text-xs leading-relaxed text-slate-600">
+                    AIの候補にないチケットも、キーやタイトルで検索してクリップに追加できます。
+                  </p>
+                </div>
+                <EnButton
+                  v-if="jiraConnections.length === 0"
+                  variant="outline"
+                  color="neutral"
+                  size="xs"
+                  leading-icon="i-heroicons-arrow-top-right-on-square"
+                  @click="navigateToJiraSettings"
+                >
+                  Jira接続を設定
+                </EnButton>
+              </div>
+
+              <div v-if="jiraConnections.length > 0" class="mt-3 space-y-3">
+                <div class="grid gap-2 md:grid-cols-[minmax(180px,0.35fr)_minmax(0,1fr)_auto]">
+                  <select
+                    v-model="jiraSelectedCloudId"
+                    class="h-9 min-w-0 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:border-[#1868DB] focus:ring-2 focus:ring-blue-100"
+                    aria-label="Jira site"
+                  >
+                    <option
+                      v-for="connection in jiraConnections"
+                      :key="connection.cloudId"
+                      :value="connection.cloudId"
+                    >
+                      {{ connection.siteName || connection.siteUrl || "Jira Cloud" }}
+                    </option>
+                  </select>
+                  <input
+                    v-model="jiraSearchQuery"
+                    type="search"
+                    class="h-9 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:border-[#1868DB] focus:ring-2 focus:ring-blue-100"
+                    placeholder="Issueキー、タイトル、語句で検索（空欄で最近のIssue）"
+                    @keydown.enter="searchJiraIssues"
+                  >
+                  <EnButton
+                    variant="solid"
+                    color="neutral"
+                    size="xs"
+                    custom-class="!border-[#1868DB] !bg-[#1868DB] !text-white hover:!bg-[#1558b7]"
+                    leading-icon="i-heroicons-magnifying-glass"
+                    :loading="isJiraSearching"
+                    @click="searchJiraIssues"
+                  >
+                    検索
+                  </EnButton>
+                </div>
+
+                <EnAlert
+                  v-if="jiraSearchError"
+                  color="warning"
+                  :title="jiraSearchError"
+                />
+
+                <div
+                  v-if="jiraSearchResults.length > 0"
+                  class="max-h-[30rem] overflow-y-auto rounded-lg border border-blue-100 bg-slate-50/70 p-3"
+                >
+                  <p class="px-2.5 pb-1 text-[11px] font-semibold text-slate-500">
+                    {{ jiraListMode === "project" ? "StoryVaultのチケット一覧" : "検索結果" }}
+                  </p>
+                  <div class="grid gap-3 lg:grid-cols-2">
+                  <label
+                    v-for="issue in jiraSearchResults"
+                    :key="`jira-search-${issue.cloudId}-${issue.key}`"
+                    class="flex min-h-36 cursor-pointer items-start gap-3 rounded-lg border bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
+                    :class="isJiraIssueSelected(issue) ? 'border-blue-300 bg-blue-50/70 ring-1 ring-blue-200' : 'border-slate-200'"
+                  >
+                    <input
+                      v-model="selectedJiraIssueKeys"
+                      type="checkbox"
+                      :value="jiraIssueSelectionKey(issue)"
+                      class="mt-1 h-4 w-4 rounded border-slate-300 text-[#1868DB] focus:ring-[#1868DB]"
+                    >
+                    <span class="min-w-0 flex-1">
+                      <span class="flex items-start justify-between gap-2">
+                        <span class="block text-xs font-bold leading-relaxed text-slate-900">{{ issue.key }} {{ issue.summary }}</span>
+                        <a
+                          v-if="issue.htmlUrl"
+                          :href="issue.htmlUrl"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="shrink-0 p-1 text-slate-400 hover:text-[#1868DB]"
+                          :aria-label="`${issue.key}をJiraで開く`"
+                          @click.stop
+                        >
+                          <UIcon name="i-heroicons-arrow-top-right-on-square" class="h-4 w-4" />
+                        </a>
+                      </span>
+                      <span class="mt-2 inline-flex max-w-full truncate rounded bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                        {{ issue.project.name || "Jira" }} / {{ issue.status.name || "状態未設定" }}
+                        <span v-if="issue.assignee.name"> / {{ issue.assignee.name }}</span>
+                      </span>
+                      <span v-if="issue.description" class="mt-2 block line-clamp-4 text-[11px] leading-relaxed text-slate-600">
+                        {{ issue.description }}
+                      </span>
+                    </span>
+                  </label>
+                  </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-xs text-slate-500">
+                    {{ jiraSearchResults.length ? `${jiraSearchResults.length}件表示中` : "検索結果はここに表示されます" }}
+                    <span v-if="selectedJiraIssueKeys.length"> / {{ selectedJiraIssueKeys.length }}件選択中</span>
+                  </p>
+                  <EnButton
+                    variant="solid"
+                    color="neutral"
+                    size="xs"
+                    custom-class="!border-slate-950 !bg-slate-950 !text-white hover:!bg-slate-800 disabled:!bg-slate-300"
+                    leading-icon="material-symbols:link"
+                    :disabled="selectedJiraIssueKeys.length === 0"
+                    @click="linkSelectedJiraIssues"
+                  >
+                    選択したIssueを紐付け
+                  </EnButton>
+                </div>
+              </div>
+              <p
+                v-if="jiraConnections.length > 0 && jiraSearchResults.length === 0"
+                class="mt-3 text-xs text-slate-500"
+              >
+                検索すると、ここにIssueの要約・状態・担当者を確認できます。
               </p>
             </div>
-            <EnBadge color="neutral" variant="soft">
-              準備中
-            </EnBadge>
-          </div>
 
-          <div class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-            Jira連携を追加すると、クリップに関連するIssue、要件、ステータス、担当者がここに表示されます
-          </div>
+            <div
+              v-if="hasRelatedJiraContext(detailVideo) && relatedJiraIssues(detailVideo).length > 0"
+              class="mb-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-bold text-emerald-900">紐付け済みIssue</p>
+                <span class="text-[11px] text-emerald-700">{{ relatedJiraIssueCount(detailVideo) }}件</span>
+              </div>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <span
+                  v-for="issue in relatedJiraIssues(detailVideo)"
+                  :key="`jira-linked-${detailVideo.id}-${issue.cloudId}-${issue.key}`"
+                  class="inline-flex max-w-full items-center gap-1 rounded-md bg-white px-2 py-1 text-xs text-emerald-900 ring-1 ring-emerald-200"
+                >
+                  <a
+                    :href="issue.htmlUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="max-w-[260px] truncate font-semibold hover:underline"
+                  >
+                    {{ issue.key }} {{ issue.summary }}
+                  </a>
+                  <button
+                    type="button"
+                    class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-emerald-600 hover:bg-emerald-100 hover:text-red-600"
+                    :aria-label="`${issue.key}の紐付けを解除`"
+                    :title="`${issue.key}の紐付けを解除`"
+                    @click="unlinkJiraIssue(issue)"
+                  >
+                    <UIcon name="material-symbols:close" class="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              </div>
+            </div>
+
+            <EnAlert
+              v-if="detailVideo.relatedContexts?.status === 'error'"
+              class="mb-4"
+              color="warning"
+              :title="relatedContextErrorTitle(detailVideo)"
+            />
+
+            <div
+              v-if="isRelatedContextProviderRunning(detailVideo, 'jira')"
+              class="mb-4 overflow-hidden rounded-xl border border-[#1868DB] bg-[#0C2B4D] text-white shadow-sm"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <span class="relative flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                    <UIcon name="i-simple-icons-jira" class="h-4 w-4" />
+                    <span class="absolute inset-0 animate-ping rounded-full border border-white/20" />
+                  </span>
+                  <div>
+                    <p class="text-sm font-semibold">Jira Issueを取得しています</p>
+                    <p class="mt-0.5 text-xs text-blue-100">
+                      Story候補とIssueの要約、説明、ラベル、ステータスを照合中
+                    </p>
+                  </div>
+                </div>
+                <EnBadge color="neutral" variant="soft">analyzing</EnBadge>
+              </div>
+              <div class="grid gap-3 bg-white p-4 md:grid-cols-2">
+                <div
+                  v-for="index in 4"
+                  :key="`related-context-jira-skeleton-${index}`"
+                  class="rounded-lg border border-slate-100 p-3"
+                >
+                  <div class="h-3 w-2/3 animate-pulse rounded-full bg-slate-200" />
+                  <div class="mt-3 h-3 w-full animate-pulse rounded-full bg-slate-100" />
+                  <div class="mt-2 h-3 w-4/5 animate-pulse rounded-full bg-slate-100" />
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="!isRelatedContextProviderRunning(detailVideo, 'jira') && !hasRelatedJiraContext(detailVideo)"
+              class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center"
+            >
+              <UIcon name="i-simple-icons-jira" class="mx-auto h-7 w-7 text-[#1868DB]" />
+              <p class="mt-3 text-sm font-semibold text-slate-700">
+                Jira Issueはまだ紐付いていません
+              </p>
+              <p class="mt-1 text-xs text-slate-500">
+                OAuth接続後、クリップに関連するIssueを理由付きで収集します
+              </p>
+              <NuxtLink
+                to="/admin/preferences?tab=oauth-connections"
+                class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#1868DB] hover:underline"
+              >
+                Jira接続を設定
+                <UIcon name="i-heroicons-arrow-top-right-on-square" class="h-3.5 w-3.5" />
+              </NuxtLink>
+            </div>
+
+            <div v-else-if="hasRelatedJiraContext(detailVideo)" class="space-y-4">
+              <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <span>{{ relatedJiraSiteLabel(detailVideo) }}</span>
+                <span>{{ formatRecordedAt(relatedJiraCheckedAt(detailVideo)) }}</span>
+              </div>
+              <div
+                v-if="relatedJiraIssues(detailVideo).length === 0"
+                class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
+              >
+                関連するJira Issueは見つかりませんでした
+              </div>
+              <div v-else class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                <article
+                  v-for="issue in relatedJiraIssues(detailVideo)"
+                  :key="`${detailVideo.id}-related-jira-${issue.cloudId}-${issue.key}`"
+                  class="flex min-h-[188px] flex-col rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-200 hover:shadow-md"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <a
+                        :href="issue.htmlUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="line-clamp-2 text-sm font-bold leading-snug text-slate-950 hover:text-[#1868DB]"
+                      >
+                        {{ issue.key }} {{ issue.summary }}
+                      </a>
+                      <p class="mt-1 text-xs text-slate-500">
+                        {{ issue.project.name || "Jira" }} / {{ issue.issueType.name || "Issue" }}
+                      </p>
+                    </div>
+                    <EnBadge color="primary" variant="soft" class="shrink-0">
+                      {{ issue.relevanceScore }}
+                    </EnBadge>
+                  </div>
+                  <p v-if="issue.reason" class="mt-3 line-clamp-3 text-xs leading-relaxed text-slate-700">
+                    {{ issue.reason }}
+                  </p>
+                  <div class="mt-3 flex flex-wrap gap-1">
+                    <EnBadge v-if="issue.status.name" color="neutral" variant="soft">
+                      {{ issue.status.name }}
+                    </EnBadge>
+                    <EnBadge v-if="issue.priority.name" color="warning" variant="soft">
+                      {{ issue.priority.name }}
+                    </EnBadge>
+                    <EnBadge
+                      v-for="signal in issue.matchedSignals.slice(0, 2)"
+                      :key="`${issue.key}-${signal}`"
+                      color="neutral"
+                      variant="soft"
+                    >
+                      {{ signal }}
+                    </EnBadge>
+                  </div>
+                  <div class="mt-auto flex items-center justify-between gap-2 pt-3 text-[11px] text-slate-500">
+                    <span>{{ issue.assignee.name || "未割当" }}</span>
+                    <span>{{ formatRecordedAt(issue.updatedAt) }}</span>
+                  </div>
+                </article>
+              </div>
+            </div>
           </section>
 
           <section
@@ -2855,7 +4036,7 @@
                 GitHub PR
               </h4>
               <p class="mt-1 text-xs text-slate-500">
-                {{ application?.repoFullName || "Repository未設定" }}
+                {{ relatedGithubRepoFullName(detailVideo) || application?.repoFullName || "Repository未設定" }}
               </p>
             </div>
             <EnButton
@@ -2869,7 +4050,7 @@
               :disabled="!application?.repoFullName || isRelatedContextProviderRunning(detailVideo, 'github')"
               @click="$emit('fetch-related-context', detailVideo.id, 'github')"
             >
-              {{ detailVideo.relatedContexts?.github ? "PR一覧を再取得" : "PR一覧を取得" }}
+              {{ hasRelatedGithubContext(detailVideo) ? "PR一覧を再取得" : "PR一覧を取得" }}
             </EnButton>
           </div>
 
@@ -2920,20 +4101,20 @@
           </div>
 
           <div
-            v-if="!isRelatedContextProviderRunning(detailVideo, 'github') && !detailVideo.relatedContexts?.github"
+            v-if="!isRelatedContextProviderRunning(detailVideo, 'github') && !hasRelatedGithubContext(detailVideo)"
             class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
           >
             GitHub PRを取得すると、クリップに関連するPRと理由がここに表示されます
           </div>
 
-          <div v-else-if="detailVideo.relatedContexts?.github" class="space-y-4">
+          <div v-else-if="hasRelatedGithubContext(detailVideo)" class="space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              <span>{{ detailVideo.relatedContexts.github.repoFullName }}</span>
-              <span>{{ formatRecordedAt(detailVideo.relatedContexts.github.checkedAt) }}</span>
+              <span>{{ relatedGithubRepoFullName(detailVideo) }}</span>
+              <span>{{ formatRecordedAt(relatedGithubCheckedAt(detailVideo)) }}</span>
             </div>
 
             <div
-              v-if="detailVideo.relatedContexts.github.pullRequests.length === 0"
+              v-if="relatedGithubPullRequests(detailVideo).length === 0"
               class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
             >
               関連するPRは見つかりませんでした
@@ -2941,7 +4122,7 @@
 
             <div v-else class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
               <article
-                v-for="pr in detailVideo.relatedContexts.github.pullRequests"
+                v-for="pr in relatedGithubPullRequests(detailVideo)"
                 :key="`${detailVideo.id}-related-pr-${pr.number}`"
                 class="flex min-h-[172px] flex-col rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:border-slate-300 hover:shadow-md"
               >
@@ -3069,20 +4250,20 @@
           </div>
 
           <div
-            v-if="!isRelatedContextProviderRunning(detailVideo, 'slack') && !detailVideo.relatedContexts?.slack"
+            v-if="!isRelatedContextProviderRunning(detailVideo, 'slack') && !hasRelatedSlackContext(detailVideo)"
             class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
           >
             Slack会話を取得すると、クリップに関連する投稿と理由がここに表示されます
           </div>
 
-          <div v-else-if="detailVideo.relatedContexts?.slack" class="space-y-4">
+          <div v-else-if="hasRelatedSlackContext(detailVideo)" class="space-y-4">
             <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              <span>{{ detailVideo.relatedContexts.slack.teamName || detailVideo.relatedContexts.slack.teamId || "Slack" }}</span>
-              <span>{{ formatRecordedAt(detailVideo.relatedContexts.slack.checkedAt) }}</span>
+              <span>{{ relatedSlackTeamLabel(detailVideo) }}</span>
+              <span>{{ formatRecordedAt(relatedSlackCheckedAt(detailVideo)) }}</span>
             </div>
 
             <div
-              v-if="detailVideo.relatedContexts.slack.messages.length === 0"
+              v-if="relatedSlackMessages(detailVideo).length === 0"
               class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500"
             >
               関連するSlack会話は見つかりませんでした
@@ -3090,7 +4271,7 @@
 
             <div v-else class="space-y-3">
               <article
-                v-for="message in detailVideo.relatedContexts.slack.messages"
+                v-for="message in relatedSlackMessages(detailVideo)"
                 :key="`${detailVideo.id}-related-slack-${message.channelId}-${message.messageTs}`"
                 class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
               >
@@ -3193,21 +4374,21 @@
 
       <div
         v-else
-        class="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]"
+        class="grid gap-4 xl:grid-cols-[20rem_minmax(0,1fr)] 2xl:grid-cols-[22rem_minmax(0,1fr)]"
       >
         <aside class="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
           <div
             v-for="group in clipGroups"
             :key="group.id"
-            class="group mb-1 flex items-start gap-2 rounded-md pr-2 transition"
+            class="group mb-1 grid min-w-0 rounded-md p-1 transition"
             :class="selectedVideoGroupId === group.id ? 'bg-slate-100 text-slate-950 shadow-sm ring-1 ring-slate-300' : 'text-slate-600 hover:bg-slate-50'"
           >
             <button
               type="button"
-              class="grid min-w-0 flex-1 gap-1 rounded-md px-3 py-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+              class="grid min-w-0 gap-1 rounded-md px-3 py-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
               @click="selectedVideoGroupId = group.id"
             >
-              <span class="truncate text-sm font-bold">{{ group.name }}</span>
+              <span class="line-clamp-2 break-words text-sm font-bold leading-snug">{{ group.name }}</span>
               <span
                 class="line-clamp-2 text-xs"
                 :class="selectedVideoGroupId === group.id ? 'text-slate-600' : 'text-slate-500'"
@@ -3221,28 +4402,54 @@
                 {{ groupVideoCount(group.id) }} clips
               </span>
             </button>
-            <button
-              type="button"
-              class="mt-2 grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 group-hover:opacity-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-300"
-              :class="groupVideoCount(group.id) > 0 ? 'text-slate-300' : ''"
-              :disabled="groupVideoCount(group.id) > 0"
-              :title="groupVideoCount(group.id) > 0 ? 'クリップがあるグループは削除できません' : 'クリップグループを削除'"
-              aria-label="クリップグループを削除"
-              @click.stop="openGroupDeleteConfirm(group)"
-            >
-              <UIcon
-                name="material-symbols:delete-outline"
-                class="h-4 w-4"
-              />
-            </button>
+            <div class="flex min-w-0 items-center justify-between gap-2 px-3 pb-2">
+              <button
+                type="button"
+                class="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] font-bold text-slate-500 opacity-0 shadow-sm transition hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-cyan-100 group-hover:opacity-100"
+                :title="`グループIDをコピー: ${group.id}`"
+                @click.stop="copyIdToClipboard(group.id, 'グループID')"
+              >
+                <UIcon name="material-symbols:content-copy-outline" class="h-3.5 w-3.5 shrink-0" />
+                <span class="truncate">ID {{ compactId(group.id) }}</span>
+              </button>
+              <button
+                type="button"
+                class="grid h-8 w-8 shrink-0 place-items-center rounded-md text-slate-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 group-hover:opacity-100 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-300"
+                :class="groupVideoCount(group.id) > 0 ? 'text-slate-300' : ''"
+                :disabled="groupVideoCount(group.id) > 0"
+                :title="groupVideoCount(group.id) > 0 ? 'クリップがあるグループは削除できません' : 'クリップグループを削除'"
+                aria-label="クリップグループを削除"
+                @click.stop="openGroupDeleteConfirm(group)"
+              >
+                <UIcon
+                  name="material-symbols:delete-outline"
+                  class="h-4 w-4"
+                />
+              </button>
+            </div>
           </div>
         </aside>
 
         <div
           v-if="selectedGroupClipItems.length === 0"
-          class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500"
+          class="flex min-h-[168px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center"
         >
-          このグループにはまだクリップがありません。新規録画を開始してください。
+          <span class="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-slate-500 shadow-sm ring-1 ring-slate-200">
+            <UIcon name="material-symbols:video-camera-back-outline" class="h-5 w-5" />
+          </span>
+          <p class="mt-3 text-sm font-semibold text-slate-700">
+            このグループにはまだクリップがありません
+          </p>
+          <EnButton
+            class="mt-4"
+            variant="ai"
+            size="sm"
+            leading-icon="material-symbols:video-camera-back-outline"
+            :disabled="!canCapture"
+            @click="openRecordingModal"
+          >
+            新しいクリップを録画
+          </EnButton>
         </div>
 
         <div
@@ -3283,18 +4490,45 @@
               </div>
               <div class="absolute left-3 top-3 flex flex-wrap gap-1">
                 <EnBadge
+                  v-if="item.clip.analysisStatus !== 'completed'"
                   :color="analysisColor(item.clip.analysisStatus)"
                   variant="soft"
                 >
                   {{ analysisLabel(item.clip.analysisStatus) }}
                 </EnBadge>
-                <EnBadge
-                  v-if="item.clip.analysisStatus === 'not_analyzed'"
-                  color="warning"
-                  variant="soft"
+              </div>
+              <div class="absolute right-3 top-3" @click.stop>
+                <button
+                  type="button"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/20 bg-slate-950/80 text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-300"
+                  :aria-label="`${clipTitle(item.clip, 0)}の操作メニュー`"
+                  title="クリップ操作"
+                  @click="toggleClipActionMenu(item.clip.id)"
                 >
-                  再解析推奨
-                </EnBadge>
+                  <UIcon name="material-symbols:more-vert" class="h-4 w-4" />
+                </button>
+                <div
+                  v-if="clipActionMenuId === item.clip.id"
+                  class="absolute right-0 z-20 mt-2 w-56 rounded-lg border border-slate-200 bg-white p-2 text-left shadow-xl"
+                >
+                  <p class="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">グループへ移動</p>
+                  <select
+                    class="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                    :value="item.clip.clipGroupId"
+                    @change="moveClipToGroup(item.clip.id, ($event.target as HTMLSelectElement).value)"
+                  >
+                    <option v-for="group in clipGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
+                  </select>
+                  <div class="my-2 border-t border-slate-100" />
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                    @click="openVideoDeleteConfirm(item.clip)"
+                  >
+                    <UIcon name="material-symbols:delete-outline" class="h-4 w-4" />
+                    削除
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -3327,6 +4561,15 @@
                   <p class="mt-1 text-xs text-slate-500">
                     {{ formatRecordedAt(item.clip.recordedAt) }}
                   </p>
+                  <button
+                    type="button"
+                    class="mt-2 inline-flex max-w-full items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 font-mono text-[11px] font-bold text-slate-500 shadow-sm transition hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+                    :title="`クリップIDをコピー: ${item.clip.id}`"
+                    @click.stop="copyIdToClipboard(item.clip.id, 'クリップID')"
+                  >
+                    <UIcon name="material-symbols:content-copy-outline" class="h-3.5 w-3.5 shrink-0" />
+                    <span class="truncate">ID {{ compactId(item.clip.id) }}</span>
+                  </button>
                 </div>
               </div>
 
@@ -3372,6 +4615,19 @@
                 </div>
               </div>
 
+              <div class="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-3">
+                <span
+                  v-for="provider in clipCardContextProviders(item.clip)"
+                  :key="`${item.clip.id}-context-provider-${provider.id}`"
+                  class="inline-flex h-7 min-w-10 items-center justify-center gap-1 rounded-md px-2 text-[11px] font-bold ring-1 ring-inset transition"
+                  :class="provider.count > 0 ? provider.activeClass : 'bg-slate-50 text-slate-400 ring-slate-200'"
+                  :title="`${provider.label}: ${provider.count}件`"
+                >
+                  <UIcon :name="provider.icon" class="h-3.5 w-3.5 shrink-0" />
+                  <span>{{ provider.count }}</span>
+                </span>
+              </div>
+
               <div class="flex flex-wrap gap-2 text-[11px] text-slate-500">
                 <span>{{ displayVideoTitle(item.clip) }}</span>
                 <span>{{ formatDuration(item.clip.durationMs) }}</span>
@@ -3388,6 +4644,7 @@
 </template>
 
 <script setup lang="ts">
+import { getAuth } from "firebase/auth";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import * as XLSX from "xlsx";
@@ -3396,17 +4653,40 @@ import { storageRefForBucketPath } from "@composables/firebase-storage-operation
 import { reportDatadogError } from "@utils/datadogObservability";
 import { formatUserStoryKey } from "@utils/storyVaultStoryKeys";
 import {
+  analyzeAudioTimeline,
+  editedStoryVaultDurationMs,
+  normalizeStoryVaultCutRanges,
+  type StoryVaultAudioLevelSample,
+  type StoryVaultSilenceRange,
+} from "@utils/storyVaultClipEditing";
+import type {
+  StoryVaultClipPreparationLog,
+  StoryVaultClipPreparationProgress,
+} from "@composables/useStoryVaultClipPreparation";
+import type {
+  StoryVaultClipDraft,
+  StoryVaultClipDraftTranscription,
+} from "@composables/useStoryVaultClipDrafts";
+import {
+  sectionSplitPointsMs,
+  sliceStoryVaultTranscriptCues,
+  type StoryVaultClipSectionDraft,
+} from "@utils/storyVaultClipSectioning";
+import {
   formatTranscriptTime,
   normalizeTranscriptCues,
   parseSrtTranscript,
   transcriptCuesToSrt,
 } from "@utils/transcriptTiming";
 import KnowledgeDocumentCompactCard from "@components/knowledge/KnowledgeDocumentCompactCard.vue";
+import { useJiraOAuth, type JiraIssuePreview } from "@composables/useJiraOAuth";
+import { useGeminiFileSpaceOperatorStore } from "@stores/geminiFileSpaceOperator";
 import type {
   DecodedStoryVaultApplication,
   DecodedStoryVaultClipGroup,
   DecodedStoryVaultClip,
   StoryVaultRelatedContextKnowledgeDocument,
+  StoryVaultRelatedContextJiraIssue,
   StoryVaultOperationVideoDiscoveryStatus,
   StoryVaultOperationVideoDisplaySurface,
   StoryVaultOperationVideoClip,
@@ -3472,6 +4752,8 @@ type LocalFrameCapture = {
 
 type SaveProgressPhase =
   | "idle"
+  | "preparing"
+  | "parallelAnalysis"
   | "saving"
   | "extracting"
   | "transcribing"
@@ -3483,6 +4765,29 @@ type SaveProgressPhase =
   | "error";
 
 type SaveWorkflowStep = "save" | "videoAnalysis";
+
+type ClipPreparationPhase =
+  | "idle"
+  | "trimming"
+  | "transcribing"
+  | "sectioning"
+  | "done"
+  | "error";
+
+type ClipPreparationStepStatus = "pending" | "active" | "done" | "error";
+
+type ClipPreparationProgressStep = {
+  key: string;
+  label: string;
+  description: string;
+  status: ClipPreparationStepStatus;
+};
+
+type PreparedRecordingClip = {
+  blob: Blob;
+  durationMs: number;
+  gcsUri: string;
+};
 
 type SaveProgressStep = {
   key: string;
@@ -3522,6 +4827,14 @@ type RelatedContextProviderTab = "knowledge" | "github" | "slack" | "jira";
 type SelectedClipContentTab = "transcript" | "summary";
 type SelectedClipLayoutMode = "split" | "stack";
 
+type ClipCardContextProvider = {
+  id: "knowledge" | "github" | "slack" | "jira";
+  label: string;
+  icon: string;
+  count: number;
+  activeClass: string;
+};
+
 type GroupClipItem = StoryVaultClipListItem;
 
 type RichTranscriptSummarySection = {
@@ -3545,6 +4858,7 @@ type ContextMapNodeKind =
   | "knowledge"
   | "github"
   | "slack"
+  | "jira"
   | "generation";
 
 type ContextMapNode = {
@@ -3578,6 +4892,13 @@ type ContextMapEdgeWithPoints = ContextMapEdge & {
 type ContextMapData = {
   nodes: ContextMapNode[];
   edges: ContextMapEdge[];
+};
+
+type BulkContextStep = {
+  key: "knowledge" | "github" | "jira";
+  label: string;
+  icon: string;
+  status: "pending" | "running" | "done";
 };
 
 type ContextMapNodePosition = {
@@ -3628,7 +4949,20 @@ const emit = defineEmits<{
     title: string,
     callbacks?: OperationVideoTitleUpdateCallbacks,
   ];
-  "fetch-related-context": [clipId: string, provider: "github" | "slack" | "knowledge"];
+  "fetch-related-context": [clipId: string, provider: "github" | "slack" | "knowledge" | "jira"];
+  "collect-related-contexts": [clipId: string];
+  "link-jira-issues": [
+    clipId: string,
+    issues: StoryVaultRelatedContextJiraIssue[],
+    site?: { name?: string; url?: string },
+  ];
+  "unlink-jira-issue": [clipId: string, issueKey: string, cloudId?: string];
+  "link-knowledge-documents": [
+    clipId: string,
+    fileSpaceId: string,
+    documents: StoryVaultRelatedContextKnowledgeDocument[],
+  ];
+  "unlink-knowledge-document": [clipId: string, documentId: string];
   "create-clip-group": [input: { applicationId: string; name: string; description?: string }];
   "update-clip-group": [input: { groupId: string; name: string; description?: string }];
   "delete-clip-group": [groupId: string];
@@ -3636,23 +4970,89 @@ const emit = defineEmits<{
     plan: ClipGroupAssistantPlan,
     callbacks?: ClipGroupOrganizationCallbacks,
   ];
+  "move-clip": [clipId: string, groupId: string];
   "create-file-space": [];
   delete: [clipId: string];
   refresh: [];
 }>();
 
+const toast = useToast();
+const jiraOAuth = useJiraOAuth();
+const clipPipelineApi = useStoryVaultClipPipelines();
+const clipCommandApi = useStoryVaultClipCommands();
+const {
+  prepare: prepareRecordedClips,
+  resume: resumeRecordedClipPreparation,
+} = useStoryVaultClipPreparation();
+const {
+  drafts: clipDrafts,
+  isLoadingDrafts,
+  fetchDrafts: fetchClipDrafts,
+  createDraft: createClipDraft,
+  updateDraft: updateClipDraft,
+  loadDraftSource,
+  loadPreparedDraftVideo,
+  discardDraft: discardClipDraft,
+} = useStoryVaultClipDrafts();
+const { generateSections: generateTranscriptSections } =
+  useStoryVaultTranscriptSectioning();
 const title = ref("");
 const errorMessage = ref("");
 const sourceDisplaySurface = ref<StoryVaultOperationVideoDisplaySurface>("unknown");
 const isRecording = ref(false);
 const recordingModalOpen = ref(false);
+const clipActionMenuId = ref("");
 const assistantPanelOpen = ref(false);
 const elapsedMs = ref(0);
 const recordedDurationMs = ref<number | undefined>();
 const recordedBlob = ref<Blob | null>(null);
 const recordedAudioBlob = ref<Blob | null>(null);
 const previewUrl = ref("");
+const preparedPreviewUrl = ref("");
+const preparedBaseClip = ref<PreparedRecordingClip | null>(null);
+const preparedTranscription = ref<GeminiTranscriptionResult | null>(null);
+const aiSectionDrafts = ref<StoryVaultClipSectionDraft[]>([]);
+const preparedSilenceFingerprint = ref("");
+const clipPreparationPhase = ref<ClipPreparationPhase>("idle");
+const clipPreparationError = ref("");
+const clipPreparationProgressOpen = ref(false);
+const clipPreparationProgress = ref<StoryVaultClipPreparationProgress | null>(null);
+const activeClipDraftId = ref("");
+const isSavingClipDraft = ref(false);
+const clipDraftSaveError = ref("");
+const clipDraftLastSavedAt = ref("");
+const resumingClipDraftId = ref("");
+const isRestoringClipDraft = ref(false);
+const discardClipDraftTarget = ref<StoryVaultClipDraft | null>(null);
+const discardClipDraftConfirmOpen = ref(false);
+const discardingClipDraftId = ref("");
 const livePreviewVideo = ref<HTMLVideoElement | null>(null);
+const recordedPreviewVideo = ref<HTMLVideoElement | null>(null);
+const silenceTimeline = ref<HTMLElement | null>(null);
+const recordedPreviewMs = ref(0);
+const isRecordedPreviewPlaying = ref(false);
+const isScrubbingSilenceTimeline = ref(false);
+const isSelectingManualCutRange = ref(false);
+const manualRangeSelectionActive = ref(false);
+const manualCutSelectionAnchorMs = ref<number | null>(null);
+const manualCutSelectionCurrentMs = ref<number | null>(null);
+const silenceCutEnabled = ref(true);
+const noiseReductionEnabled = ref(true);
+const silenceRanges = ref<StoryVaultSilenceRange[]>([]);
+const manualCutRanges = ref<StoryVaultSilenceRange[]>([]);
+const audioLevelSamples = ref<StoryVaultAudioLevelSample[]>([]);
+const keptSilenceRangeIndexes = ref<number[]>([]);
+const splitPointsMs = ref<number[]>([]);
+const clipEditingStep = ref<1 | 2>(1);
+const recordingProcessingMode = ref<"automatic" | "manual">("automatic");
+const isStartingAutomaticPipeline = ref(false);
+const continueRecordingPromptOpen = ref(false);
+const submittedPipelineCount = ref(0);
+const lastSubmittedRecordingTitle = ref("");
+const isAnalyzingSilence = ref(false);
+const isPreparingClips = ref(false);
+const parallelAnalysisCompleted = ref(0);
+const parallelAnalysisTotal = ref(0);
 const selectedClipVideo = ref<HTMLVideoElement | null>(null);
 const selectedClipPlaybackMs = ref(0);
 const selectedClipTranscriptScroller = ref<HTMLElement | null>(null);
@@ -3674,6 +5074,7 @@ const transcriptErrorMessage = ref("");
 const saveProgressOpen = ref(false);
 const saveProgressPhase = ref<SaveProgressPhase>("idle");
 const saveProgressFramePreviewIndex = ref(0);
+const saveProgressActivitySeconds = ref(0);
 const saveWorkflowStep = ref<SaveWorkflowStep>("save");
 const workflowVideoId = ref("");
 const workflowClipId = ref("");
@@ -3696,6 +5097,42 @@ const selectedVideoGroupId = ref("");
 const detailTab = ref<DetailTab>("video");
 const reportMode = ref<ReportMode>("html");
 const relatedContextProviderTab = ref<RelatedContextProviderTab>("knowledge");
+const bulkContextModalOpen = ref(false);
+const bulkContextCompleted = ref(false);
+const bulkContextTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+const bulkContextSteps = ref<BulkContextStep[]>([
+  { key: "knowledge", label: "ボルトナレッジ", icon: "material-symbols:folder-managed-outline", status: "pending" },
+  { key: "github", label: "GitHub", icon: "i-simple-icons-github", status: "pending" },
+  { key: "jira", label: "Jira", icon: "i-simple-icons-jira", status: "pending" },
+]);
+const jiraConnections = computed(() => jiraOAuth.connections.value);
+const knowledgeFileSpaceStore = useGeminiFileSpaceOperatorStore();
+const knowledgeManualSearchQuery = ref("");
+const selectedKnowledgeDocumentIds = ref<string[]>([]);
+const isKnowledgeManualLoading = ref(false);
+const knowledgeManualError = ref("");
+const knowledgeManualDocuments = computed(() => {
+  const query = knowledgeManualSearchQuery.value.trim().toLocaleLowerCase();
+  const documents = knowledgeFileSpaceStore.documents ?? [];
+  if (!query) return documents;
+  return documents.filter((document) =>
+    [document.displayName, document.title, document.name, document.description]
+      .filter(Boolean)
+      .some((value) => String(value).toLocaleLowerCase().includes(query))
+  );
+});
+const jiraSelectedCloudId = ref("");
+const jiraSearchQuery = ref("");
+const jiraSearchResults = ref<JiraIssuePreview[]>([]);
+const jiraSearchError = ref("");
+const isJiraSearching = ref(false);
+const jiraListMode = ref<"project" | "search">("project");
+const selectedJiraIssueKeys = ref<string[]>([]);
+const selectedJiraConnection = computed(() =>
+  jiraConnections.value.find(
+    (connection) => connection.cloudId === jiraSelectedCloudId.value
+  ) ?? jiraConnections.value[0]
+);
 const reportHtmlUrl = ref("");
 const reportCopied = ref(false);
 const selectedAnalysisStoryId = ref("");
@@ -3705,6 +5142,25 @@ const groupCreateModalOpen = ref(false);
 const groupNameDraft = ref("");
 const groupDescriptionDraft = ref("");
 const isApplyingOrganizationPlan = ref(false);
+
+function compactId(id: string): string {
+  if (id.length <= 18) return id;
+  return `${id.slice(0, 8)}...${id.slice(-6)}`;
+}
+
+async function copyIdToClipboard(id: string, label: string): Promise<void> {
+  if (!id) return;
+  if (!import.meta.client || !navigator.clipboard?.writeText) {
+    toast.add({ title: `${label}をコピーできませんでした`, color: "error" });
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(id);
+    toast.add({ title: `${label}をコピーしました`, color: "success" });
+  } catch {
+    toast.add({ title: `${label}のコピーに失敗しました`, color: "error" });
+  }
+}
 const pendingCreatedGroupName = ref("");
 const quickScanPreviewVideoId = ref("");
 const deleteTargetGroup = ref<DecodedStoryVaultClipGroup | null>(null);
@@ -3752,6 +5208,8 @@ let waveformRaf: number | null = null;
 let startedAt = 0;
 let elapsedTimer: number | null = null;
 let saveProgressFramePreviewTimer: ReturnType<typeof setInterval> | null = null;
+let saveProgressActivityTimer: ReturnType<typeof setInterval> | null = null;
+let clipDraftAutosaveTimer: ReturnType<typeof setTimeout> | null = null;
 let chunks: BlobPart[] = [];
 let audioChunks: BlobPart[] = [];
 let lastAudioMimeType = "audio/webm";
@@ -3770,21 +5228,279 @@ const selectedGroupClipItems = computed<GroupClipItem[]>(() => {
   if (!group) return [];
   return props.clips.filter((item) => item.clipGroupId === group.id);
 });
+const applicationClipDrafts = computed(() =>
+  clipDrafts.value.filter(
+    (draft) =>
+      draft.applicationId === (props.application?.id || "") &&
+      // A submitted recording belongs to the background pipeline, not the
+      // manual-editor draft queue. Pipeline failures restore it as `error`.
+      draft.status !== "processing"
+  )
+);
+const activeClipDraft = computed(() =>
+  applicationClipDrafts.value.find((draft) => draft.id === activeClipDraftId.value) ?? null
+);
+const activeClipDraftIsPersisted = computed(
+  () => Boolean(activeClipDraft.value?.source) && activeClipDraft.value?.status !== "saving"
+);
 function groupVideoCount(groupId: string): number {
   return props.clips.filter((item) => item.clipGroupId === groupId).length;
 }
 const canCapture = computed(
   () => Boolean(props.application?.id && selectedVideoGroup.value) && !props.isSaving
 );
+const sourceRecordingDurationMs = computed(
+  () => recordedDurationMs.value ?? elapsedMs.value
+);
+const silenceThresholdDb = -38;
+const minimumSilenceMs = 5_000;
+const cutSilenceRanges = computed(() =>
+  silenceRanges.value.filter(
+    (_, index) => !keptSilenceRangeIndexes.value.includes(index)
+  )
+);
+const selectedCutRanges = computed(() =>
+  normalizeStoryVaultCutRanges(
+    [
+      ...(silenceCutEnabled.value ? cutSilenceRanges.value : []),
+      ...manualCutRanges.value,
+    ],
+    sourceRecordingDurationMs.value
+  )
+);
+const manualCutSelectionRange = computed<StoryVaultSilenceRange | null>(() => {
+  const anchor = manualCutSelectionAnchorMs.value;
+  const current = manualCutSelectionCurrentMs.value;
+  if (anchor === null || current === null) return null;
+  return {
+    startMs: Math.min(anchor, current),
+    endMs: Math.max(anchor, current),
+  };
+});
+const canAddManualCutSelection = computed(
+  () => (manualCutSelectionRange.value?.endMs ?? 0) - (manualCutSelectionRange.value?.startMs ?? 0) >= 250
+);
+const currentSilenceFingerprint = computed(() =>
+  JSON.stringify({
+    ranges: selectedCutRanges.value.map((range) => [range.startMs, range.endMs]),
+    noiseReductionEnabled: noiseReductionEnabled.value,
+  })
+);
+const hasCurrentPreparedClip = computed(
+  () =>
+    Boolean(preparedBaseClip.value) &&
+    preparedSilenceFingerprint.value === currentSilenceFingerprint.value
+);
 const canSave = computed(
   () =>
     Boolean(props.application?.id) &&
     Boolean(selectedVideoGroup.value) &&
     Boolean(recordedBlob.value) &&
+    activeClipDraftIsPersisted.value &&
     !isRecording.value &&
+    hasCurrentPreparedClip.value &&
+    Boolean(preparedTranscription.value) &&
     !isExtractingFrames.value &&
+    !isPreparingClips.value &&
     !props.isSaving
 );
+const recordingDurationMs = computed(() =>
+  clipEditingStep.value === 2 && hasCurrentPreparedClip.value
+    ? preparedBaseClip.value?.durationMs ?? sourceRecordingDurationMs.value
+    : sourceRecordingDurationMs.value
+);
+const editingPreviewUrl = computed(() =>
+  clipEditingStep.value === 2 && hasCurrentPreparedClip.value
+    ? preparedPreviewUrl.value || previewUrl.value
+    : previewUrl.value
+);
+const clipPreparationStatus = computed(() => {
+  if (clipPreparationPhase.value === "trimming") {
+    const hasCuts = selectedCutRanges.value.length > 0;
+    return {
+      title: hasCuts
+        ? noiseReductionEnabled.value ? "カットとノイズ低減を実行しています" : "選択した区間をカットしています"
+        : noiseReductionEnabled.value ? "音声ノイズを低減しています" : "動画を準備しています",
+      description: noiseReductionEnabled.value
+        ? "映像と音声の同期を保ったまま、聞き取りやすい文字起こし用動画を生成しています。"
+        : "映像と音声の同期を保ったまま、文字起こし用の動画を生成しています。",
+      icon: "material-symbols:content-cut-rounded",
+    };
+  }
+  if (clipPreparationPhase.value === "transcribing") {
+    return {
+      title: "Geminiで文字起こししています",
+      description: "タイムコード付きの発話テキストを取得しています。",
+      icon: "material-symbols:subtitles-outline",
+    };
+  }
+  if (clipPreparationPhase.value === "sectioning") {
+    return {
+      title: "話題の区切りを見つけています",
+      description: "文字起こしを読み、約1分を目安に意味のまとまりへ分けています。",
+      icon: "material-symbols:auto-awesome",
+    };
+  }
+  if (clipPreparationPhase.value === "done") {
+    return {
+      title: "文字起こしと分割案を準備しました",
+      description: `${preparedTranscription.value?.segments.length ?? 0}件の発話から${aiSectionDrafts.value.length}クリップを提案しています。`,
+      icon: "material-symbols:check-circle-outline",
+    };
+  }
+  return null;
+});
+const isClipPreparationBusy = computed(() =>
+  ["trimming", "transcribing", "sectioning"].includes(clipPreparationPhase.value)
+);
+const clipPreparationRequestLogs = computed(
+  () => clipPreparationProgress.value?.logs ?? []
+);
+const latestClipPreparationLog = computed(
+  () => clipPreparationRequestLogs.value.at(-1) ?? null
+);
+const clipPreparationProgressCompletion = computed(() => {
+  if (clipPreparationPhase.value === "done") return 100;
+  if (clipPreparationPhase.value === "error") return 100;
+  if (clipPreparationPhase.value === "sectioning") return 88;
+  if (clipPreparationPhase.value === "transcribing") return 68;
+  const stage = clipPreparationProgress.value?.stage;
+  if (stage === "ready" || stage === "downloading" || stage === "completed") return 48;
+  if (stage === "processing") return 32;
+  if (stage === "queued") return 18;
+  return 8;
+});
+const clipPreparationProgressTitle = computed(() => {
+  if (clipPreparationPhase.value === "done") return "分割案の準備が完了しました";
+  if (clipPreparationPhase.value === "error") return "動画の準備を完了できませんでした";
+  if (clipPreparationPhase.value === "transcribing") return "Geminiで文字起こし中";
+  if (clipPreparationPhase.value === "sectioning") return "クリップの区切りを作成中";
+  const currentStep = latestClipPreparationLog.value?.currentStep;
+  if (currentStep === "download") return "Cloud Runが録画を取得中";
+  if (currentStep === "detect_silence") return "動画タイムラインを調整中";
+  if (currentStep === "reduce_noise") return "音声ノイズを低減中";
+  if (currentStep === "render") return "カット済み動画を書き出し中";
+  if (currentStep === "completed") return "調整済み動画を受信中";
+  if (clipPreparationProgress.value?.stage === "queued") return "処理を開始しています";
+  return "録画をアップロード中";
+});
+const clipPreparationProgressDescription = computed(() => {
+  if (clipPreparationPhase.value === "done") {
+    return `${preparedTranscription.value?.segments.length ?? 0}件の発話から${aiSectionDrafts.value.length}クリップを準備しました。`;
+  }
+  if (clipPreparationPhase.value === "error") {
+    return clipPreparationError.value || "処理ログを確認して再実行してください。";
+  }
+  if (clipPreparationPhase.value === "transcribing") {
+    return "調整済み動画からタイムコード付きの発話を取得しています。";
+  }
+  if (clipPreparationPhase.value === "sectioning") {
+    return "文字起こしを読み、約1分を目安に話題の境界とタイトルを決めています。";
+  }
+  return latestClipPreparationLog.value?.message || "録画をCloud Runの動画調整処理へ送っています。";
+});
+const clipPreparationProgressSteps = computed<ClipPreparationProgressStep[]>(() => {
+  const stage = clipPreparationProgress.value?.stage;
+  let activeIndex = stage === "uploading" || !stage ? 0 : 1;
+  if (clipPreparationPhase.value === "transcribing") activeIndex = 2;
+  if (clipPreparationPhase.value === "sectioning") activeIndex = 3;
+  if (clipPreparationPhase.value === "done") activeIndex = 4;
+  if (clipPreparationPhase.value === "error") {
+    activeIndex = !preparedBaseClip.value
+      ? stage === "uploading" || !stage ? 0 : 1
+      : preparedTranscription.value ? 3 : 2;
+  }
+  const definitions = [
+    ["upload", "録画をアップロード", "元動画を一時保存します。"],
+    ["trim", "カット・ノイズ低減", "音声を聞き取りやすく整えて動画を書き出します。"],
+    ["transcribe", "Gemini文字起こし", "タイムコード付きの発話を生成します。"],
+    ["section", "AIクリップ分割", "話題の境界とクリップタイトルを作ります。"],
+  ] as const;
+  return definitions.map(([key, label, description], index) => ({
+    key,
+    label,
+    description,
+    status:
+      clipPreparationPhase.value === "error" && index === activeIndex
+        ? "error"
+        : activeIndex > index
+          ? "done"
+          : activeIndex === index
+            ? "active"
+            : "pending",
+  }));
+});
+const displayedAudioLevelSamples = computed(() => {
+  const samples = audioLevelSamples.value;
+  const maxBars = 240;
+  if (samples.length <= maxBars) return samples;
+  const groupSize = Math.ceil(samples.length / maxBars);
+  const grouped: StoryVaultAudioLevelSample[] = [];
+  for (let index = 0; index < samples.length; index += groupSize) {
+    const group = samples.slice(index, index + groupSize);
+    const first = group[0];
+    const last = group[group.length - 1];
+    if (!first || !last) continue;
+    grouped.push({
+      startMs: first.startMs,
+      endMs: last.endMs,
+      db: Math.max(...group.map((sample) => sample.db)),
+    });
+  }
+  return grouped;
+});
+const editedDurationMs = computed(() =>
+  editedStoryVaultDurationMs(
+    sourceRecordingDurationMs.value,
+    selectedCutRanges.value,
+    true
+  )
+);
+const previewProgressPercent = computed(() =>
+  timelinePercent(recordedPreviewMs.value)
+);
+const aiSuggestedSplitPointsMs = computed(() =>
+  sectionSplitPointsMs(aiSectionDrafts.value)
+);
+const hasChangedAiSplitProposal = computed(() =>
+  JSON.stringify(splitPointsMs.value) !==
+  JSON.stringify(aiSuggestedSplitPointsMs.value)
+);
+const preparedSectionSummaries = computed(() => {
+  const boundaries = [0, ...splitPointsMs.value, recordingDurationMs.value];
+  return boundaries.slice(0, -1).map((startMs, index) => {
+    const endMs = boundaries[index + 1] ?? recordingDurationMs.value;
+    const sectionSilence = hasCurrentPreparedClip.value
+      ? []
+      : selectedCutRanges.value
+      .map((range) => ({
+        startMs: Math.max(startMs, range.startMs),
+        endMs: Math.min(endMs, range.endMs),
+      }))
+      .filter((range) => range.endMs > range.startMs);
+    const aiDraft = aiSectionDrafts.value.find(
+      (draft) =>
+        Math.abs(draft.startMs - startMs) < 500 &&
+        Math.abs(draft.endMs - endMs) < 500
+    );
+    return {
+      index,
+      startMs,
+      endMs,
+      title: aiDraft?.title || `クリップ ${index + 1}`,
+      summary: aiDraft?.summary || "解析後にタイトルと説明を更新します。",
+      isAiSuggested: Boolean(aiDraft),
+      editedDurationMs: editedStoryVaultDurationMs(
+        endMs - startMs,
+        sectionSilence.map((range) => ({
+          startMs: range.startMs - startMs,
+          endMs: range.endMs - startMs,
+        })),
+        !hasCurrentPreparedClip.value
+      ),
+    };
+  });
+});
 
 const elapsedLabel = computed(() => formatDuration(elapsedMs.value));
 const sourceDisplaySurfaceLabel = computed(() =>
@@ -3838,6 +5554,7 @@ const reportMetrics = computed(() => {
     { label: "PRs", value: relatedGithubPullRequestCount(video) },
     { label: "Slack", value: relatedSlackMessageCount(video) },
     { label: "Knowledge", value: relatedKnowledgeDocumentCount(video) },
+    { label: "Jira", value: relatedJiraIssueCount(video) },
   ];
 });
 
@@ -3849,42 +5566,8 @@ const reportExcelSheets = [
   { name: "GitHub PR", description: "関連Pull RequestのURL、状態、差分量、抽出理由をまとめます。" },
   { name: "Slack", description: "関連Slack投稿のチャンネル、投稿者、本文、Permalinkをまとめます。" },
   { name: "Knowledge", description: "関連ナレッジ文書、Drive/Storageリンク、根拠理由をまとめます。" },
+  { name: "Jira", description: "関連Issueの状態、担当者、URL、抽出理由をまとめます。" },
 ] as const;
-
-const detailReanalysisItems = computed(() => {
-  const video = detailVideo.value;
-  if (!video) return [];
-  const videoBusy =
-    props.isSaving ||
-    video.analysisStatus === "queued" ||
-    video.analysisStatus === "running";
-  const storyBusy =
-    !props.application?.fileSpaceId ||
-    video.analysisStatus === "queued" ||
-    video.analysisStatus === "running";
-  return [
-    [
-      {
-        label: "動画を再解析",
-        icon: "material-symbols:movie-edit-outline",
-        disabled: videoBusy,
-        onSelect: () => {
-          if (videoBusy) return;
-          void resumeVideoWorkflow(video, { force: true });
-        },
-      },
-      {
-        label: "ユーザーストーリーを再解析",
-        icon: "material-symbols:psychology-outline",
-        disabled: storyBusy,
-        onSelect: () => {
-          if (storyBusy) return;
-          emit("analyze", video.id);
-        },
-      },
-    ],
-  ];
-});
 
 const detailMoreActionItems = computed(() => {
   const video = detailVideo.value;
@@ -3929,6 +5612,7 @@ const reportMarkdown = computed(() => {
     `- Screenshots: ${video.frameCaptures.length}`,
     `- GitHub pull requests: ${relatedGithubPullRequestCount(video)}`,
     `- Knowledge documents: ${relatedKnowledgeDocumentCount(video)}`,
+    `- Jira issues: ${relatedJiraIssueCount(video)}`,
     "",
     "## Operation Video",
     `- Title: ${displayVideoTitle(video)}`,
@@ -3948,6 +5632,11 @@ const reportMarkdown = computed(() => {
           `- Goal: ${story.goal || "n/a"}`,
           `- Benefit: ${story.benefit || "n/a"}`,
           `- Confidence: ${story.confidence ?? story.confidenceScore ?? "n/a"}`,
+          "",
+          "#### Detailed Specifications",
+          ...(story.detailedSpecifications.length
+            ? story.detailedSpecifications.map((specification, specificationIndex) => `${specificationIndex + 1}. ${specification}`)
+            : ["- No detailed specifications recorded."]),
           "",
           "#### Acceptance Criteria",
           ...(story.acceptanceCriteria.length
@@ -3971,14 +5660,19 @@ const reportMarkdown = computed(() => {
     }),
     "",
     "## GitHub Pull Requests",
-    ...(video.relatedContexts?.github?.pullRequests.length
-      ? video.relatedContexts.github.pullRequests.map((pr) => `- ${video.relatedContexts?.github?.repoFullName || "repo"} PR ${pr.number}: ${pr.title} (${pr.htmlUrl})`)
+    ...(relatedGithubPullRequests(video).length
+      ? relatedGithubPullRequests(video).map((pr) => `- ${relatedGithubRepoFullName(video) || "repo"} PR ${pr.number}: ${pr.title} (${pr.htmlUrl})`)
       : ["- No GitHub pull request refs."]),
     "",
     "## Knowledge Documents",
-    ...(video.relatedContexts?.knowledge?.documents.length
-      ? video.relatedContexts.knowledge.documents.map((doc) => `- ${doc.displayName || doc.documentId || doc.name || "Knowledge"} (${doc.mimeType || "unknown"}): ${doc.reason || "No reason recorded."}${doc.gcsUrl ? ` ${doc.gcsUrl}` : ""}`)
+    ...(relatedKnowledgeDocuments(video).length
+      ? relatedKnowledgeDocuments(video).map((doc) => `- ${doc.displayName || doc.documentId || doc.name || "Knowledge"} (${doc.mimeType || "unknown"}): ${doc.reason || "No reason recorded."}${doc.gcsUrl ? ` ${doc.gcsUrl}` : ""}`)
       : ["- No knowledge document refs."]),
+    "",
+    "## Jira Issues",
+    ...(relatedJiraIssues(video).length
+      ? relatedJiraIssues(video).map((issue) => `- ${issue.key}: ${issue.summary} [${issue.status.name || "status n/a"}] (${issue.htmlUrl})`)
+      : ["- No Jira issue refs."]),
     "",
     "## Agent Instructions",
     "- Treat this as an operation-video bundle report.",
@@ -4029,6 +5723,7 @@ const mcpTestContextJson = computed(() => {
       githubPullRequests: relatedGithubPullRequestCount(video),
       slackMessages: relatedSlackMessageCount(video),
       knowledgeDocuments: relatedKnowledgeDocumentCount(video),
+      jiraIssues: relatedJiraIssueCount(video),
     },
     storyCandidates: stories.map((story) => ({
       id: story.id,
@@ -4039,6 +5734,7 @@ const mcpTestContextJson = computed(() => {
       userStory: story.userStory || "",
       confidence: story.confidence ?? story.confidenceScore ?? null,
       acceptanceCriteria: story.acceptanceCriteria,
+      detailedSpecifications: story.detailedSpecifications,
       evidence: story.evidence.map((item) => ({
         id: `${item.videoId}:${item.tRange.join("-")}:${item.representativeScreenshotId || "evidence"}`,
         title: item.title,
@@ -4058,9 +5754,10 @@ const mcpTestContextJson = computed(() => {
       url: savedFrameUrl(video, frame.id) || "",
     })),
     relatedContexts: {
-      knowledgeDocuments: video.relatedContexts?.knowledge?.documents ?? [],
-      githubPullRequests: video.relatedContexts?.github?.pullRequests ?? [],
-      slackMessages: video.relatedContexts?.slack?.messages ?? [],
+      knowledgeDocuments: relatedKnowledgeDocuments(video),
+      githubPullRequests: relatedGithubPullRequests(video),
+      slackMessages: relatedSlackMessages(video),
+      jiraIssues: relatedJiraIssues(video),
     },
   };
   return JSON.stringify(payload, null, 2);
@@ -4074,7 +5771,7 @@ const reportHtml = computed(() => {
   const storyCards = stories.length
     ? stories
         .map(
-          (story, index) => `<article class="panel story"><h3>${index + 1}. ${escapeHtml(story.title)}</h3><p>${escapeHtml(story.goal || story.summary || story.userStory || "No goal recorded.")}</p><div class="chips"><span class="chip">${escapeHtml(story.role?.value || "role n/a")}</span><span class="chip">confidence ${escapeHtml(String(story.confidenceScore ?? "n/a"))}</span></div><h4>Acceptance Criteria</h4><ol>${story.acceptanceCriteria.map((criterion) => `<li>${escapeHtml(criterion)}</li>`).join("") || "<li>No acceptance criteria recorded.</li>"}</ol><h4>Evidence</h4><ul>${story.evidence.map((item) => `<li><strong>${escapeHtml(item.title || "Evidence")}</strong>: ${escapeHtml(item.summary || "No summary recorded.")}<br><span class="muted">${escapeHtml(item.videoId)} / ${escapeHtml(item.representativeScreenshotId || "no representative screenshot")}</span></li>`).join("") || '<li class="muted">No evidence recorded.</li>'}</ul></article>`
+          (story, index) => `<article class="panel story"><h3>${index + 1}. ${escapeHtml(story.title)}</h3><p>${escapeHtml(story.goal || story.summary || story.userStory || "No goal recorded.")}</p><div class="chips"><span class="chip">${escapeHtml(story.role?.value || "role n/a")}</span><span class="chip">confidence ${escapeHtml(String(story.confidenceScore ?? "n/a"))}</span></div><h4>Detailed Specifications</h4><ul>${story.detailedSpecifications.map((specification) => `<li>${escapeHtml(specification)}</li>`).join("") || '<li class="muted">No detailed specifications recorded.</li>'}</ul><h4>Acceptance Criteria</h4><ol>${story.acceptanceCriteria.map((criterion) => `<li>${escapeHtml(criterion)}</li>`).join("") || "<li>No acceptance criteria recorded.</li>"}</ol><h4>Evidence</h4><ul>${story.evidence.map((item) => `<li><strong>${escapeHtml(item.title || "Evidence")}</strong>: ${escapeHtml(item.summary || "No summary recorded.")}<br><span class="muted">${escapeHtml(item.videoId)} / ${escapeHtml(item.representativeScreenshotId || "no representative screenshot")}</span></li>`).join("") || '<li class="muted">No evidence recorded.</li>'}</ul></article>`
         )
         .join("")
     : '<div class="panel"><p class="muted">No user stories are linked to this operation video.</p></div>';
@@ -4084,16 +5781,21 @@ const reportHtml = computed(() => {
         .map((frame) => `<figure class="frame"><img src="${escapeHtml(savedFrameUrl(video, frame.id) || frame.storagePath || "")}" alt="${escapeHtml(frame.id)}"><figcaption>${escapeHtml(frame.id)} / ${escapeHtml(formatDuration(frame.timestampMs))}</figcaption></figure>`)
         .join("")
     : '<div class="panel"><p class="muted">No screenshots.</p></div>';
-  const prs = video.relatedContexts?.github?.pullRequests.length
-    ? video.relatedContexts.github.pullRequests
+  const prs = relatedGithubPullRequests(video).length
+    ? relatedGithubPullRequests(video)
         .map((pr) => `<li>PR ${escapeHtml(String(pr.number))}: <a href="${escapeHtml(pr.htmlUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(pr.title)}</a></li>`)
         .join("")
     : '<li class="muted">No GitHub pull request refs.</li>';
-  const knowledge = video.relatedContexts?.knowledge?.documents.length
-    ? video.relatedContexts.knowledge.documents
+  const knowledge = relatedKnowledgeDocuments(video).length
+    ? relatedKnowledgeDocuments(video)
         .map((doc) => `<article class="panel"><h3>${escapeHtml(doc.displayName || doc.documentId || doc.name || "Knowledge")}</h3><p class="muted">${escapeHtml(doc.mimeType || "unknown")} / score ${escapeHtml(String(doc.relevanceScore ?? "n/a"))}</p>${doc.reason ? `<p>${escapeHtml(doc.reason)}</p>` : ""}${doc.gcsUrl ? `<p class="muted">${escapeHtml(doc.gcsUrl)}</p>` : ""}</article>`)
         .join("")
     : '<div class="panel"><p class="muted">No knowledge document refs.</p></div>';
+  const jiraIssues = relatedJiraIssues(video).length
+    ? relatedJiraIssues(video)
+        .map((issue) => `<li><a href="${escapeHtml(issue.htmlUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(issue.key)} ${escapeHtml(issue.summary)}</a> <span class="muted">${escapeHtml(issue.status.name || "status n/a")} / ${escapeHtml(issue.assignee.name || "unassigned")}</span></li>`)
+        .join("")
+    : '<li class="muted">No Jira issue refs.</li>';
   const videoUrl = videoUrls[video.id] || "";
   return `<!doctype html>
 <html lang="ja">
@@ -4102,11 +5804,11 @@ const reportHtml = computed(() => {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(displayVideoTitle(video))} StoryVault Operation Video Bundle</title>
   <style>
-    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:#0f172a;background:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65}.layout{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;border-right:1px solid #dbe3ef;background:#f8fafc;padding:22px 18px}.brand{margin:0;color:#64748b;font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.side-title{margin:8px 0 18px;font-size:18px;line-height:1.25}.nav{display:grid;gap:7px;margin-top:18px}.nav a{display:block;border-radius:8px;padding:9px 10px;color:#334155;font-size:13px;font-weight:800;text-decoration:none}.nav a:hover{background:#fff}.content{min-width:0;padding:30px min(5vw,54px) 56px}.hero{border-bottom:1px solid #dbe3ef;padding-bottom:22px}.eyebrow{margin:0 0 6px;color:#0f9aa7;font-size:13px;font-weight:900}h1{margin:0;font-size:clamp(30px,4vw,54px);line-height:1.08}h2{margin:36px 0 12px;padding-top:10px;font-size:24px}h3{margin:0 0 8px;font-size:17px}.summary{margin-top:12px;color:#475569}.grid{display:grid;gap:14px}.cols5{grid-template-columns:repeat(6,minmax(0,1fr))}.metric,.panel{border:1px solid #dbe3ef;border-radius:8px;background:#fff;padding:15px}.metric{background:#f8fafc}.metric span{display:block;color:#64748b;font-size:12px;font-weight:900}.metric strong{display:block;font-size:18px}.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.chip{border-radius:999px;background:#ecfeff;color:#0e7490;padding:3px 9px;font-size:12px;font-weight:800}.story{border-left:4px solid #0f9aa7}.muted{color:#64748b}.frames{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}video,img{width:100%;max-height:560px;border:1px solid #dbe3ef;border-radius:8px;background:#f1f5f9;object-fit:contain}.frame figcaption{margin-top:5px;color:#64748b;font-size:12px}li{overflow-wrap:anywhere}@media(max-width:960px){.layout{grid-template-columns:1fr}.sidebar{position:static;height:auto}.content{padding:22px 16px 44px}.cols5,.frames{grid-template-columns:1fr}}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:#0f172a;background:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65}.layout{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;border-right:1px solid #dbe3ef;background:#f8fafc;padding:22px 18px}.brand{margin:0;color:#64748b;font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.side-title{margin:8px 0 18px;font-size:18px;line-height:1.25}.nav{display:grid;gap:7px;margin-top:18px}.nav a{display:block;border-radius:8px;padding:9px 10px;color:#334155;font-size:13px;font-weight:800;text-decoration:none}.nav a:hover{background:#fff}.content{min-width:0;padding:30px min(5vw,54px) 56px}.hero{border-bottom:1px solid #dbe3ef;padding-bottom:22px}.eyebrow{margin:0 0 6px;color:#0f9aa7;font-size:13px;font-weight:900}h1{margin:0;font-size:clamp(30px,4vw,54px);line-height:1.08}h2{margin:36px 0 12px;padding-top:10px;font-size:24px}h3{margin:0 0 8px;font-size:17px}.summary{margin-top:12px;color:#475569}.grid{display:grid;gap:14px}.cols5{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}.metric,.panel{border:1px solid #dbe3ef;border-radius:8px;background:#fff;padding:15px}.metric{background:#f8fafc}.metric span{display:block;color:#64748b;font-size:12px;font-weight:900}.metric strong{display:block;font-size:18px}.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.chip{border-radius:999px;background:#ecfeff;color:#0e7490;padding:3px 9px;font-size:12px;font-weight:800}.story{border-left:4px solid #0f9aa7}.muted{color:#64748b}.frames{display:grid;gap:12px;grid-template-columns:repeat(3,minmax(0,1fr))}video,img{width:100%;max-height:560px;border:1px solid #dbe3ef;border-radius:8px;background:#f1f5f9;object-fit:contain}.frame figcaption{margin-top:5px;color:#64748b;font-size:12px}li{overflow-wrap:anywhere}@media(max-width:960px){.layout{grid-template-columns:1fr}.sidebar{position:static;height:auto}.content{padding:22px 16px 44px}.cols5,.frames{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-  <div class="layout"><aside class="sidebar"><p class="brand">StoryVault Bundle</p><h2 class="side-title">${escapeHtml(displayVideoTitle(video))}</h2><div class="chips"><span class="chip">${stories.length} stories</span><span class="chip">${video.frameCaptures.length} screenshots</span></div><nav class="nav"><a href="#overview">Overview</a><a href="#video">Operation Video</a><a href="#stories">Linked User Stories</a><a href="#knowledge">Knowledge Documents</a><a href="#screenshots">Screenshots</a><a href="#pull-requests">Pull Requests</a></nav></aside><main class="content">
+  <div class="layout"><aside class="sidebar"><p class="brand">StoryVault Bundle</p><h2 class="side-title">${escapeHtml(displayVideoTitle(video))}</h2><div class="chips"><span class="chip">${stories.length} stories</span><span class="chip">${video.frameCaptures.length} screenshots</span></div><nav class="nav"><a href="#overview">Overview</a><a href="#video">Operation Video</a><a href="#stories">Linked User Stories</a><a href="#knowledge">Knowledge Documents</a><a href="#screenshots">Screenshots</a><a href="#pull-requests">Pull Requests</a><a href="#jira-issues">Jira Issues</a></nav></aside><main class="content">
     <header id="overview" class="hero"><p class="eyebrow">Operation video centered context</p><h1>${escapeHtml(displayVideoTitle(video))}</h1><p class="summary">${escapeHtml(displayVideoDescription(video) || video.analysisResult?.operationIntent || "")}</p><div class="panel"><h3>Video Group</h3><p><strong>${escapeHtml(videoGroup.name)}</strong></p><p class="muted">${escapeHtml(videoGroup.description || "No group description.")}</p></div></header>
     <section><h2>Bundle Metrics</h2><div class="grid cols5">${reportMetrics.value.map((metric) => `<div class="metric"><span>${escapeHtml(metric.label)}</span><strong>${escapeHtml(String(metric.value))}</strong></div>`).join("")}</div></section>
     <section id="video"><h2>Operation Video</h2><div class="panel">${videoUrl ? `<video controls preload="metadata" src="${escapeHtml(videoUrl)}"></video>` : ""}<p class="summary">${escapeHtml(video.analysisResult?.transcriptSummary || video.transcriptSummary || video.quickScan?.transcriptSummary || "")}</p></div></section>
@@ -4114,6 +5816,7 @@ const reportHtml = computed(() => {
     <section id="knowledge"><h2>Knowledge Documents</h2><div class="grid">${knowledge}</div></section>
     <section id="screenshots"><h2>Screenshots</h2><div class="frames">${frames}</div></section>
     <section id="pull-requests"><h2>GitHub Pull Requests</h2><div class="panel"><ul>${prs}</ul></div></section>
+    <section id="jira-issues"><h2>Jira Issues</h2><div class="panel"><ul>${jiraIssues}</ul></div></section>
   </main></div>
 </body>
 </html>`;
@@ -4314,6 +6017,23 @@ const saveWorkflowActiveIndex = computed(() => {
 const isSaveWorkflowBusy = computed(() =>
   !["idle", "done", "error"].includes(saveProgressPhase.value)
 );
+const saveProgressActivityLabel = computed(() => {
+  if (saveProgressPhase.value === "preparing") return "動画を調整中";
+  if (saveProgressPhase.value === "saving") return "クリップを保存中";
+  if (saveProgressPhase.value === "parallelAnalysis") return "並列解析中";
+  if (saveProgressPhase.value === "extracting") return "画面を抽出中";
+  if (saveProgressPhase.value === "transcribing") return "文字起こし中";
+  if (saveProgressPhase.value === "summarizing") return "要約を作成中";
+  if (saveProgressPhase.value === "scanning") return "AI解析中";
+  if (saveProgressPhase.value === "analysisSaving") return "解析結果を保存中";
+  if (saveProgressPhase.value === "uploading") return "データを保存中";
+  return "処理中";
+});
+const saveProgressElapsedLabel = computed(() =>
+  saveProgressActivitySeconds.value > 0
+    ? `${formatDuration(saveProgressActivitySeconds.value * 1000)} 経過・処理は継続中です`
+    : "処理を開始しました"
+);
 const saveWorkflowStepperItems = computed(() => [
   {
     title: "1. 保存",
@@ -4333,7 +6053,11 @@ const saveWorkflowStepperItems = computed(() => [
 const saveProgressTitle = computed(() => {
   if (saveProgressPhase.value === "done") return "クリップ解析まで完了しました";
   if (saveProgressPhase.value === "error") return "保存に失敗しました";
+  if (saveProgressPhase.value === "preparing") return "無音カットと分割を実行しています";
   if (saveProgressPhase.value === "saving") return "ザッピングクリップを保存しています";
+  if (saveProgressPhase.value === "parallelAnalysis") {
+    return `${parallelAnalysisTotal.value}クリップを並列解析しています`;
+  }
   if (saveProgressPhase.value === "extracting") return "スクリーンショットを抽出しています";
   if (saveProgressPhase.value === "transcribing") return "Geminiで文字起こししています";
   if (saveProgressPhase.value === "summarizing") return "文字起こしを要約しています";
@@ -4348,8 +6072,14 @@ const saveProgressDescription = computed(() => {
   if (saveProgressPhase.value === "error") {
     return errorMessage.value || "保存処理を完了できませんでした。";
   }
+  if (saveProgressPhase.value === "preparing") {
+    return "無音区間を除き、指定した分割点ごとに独立したクリップを生成しています。";
+  }
   if (saveProgressPhase.value === "saving") {
     return "解析に失敗しても録画が残るよう、まずクリップ本体を保存しています。";
+  }
+  if (saveProgressPhase.value === "parallelAnalysis") {
+    return `先に取得した文字起こしを再利用し、スクリーンショット・要約・クリップ解析を並行しています。${parallelAnalysisCompleted.value}/${parallelAnalysisTotal.value}件完了`;
   }
   if (saveProgressPhase.value === "extracting") {
     return "録画クリップから約5秒ごとの操作スクリーンショットを作っています。";
@@ -4370,6 +6100,12 @@ const saveProgressDescription = computed(() => {
 });
 const saveProgressCompletion = computed(() => {
   if (saveProgressPhase.value === "done") return 100;
+  if (saveProgressPhase.value === "parallelAnalysis") {
+    const ratio = parallelAnalysisTotal.value > 0
+      ? parallelAnalysisCompleted.value / parallelAnalysisTotal.value
+      : 0;
+    return Math.round(58 + ratio * 34);
+  }
   if (saveProgressPhase.value === "analysisSaving") return 78;
   if (saveProgressPhase.value === "uploading") return 22;
   if (saveProgressPhase.value === "scanning") return 74;
@@ -4377,6 +6113,7 @@ const saveProgressCompletion = computed(() => {
   if (saveProgressPhase.value === "transcribing") return 38;
   if (saveProgressPhase.value === "extracting") return 30;
   if (saveProgressPhase.value === "saving") return 14;
+  if (saveProgressPhase.value === "preparing") return 8;
   return saveProgressPhase.value === "error" ? 100 : 8;
 });
 const saveProgressFramePreview = computed(() => {
@@ -4426,6 +6163,36 @@ const saveProgressInsight = computed<SaveProgressInsight>(() => {
       icon: "material-symbols:format-list-numbered",
     },
   ];
+
+  if (saveProgressPhase.value === "preparing") {
+    return {
+      heading: "扱いやすい長さへ整えています",
+      subheading: "音声と映像の同期を保ったまま、無音除去とセクション分割を行っています。",
+      badge: "動画調整",
+      noteCount: splitPointsMs.value.length + cutSilenceRanges.value.length,
+      lines: [
+        silenceCutEnabled.value
+          ? `無音候補 ${cutSilenceRanges.value.length}箇所をカット対象にしています。`
+          : "無音カットはオフです。",
+        `${splitPointsMs.value.length + 1}本のクリップを生成します。`,
+      ],
+      artifacts,
+    };
+  }
+
+  if (saveProgressPhase.value === "parallelAnalysis") {
+    return {
+      heading: "クリップごとの解析を同時に進めています",
+      subheading: "文字起こしは再実行せず、各区間の画面と発話を合わせてタイトル・説明・操作手順を作っています。",
+      badge: "並列解析",
+      noteCount: parallelAnalysisCompleted.value,
+      lines: [
+        `${parallelAnalysisCompleted.value}/${parallelAnalysisTotal.value}クリップの後続解析が完了しました。`,
+        `${preparedTranscription.value?.segments.length ?? 0}件のタイムコード付き発話を区間ごとに再利用しています。`,
+      ],
+      artifacts,
+    };
+  }
 
   if (saveProgressPhase.value === "extracting") {
     return {
@@ -4553,8 +6320,16 @@ function saveProgressStatusLabel(status: SaveProgressStepStatus): string {
 
 const saveProgressSteps = computed<SaveProgressStep[]>(() => {
   const phase = saveProgressPhase.value;
+  const prepareStatus: SaveProgressStepStatus =
+    phase === "preparing"
+      ? "active"
+      : phase === "idle"
+        ? "pending"
+        : phase === "error" && !workflowVideoId.value
+          ? "error"
+          : "done";
   const extractStatus: SaveProgressStepStatus =
-    phase === "extracting"
+    phase === "extracting" || phase === "parallelAnalysis"
       ? "active"
       : ["transcribing", "summarizing", "scanning", "analysisSaving", "done"].includes(phase)
         ? "done"
@@ -4564,6 +6339,8 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
   const transcribeStatus: SaveProgressStepStatus =
     phase === "transcribing"
       ? "active"
+      : phase === "parallelAnalysis" && Boolean(preparedTranscription.value)
+        ? "done"
       : transcriptErrorMessage.value
         ? "error"
       : ["summarizing", "scanning", "analysisSaving", "done"].includes(phase)
@@ -4572,7 +6349,7 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
           ? "error"
           : "pending";
   const summarizeStatus: SaveProgressStepStatus =
-    phase === "summarizing"
+    phase === "summarizing" || phase === "parallelAnalysis"
       ? "active"
       : ["scanning", "analysisSaving", "done"].includes(phase)
         ? "done"
@@ -4580,7 +6357,7 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
           ? "error"
           : "pending";
   const scanStatus: SaveProgressStepStatus =
-    phase === "scanning"
+    phase === "scanning" || phase === "parallelAnalysis"
       ? "active"
       : ["analysisSaving", "done"].includes(phase)
         ? "done"
@@ -4590,7 +6367,7 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
   const uploadingStatus: SaveProgressStepStatus =
     phase === "saving"
       ? "active"
-      : ["extracting", "transcribing", "summarizing", "scanning", "analysisSaving", "done"].includes(phase)
+      : ["extracting", "transcribing", "summarizing", "scanning", "analysisSaving", "parallelAnalysis", "done"].includes(phase)
         ? "done"
         : phase === "error" && workflowVideoId.value
           ? "done"
@@ -4599,8 +6376,19 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
             : "pending";
   return [
     {
-      key: "frames",
+      key: "prepare",
       index: 1,
+      label: "無音カット・分割",
+      description:
+        phase === "preparing"
+          ? `無音候補 ${cutSilenceRanges.value.length}箇所を整理し、${splitPointsMs.value.length + 1}本へ分割しています。`
+          : "無音区間と分割位置を反映し、解析しやすい動画へ整えます。",
+      status: prepareStatus,
+      statusLabel: saveProgressStatusLabel(prepareStatus),
+    },
+    {
+      key: "frames",
+      index: 2,
       label: "スクリーンショットを抽出",
       description: `${frameCaptures.value.length}枚の操作スクリーンショットを準備しています。`,
       status: extractStatus,
@@ -4608,7 +6396,7 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
     },
     {
       key: "transcript",
-      index: 2,
+      index: 3,
       label: "Gemini文字起こし",
       description: transcriptErrorMessage.value
         ? transcriptErrorMessage.value
@@ -4620,7 +6408,7 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
     },
     {
       key: "summary",
-      index: 3,
+      index: 4,
       label: "文字起こしを要約",
       description: transcriptSummary.value
         ? "文字起こしの要約を作成しました。"
@@ -4630,7 +6418,7 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
     },
     {
       key: "scan",
-      index: 4,
+      index: 5,
       label: "AIクリップ解析",
       description: quickScan.value?.errorMessage
         ? "簡易スキャンは失敗しましたが、クリップ保存は継続します。"
@@ -4640,7 +6428,7 @@ const saveProgressSteps = computed<SaveProgressStep[]>(() => {
     },
     {
       key: "upload",
-      index: 5,
+      index: 6,
       label: "クリップを保存",
       description: workflowVideoId.value
         ? "クリップ本体は保存済みです。"
@@ -4805,6 +6593,45 @@ watch(reportMode, () => {
 });
 
 watch(
+  () => props.application?.id || "",
+  (applicationId) => {
+    void fetchClipDrafts(applicationId);
+  },
+  { immediate: true }
+);
+
+watch(
+  [
+    title,
+    selectedVideoGroupId,
+    silenceCutEnabled,
+    noiseReductionEnabled,
+    silenceRanges,
+    keptSilenceRangeIndexes,
+    manualCutRanges,
+    splitPointsMs,
+    aiSectionDrafts,
+  ],
+  () => scheduleActiveClipDraftSave(),
+  { deep: true }
+);
+
+watch(
+  [recordedBlob, recordedAudioBlob],
+  ([videoBlob, audioBlob]) => {
+    if (!videoBlob) {
+      silenceRanges.value = [];
+      manualCutRanges.value = [];
+      audioLevelSamples.value = [];
+      keptSilenceRangeIndexes.value = [];
+      return;
+    }
+    if (!audioBlob) return;
+    void analyzeRecordedSilence(audioBlob);
+  }
+);
+
+watch(
   [
     saveProgressOpen,
     () => saveProgressPhase.value,
@@ -4828,17 +6655,87 @@ watch(
   { immediate: true }
 );
 
+watch(
+  [saveProgressOpen, () => saveProgressPhase.value],
+  ([isOpen, phase]) => {
+    stopSaveProgressActivityTimer();
+    saveProgressActivitySeconds.value = 0;
+    if (!isOpen || ["idle", "done", "error"].includes(phase)) return;
+    const startedAt = Date.now();
+    saveProgressActivityTimer = setInterval(() => {
+      saveProgressActivitySeconds.value = Math.max(
+        1,
+        Math.floor((Date.now() - startedAt) / 1000)
+      );
+    }, 1000);
+  },
+  { immediate: true }
+);
+
+watch(relatedContextProviderTab, (tab) => {
+  if (tab === "jira") void ensureJiraConnections();
+});
+
+watch(detailVideoId, () => {
+  jiraSearchResults.value = [];
+  jiraListMode.value = "project";
+  selectedJiraIssueKeys.value = [];
+  jiraSearchError.value = "";
+});
+
+function startBulkContextCollection(): void {
+  if (!detailVideo.value || isRelatedContextBusy(detailVideo.value)) return;
+  if (bulkContextTimer.value) clearTimeout(bulkContextTimer.value);
+  bulkContextCompleted.value = false;
+  bulkContextSteps.value = bulkContextSteps.value.map((step, index) => ({
+    ...step,
+    status: index === 0 ? "running" : "pending",
+  }));
+  bulkContextModalOpen.value = true;
+  emit("collect-related-contexts", detailVideo.value.id);
+
+  bulkContextTimer.value = setTimeout(() => {
+    bulkContextSteps.value = bulkContextSteps.value.map((step) => ({
+      ...step,
+      status: "done",
+    }));
+    bulkContextCompleted.value = true;
+    bulkContextTimer.value = null;
+  }, 1800);
+}
+
+function handleClipDraftBeforeUnload(event: BeforeUnloadEvent): void {
+  const hasUnsavedRecording = Boolean(
+    recordedBlob.value && !activeClipDraftIsPersisted.value
+  );
+  if (
+    !isRecording.value &&
+    !isSavingClipDraft.value &&
+    !hasUnsavedRecording
+  ) {
+    return;
+  }
+  event.preventDefault();
+  event.returnValue = "";
+}
+
 onMounted(() => {
   document.addEventListener("click", handleDetailClipPickerDocumentClick);
+  window.addEventListener("beforeunload", handleClipDraftBeforeUnload);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener("click", handleDetailClipPickerDocumentClick);
+  window.removeEventListener("beforeunload", handleClipDraftBeforeUnload);
   stopSaveProgressFramePreviewTimer();
+  stopSaveProgressActivityTimer();
+  if (clipDraftAutosaveTimer) clearTimeout(clipDraftAutosaveTimer);
+  if (bulkContextTimer.value) clearTimeout(bulkContextTimer.value);
   stopElapsedTimer();
   stopTracks();
   stopContextMapNodeDrag();
   revokePreviewUrl();
+  revokePreparedPreviewUrl();
   revokeFramePreviewUrls();
   revokeReportHtmlUrl();
 });
@@ -4858,10 +6755,162 @@ function stopSaveProgressFramePreviewTimer(): void {
   saveProgressFramePreviewTimer = null;
 }
 
+function stopSaveProgressActivityTimer(): void {
+  if (!saveProgressActivityTimer) return;
+  clearInterval(saveProgressActivityTimer);
+  saveProgressActivityTimer = null;
+}
+
+function currentClipDraftEditorState() {
+  return {
+    silenceCutEnabled: silenceCutEnabled.value,
+    noiseReductionEnabled: noiseReductionEnabled.value,
+    silenceRanges: [...silenceRanges.value],
+    keptSilenceRangeIndexes: [...keptSilenceRangeIndexes.value],
+    manualCutRanges: [...manualCutRanges.value],
+    splitPointsMs: [...splitPointsMs.value],
+    aiSectionDrafts: [...aiSectionDrafts.value],
+  };
+}
+
+async function persistActiveClipDraft(
+  patch: Partial<StoryVaultClipDraft> = {}
+): Promise<void> {
+  const draftId = activeClipDraftId.value;
+  if (!draftId || isRestoringClipDraft.value) return;
+  try {
+    const updated = await updateClipDraft(draftId, {
+      clipGroupId: selectedVideoGroupId.value || activeClipDraft.value?.clipGroupId || "",
+      title: title.value.trim() || activeClipDraft.value?.title || "録画下書き",
+      editorState: currentClipDraftEditorState(),
+      ...patch,
+    });
+    clipDraftSaveError.value = "";
+    clipDraftLastSavedAt.value = updated.updatedAt;
+  } catch (error) {
+    clipDraftSaveError.value =
+      error instanceof Error ? error.message : "録画下書きの更新に失敗しました";
+    reportDatadogError(error, {
+      feature: "storyvault_clip_draft_autosave",
+      draftId,
+    });
+  }
+}
+
+function scheduleActiveClipDraftSave(): void {
+  if (!activeClipDraftId.value || isRestoringClipDraft.value) return;
+  if (clipDraftAutosaveTimer) clearTimeout(clipDraftAutosaveTimer);
+  clipDraftAutosaveTimer = setTimeout(() => {
+    clipDraftAutosaveTimer = null;
+    void persistActiveClipDraft();
+  }, 450);
+}
+
+async function saveRecordedBlobAsDraft(
+  blob: Blob,
+  durationMs: number
+): Promise<void> {
+  const application = props.application;
+  const group = selectedVideoGroup.value;
+  if (!application || !group || blob.size <= 0) return;
+  isSavingClipDraft.value = true;
+  clipDraftSaveError.value = "";
+  const previousDraft = activeClipDraft.value;
+  try {
+    const draft = await createClipDraft({
+      applicationId: application.id,
+      clipGroupId: group.id,
+      blob,
+      durationMs,
+      sourceDisplaySurface: sourceDisplaySurface.value,
+      title: title.value.trim() || undefined,
+    });
+    activeClipDraftId.value = draft.id;
+    clipDraftLastSavedAt.value = draft.updatedAt;
+    if (previousDraft && previousDraft.id !== draft.id && !previousDraft.source) {
+      void discardClipDraft(previousDraft);
+    }
+    await persistActiveClipDraft({
+      status: "editing",
+      statusMessage: "編集を再開できます",
+    });
+  } catch (error) {
+    const failedDraft = applicationClipDrafts.value.find(
+      (draft) => draft.status === "error" && !draft.source
+    );
+    if (failedDraft) activeClipDraftId.value = failedDraft.id;
+    clipDraftSaveError.value =
+      error instanceof Error ? error.message : "録画下書きの保存に失敗しました";
+  } finally {
+    isSavingClipDraft.value = false;
+  }
+}
+
+async function retryActiveClipDraftSave(): Promise<void> {
+  if (!recordedBlob.value) return;
+  await saveRecordedBlobAsDraft(
+    recordedBlob.value,
+    sourceRecordingDurationMs.value
+  );
+}
+
 function openAppendRecordingModal(video: DecodedStoryVaultClip): void {
   errorMessage.value = "";
   selectedVideoGroupId.value = video.clipGroupId || selectedVideoGroupId.value;
   recordingModalOpen.value = true;
+}
+
+function clipDraftStatusLabel(draft: StoryVaultClipDraft): string {
+  if (draft.status === "saving") return "保存中";
+  if (draft.status === "processing") return "処理中";
+  if (draft.status === "ready") return "分割案あり";
+  if (draft.status === "error") return "要確認";
+  return "編集中";
+}
+
+function clipDraftStatusClass(draft: StoryVaultClipDraft): string {
+  if (draft.status === "ready") return "bg-emerald-50 text-emerald-700";
+  if (draft.status === "processing" || draft.status === "saving") {
+    return "bg-cyan-50 text-cyan-700";
+  }
+  if (draft.status === "error") return "bg-red-50 text-red-700";
+  return "bg-amber-50 text-amber-700";
+}
+
+function formatClipDraftUpdatedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function openDiscardClipDraftConfirm(draft: StoryVaultClipDraft): void {
+  discardClipDraftTarget.value = draft;
+  discardClipDraftConfirmOpen.value = true;
+}
+
+async function confirmDiscardClipDraft(): Promise<void> {
+  const draft = discardClipDraftTarget.value;
+  if (!draft || discardingClipDraftId.value) return;
+  discardingClipDraftId.value = draft.id;
+  try {
+    await discardClipDraft(draft);
+    if (activeClipDraftId.value === draft.id) {
+      resetRecording();
+      recordingModalOpen.value = false;
+    }
+    discardClipDraftConfirmOpen.value = false;
+    discardClipDraftTarget.value = null;
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : "録画下書きの破棄に失敗しました";
+  } finally {
+    discardingClipDraftId.value = "";
+  }
 }
 
 function openGroupCreateModal(): void {
@@ -4968,7 +7017,6 @@ async function startCapture(): Promise<void> {
       (track) => track.readyState === "live"
     );
     setupAudioAnalyser(microphoneStream);
-    startAudioOnlyRecorder(microphoneStream);
 
     displayStream = await navigator.mediaDevices.getDisplayMedia({
       video: { displaySurface: "window" } as MediaTrackConstraints,
@@ -5001,20 +7049,28 @@ async function startCapture(): Promise<void> {
     mediaRecorder.onstop = () => {
       const blobType = mediaRecorder?.mimeType || mimeType || "video/webm";
       const blob = new Blob(chunks, { type: blobType });
-      const durationMs = elapsedMs.value;
+      // The interval display is intentionally coarse and can be up to 500 ms
+      // behind the actual recording. Persist the shared recorder clock instead.
+      const durationMs = Math.max(0, Date.now() - startedAt);
+      elapsedMs.value = durationMs;
       recordedBlob.value = blob;
       recordedDurationMs.value = durationMs;
       previewUrl.value = URL.createObjectURL(blob);
+      void saveRecordedBlobAsDraft(blob, durationMs);
       stopElapsedTimer();
       stopTracks();
       mediaRecorder = null;
       isRecording.value = false;
     };
+    // Start both MediaRecorders from the same origin. Starting the audio-only
+    // recorder before getDisplayMedia() included time spent in the browser's
+    // screen picker and shifted silence/waveform data ahead of the video.
     startedAt = Date.now();
     elapsedMs.value = 0;
     elapsedTimer = window.setInterval(() => {
       elapsedMs.value = Date.now() - startedAt;
     }, 500);
+    startAudioOnlyRecorder(microphoneStream);
     mediaRecorder.start(1000);
     isRecording.value = true;
   } catch (error) {
@@ -5065,18 +7121,49 @@ function startAudioOnlyRecorder(stream: MediaStream): void {
   audioRecorder.start(1000);
 }
 
-function resolveTranscriptionAudioBlob(): Blob | null {
-  if (recordedAudioBlob.value?.size) return recordedAudioBlob.value;
-  if (audioChunks.length === 0) return null;
-  return new Blob(audioChunks, { type: lastAudioMimeType || "audio/webm" });
-}
-
 function resetRecording(): void {
   if (isRecording.value) return;
+  if (clipDraftAutosaveTimer) {
+    clearTimeout(clipDraftAutosaveTimer);
+    clipDraftAutosaveTimer = null;
+  }
   revokePreviewUrl();
+  revokePreparedPreviewUrl();
   recordedBlob.value = null;
   recordedAudioBlob.value = null;
   recordedDurationMs.value = undefined;
+  recordedPreviewMs.value = 0;
+  isRecordedPreviewPlaying.value = false;
+  isScrubbingSilenceTimeline.value = false;
+  isSelectingManualCutRange.value = false;
+  manualRangeSelectionActive.value = false;
+  manualCutSelectionAnchorMs.value = null;
+  manualCutSelectionCurrentMs.value = null;
+  silenceCutEnabled.value = true;
+  noiseReductionEnabled.value = true;
+  silenceRanges.value = [];
+  manualCutRanges.value = [];
+  audioLevelSamples.value = [];
+  keptSilenceRangeIndexes.value = [];
+  splitPointsMs.value = [];
+  preparedBaseClip.value = null;
+  preparedTranscription.value = null;
+  aiSectionDrafts.value = [];
+  preparedSilenceFingerprint.value = "";
+  clipPreparationPhase.value = "idle";
+  clipPreparationError.value = "";
+  clipPreparationProgressOpen.value = false;
+  clipPreparationProgress.value = null;
+  activeClipDraftId.value = "";
+  isSavingClipDraft.value = false;
+  clipDraftSaveError.value = "";
+  clipDraftLastSavedAt.value = "";
+  clipEditingStep.value = 1;
+  recordingProcessingMode.value = "automatic";
+  isAnalyzingSilence.value = false;
+  isPreparingClips.value = false;
+  parallelAnalysisCompleted.value = 0;
+  parallelAnalysisTotal.value = 0;
   quickScan.value = undefined;
   transcriptText.value = "";
   transcriptProvider.value = "";
@@ -5095,8 +7182,652 @@ function resetRecording(): void {
   resetWaveform();
 }
 
+async function analyzeRecordedSilence(blob: Blob): Promise<void> {
+  isAnalyzingSilence.value = true;
+  try {
+    const analysis = await analyzeAudioTimeline(blob, {
+      thresholdDb: silenceThresholdDb,
+      minSilenceMs: minimumSilenceMs,
+      keepPaddingMs: 180,
+    });
+    silenceRanges.value = analysis.silenceRanges;
+    audioLevelSamples.value = analysis.levelSamples;
+    keptSilenceRangeIndexes.value = [];
+  } catch (error) {
+    silenceRanges.value = [];
+    audioLevelSamples.value = [];
+    keptSilenceRangeIndexes.value = [];
+    reportDatadogError(error, {
+      feature: "storyvault_clip_silence_preview",
+      blobSize: blob.size,
+    });
+  } finally {
+    isAnalyzingSilence.value = false;
+  }
+}
+
+function updateRecordedPreviewTime(event: Event): void {
+  recordedPreviewMs.value = Math.max(
+    0,
+    Math.round((event.currentTarget as HTMLVideoElement).currentTime * 1000)
+  );
+}
+
+function reconcileRecordedPreviewDuration(event: Event): void {
+  if (clipEditingStep.value !== 1 || isRecording.value) return;
+  const video = event.currentTarget as HTMLVideoElement;
+  const mediaDurationMs = Math.round(video.duration * 1000);
+  if (!Number.isFinite(mediaDurationMs) || mediaDurationMs <= 0) return;
+  const previousDurationMs = sourceRecordingDurationMs.value;
+  if (Math.abs(mediaDurationMs - previousDurationMs) < 20) return;
+
+  recordedDurationMs.value = mediaDurationMs;
+  elapsedMs.value = mediaDurationMs;
+  silenceRanges.value = normalizeStoryVaultCutRanges(
+    silenceRanges.value,
+    mediaDurationMs
+  );
+  manualCutRanges.value = normalizeStoryVaultCutRanges(
+    manualCutRanges.value,
+    mediaDurationMs
+  );
+  splitPointsMs.value = splitPointsMs.value.filter(
+    (point) => point > 250 && point < mediaDurationMs - 250
+  );
+
+  const draft = activeClipDraft.value;
+  if (draft?.source && draft.source.durationMs !== mediaDurationMs) {
+    void persistActiveClipDraft({
+      source: { ...draft.source, durationMs: mediaDurationMs },
+    });
+  }
+}
+
+function timelinePercent(timeMs: number): number {
+  if (recordingDurationMs.value <= 0) return 0;
+  return Math.max(0, Math.min(100, timeMs / recordingDurationMs.value * 100));
+}
+
+function timelineRangeStyle(startMs: number, endMs: number): Record<string, string> {
+  return {
+    left: `${timelinePercent(startMs)}%`,
+    width: `${Math.max(0.2, timelinePercent(endMs) - timelinePercent(startMs))}%`,
+  };
+}
+
+function seekRecordedPreview(timeMs: number): void {
+  if (!recordedPreviewVideo.value) return;
+  recordedPreviewVideo.value.currentTime = Math.max(0, timeMs / 1000);
+  recordedPreviewMs.value = Math.max(0, Math.round(timeMs));
+}
+
+function audioLevelHeightPercent(db: number): number {
+  return Math.max(3, Math.min(100, (db + 60) / 60 * 100));
+}
+
+function thresholdLineBottomPercent(db: number): number {
+  return Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+}
+
+function isAudioSampleBelowThreshold(sample: StoryVaultAudioLevelSample): boolean {
+  return sample.db < silenceThresholdDb;
+}
+
+function isSilenceRangeKept(index: number): boolean {
+  return keptSilenceRangeIndexes.value.includes(index);
+}
+
+function toggleSilenceRangeKept(index: number): void {
+  keptSilenceRangeIndexes.value = isSilenceRangeKept(index)
+    ? keptSilenceRangeIndexes.value.filter((item) => item !== index)
+    : [...keptSilenceRangeIndexes.value, index].sort((a, b) => a - b);
+}
+
+function silenceTimelineTimeFromPointer(event: PointerEvent): number | null {
+  const element = silenceTimeline.value;
+  if (!element || recordingDurationMs.value <= 0) return null;
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0) return null;
+  const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+  return ratio * recordingDurationMs.value;
+}
+
+function seekSilenceTimelineFromPointer(event: PointerEvent): void {
+  const timeMs = silenceTimelineTimeFromPointer(event);
+  if (timeMs === null) return;
+  seekRecordedPreview(timeMs);
+}
+
+function clearManualCutSelection(): void {
+  manualCutSelectionAnchorMs.value = null;
+  manualCutSelectionCurrentMs.value = null;
+  isSelectingManualCutRange.value = false;
+}
+
+function toggleManualRangeSelection(): void {
+  manualRangeSelectionActive.value = !manualRangeSelectionActive.value;
+  clearManualCutSelection();
+}
+
+function updateManualCutSelectionFromPointer(event: PointerEvent): void {
+  const timeMs = silenceTimelineTimeFromPointer(event);
+  if (timeMs === null) return;
+  manualCutSelectionCurrentMs.value = Math.round(timeMs);
+  seekRecordedPreview(timeMs);
+}
+
+function addManualCutSelection(): void {
+  const range = manualCutSelectionRange.value;
+  if (!range || !canAddManualCutSelection.value) return;
+  manualCutRanges.value = normalizeStoryVaultCutRanges(
+    [...manualCutRanges.value, range],
+    sourceRecordingDurationMs.value
+  );
+  clearManualCutSelection();
+}
+
+function removeManualCutRange(index: number): void {
+  manualCutRanges.value = manualCutRanges.value.filter((_, itemIndex) => itemIndex !== index);
+}
+
+function handleSilenceTimelinePointerDown(event: PointerEvent): void {
+  silenceTimeline.value?.setPointerCapture(event.pointerId);
+  if (manualRangeSelectionActive.value) {
+    const timeMs = silenceTimelineTimeFromPointer(event);
+    if (timeMs === null) return;
+    isSelectingManualCutRange.value = true;
+    manualCutSelectionAnchorMs.value = Math.round(timeMs);
+    manualCutSelectionCurrentMs.value = Math.round(timeMs);
+    seekRecordedPreview(timeMs);
+    return;
+  }
+  isScrubbingSilenceTimeline.value = true;
+  seekSilenceTimelineFromPointer(event);
+}
+
+function handleSilenceTimelinePointerMove(event: PointerEvent): void {
+  if (isSelectingManualCutRange.value) {
+    updateManualCutSelectionFromPointer(event);
+    return;
+  }
+  if (!isScrubbingSilenceTimeline.value) return;
+  seekSilenceTimelineFromPointer(event);
+}
+
+function handleSilenceTimelinePointerUp(event: PointerEvent): void {
+  if (isSelectingManualCutRange.value) {
+    updateManualCutSelectionFromPointer(event);
+    isSelectingManualCutRange.value = false;
+  }
+  isScrubbingSilenceTimeline.value = false;
+  if (silenceTimeline.value?.hasPointerCapture(event.pointerId)) {
+    silenceTimeline.value.releasePointerCapture(event.pointerId);
+  }
+}
+
+async function toggleRecordedPreviewPlayback(): Promise<void> {
+  const video = recordedPreviewVideo.value;
+  if (!video) return;
+  if (video.paused) {
+    await video.play().catch(() => undefined);
+  } else {
+    video.pause();
+  }
+}
+
+async function requestRecordedPreviewFullscreen(): Promise<void> {
+  const video = recordedPreviewVideo.value;
+  if (!video) return;
+  await video.requestFullscreen?.().catch(() => undefined);
+}
+
+function toggleClipActionMenu(clipId: string): void {
+  clipActionMenuId.value = clipActionMenuId.value === clipId ? "" : clipId;
+}
+
+function moveClipToGroup(clipId: string, groupId: string): void {
+  clipActionMenuId.value = "";
+  const clip = props.clips.find((item) => item.id === clipId);
+  if (!clip || !groupId || clip.clipGroupId === groupId) return;
+  emit("move-clip", clipId, groupId);
+}
+
+function addSplitPoint(timeMs: number): void {
+  const point = Math.round(timeMs);
+  if (point <= 250 || point >= recordingDurationMs.value - 250) return;
+  if (splitPointsMs.value.some((existing) => Math.abs(existing - point) < 500)) return;
+  splitPointsMs.value = [...splitPointsMs.value, point].sort((a, b) => a - b);
+}
+
+function addSplitAtCurrentTime(): void {
+  addSplitPoint(recordedPreviewMs.value);
+}
+
+function removeSplitPoint(point: number): void {
+  splitPointsMs.value = splitPointsMs.value.filter((item) => item !== point);
+}
+
+function restoreAiSplitProposal(): void {
+  if (aiSectionDrafts.value.length === 0) return;
+  splitPointsMs.value = [...aiSuggestedSplitPointsMs.value];
+}
+
+function applyTranscriptionToPanel(transcription: GeminiTranscriptionResult): void {
+  transcriptText.value = transcription.text;
+  transcriptProvider.value = transcription.provider;
+  transcriptSegments.value = transcription.segments;
+  transcriptSrt.value = transcription.srt;
+  transcriptTimingStatus.value = transcription.timingStatus;
+  transcriptErrorMessage.value = "";
+}
+
+async function handleClipPreparationProgress(
+  progress: StoryVaultClipPreparationProgress
+): Promise<void> {
+  clipPreparationProgress.value = progress;
+  await persistActiveClipDraft({
+    status: "processing",
+    statusMessage: "動画を調整しています",
+    preparationState: {
+      phase: "trimming",
+      requestId: progress.requestId,
+      requestPath: progress.requestPath,
+      errorMessage: "",
+    },
+  });
+}
+
+function clipPreparationLogLabel(log: StoryVaultClipPreparationLog): string {
+  const labels: Record<string, string> = {
+    download: "元動画を取得",
+    detect_silence: "動画タイムラインを解析",
+    render: "調整済み動画を書き出し",
+    upload: "生成物をアップロード",
+    completed: "Cloud Run処理完了",
+    error: "処理エラー",
+  };
+  return labels[log.currentStep || ""] || "処理ログ";
+}
+
+function formatClipPreparationLogTime(value: unknown): string {
+  let date: Date | null = null;
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) date = parsed;
+  } else if (value && typeof value === "object" && "toDate" in value) {
+    const toDate = (value as { toDate?: () => Date }).toDate;
+    if (typeof toDate === "function") date = toDate.call(value);
+  }
+  return date
+    ? new Intl.DateTimeFormat("ja-JP", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }).format(date)
+    : "";
+}
+
+function clipDraftTranscription(
+  transcription: GeminiTranscriptionResult
+): StoryVaultClipDraftTranscription {
+  return {
+    text: transcription.text,
+    provider: transcription.provider,
+    segments: transcription.segments,
+    srt: transcription.srt,
+    timingStatus: transcription.timingStatus,
+  };
+}
+
+async function completeSectioningPreparation(
+  prepared: PreparedRecordingClip,
+  transcription: GeminiTranscriptionResult
+): Promise<void> {
+  preparedTranscription.value = transcription;
+  applyTranscriptionToPanel(transcription);
+  clipPreparationPhase.value = "sectioning";
+  await persistActiveClipDraft({
+    status: "processing",
+    statusMessage: "AIで分割案を作成しています",
+    preparationState: {
+      phase: "sectioning",
+      transcription: clipDraftTranscription(transcription),
+      errorMessage: "",
+    },
+  });
+  const sections = await generateTranscriptSections({
+    cues: transcription.segments,
+    durationMs: prepared.durationMs,
+  });
+  aiSectionDrafts.value = sections;
+  splitPointsMs.value = sectionSplitPointsMs(sections);
+  preparedSilenceFingerprint.value = currentSilenceFingerprint.value;
+  recordedPreviewMs.value = 0;
+  clipEditingStep.value = 2;
+  clipPreparationPhase.value = "done";
+  await persistActiveClipDraft({
+    status: "ready",
+    statusMessage: "分割案を確認できます",
+    preparationState: {
+      phase: "done",
+      preparedGcsUri: prepared.gcsUri,
+      preparedDurationMs: prepared.durationMs,
+      transcription: clipDraftTranscription(transcription),
+      errorMessage: "",
+    },
+  });
+}
+
+async function completeTranscriptAndSectionPreparation(
+  prepared: PreparedRecordingClip
+): Promise<void> {
+  const normalizedPrepared: PreparedRecordingClip = {
+    ...prepared,
+    durationMs: prepared.durationMs || sourceRecordingDurationMs.value,
+  };
+  preparedBaseClip.value = normalizedPrepared;
+  revokePreparedPreviewUrl();
+  preparedPreviewUrl.value = URL.createObjectURL(normalizedPrepared.blob);
+
+  clipPreparationPhase.value = "transcribing";
+  await persistActiveClipDraft({
+    status: "processing",
+    statusMessage: "Geminiで文字起こししています",
+    preparationState: {
+      phase: "transcribing",
+      preparedGcsUri: normalizedPrepared.gcsUri,
+      preparedDurationMs: normalizedPrepared.durationMs,
+      errorMessage: "",
+    },
+  });
+  const transcription = await transcribeRecordingWithGemini(
+    normalizedPrepared.blob,
+    {
+      gcsUri: normalizedPrepared.gcsUri,
+      contentType: normalizedPrepared.blob.type || "video/mp4",
+      fileName: "storyvault-prepared-video.mp4",
+    }
+  );
+  await completeSectioningPreparation(normalizedPrepared, transcription);
+}
+
+async function prepareTranscriptAndSections(applySelectedCuts: boolean): Promise<void> {
+  if (!props.application || !recordedBlob.value || isPreparingClips.value) return;
+  if (!activeClipDraftIsPersisted.value || !activeClipDraft.value?.source) {
+    clipDraftSaveError.value = "録画下書きの保存完了後に文字起こしを開始できます";
+    return;
+  }
+  if (!applySelectedCuts) {
+    silenceCutEnabled.value = false;
+    manualCutRanges.value = [];
+    manualRangeSelectionActive.value = false;
+    clearManualCutSelection();
+  }
+  const cutRangesToApply = applySelectedCuts ? [...selectedCutRanges.value] : [];
+  isPreparingClips.value = true;
+  clipPreparationError.value = "";
+  clipPreparationPhase.value = "trimming";
+  clipPreparationProgressOpen.value = true;
+  clipPreparationProgress.value = null;
+  splitPointsMs.value = [];
+  aiSectionDrafts.value = [];
+  preparedTranscription.value = null;
+  preparedBaseClip.value = null;
+  preparedSilenceFingerprint.value = "";
+  revokePreparedPreviewUrl();
+
+  try {
+    await persistActiveClipDraft({
+      status: "processing",
+      statusMessage: "動画調整を開始しています",
+      preparationState: {
+        phase: "trimming",
+        errorMessage: "",
+      },
+    });
+    const preparedClips = await prepareRecordedClips({
+      applicationId: props.application.id,
+      blob: recordedBlob.value,
+      durationMs: sourceRecordingDurationMs.value,
+      silenceCutEnabled: cutRangesToApply.length > 0,
+      noiseReductionEnabled: noiseReductionEnabled.value,
+      silenceRanges: cutRangesToApply,
+      splitPointsMs: [],
+      sourceGcsUri: activeClipDraft.value.source.gcsUri,
+      onProgress: handleClipPreparationProgress,
+    });
+    const prepared = preparedClips[0];
+    if (!prepared) throw new Error("文字起こし用の動画を生成できませんでした");
+    await completeTranscriptAndSectionPreparation(prepared);
+  } catch (error) {
+    clipPreparationError.value =
+      error instanceof Error ? error.message : "動画の準備に失敗しました";
+    clipPreparationPhase.value = "error";
+    await persistActiveClipDraft({
+      status: "error",
+      statusMessage: clipPreparationError.value,
+      preparationState: {
+        phase: "error",
+        errorMessage: clipPreparationError.value,
+      },
+    });
+    reportDatadogError(error, {
+      feature: "storyvault_prepare_transcript_sections",
+      applicationId: props.application.id,
+      cutRangeCount: cutRangesToApply.length,
+    });
+  } finally {
+    isPreparingClips.value = false;
+  }
+}
+
+function transcriptionFromClipDraft(
+  transcription: StoryVaultClipDraftTranscription
+): GeminiTranscriptionResult {
+  return {
+    text: transcription.text,
+    provider: transcription.provider,
+    segments: transcription.segments,
+    srt: transcription.srt,
+    timingStatus: transcription.timingStatus,
+  };
+}
+
+async function resumeClipDraft(draft: StoryVaultClipDraft): Promise<void> {
+  if (!draft.source || resumingClipDraftId.value) return;
+  resumingClipDraftId.value = draft.id;
+  isRestoringClipDraft.value = true;
+  try {
+    resetRecording();
+    isRestoringClipDraft.value = true;
+    const sourceBlob = await loadDraftSource(draft);
+    activeClipDraftId.value = draft.id;
+    title.value = draft.title;
+    selectedVideoGroupId.value = props.clipGroups.some(
+      (group) => group.id === draft.clipGroupId
+    )
+      ? draft.clipGroupId
+      : selectedVideoGroupId.value;
+    recordedBlob.value = sourceBlob;
+    recordedDurationMs.value = draft.source.durationMs;
+    elapsedMs.value = draft.source.durationMs;
+    sourceDisplaySurface.value = draft.source.sourceDisplaySurface;
+    previewUrl.value = URL.createObjectURL(sourceBlob);
+    silenceCutEnabled.value = draft.editorState.silenceCutEnabled;
+    noiseReductionEnabled.value = draft.editorState.noiseReductionEnabled !== false;
+    silenceRanges.value = [...draft.editorState.silenceRanges];
+    keptSilenceRangeIndexes.value = [
+      ...draft.editorState.keptSilenceRangeIndexes,
+    ];
+    manualCutRanges.value = [...draft.editorState.manualCutRanges];
+    splitPointsMs.value = [...draft.editorState.splitPointsMs];
+    aiSectionDrafts.value = [...draft.editorState.aiSectionDrafts];
+    clipDraftLastSavedAt.value = draft.updatedAt;
+    clipDraftSaveError.value = "";
+    recordingModalOpen.value = true;
+
+    const preparation = draft.preparationState;
+    const preparedBlob = preparation?.preparedGcsUri
+      ? await loadPreparedDraftVideo(draft)
+      : null;
+    const prepared = preparedBlob && preparation?.preparedGcsUri
+      ? {
+          blob: preparedBlob,
+          durationMs:
+            preparation.preparedDurationMs || draft.source.durationMs,
+          gcsUri: preparation.preparedGcsUri,
+        }
+      : null;
+
+    isRestoringClipDraft.value = false;
+    if (prepared && preparation?.transcription) {
+      preparedBaseClip.value = prepared;
+      preparedPreviewUrl.value = URL.createObjectURL(prepared.blob);
+      const transcription = transcriptionFromClipDraft(
+        preparation.transcription
+      );
+      preparedTranscription.value = transcription;
+      applyTranscriptionToPanel(transcription);
+      preparedSilenceFingerprint.value = currentSilenceFingerprint.value;
+      if (
+        preparation.phase === "done" &&
+        draft.editorState.aiSectionDrafts.length > 0
+      ) {
+        clipEditingStep.value = 2;
+        clipPreparationPhase.value = "done";
+        return;
+      }
+      isPreparingClips.value = true;
+      clipPreparationProgressOpen.value = true;
+      await completeSectioningPreparation(prepared, transcription);
+      return;
+    }
+
+    if (prepared) {
+      isPreparingClips.value = true;
+      clipPreparationProgressOpen.value = true;
+      await completeTranscriptAndSectionPreparation(prepared);
+      return;
+    }
+
+    if (preparation?.requestPath && preparation.phase !== "error") {
+      isPreparingClips.value = true;
+      clipPreparationPhase.value = "trimming";
+      clipPreparationProgressOpen.value = true;
+      const clips = await resumeRecordedClipPreparation({
+        requestPath: preparation.requestPath,
+        onProgress: handleClipPreparationProgress,
+      });
+      const resumedPrepared = clips[0];
+      if (!resumedPrepared) {
+        throw new Error("調整済み動画を復元できませんでした");
+      }
+      await completeTranscriptAndSectionPreparation(resumedPrepared);
+      return;
+    }
+
+    clipEditingStep.value = 1;
+    clipPreparationPhase.value = preparation?.phase === "error" ? "error" : "idle";
+    clipPreparationError.value = preparation?.errorMessage || "";
+  } catch (error) {
+    isRestoringClipDraft.value = false;
+    clipPreparationError.value =
+      error instanceof Error ? error.message : "録画下書きの再開に失敗しました";
+    clipPreparationPhase.value = "error";
+    clipPreparationProgressOpen.value = false;
+    await persistActiveClipDraft({
+      status: "error",
+      statusMessage: clipPreparationError.value,
+      preparationState: {
+        phase: "error",
+        errorMessage: clipPreparationError.value,
+      },
+    });
+  } finally {
+    isRestoringClipDraft.value = false;
+    isPreparingClips.value = false;
+    resumingClipDraftId.value = "";
+  }
+}
+
+async function startAutomaticPipeline(): Promise<void> {
+  if (!props.application || !recordedBlob.value || !activeClipDraft.value?.source) return;
+  const group = selectedVideoGroup.value;
+  if (!group) {
+    errorMessage.value = "クリップグループを選択してください";
+    return;
+  }
+  isStartingAutomaticPipeline.value = true;
+  errorMessage.value = "";
+  try {
+    const submittedTitle = title.value.trim() || buildFallbackRecordingTitle();
+    const pipelineId = await clipPipelineApi.createPipeline({
+      applicationId: props.application.id,
+      applicationName: props.application.name,
+      clipGroupId: group.id,
+      clipGroupName: group.name,
+      title: submittedTitle,
+      sourceDraftId: activeClipDraft.value.id,
+      sourceGcsUri: activeClipDraft.value.source.gcsUri,
+      sourceContentType: activeClipDraft.value.source.contentType,
+      durationMs: activeClipDraft.value.source.durationMs,
+      notificationEmail: getAuth().currentUser?.email || undefined,
+    });
+    submittedPipelineCount.value += 1;
+    lastSubmittedRecordingTitle.value = submittedTitle;
+    await persistActiveClipDraft({
+      status: "processing",
+      statusMessage: `バックグラウンド解析中 (${pipelineId})`,
+    });
+    toast.add({
+      title: "バックグラウンド解析を開始しました",
+      description: "ヘッダーの「解析ステータス」から進捗を確認できます。",
+      color: "success",
+    });
+    recordingModalOpen.value = false;
+    continueRecordingPromptOpen.value = true;
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "バックグラウンド解析を開始できませんでした";
+    reportDatadogError(error, {
+      feature: "storyvault_clip_pipeline_start",
+      applicationId: props.application.id,
+    });
+  } finally {
+    isStartingAutomaticPipeline.value = false;
+  }
+}
+
+async function recordNextClip(): Promise<void> {
+  continueRecordingPromptOpen.value = false;
+  resetRecording();
+  title.value = "";
+  recordingModalOpen.value = true;
+  await nextTick();
+  await startCapture();
+}
+
+function finishRecordingBatch(): void {
+  continueRecordingPromptOpen.value = false;
+  resetRecording();
+  title.value = "";
+  toast.add({
+    title: `${submittedPipelineCount.value}本のバックグラウンド解析を実行中です`,
+    description: "ヘッダーの「解析ステータス」または完了メールから確認できます。",
+    color: "success",
+  });
+  submittedPipelineCount.value = 0;
+  lastSubmittedRecordingTitle.value = "";
+}
+
 async function saveRecording(): Promise<void> {
   if (!props.application || !recordedBlob.value || !canSave.value) return;
+  const preparedBase = preparedBaseClip.value;
+  const transcription = preparedTranscription.value;
+  if (!preparedBase || !transcription || !hasCurrentPreparedClip.value) {
+    errorMessage.value = "先に文字起こしと分割案を準備してください";
+    clipEditingStep.value = 1;
+    return;
+  }
   const group = selectedVideoGroup.value;
   if (!group) {
     errorMessage.value = "クリップグループを選択してください";
@@ -5110,46 +7841,139 @@ async function saveRecording(): Promise<void> {
   saveProgressPhase.value = "saving";
 
   try {
-    const savedVideo = await persistRecordedVideoShell(group);
-    workflowVideoId.value = savedVideo.id;
-    workflowClipId.value = savedVideo.id;
-    selectedVideoGroupId.value = savedVideo.clipGroupId || group.id;
-    selectedVideoId.value = savedVideo.id;
-    detailVideoId.value = savedVideo.id;
-    selectedClipId.value = savedVideo.id;
-
-    await runVideoAnalysisWorkflow({
-      video: savedVideo,
-      videoBlob: recordedBlob.value,
-      transcriptionBlob: resolveTranscriptionAudioBlob() || recordedBlob.value,
-      durationMs: recordedDurationMs.value ?? elapsedMs.value,
-      closeRecordingWhenDone: true,
+    isPreparingClips.value = true;
+    await persistActiveClipDraft({
+      status: "processing",
+      statusMessage: "クリップを確定保存しています",
     });
+    let preparedClips: PreparedRecordingClip[] = [preparedBase];
+    if (splitPointsMs.value.length > 0) {
+      saveProgressPhase.value = "preparing";
+      preparedClips = await prepareRecordedClips({
+        applicationId: props.application.id,
+        blob: preparedBase.blob,
+        durationMs: preparedBase.durationMs,
+        silenceCutEnabled: false,
+        noiseReductionEnabled: false,
+        silenceRanges: [],
+        splitPointsMs: splitPointsMs.value,
+      });
+    }
+
+    const boundaries = [0, ...splitPointsMs.value, preparedBase.durationMs];
+    const baseTitle = title.value.trim() || buildFallbackRecordingTitle();
+    const analysisJobs: Array<{
+      video: DecodedStoryVaultClip;
+      blob: Blob;
+      durationMs: number;
+      transcription: GeminiTranscriptionResult;
+    }> = [];
+
+    saveProgressPhase.value = "saving";
+    for (const [index, prepared] of preparedClips.entries()) {
+      const startMs = boundaries[index] ?? 0;
+      const endMs = boundaries[index + 1] ?? preparedBase.durationMs;
+      const section = preparedSectionSummaries.value[index];
+      const clipTranscription = transcriptionForClipRange(
+        transcription,
+        startMs,
+        endMs
+      );
+      const clipTitle = section?.isAiSuggested
+        ? section.title
+        : preparedClips.length > 1
+          ? `${baseTitle} ${index + 1}/${preparedClips.length}`
+          : baseTitle;
+      const savedVideo = await persistRecordedVideoShell(group, {
+        blob: prepared.blob,
+        durationMs: prepared.durationMs,
+        title: clipTitle,
+        description: section?.isAiSuggested ? section.summary : undefined,
+        transcription: clipTranscription,
+      });
+      analysisJobs.push({
+        video: savedVideo,
+        blob: prepared.blob,
+        durationMs: prepared.durationMs,
+        transcription: clipTranscription,
+      });
+      workflowVideoId.value ||= savedVideo.id;
+      workflowClipId.value ||= savedVideo.id;
+      selectedVideoGroupId.value = savedVideo.clipGroupId || group.id;
+    }
+
+    saveWorkflowStep.value = "videoAnalysis";
+    saveProgressPhase.value = "parallelAnalysis";
+    parallelAnalysisCompleted.value = 0;
+    parallelAnalysisTotal.value = analysisJobs.length;
+    isExtractingFrames.value = true;
+    const command = await clipCommandApi.execute({
+      operation: "quickScan",
+      applicationId: props.application.id,
+      clipGroupId: group.id,
+      clipIds: analysisJobs.map((job) => job.video.id),
+    });
+    const failedClipIds = Array.isArray(command.output?.failedClipIds)
+      ? command.output.failedClipIds
+      : [];
+    if (failedClipIds.length > 0) {
+      throw new Error(`${failedClipIds.length}件のクリップ解析に失敗しました`);
+    }
+    emit("refresh");
+    const analyzedVideos = analysisJobs.map((job) => job.video);
+    const selected = analyzedVideos[0];
+    if (selected) {
+      workflowVideoId.value = selected.id;
+      workflowClipId.value = selected.id;
+      selectedVideoId.value = selected.id;
+      detailVideoId.value = selected.id;
+      selectedClipId.value = selected.id;
+    }
+    completePreparedRecordingWorkflow();
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : "ザッピングクリップの保存に失敗しました";
     saveProgressPhase.value = "error";
     isExtractingFrames.value = false;
+    await persistActiveClipDraft({
+      status: "error",
+      statusMessage: errorMessage.value,
+    });
+  } finally {
+    isPreparingClips.value = false;
+    isExtractingFrames.value = false;
   }
 }
 
 function persistRecordedVideoShell(
-  group: DecodedStoryVaultClipGroup
+  group: DecodedStoryVaultClipGroup,
+  override?: {
+    blob: Blob;
+    durationMs: number;
+    title: string;
+    description?: string;
+    transcription?: GeminiTranscriptionResult;
+  }
 ): Promise<DecodedStoryVaultClip> {
   if (!props.application || !recordedBlob.value) {
     return Promise.reject(new Error("保存する録画がありません"));
   }
-  const resolvedTitle = title.value.trim() || buildFallbackRecordingTitle();
+  const blob = override?.blob ?? recordedBlob.value;
+  const resolvedTitle = override?.title || title.value.trim() || buildFallbackRecordingTitle();
   const payload: StoryVaultClipSaveInput = {
     applicationId: props.application.id,
     clipGroupId: group.id,
     title: resolvedTitle,
-    description: undefined,
-    blob: recordedBlob.value,
-    durationMs: recordedDurationMs.value ?? elapsedMs.value,
-    contentType: recordedBlob.value.type || "video/webm",
+    description: override?.description,
+    blob,
+    durationMs: override?.durationMs ?? recordedDurationMs.value ?? elapsedMs.value,
+    contentType: blob.type || "video/webm",
     sourceDisplaySurface: sourceDisplaySurface.value,
-    transcriptTimingStatus: "unavailable",
+    transcriptText: override?.transcription?.text,
+    transcriptProvider: override?.transcription?.provider,
+    transcriptSegments: override?.transcription?.segments,
+    transcriptSrt: override?.transcription?.srt,
+    transcriptTimingStatus: override?.transcription?.timingStatus ?? "unavailable",
     frameCaptures: [],
     tags: [],
   };
@@ -5162,196 +7986,54 @@ function persistRecordedVideoShell(
   });
 }
 
-function persistVideoAnalysis(
-  input: StoryVaultClipAnalysisInput
-): Promise<DecodedStoryVaultClip> {
-  return new Promise((resolve, reject) => {
-    emit("update-clip-analysis", input, {
-      onSuccess: resolve,
-      onError: (message) => reject(new Error(message)),
-    });
-  });
-}
-
-async function runVideoAnalysisWorkflow(params: {
-  video: DecodedStoryVaultClip;
-  videoBlob: Blob | null;
-  transcriptionBlob: Blob | null;
-  transcriptionGcsUri?: string;
-  durationMs?: number;
-  closeRecordingWhenDone?: boolean;
-}): Promise<void> {
-  if (!props.application) return;
-  saveWorkflowStep.value = "videoAnalysis";
-  isExtractingFrames.value = true;
-  try {
-    saveProgressPhase.value = "extracting";
-    frameCaptures.value = params.videoBlob
-      ? await extractVideoFrames(
-          params.videoBlob,
-          params.durationMs ?? params.video.durationMs ?? 0
-        )
-      : [];
-    saveProgressPhase.value = "transcribing";
-    const transcription = await transcribeRecordingWithGemini(
-      params.transcriptionBlob,
-      params.transcriptionGcsUri
-        ? {
-            gcsUri: params.transcriptionGcsUri,
-            contentType: params.video.contentType || "video/webm",
-            fileName: params.video.fileName || "zapping-video.webm",
-          }
-        : undefined
-    );
-    transcriptText.value = transcription.text;
-    transcriptProvider.value = transcription.provider;
-    transcriptSegments.value = transcription.segments;
-    transcriptSrt.value = transcription.srt;
-    transcriptTimingStatus.value = transcription.timingStatus;
-    transcriptErrorMessage.value = "";
-
-    saveProgressPhase.value = "summarizing";
-    transcriptSummary.value = await summarizeTranscriptWithGemini(
-      transcriptText.value
-    );
-    saveProgressPhase.value = "scanning";
-    quickScan.value = await generateQuickScanFromContext({
-      frames: frameCaptures.value,
-      videoBlob: params.videoBlob,
-      transcriptText: transcriptText.value,
-      transcriptSummary: transcriptSummary.value,
-    });
-    if (!transcriptSummary.value.trim()) {
-      transcriptSummary.value =
-        quickScan.value?.transcriptSummary?.trim() ||
-        quickScan.value?.description?.trim() ||
-        quickScan.value?.operationMemo?.trim() ||
-        compactPreviewText(transcriptText.value, 420);
-    }
-
-    saveProgressPhase.value = "analysisSaving";
-    const analyzedVideo = await persistVideoAnalysis({
-      clipId: workflowClipId.value || params.video.id,
-      title:
-        quickScan.value?.title?.trim() ||
-        params.video.title ||
-        buildFallbackRecordingTitle(),
-      description: quickScan.value?.description?.trim(),
-      transcriptText: transcriptText.value,
-      transcriptProvider: transcriptProvider.value,
-      transcriptSummary: transcriptSummary.value,
-      transcriptSegments: transcriptSegments.value,
-      transcriptSrt: transcriptSrt.value,
-      transcriptTimingStatus: "timestamped",
-      quickScan: quickScan.value,
-      frameCaptures: frameCaptures.value.map((frame) => ({
-        timestampMs: frame.timestampMs,
-        blob: frame.blob,
-        contentType: frame.contentType,
-        width: frame.width,
-        height: frame.height,
-      })),
-    });
-    workflowVideoId.value = analyzedVideo.id;
-    workflowClipId.value = analyzedVideo.id;
-    selectedVideoId.value = analyzedVideo.id;
-    detailVideoId.value = analyzedVideo.id;
-    selectedClipId.value = workflowClipId.value;
-    isExtractingFrames.value = false;
-
-    saveProgressPhase.value = "done";
-    if (params.closeRecordingWhenDone) {
-      window.setTimeout(() => {
-        recordingModalOpen.value = false;
-        saveProgressOpen.value = false;
-        saveProgressPhase.value = "idle";
-        saveWorkflowStep.value = "save";
-        workflowVideoId.value = "";
-        workflowClipId.value = "";
-        resetRecording();
-      }, 900);
-    }
-  } catch (error) {
-    isExtractingFrames.value = false;
-    errorMessage.value =
-      error instanceof Error
-        ? `クリップ解析に失敗しました: ${error.message}`
-        : "クリップ解析に失敗しました";
-    saveProgressPhase.value = "error";
-    throw error;
-  }
-}
-
-async function resumeVideoWorkflow(
-  video: DecodedStoryVaultClip,
-  options: { force?: boolean } = {}
-): Promise<void> {
-  errorMessage.value = "";
-  workflowVideoId.value = video.id;
-  workflowClipId.value = video.id;
-  saveProgressOpen.value = true;
-  try {
-    if (options.force || !hasVideoAnalysis(video)) {
-      const blob = await fetchSavedVideoBlob(video).catch((error) => {
-        reportDatadogError(error, {
-          feature: "storyvault_resume_video_workflow_saved_blob_optional",
-          clipId: video.id,
-        });
-        return null;
+function completePreparedRecordingWorkflow(): void {
+  saveProgressPhase.value = "done";
+  const committedDraft = activeClipDraft.value;
+  if (committedDraft) {
+    void discardClipDraft(committedDraft).catch((error) => {
+      reportDatadogError(error, {
+        feature: "storyvault_clip_draft_finalize_cleanup",
+        draftId: committedDraft.id,
       });
-      await runVideoAnalysisWorkflow({
-        video,
-        videoBlob: blob,
-        transcriptionBlob: blob,
-        transcriptionGcsUri: `gs://${video.bucketName}/${video.storagePath}`,
-        durationMs: video.durationMs,
-        closeRecordingWhenDone: false,
-      });
-      return;
-    }
-    saveProgressPhase.value = "done";
-  } catch (error) {
-    isExtractingFrames.value = false;
-    errorMessage.value =
-      error instanceof Error
-        ? `途中からの解析再開に失敗しました: ${error.message}`
-        : "途中からの解析再開に失敗しました";
-    saveProgressPhase.value = "error";
-    reportDatadogError(error, {
-      feature: "storyvault_resume_video_workflow",
-      clipId: video.id,
-      hasVideoAnalysis: hasVideoAnalysis(video),
     });
   }
+  window.setTimeout(() => {
+    recordingModalOpen.value = false;
+    saveProgressOpen.value = false;
+    saveProgressPhase.value = "idle";
+    saveWorkflowStep.value = "save";
+    workflowVideoId.value = "";
+    workflowClipId.value = "";
+    resetRecording();
+  }, 900);
 }
 
-async function fetchSavedVideoBlob(video: DecodedStoryVaultClip): Promise<Blob> {
-  const primary = videoClips(video)[0];
-  const bucketName = primary?.bucketName || video.bucketName;
-  const storagePath = primary?.storagePath || video.storagePath;
-  if (!bucketName || !storagePath) {
-    throw new Error("保存済みクリップのStorageパスを取得できませんでした");
-  }
-  const fileRef = storageRefForBucketPath({
-    bucketName,
-    filePath: storagePath,
-  });
-  try {
-    const blob = await getBlob(fileRef);
-    return blob.type ? blob : new Blob([blob], { type: primary?.contentType || video.contentType || "video/webm" });
-  } catch (error) {
-    reportDatadogError(error, {
-      feature: "storyvault_fetch_saved_video_blob",
-      videoId: video.id,
-      bucketName,
-      storagePath,
-    });
-    throw new Error(
-      error instanceof Error
-        ? `保存済みクリップの取得に失敗しました: ${error.message}`
-        : "保存済みクリップの取得に失敗しました"
-    );
-  }
+function transcriptionForClipRange(
+  transcription: GeminiTranscriptionResult,
+  startMs: number,
+  endMs: number
+): GeminiTranscriptionResult {
+  const slicedSegments = sliceStoryVaultTranscriptCues(
+    transcription.segments,
+    startMs,
+    endMs
+  );
+  const segments: StoryVaultTranscriptCue[] = slicedSegments.length > 0
+    ? slicedSegments
+    : [{
+        id: "cue-0001",
+        index: 1,
+        startMs: 0,
+        endMs: Math.max(1, endMs - startMs),
+        text: "（発話なし）",
+      }];
+  return {
+    text: segments.map((segment) => segment.text.trim()).filter(Boolean).join("\n"),
+    provider: transcription.provider,
+    segments,
+    srt: transcriptCuesToSrt(segments),
+    timingStatus: "timestamped",
+  };
 }
 
 async function downloadOperationVideoClip(
@@ -5420,10 +8102,6 @@ function hasVideoAnalysis(video: DecodedStoryVaultClip | null): boolean {
     Boolean(video.transcriptSrt?.trim()) &&
     Boolean(video.quickScan || video.transcriptSummary)
   );
-}
-
-function isWorkflowRunningFor(video: DecodedStoryVaultClip): boolean {
-  return saveProgressOpen.value && workflowVideoId.value === video.id;
 }
 
 function displayVideoTitle(video: DecodedStoryVaultClip): string {
@@ -5665,6 +8343,7 @@ function buildOperationVideoReportWorkbook(): XLSX.WorkBook {
       { 項目: "GitHub PR", 値: relatedGithubPullRequestCount(video), リンク: "" },
       { 項目: "Slack", 値: relatedSlackMessageCount(video), リンク: "" },
       { 項目: "Knowledge", 値: relatedKnowledgeDocumentCount(video), リンク: "" },
+      { 項目: "Jira", 値: relatedJiraIssueCount(video), リンク: "" },
     ],
     ["リンク"]
   );
@@ -5680,6 +8359,7 @@ function buildOperationVideoReportWorkbook(): XLSX.WorkBook {
       ゴール: excelCell(story.goal),
       価値: excelCell(story.benefit),
       信頼度: excelCell(story.confidence ?? story.confidenceScore),
+      詳細仕様: excelCell(story.detailedSpecifications),
       受け入れ条件: excelCell(story.acceptanceCriteria),
       証跡数: story.evidence.length,
       代表スクリーンショット: excelCell(story.evidence[0]?.representativeScreenshotId),
@@ -5732,8 +8412,8 @@ function buildOperationVideoReportWorkbook(): XLSX.WorkBook {
   appendExcelSheet(
     workbook,
     "GitHub PR",
-    (video.relatedContexts?.github?.pullRequests ?? []).map((pr) => ({
-      Repository: excelCell(video.relatedContexts?.github?.repoFullName),
+    relatedGithubPullRequests(video).map((pr) => ({
+      Repository: excelCell(relatedGithubRepoFullName(video)),
       Number: excelCell(pr.number),
       Title: excelCell(pr.title),
       URL: excelCell(pr.htmlUrl),
@@ -5754,8 +8434,8 @@ function buildOperationVideoReportWorkbook(): XLSX.WorkBook {
   appendExcelSheet(
     workbook,
     "Slack",
-    (video.relatedContexts?.slack?.messages ?? []).map((message) => ({
-      Team: excelCell(video.relatedContexts?.slack?.teamName || video.relatedContexts?.slack?.teamId),
+    relatedSlackMessages(video).map((message) => ({
+      Team: excelCell(relatedSlackTeamLabel(video)),
       Channel: excelCell(message.channelName || message.channelId),
       Author: excelCell(message.author),
       PostedAt: excelCell(message.postedAt),
@@ -5772,7 +8452,7 @@ function buildOperationVideoReportWorkbook(): XLSX.WorkBook {
   appendExcelSheet(
     workbook,
     "Knowledge",
-    (video.relatedContexts?.knowledge?.documents ?? []).map((doc) => ({
+    relatedKnowledgeDocuments(video).map((doc) => ({
       DocumentID: excelCell(doc.documentId),
       Name: excelCell(doc.displayName || doc.name),
       SourceKind: excelCell(doc.sourceKind),
@@ -5787,6 +8467,27 @@ function buildOperationVideoReportWorkbook(): XLSX.WorkBook {
       MatchedSignals: excelCell(doc.matchedSignals),
     })),
     ["DownloadURL"]
+  );
+  appendExcelSheet(
+    workbook,
+    "Jira",
+    relatedJiraIssues(video).map((issue) => ({
+      Site: excelCell(relatedJiraSiteLabel(video)),
+      Key: excelCell(issue.key),
+      Summary: excelCell(issue.summary),
+      URL: excelCell(issue.htmlUrl),
+      Project: excelCell(issue.project.name),
+      Type: excelCell(issue.issueType.name),
+      Status: excelCell(issue.status.name),
+      Priority: excelCell(issue.priority.name),
+      Assignee: excelCell(issue.assignee.name),
+      Labels: excelCell(issue.labels),
+      UpdatedAt: excelCell(issue.updatedAt),
+      Relevance: excelCell(issue.relevanceScore),
+      Reason: excelCell(issue.reason),
+      MatchedSignals: excelCell(issue.matchedSignals),
+    })),
+    ["URL"]
   );
   return workbook;
 }
@@ -6113,6 +8814,171 @@ function openRelatedContextTab(): void {
   relatedContextProviderTab.value = "knowledge";
 }
 
+async function ensureJiraConnections(): Promise<void> {
+  jiraSearchError.value = "";
+  try {
+    await jiraOAuth.refreshConnections();
+    if (
+      !jiraConnections.value.some(
+        (connection) => connection.cloudId === jiraSelectedCloudId.value
+      )
+    ) {
+      jiraSelectedCloudId.value = jiraConnections.value[0]?.cloudId || "";
+    }
+    await loadStoryVaultJiraIssues();
+  } catch (error) {
+    jiraSearchError.value =
+      error instanceof Error ? error.message : "Jira接続状態の取得に失敗しました";
+  }
+}
+
+async function loadStoryVaultJiraIssues(): Promise<void> {
+  const cloudId = jiraSelectedCloudId.value || jiraConnections.value[0]?.cloudId || "";
+  if (!cloudId) return;
+  jiraSelectedCloudId.value = cloudId;
+  isJiraSearching.value = true;
+  jiraSearchError.value = "";
+  try {
+    jiraSearchResults.value = await jiraOAuth.listIssues({
+      cloudId,
+      jql: 'project = "STOR" ORDER BY updated DESC',
+      limit: 50,
+    });
+    jiraListMode.value = "project";
+    selectedJiraIssueKeys.value = [];
+  } catch (error) {
+    jiraSearchResults.value = [];
+    jiraSearchError.value =
+      error instanceof Error ? error.message : "StoryVaultのIssue一覧取得に失敗しました";
+  } finally {
+    isJiraSearching.value = false;
+  }
+}
+
+async function searchJiraIssues(): Promise<void> {
+  if (jiraConnections.value.length === 0) {
+    await ensureJiraConnections();
+  }
+  const cloudId = jiraSelectedCloudId.value || jiraConnections.value[0]?.cloudId || "";
+  if (!cloudId) {
+    jiraSearchError.value = "Jira Cloud siteを先に接続してください";
+    return;
+  }
+  jiraSelectedCloudId.value = cloudId;
+  isJiraSearching.value = true;
+  jiraSearchError.value = "";
+  try {
+    jiraSearchResults.value = await jiraOAuth.listIssues({
+      cloudId,
+      query: jiraSearchQuery.value,
+      limit: 30,
+    });
+    jiraListMode.value = "search";
+    selectedJiraIssueKeys.value = [];
+  } catch (error) {
+    jiraSearchResults.value = [];
+    jiraSearchError.value =
+      error instanceof Error ? error.message : "Jira Issueの検索に失敗しました";
+  } finally {
+    isJiraSearching.value = false;
+  }
+}
+
+function jiraIssueSelectionKey(issue: JiraIssuePreview): string {
+  return `${issue.cloudId}:${issue.key}`;
+}
+
+function isJiraIssueSelected(issue: JiraIssuePreview): boolean {
+  return selectedJiraIssueKeys.value.includes(jiraIssueSelectionKey(issue));
+}
+
+function jiraIssueToContextIssue(issue: JiraIssuePreview): StoryVaultRelatedContextJiraIssue {
+  return {
+    ...issue,
+    relevanceScore: 100,
+    reason: "ユーザーが検索結果から手動でクリップに紐付けました",
+    matchedSignals: ["手動紐付け"],
+  };
+}
+
+function linkSelectedJiraIssues(): void {
+  const selected = jiraSearchResults.value
+    .filter((issue) => selectedJiraIssueKeys.value.includes(jiraIssueSelectionKey(issue)))
+    .map(jiraIssueToContextIssue);
+  if (selected.length === 0) return;
+  emit(
+    "link-jira-issues",
+    detailVideoId.value,
+    selected,
+    selectedJiraConnection.value
+      ? {
+          name: selectedJiraConnection.value.siteName,
+          url: selectedJiraConnection.value.siteUrl,
+        }
+      : undefined
+  );
+  selectedJiraIssueKeys.value = [];
+}
+
+function unlinkJiraIssue(issue: StoryVaultRelatedContextJiraIssue): void {
+  emit("unlink-jira-issue", detailVideoId.value, issue.key, issue.cloudId);
+}
+
+function knowledgeDocumentSelectionKey(document: Document): string {
+  return document.id || document.name || "";
+}
+
+async function loadKnowledgeDocumentsForManualLink(): Promise<void> {
+  const fileSpaceId = props.application?.fileSpaceId;
+  if (!fileSpaceId) return;
+  isKnowledgeManualLoading.value = true;
+  knowledgeManualError.value = "";
+  try {
+    await knowledgeFileSpaceStore.fetchDocumentsFromFirestore(fileSpaceId);
+    selectedKnowledgeDocumentIds.value = [];
+  } catch (error) {
+    knowledgeManualError.value =
+      error instanceof Error ? error.message : "ナレッジ一覧の取得に失敗しました";
+  } finally {
+    isKnowledgeManualLoading.value = false;
+  }
+}
+
+function knowledgeDocumentToRelatedContext(
+  document: Document
+): StoryVaultRelatedContextKnowledgeDocument {
+  return {
+    documentId: knowledgeDocumentSelectionKey(document),
+    name: document.name ?? undefined,
+    displayName: document.displayName,
+    description: document.description,
+    mimeType: document.mimeType,
+    sourceKind: document.sourceKind,
+    gcsUrl: document.gcsUrl,
+    bucketName: document.bucketName,
+    filePath: document.filePath,
+    relevanceScore: 100,
+    reason: "ユーザーがナレッジ一覧から手動でクリップに紐付けました",
+    matchedSignals: ["手動紐付け"],
+    downloadUrl: document.driveWebViewLink ?? document.entryUrl ?? document.url,
+  };
+}
+
+function linkSelectedKnowledgeDocuments(): void {
+  const fileSpaceId = props.application?.fileSpaceId;
+  if (!fileSpaceId) return;
+  const documents = (knowledgeFileSpaceStore.documents ?? [])
+    .filter((document) => selectedKnowledgeDocumentIds.value.includes(knowledgeDocumentSelectionKey(document)))
+    .map(knowledgeDocumentToRelatedContext);
+  if (!documents.length) return;
+  emit("link-knowledge-documents", detailVideoId.value, fileSpaceId, documents);
+  selectedKnowledgeDocumentIds.value = [];
+}
+
+function navigateToJiraSettings(): void {
+  void navigateTo("/admin/preferences?tab=oauth-connections");
+}
+
 function analysisResultCount(video: DecodedStoryVaultClip): string {
   const stories = video.analysisResult?.storyCandidates.length ?? 0;
   return `${stories} stories`;
@@ -6164,36 +9030,215 @@ function videoAnalysisTabStatus(video: DecodedStoryVaultClip): string {
   return "未解析";
 }
 
+function relatedContextGroupClips(
+  video: DecodedStoryVaultClip
+): DecodedStoryVaultClip[] {
+  if (!video.clipGroupId) return [video];
+  return props.clipRecords.filter(
+    (item) => item.clipGroupId === video.clipGroupId
+  );
+}
+
+function relatedGithubPullRequests(video: DecodedStoryVaultClip) {
+  const seen = new Set<string>();
+  return relatedContextGroupClips(video)
+    .flatMap((item) => item.relatedContexts?.github?.pullRequests ?? [])
+    .filter((pullRequest) => {
+      const key = pullRequest.htmlUrl || String(pullRequest.number);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function relatedSlackMessages(video: DecodedStoryVaultClip) {
+  const seen = new Set<string>();
+  return relatedContextGroupClips(video)
+    .flatMap((item) => item.relatedContexts?.slack?.messages ?? [])
+    .filter((message) => {
+      const key = message.permalink || `${message.channelId || ""}:${message.messageTs}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function relatedKnowledgeDocuments(video: DecodedStoryVaultClip) {
+  const seen = new Set<string>();
+  return relatedContextGroupClips(video)
+    .flatMap((item) => item.relatedContexts?.knowledge?.documents ?? [])
+    .filter((document) => {
+      const key =
+        document.documentId ||
+        document.gcsUrl ||
+        document.downloadUrl ||
+        document.displayName ||
+        document.name ||
+        "knowledge";
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function relatedJiraIssues(video: DecodedStoryVaultClip) {
+  const seen = new Set<string>();
+  return relatedContextGroupClips(video)
+    .flatMap((item) => item.relatedContexts?.jira?.issues ?? [])
+    .filter((issue) => {
+      const key = `${issue.cloudId}:${issue.key}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function hasRelatedGithubContext(video: DecodedStoryVaultClip): boolean {
+  return relatedContextGroupClips(video).some(
+    (item) => Boolean(item.relatedContexts?.github)
+  );
+}
+
+function hasRelatedSlackContext(video: DecodedStoryVaultClip): boolean {
+  return relatedContextGroupClips(video).some(
+    (item) => Boolean(item.relatedContexts?.slack)
+  );
+}
+
+function hasRelatedKnowledgeContext(video: DecodedStoryVaultClip): boolean {
+  return relatedContextGroupClips(video).some(
+    (item) => Boolean(item.relatedContexts?.knowledge)
+  );
+}
+
+function hasRelatedJiraContext(video: DecodedStoryVaultClip): boolean {
+  return relatedContextGroupClips(video).some(
+    (item) => Boolean(item.relatedContexts?.jira)
+  );
+}
+
+function relatedGithubRepoFullName(video: DecodedStoryVaultClip): string {
+  return (
+    relatedContextGroupClips(video).find(
+      (item) => item.relatedContexts?.github?.repoFullName
+    )?.relatedContexts?.github?.repoFullName ?? ""
+  );
+}
+
+function relatedSlackTeamLabel(video: DecodedStoryVaultClip): string {
+  const context = relatedContextGroupClips(video).find(
+    (item) => item.relatedContexts?.slack
+  )?.relatedContexts?.slack;
+  return context?.teamName || context?.teamId || "Slack";
+}
+
+function relatedKnowledgeFileSpaceId(video: DecodedStoryVaultClip): string {
+  return (
+    relatedContextGroupClips(video).find(
+      (item) => item.relatedContexts?.knowledge?.fileSpaceId
+    )?.relatedContexts?.knowledge?.fileSpaceId ?? ""
+  );
+}
+
+function relatedJiraSiteLabel(video: DecodedStoryVaultClip): string {
+  const context = relatedContextGroupClips(video).find(
+    (item) => item.relatedContexts?.jira
+  )?.relatedContexts?.jira;
+  return context?.siteName || context?.siteUrl || context?.cloudId || "Jira Cloud";
+}
+
+function relatedGithubCheckedAt(video: DecodedStoryVaultClip): string {
+  return relatedContextGroupClips(video).reduce((latest, item) => {
+    const checkedAt = item.relatedContexts?.github?.checkedAt ?? "";
+    return checkedAt > latest ? checkedAt : latest;
+  }, "");
+}
+
+function relatedSlackCheckedAt(video: DecodedStoryVaultClip): string {
+  return relatedContextGroupClips(video).reduce((latest, item) => {
+    const checkedAt = item.relatedContexts?.slack?.checkedAt ?? "";
+    return checkedAt > latest ? checkedAt : latest;
+  }, "");
+}
+
+function relatedKnowledgeCheckedAt(video: DecodedStoryVaultClip): string {
+  return relatedContextGroupClips(video).reduce((latest, item) => {
+    const checkedAt = item.relatedContexts?.knowledge?.checkedAt ?? "";
+    return checkedAt > latest ? checkedAt : latest;
+  }, "");
+}
+
+function relatedJiraCheckedAt(video: DecodedStoryVaultClip): string {
+  return relatedContextGroupClips(video).reduce((latest, item) => {
+    const checkedAt = item.relatedContexts?.jira?.checkedAt ?? "";
+    return checkedAt > latest ? checkedAt : latest;
+  }, "");
+}
+
 function relatedGithubPullRequestCount(
   video: DecodedStoryVaultClip
 ): number {
-  return props.clipRecords
-    .filter((item) => item.clipGroupId === video.clipGroupId)
-    .reduce((sum, item) => sum + (item.relatedContexts?.github?.pullRequests.length ?? 0), 0);
+  return relatedGithubPullRequests(video).length;
 }
 
 function relatedSlackMessageCount(
   video: DecodedStoryVaultClip
 ): number {
-  return props.clipRecords
-    .filter((item) => item.clipGroupId === video.clipGroupId)
-    .reduce((sum, item) => sum + (item.relatedContexts?.slack?.messages.length ?? 0), 0);
+  return relatedSlackMessages(video).length;
 }
 
 function relatedKnowledgeDocumentCount(
   video: DecodedStoryVaultClip
 ): number {
-  return props.clipRecords
-    .filter((item) => item.clipGroupId === video.clipGroupId)
-    .reduce((sum, item) => sum + (item.relatedContexts?.knowledge?.documents.length ?? 0), 0);
+  return relatedKnowledgeDocuments(video).length;
+}
+
+function relatedJiraIssueCount(video: DecodedStoryVaultClip): number {
+  return relatedJiraIssues(video).length;
 }
 
 function relatedContextCount(video: DecodedStoryVaultClip): number {
   return (
     relatedGithubPullRequestCount(video) +
     relatedSlackMessageCount(video) +
-    relatedKnowledgeDocumentCount(video)
+    relatedKnowledgeDocumentCount(video) +
+    relatedJiraIssueCount(video)
   );
+}
+
+function clipCardContextProviders(
+  video: DecodedStoryVaultClip
+): ClipCardContextProvider[] {
+  return [
+    {
+      id: "knowledge",
+      label: "Vault Knowledge",
+      icon: "material-symbols:folder-managed-outline",
+      count: relatedKnowledgeDocumentCount(video),
+      activeClass: "bg-violet-50 text-violet-700 ring-violet-200",
+    },
+    {
+      id: "github",
+      label: "GitHub",
+      icon: "i-simple-icons-github",
+      count: relatedGithubPullRequestCount(video),
+      activeClass: "bg-slate-950 text-white ring-slate-950",
+    },
+    {
+      id: "slack",
+      label: "Slack",
+      icon: "i-simple-icons-slack",
+      count: relatedSlackMessageCount(video),
+      activeClass: "bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200",
+    },
+    {
+      id: "jira",
+      label: "Jira",
+      icon: "i-simple-icons-jira",
+      count: relatedJiraIssueCount(video),
+      activeClass: "bg-blue-50 text-blue-700 ring-blue-200",
+    },
+  ];
 }
 
 function applyContextMapNodePositions(data: ContextMapData): ContextMapData {
@@ -6439,7 +9484,7 @@ function buildContextMapData(
       x: 86,
       y: 66,
       tone: "violet",
-      details: (video.relatedContexts?.knowledge?.documents ?? [])
+      details: relatedKnowledgeDocuments(video)
         .slice(0, 5)
         .map((doc) => `${doc.displayName || doc.documentId || doc.name || "Knowledge"}: ${doc.reason || doc.description || "関連資料"}`),
     });
@@ -6459,7 +9504,7 @@ function buildContextMapData(
       x: 81,
       y: 82,
       tone: "violet",
-      details: (video.relatedContexts?.github?.pullRequests ?? [])
+      details: relatedGithubPullRequests(video)
         .slice(0, 5)
         .map((pr) => `#${pr.number} ${pr.title}`),
     });
@@ -6485,6 +9530,26 @@ function buildContextMapData(
     });
     addEdge("analysis", "slack", "violet");
     addEdge("video", "slack", "violet");
+  }
+
+  if (relatedJiraIssueCount(video) > 0) {
+    nodes.push({
+      id: "jira",
+      kind: "jira",
+      label: "Jira",
+      title: "関連Issue",
+      subtitle: relatedJiraSiteLabel(video),
+      value: `${relatedJiraIssueCount(video)}件`,
+      icon: "i-simple-icons-jira",
+      x: 88,
+      y: 48,
+      tone: "violet",
+      details: relatedJiraIssues(video)
+        .slice(0, 5)
+        .map((issue) => `${issue.key} ${issue.summary}: ${issue.reason || issue.status.name || "関連Issue"}`),
+    });
+    addEdge("analysis", "jira", "violet");
+    addEdge("video", "jira", "violet");
   }
 
   return { nodes, edges };
@@ -6531,7 +9596,7 @@ function contextMapFrameDetails(
 function contextMapNodeClass(node: ContextMapNode): string {
   if (node.kind === "video") return "border-cyan-200/70 bg-cyan-50/95 text-slate-950";
   if (node.kind === "story") return "border-amber-200/80 bg-amber-50/95 text-slate-950";
-  if (node.kind === "knowledge" || node.kind === "github" || node.kind === "slack") {
+  if (node.kind === "knowledge" || node.kind === "github" || node.kind === "slack" || node.kind === "jira") {
     return "border-violet-200/80 bg-violet-50/95 text-slate-950";
   }
   if (node.kind === "transcript" || node.kind === "screen") {
@@ -6543,7 +9608,7 @@ function contextMapNodeClass(node: ContextMapNode): string {
 function contextMapNodeIconClass(node: ContextMapNode): string {
   if (node.kind === "video") return "bg-cyan-500 text-white";
   if (node.kind === "story") return "bg-amber-400 text-slate-950";
-  if (node.kind === "knowledge" || node.kind === "github" || node.kind === "slack") {
+  if (node.kind === "knowledge" || node.kind === "github" || node.kind === "slack" || node.kind === "jira") {
     return "bg-violet-500 text-white";
   }
   if (node.kind === "transcript" || node.kind === "screen") {
@@ -6677,112 +9742,6 @@ function nearestFrames(
     .sort((a, b) => a.timestampMs - b.timestampMs);
 }
 
-async function extractVideoFrames(
-  blob: Blob,
-  durationMs: number
-): Promise<LocalFrameCapture[]> {
-  revokeFramePreviewUrls();
-  const sourceUrl = URL.createObjectURL(blob);
-  const video = document.createElement("video");
-  video.src = sourceUrl;
-  video.muted = true;
-  video.playsInline = true;
-  video.preload = "metadata";
-
-  try {
-    await waitForVideoEvent(video, "loadedmetadata");
-    const resolvedDurationMs =
-      Number.isFinite(video.duration) && video.duration > 0
-        ? video.duration * 1000
-        : durationMs;
-    const captureTimes = buildFrameCaptureTimes(resolvedDurationMs);
-    const canvas = document.createElement("canvas");
-    const width = Math.max(1, video.videoWidth || 1280);
-    const height = Math.max(1, video.videoHeight || 720);
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Canvasを初期化できませんでした");
-
-    const frames: LocalFrameCapture[] = [];
-    for (const timestampMs of captureTimes) {
-      video.currentTime = Math.min(
-        Math.max(0, timestampMs / 1000),
-        Math.max(0, (resolvedDurationMs - 200) / 1000)
-      );
-      await waitForVideoEvent(video, "seeked");
-      context.drawImage(video, 0, 0, width, height);
-      const frameBlob = await canvasToBlob(canvas, "image/jpeg", 0.78);
-      const previewUrl = URL.createObjectURL(frameBlob);
-      frames.push({
-        id: `frame-${String(frames.length + 1).padStart(3, "0")}`,
-        timestampMs,
-        blob: frameBlob,
-        contentType: frameBlob.type || "image/jpeg",
-        width,
-        height,
-        previewUrl,
-      });
-    }
-    return frames;
-  } finally {
-    URL.revokeObjectURL(sourceUrl);
-  }
-}
-
-function buildFrameCaptureTimes(durationMs: number): number[] {
-  const safeDuration = Math.max(0, Math.round(durationMs));
-  if (safeDuration <= 0) return [0];
-  const interval = 5000;
-  const maxFrames = 24;
-  const times: number[] = [];
-  for (let timestamp = 0; timestamp <= safeDuration; timestamp += interval) {
-    times.push(timestamp);
-    if (times.length >= maxFrames) break;
-  }
-  if (times.length === 0) times.push(0);
-  return times;
-}
-
-function waitForVideoEvent(
-  video: HTMLVideoElement,
-  eventName: "loadedmetadata" | "seeked"
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      video.removeEventListener(eventName, onEvent);
-      video.removeEventListener("error", onError);
-    };
-    const onEvent = () => {
-      cleanup();
-      resolve();
-    };
-    const onError = () => {
-      cleanup();
-      reject(new Error("クリップフレームを読み込めませんでした"));
-    };
-    video.addEventListener(eventName, onEvent, { once: true });
-    video.addEventListener("error", onError, { once: true });
-  });
-}
-
-function canvasToBlob(
-  canvas: HTMLCanvasElement,
-  type: string,
-  quality: number
-): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error("スクリーンショット画像を生成できませんでした"));
-      },
-      type,
-      quality
-    );
-  });
-}
-
 type GeminiTranscriptionResult = {
   text: string;
   provider: string;
@@ -6863,162 +9822,6 @@ async function transcribeRecordingWithGemini(
         : "Gemini文字起こしに失敗しました"
     );
   }
-}
-
-async function summarizeTranscriptWithGemini(text: string): Promise<string> {
-  const transcript = text.trim();
-  if (!transcript) return "";
-  try {
-    const [{ getApp }, { getAI, getGenerativeModel, VertexAIBackend }] =
-      await Promise.all([import("firebase/app"), import("firebase/ai")]);
-    const ai = getAI(getApp(), { backend: new VertexAIBackend("us-central1") });
-    const model = getGenerativeModel(ai, {
-      model: "gemini-2.5-flash-lite",
-      generationConfig: {
-        temperature: 0.15,
-        maxOutputTokens: 512,
-      },
-    });
-    const result = await model.generateContent([
-      [
-        "以下はプロダクト担当者がクリップを説明しながら話した文字起こし全文です。",
-        "クリップ解析の補助文脈として使うため、操作意図、確認した対象、期待結果、気づいた差分を日本語で簡潔に要約してください。",
-        "",
-        transcript.slice(0, 12000),
-      ].join("\n"),
-    ]);
-    return result.response.text().trim();
-  } catch {
-    return "";
-  }
-}
-
-async function generateQuickScanFromContext(params: {
-  frames: LocalFrameCapture[];
-  videoBlob: Blob | null;
-  transcriptText: string;
-  transcriptSummary: string;
-}): Promise<DecodedStoryVaultClip["quickScan"] | undefined> {
-  const { frames, videoBlob, transcriptText, transcriptSummary } = params;
-  if (frames.length === 0 && !transcriptText.trim() && !transcriptSummary.trim()) {
-    return undefined;
-  }
-  try {
-    const [{ getApp }, { getAI, getGenerativeModel, VertexAIBackend }] =
-      await Promise.all([import("firebase/app"), import("firebase/ai")]);
-    const ai = getAI(getApp(), { backend: new VertexAIBackend("us-central1") });
-    const model = getGenerativeModel(ai, {
-      model: "gemini-2.5-flash-lite",
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 900,
-        responseMimeType: "application/json",
-      },
-    });
-    const sampled = sampleFramesForQuickScan(frames, 6);
-    const imageParts = await Promise.all(
-      sampled.map(async (frame) => ({
-        inlineData: {
-          mimeType: frame.contentType,
-          data: await blobToBase64(frame.blob),
-        },
-      }))
-    );
-    const videoParts =
-      videoBlob && videoBlob.size <= 7 * 1024 * 1024
-        ? [
-            {
-              inlineData: {
-                mimeType: videoBlob.type || "video/webm",
-                data: await blobToBase64(videoBlob),
-              },
-            },
-          ]
-        : [];
-    const result = await model.generateContent([
-      [
-        "StoryVaultのクリップをクリップ解析します。",
-        "入力には、クリップ本体、5秒ごとの操作スクリーンショット、Gemini文字起こし全文、文字起こし要約が含まれます。",
-        "これらを総合して、タイトル、説明、操作ステップを日本語で作成してください。",
-        "操作ステップは実際の操作順序がわかる短い文の配列にしてください。",
-        "JSONだけを返してください。",
-        '形式: {"title":"短いタイトル","description":"1文の説明","operationSteps":["操作1","操作2"],"operationMemo":"操作1\\n操作2","transcriptSummary":"文字起こし要約"}',
-        "",
-        "## Gemini文字起こし要約",
-        transcriptSummary.trim() || "なし",
-        "",
-        "## Gemini文字起こし全文",
-        transcriptText.trim().slice(0, 14000) || "なし",
-      ].join("\n"),
-      ...videoParts,
-      ...imageParts,
-    ]);
-    const parsed = parseQuickScanJson(result.response.text());
-    return {
-      ...parsed,
-      transcriptSummary: parsed.transcriptSummary || transcriptSummary || undefined,
-      provider: "firebase-ai-vertex",
-      generatedAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    reportDatadogError(error, {
-      feature: "storyvault_zapping_quick_scan",
-      frameCount: frames.length,
-      sampledFrameCount: Math.min(frames.length, 6),
-      videoSizeBytes: videoBlob?.size ?? 0,
-      transcriptLength: transcriptText.length,
-      transcriptSummaryLength: transcriptSummary.length,
-      videoIncluded: Boolean(videoBlob && videoBlob.size <= 7 * 1024 * 1024),
-    });
-    return {
-      provider: "firebase-ai-vertex",
-      generatedAt: new Date().toISOString(),
-      operationSteps: [],
-      errorMessage:
-        error instanceof Error ? error.message : "簡易スキャンに失敗しました",
-    };
-  }
-}
-
-function sampleFramesForQuickScan(
-  frames: LocalFrameCapture[],
-  maxCount: number
-): LocalFrameCapture[] {
-  if (frames.length <= maxCount) return frames;
-  return Array.from({ length: maxCount }, (_, index) => {
-    const frameIndex = Math.round((index / (maxCount - 1)) * (frames.length - 1));
-    return frames[frameIndex]!;
-  });
-}
-
-function parseQuickScanJson(
-  text: string
-): Pick<
-  NonNullable<DecodedStoryVaultClip["quickScan"]>,
-  "title" | "description" | "operationMemo" | "operationSteps" | "transcriptSummary"
-> {
-  const normalized = text.trim().replace(/^```json\s*/i, "").replace(/```$/i, "");
-  const data = JSON.parse(normalized) as Record<string, unknown>;
-  const operationSteps = Array.isArray(data.operationSteps)
-    ? data.operationSteps
-        .map((item) => (typeof item === "string" ? item.trim() : ""))
-        .filter(Boolean)
-    : [];
-  const operationMemo =
-    typeof data.operationMemo === "string"
-      ? data.operationMemo.trim()
-      : operationSteps.join("\n");
-  return {
-    title: typeof data.title === "string" ? data.title.trim() : undefined,
-    description:
-      typeof data.description === "string" ? data.description.trim() : undefined,
-    operationMemo: operationMemo || undefined,
-    operationSteps,
-    transcriptSummary:
-      typeof data.transcriptSummary === "string"
-        ? data.transcriptSummary.trim()
-        : undefined,
-  };
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
@@ -7329,6 +10132,12 @@ function revokePreviewUrl(): void {
   if (!previewUrl.value) return;
   URL.revokeObjectURL(previewUrl.value);
   previewUrl.value = "";
+}
+
+function revokePreparedPreviewUrl(): void {
+  if (!preparedPreviewUrl.value) return;
+  URL.revokeObjectURL(preparedPreviewUrl.value);
+  preparedPreviewUrl.value = "";
 }
 
 function revokeFramePreviewUrls(): void {

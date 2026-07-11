@@ -91,7 +91,7 @@
 - Manifest schema: {{ manifest.schemaVersion|text("n/a") }}
 - Generated at: {{ manifest.generatedAt|text("n/a") }}
 - Signed URL expires at: {{ manifest.signedUrlExpiresAt|text("n/a") }}
-- Asset counts: sourceAssets={{ counts.sourceAssets|default("n/a") }}, operationVideos={{ counts.operationVideos|default("n/a") }}, screenshots={{ counts.screenshots|default("n/a") }}, generatedAssets={{ counts.generatedAssets|default("n/a") }}, githubPullRequests={{ counts.githubPullRequests|default("n/a") }}, slackMessages={{ counts.slackMessages|default("n/a") }}, knowledgeDocuments={{ counts.knowledgeDocuments|default("n/a") }}
+- Asset counts: sourceAssets={{ counts.sourceAssets|default("n/a") }}, operationVideos={{ counts.operationVideos|default("n/a") }}, screenshots={{ counts.screenshots|default("n/a") }}, generatedAssets={{ counts.generatedAssets|default("n/a") }}, githubPullRequests={{ counts.githubPullRequests|default("n/a") }}, slackMessages={{ counts.slackMessages|default("n/a") }}, knowledgeDocuments={{ counts.knowledgeDocuments|default("n/a") }}, jiraIssues={{ counts.jiraIssues|default("n/a") }}
 
 ### Source Asset Files
 {% for asset in source_asset_refs -%}
@@ -156,6 +156,16 @@
   - Download URL: {{ doc.downloadUrl|text("n/a") }}
 {% else -%}
 - No knowledge document refs.
+{% endfor %}
+
+### Jira Issues
+{% for issue in jira_issues -%}
+- {{ issue.key|text("JIRA") }}: {{ issue.summary|text("n/a") }} ({{ issue.htmlUrl|text("n/a") }})
+  - Status: {{ issue.status.name|text("n/a") if issue.status else "n/a" }}
+  - Assignee: {{ issue.assignee.name|text("unassigned") if issue.assignee else "unassigned" }}
+  - Reason: {{ issue.reason|text("n/a") }}
+{% else -%}
+- No Jira issue refs.
 {% endfor %}
 
 ## Agent Instructions

@@ -4,24 +4,37 @@ StoryVault uses Slack OAuth to collect related conversations for operation video
 
 ## Slack App
 
-1. Create or open a Slack App at <https://api.slack.com/apps>.
-2. Add an OAuth redirect URL:
+### Create From Manifest
+
+1. Open <https://api.slack.com/apps>.
+2. Click `Create New App`.
+3. Choose `From an app manifest`.
+4. Select the workspace that will own/administer the app.
+5. Paste [`slack-app-manifest.yml`](./slack-app-manifest.yml) into the YAML editor.
+6. Create the app.
+7. Open `Basic Information` > `Display Information` and upload the StoryVault logo/icon. Slack app icons are uploaded in the app settings UI; the icon image is not represented in the app manifest.
+8. Open `Basic Information` > `App Credentials` and copy `Client ID` / `Client Secret` into the app and Firebase Functions environments below.
+
+The included manifest configures these OAuth redirect URLs:
+
    - Production: `https://<your-host>/admin/storyvault/slack-callback`
    - Local development: `http://127.0.0.1:<port>/admin/storyvault/slack-callback`
-3. Add these Bot Token Scopes:
+
+For the current StoryVault dev deployment, the manifest uses `https://storyvault-dev.web.app/admin/storyvault/slack-callback` and `http://127.0.0.1:3000/admin/storyvault/slack-callback`. Update the manifest before creating a production app for a different host or local port.
+
+The manifest also configures these Bot Token Scopes:
+
    - `channels:read`
    - `channels:history`
    - `groups:read`
    - `groups:history`
-4. Add this User Token Scope:
-   - `search:read`
-5. Install the app to the workspace.
 
-`search.messages` requires the user token scope `search:read`; channel history reads use the bot token scopes above. Private channel history is available only for private channels the Slack app has access to. Invite the app to private channels that should be used as StoryVault context.
+After creating or changing scopes, install or reinstall the app to the workspace.
+
+Channel history reads use the bot token scopes above. Private channel history is available only for private channels the Slack app has access to. Invite the app to private channels that should be used as StoryVault context.
 
 References:
 
-- Slack `search.messages`: <https://docs.slack.dev/reference/methods/search.messages/>
 - Slack `conversations.history`: <https://docs.slack.dev/reference/methods/conversations.history/>
 
 ## Frontend Environment

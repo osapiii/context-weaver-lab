@@ -2,6 +2,8 @@ const allowedAdminPaths = new Set([
   "/admin/signin",
   "/admin/storyvault",
   "/admin/storyvault/github-callback",
+  "/admin/storyvault/jira-callback",
+  "/admin/storyvault/slack-callback",
   "/admin/data-source",
   "/admin/request-logs",
   "/admin/workflow-executions",

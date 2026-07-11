@@ -65,6 +65,14 @@ class ZappingAnalysisStoryCandidate(BaseModel):
     goal: str = Field(min_length=1)
     benefit: str = Field(min_length=1)
     acceptanceCriteria: list[str] = Field(min_length=1)
+    detailedSpecifications: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Detailed behavior, feature, rule, constraint, UI, automation, "
+            "or exception notes spoken or shown in the video. These are not "
+            "acceptance criteria; preserve fine-grained product specs here."
+        ),
+    )
     summary: str | None = None
     userStory: str | None = None
     asA: str | None = None

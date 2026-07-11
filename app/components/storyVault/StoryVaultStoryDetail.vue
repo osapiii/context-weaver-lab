@@ -121,6 +121,32 @@
               </div>
             </div>
           </section>
+
+          <section
+            v-if="story.detailedSpecifications.length > 0"
+            class="rounded-lg border border-cyan-100 bg-cyan-50/60 p-4"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-xs font-bold uppercase text-cyan-700">
+                詳細仕様
+              </h3>
+              <EnBadge variant="tag" size="xs">
+                {{ story.detailedSpecifications.length }}
+              </EnBadge>
+            </div>
+            <ul class="mt-3 space-y-2">
+              <li
+                v-for="(specification, index) in story.detailedSpecifications"
+                :key="`${story.id}-spec-${index}`"
+                class="flex gap-2 text-sm leading-relaxed text-slate-700"
+              >
+                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-cyan-700 ring-1 ring-cyan-100">
+                  {{ index + 1 }}
+                </span>
+                <span>{{ specification }}</span>
+              </li>
+            </ul>
+          </section>
         </section>
 
         <section v-else-if="activeTab === 'evidence'" class="space-y-3">
@@ -533,6 +559,11 @@ const reportMarkdown = computed(() => {
     `- Drift: ${story.driftLevel}`,
     `- Confidence: ${story.confidenceScore}`,
     "",
+    "## Detailed Specifications",
+    ...(story.detailedSpecifications.length
+      ? story.detailedSpecifications.map((specification, index) => `${index + 1}. ${specification}`)
+      : ["- No detailed specifications recorded."]),
+    "",
     "## Acceptance Criteria",
     ...story.acceptanceCriteria.map(
       (ac, index) =>
@@ -602,6 +633,11 @@ const reportHtml = computed(() => {
         )
         .join("")
     : '<li><span class="state">n/a</span><span>No acceptance criteria recorded.</span></li>';
+  const detailedSpecifications = story.detailedSpecifications.length
+    ? story.detailedSpecifications
+        .map((specification) => `<li>${escapeHtml(specification)}</li>`)
+        .join("")
+    : '<li class="muted">No detailed specifications recorded.</li>';
   const evidenceCards = props.evidence.length
     ? props.evidence
         .map(
@@ -642,6 +678,7 @@ const reportHtml = computed(() => {
     <header class="top"><div><p class="eyebrow">StoryVault Story Context Report</p><h1>${escapeHtml(story.storyKey || story.id)}</h1><p class="summary">${escapeHtml(story.title)}</p></div><div class="chips">${evidenceChips}</div></header>
     <section><h2>基本情報</h2><div class="grid cols4"><div class="metric"><span>Application</span><strong>${escapeHtml(props.application?.name || story.applicationId)}</strong></div><div class="metric"><span>Status</span><strong>${escapeHtml(story.status)}</strong></div><div class="metric"><span>Review</span><strong>${escapeHtml(story.reviewState)}</strong></div><div class="metric"><span>Confidence</span><strong>${story.confidenceScore}%</strong></div></div></section>
     <section class="grid cols2"><div><h2>ユーザーストーリー</h2><div class="panel">${escapeHtml(story.userStory || "No user story recorded.")}<p class="muted">${escapeHtml(story.summary || "")}</p></div></div><div><h2>素材</h2><div class="grid cols2"><div class="metric"><span>Evidence</span><strong>${props.evidence.length}</strong></div><div class="metric"><span>Source Assets</span><strong>${linkedSourceAssets.value.length}</strong></div><div class="metric"><span>Videos</span><strong>${linkedOperationVideos.value.length}</strong></div><div class="metric"><span>Screenshots</span><strong>${linkedOperationVideos.value.reduce((sum, video) => sum + (video.frameCaptures?.length ?? 0), 0)}</strong></div></div></div></section>
+    <section><h2>詳細仕様</h2><div class="panel"><ul>${detailedSpecifications}</ul></div></section>
     <section><h2>受け入れ条件</h2><div class="panel"><ol class="criteria">${criteria}</ol></div></section>
     <section><h2>証跡</h2>${evidenceCards}</section>
     <section><h2>Source Assets</h2>${assetCards}</section>
@@ -871,6 +908,7 @@ function buildStoryReportWorkbook(): XLSX.WorkBook {
       Title: excelCell(story.title),
       Summary: excelCell(story.summary),
       UserStory: excelCell(story.userStory),
+      DetailedSpecifications: excelCell(story.detailedSpecifications),
       Domain: excelCell(story.domain),
       Milestone: excelCell(story.milestone),
       Labels: excelCell(story.labels),
@@ -882,6 +920,14 @@ function buildStoryReportWorkbook(): XLSX.WorkBook {
       StaleSources: excelCell(story.sourceFreshness.staleSources),
     },
   ]);
+  appendExcelSheet(
+    workbook,
+    "詳細仕様",
+    story.detailedSpecifications.map((specification, index) => ({
+      No: index + 1,
+      Text: excelCell(specification),
+    }))
+  );
   appendExcelSheet(
     workbook,
     "受け入れ条件",

@@ -10,7 +10,32 @@ const SLACK_SCOPES = [
   "groups:read",
   "groups:history",
 ].join(",");
-const SLACK_USER_SCOPES = "search:read";
+const SLACK_DEBUG_STORAGE_KEY = "storyvault-slack-oauth-debug";
+
+function appendSlackOAuthDebug(
+  event: string,
+  details: Record<string, unknown> = {}
+): void {
+  const entry = {
+    at: new Date().toISOString(),
+    event,
+    details,
+  };
+  log("INFO", "[Slack OAuth]", event, details);
+  try {
+    const current = JSON.parse(
+      window.localStorage.getItem(SLACK_DEBUG_STORAGE_KEY) || "[]"
+    );
+    const rows = Array.isArray(current) ? current : [];
+    rows.push(entry);
+    window.localStorage.setItem(
+      SLACK_DEBUG_STORAGE_KEY,
+      JSON.stringify(rows.slice(-30))
+    );
+  } catch {
+    // Debug logging must never block OAuth.
+  }
+}
 
 export type SlackConnection = {
   id?: string;
@@ -37,21 +62,9 @@ export type SlackMessagePreview = {
   postedAt: string;
 };
 
-type SlackCodeMessage = {
-  source: "storyvault-slack-oauth";
-  code?: string;
-  error?: string;
-  state?: string;
-};
-
 type SlackConnectionsResponse = {
   ok: boolean;
   connections: SlackConnection[];
-};
-
-type SlackConnectResponse = {
-  ok: boolean;
-  connection?: SlackConnection;
 };
 
 const sharedIsLoading = ref(false);
@@ -85,71 +98,21 @@ function randomNonce(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function createSlackState(organizationId: string): string {
+function createSlackState(params: {
+  organizationId: string;
+  redirectUri: string;
+  returnPath: string;
+}): string {
   return encodeBase64Url(
     JSON.stringify({
       provider: "slack",
-      organizationId,
+      organizationId: params.organizationId,
+      redirectUri: params.redirectUri,
+      returnPath: params.returnPath,
       nonce: randomNonce(),
       openerOrigin: window.location.origin,
     })
   );
-}
-
-function waitForSlackCode(popup: Window | null, state: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (!popup) {
-      reject(new Error("Slack OAuth popup を開けませんでした"));
-      return;
-    }
-    let settled = false;
-    let closeGraceTimeout: number | undefined;
-    const timeout = window.setTimeout(() => {
-      settle(() => reject(new Error("Slack OAuth がタイムアウトしました")));
-    }, 120_000);
-    const poll = window.setInterval(() => {
-      if (popup.closed && closeGraceTimeout === undefined) {
-        closeGraceTimeout = window.setTimeout(() => {
-          settle(() => reject(new Error("Slack OAuth popup が閉じられました")));
-        }, 2_000);
-      }
-    }, 500);
-    const onMessage = (event: MessageEvent<SlackCodeMessage>) => {
-      const payload = event.data;
-      if (!payload || payload.source !== "storyvault-slack-oauth") return;
-      if (payload.state !== state) return;
-      if (payload.error) {
-        settle(() => reject(new Error(payload.error)));
-        return;
-      }
-      if (!payload.code) {
-        settle(() => reject(new Error("Slack 認可コードを取得できませんでした")));
-        return;
-      }
-      const code = payload.code;
-      settle(() => resolve(code));
-    };
-    const cleanup = () => {
-      window.clearTimeout(timeout);
-      window.clearInterval(poll);
-      if (closeGraceTimeout !== undefined) {
-        window.clearTimeout(closeGraceTimeout);
-      }
-      window.removeEventListener("message", onMessage);
-      try {
-        popup.close();
-      } catch {
-        // noop
-      }
-    };
-    const settle = (complete: () => void) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      complete();
-    };
-    window.addEventListener("message", onMessage);
-  });
 }
 
 export function useSlackOAuth() {
@@ -171,8 +134,12 @@ export function useSlackOAuth() {
   const refreshConnections = async (): Promise<SlackConnection[]> => {
     if (!organizationId.value) {
       sharedConnections.value = [];
+      appendSlackOAuthDebug("refreshConnections:missingOrganization", {});
       return sharedConnections.value;
     }
+    appendSlackOAuthDebug("refreshConnections:start", {
+      organizationId: organizationId.value,
+    });
     const callable = httpsCallable<
       { organizationId: string },
       SlackConnectionsResponse
@@ -182,6 +149,11 @@ export function useSlackOAuth() {
       ...connection,
       connected: true,
     }));
+    appendSlackOAuthDebug("refreshConnections:success", {
+      organizationId: organizationId.value,
+      count: sharedConnections.value.length,
+      ids: sharedConnections.value.map((connection) => connection.id || connection.teamId),
+    });
     return sharedConnections.value;
   };
 
@@ -192,6 +164,7 @@ export function useSlackOAuth() {
 
   const connect = async (): Promise<boolean> => {
     if (!clientId.value) {
+      appendSlackOAuthDebug("connect:missingClientId", {});
       toast.add({
         title: "Slack OAuth client が未設定です",
         description: "NUXT_PUBLIC_SLACK_OAUTH_CLIENT_ID を設定してください",
@@ -200,42 +173,36 @@ export function useSlackOAuth() {
       return false;
     }
     if (!organizationId.value) {
+      appendSlackOAuthDebug("connect:missingOrganization", {});
       toast.add({ title: "組織情報が未取得です", color: "error" });
       return false;
     }
     sharedIsLoading.value = true;
     try {
-      const state = createSlackState(organizationId.value);
       const redirectUri = slackCallbackUrl(configuredRedirectUri.value);
+      const state = createSlackState({
+        organizationId: organizationId.value,
+        redirectUri,
+        returnPath: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      });
       const url = new URL(SLACK_AUTHORIZE_URL);
       url.searchParams.set("client_id", clientId.value);
       url.searchParams.set("scope", SLACK_SCOPES);
-      url.searchParams.set("user_scope", SLACK_USER_SCOPES);
       url.searchParams.set("state", state);
       url.searchParams.set("redirect_uri", redirectUri);
-      const popup = window.open(
-        url.toString(),
-        "storyvault-slack-oauth",
-        "width=720,height=760"
-      );
-      const code = await waitForSlackCode(popup, state);
-      const callable = httpsCallable<
-        { organizationId: string; code: string; redirectUri: string },
-        SlackConnectResponse
-      >(functions(), "connect_slack_workspace");
-      const res = await callable({
+      appendSlackOAuthDebug("connect:redirectToSlack", {
         organizationId: organizationId.value,
-        code,
         redirectUri,
+        returnPath: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+        scopes: SLACK_SCOPES,
+        stateLength: state.length,
       });
-      await refreshConnections();
-      toast.add({
-        title: "Slack workspace を接続しました",
-        description: res.data.connection?.teamName || undefined,
-        color: "success",
-      });
-      return true;
+      window.location.assign(url.toString());
+      return false;
     } catch (error) {
+      appendSlackOAuthDebug("connect:error", {
+        message: error instanceof Error ? error.message : String(error),
+      });
       log("ERROR", "Slack OAuth connect failed", error);
       toast.add({
         title: "Slack 接続に失敗しました",

@@ -14,9 +14,10 @@ SYSTEM_INSTRUCTION = """
 
 ストーリーの出力方針:
 - 1 application = 1 software application / product surface とし、name、applicationKey、FileSpace、repo を持たせる。
-- 1 story = 1 user goal とし、title、summary、userStory、acceptanceCriteria を含める。
+- 1 story = 1 user goal とし、title、summary、userStory、acceptanceCriteria、detailedSpecifications を含める。
 - story と evidence には applicationId / applicationKey を必ず含める。
 - acceptanceCriteria は covered / missing / conflict / unknown のいずれかで分類してください。
+- detailedSpecifications には、動画・ナレッジで補足された細かい仕様・機能特徴・制約・例外・UI挙動・自動化ルールを、完了条件とは別の箇条書き配列で保持してください。
 - confidenceScore は citation coverage、AC coverage、code mapping coverage の充足度で決めてください。
 - driftLevel は none / low / medium / high のいずれかにしてください。
 - evidence は knowledge、ticket、code、pr、commit、agent に分類し、citation title / snippet / uri を必ず含めてください。
