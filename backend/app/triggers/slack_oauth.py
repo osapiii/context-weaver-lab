@@ -174,6 +174,16 @@ def _as_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
 def _exchange_auth_code(code: str, redirect_uri: str | None = None) -> dict[str, Any]:
     client_id = _oauth_client_id()
     client_secret = _oauth_client_secret()
+    print(
+        "[Slack OAuth] exchange:start",
+        {
+            "clientIdPresent": bool(client_id),
+            "clientIdSuffix": client_id[-6:] if client_id else "",
+            "clientSecretPresent": bool(client_secret),
+            "codeLength": len(code),
+            "redirectUri": redirect_uri or "",
+        },
+    )
     if not client_id or not client_secret:
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.FAILED_PRECONDITION,
@@ -190,12 +200,36 @@ def _exchange_auth_code(code: str, redirect_uri: str | None = None) -> dict[str,
     if redirect_uri:
         data["redirect_uri"] = redirect_uri
     resp = requests.post(TOKEN_URL, data=data, timeout=30)
+    print(
+        "[Slack OAuth] exchange:response",
+        {
+            "status": resp.status_code,
+            "contentType": resp.headers.get("content-type", ""),
+            "bodyLength": len(resp.text or ""),
+        },
+    )
     if resp.status_code >= 400:
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.PERMISSION_DENIED,
             message=f"Slack OAuth token exchange failed: {resp.text[:300]}",
         )
     payload = resp.json()
+    print(
+        "[Slack OAuth] exchange:payload",
+        {
+            "ok": bool(payload.get("ok")),
+            "error": payload.get("error") or "",
+            "teamId": (payload.get("team") or {}).get("id")
+            if isinstance(payload.get("team"), dict)
+            else "",
+            "appId": payload.get("app_id") or "",
+            "hasAccessToken": bool(payload.get("access_token")),
+            "hasAuthedUserToken": bool(
+                isinstance(payload.get("authed_user"), dict)
+                and payload.get("authed_user", {}).get("access_token")
+            ),
+        },
+    )
     if not payload.get("ok"):
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.PERMISSION_DENIED,
@@ -447,6 +481,15 @@ def connect_slack_workspace(req: https_fn.CallableRequest) -> dict[str, Any]:
     organization_id = _require_org(data)
     code = str(data.get("code") or "").strip()
     redirect_uri = str(data.get("redirectUri") or "").strip()
+    print(
+        "[Slack OAuth] connect_workspace:start",
+        {
+            "uid": user_id,
+            "organizationId": organization_id,
+            "codeLength": len(code),
+            "redirectUri": redirect_uri,
+        },
+    )
     if not code:
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
@@ -476,6 +519,19 @@ def connect_slack_workspace(req: https_fn.CallableRequest) -> dict[str, Any]:
         if scope.strip()
     ]
     connection_id = _connection_id(token)
+    print(
+        "[Slack OAuth] connect_workspace:resolved",
+        {
+            "organizationId": organization_id,
+            "connectionId": connection_id,
+            "teamId": team.get("id") or "",
+            "teamName": team.get("name") or "",
+            "enterpriseId": enterprise.get("id") or "",
+            "botUserIdPresent": bool(token.get("bot_user_id")),
+            "scopeCount": len(scopes),
+            "userScopeCount": len(user_scopes),
+        },
+    )
     now = firestore.SERVER_TIMESTAMP
     doc = {
         "provider": "slack",
@@ -499,6 +555,19 @@ def connect_slack_workspace(req: https_fn.CallableRequest) -> dict[str, Any]:
         "updatedAt": now,
     }
     _workspace_configs_ref(organization_id).document(connection_id).set(doc, merge=True)
+    print(
+        "[Slack OAuth] connect_workspace:stored",
+        {
+            "organizationId": organization_id,
+            "connectionId": connection_id,
+            "path": (
+                "organizations/"
+                + organization_id
+                + "/externalServiceConfigs/slackIntegration/configs/"
+                + connection_id
+            ),
+        },
+    )
     return {
         "ok": True,
         "connection": _public_workspace_connection(connection_id, doc),
@@ -510,6 +579,10 @@ def get_slack_connections(req: https_fn.CallableRequest) -> dict[str, Any]:
     _require_auth(req)
     data = req.data if isinstance(req.data, dict) else {}
     organization_id = _require_org(data)
+    print(
+        "[Slack OAuth] get_connections:start",
+        {"organizationId": organization_id},
+    )
     rows = []
     for snap in _workspace_configs_ref(organization_id).stream():
         doc = snap.to_dict() or {}
@@ -517,8 +590,20 @@ def get_slack_connections(req: https_fn.CallableRequest) -> dict[str, Any]:
             if _unprotect(doc.get("botAccessToken")) or _unprotect(doc.get("accessToken")):
                 rows.append(_public_workspace_connection(snap.id, doc))
         except RuntimeError:
+            print(
+                "[Slack OAuth] get_connections:decryptSkipped",
+                {"organizationId": organization_id, "connectionId": snap.id},
+            )
             continue
     rows.sort(key=lambda row: (row.get("teamName") or row.get("id") or "").lower())
+    print(
+        "[Slack OAuth] get_connections:done",
+        {
+            "organizationId": organization_id,
+            "count": len(rows),
+            "ids": [row.get("id") for row in rows],
+        },
+    )
     return {"ok": True, "connections": rows}
 
 
