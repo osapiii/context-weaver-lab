@@ -5,7 +5,7 @@
  * RequestDocアーキテクチャに準拠した実装パターン
  */
 
-import { ref, onUnmounted, type Ref } from "vue";
+import { getCurrentInstance, ref, onUnmounted, type Ref } from "vue";
 import {
   doc,
   onSnapshot,
@@ -616,16 +616,19 @@ export function useGeminiFileSpaceSnapshot(
     childUnsubscribes.length = 0;
   };
 
-  // Componentがunmountされたときにクリーンアップ
-  onUnmounted(() => {
-    log("INFO", "Component unmounted, cleaning up snapshot", {
-      requestId: requestIdValue,
-      childCount: childUnsubscribes.length,
+  // setup 内から呼ばれた場合だけ Vue lifecycle に紐付ける。
+  // イベントハンドラや watch callback からの利用では、呼び出し元が明示的に unsubscribe する。
+  if (getCurrentInstance()) {
+    onUnmounted(() => {
+      log("INFO", "Component unmounted, cleaning up snapshot", {
+        requestId: requestIdValue,
+        childCount: childUnsubscribes.length,
+      });
+      cleanup();
+      // Store側から削除（オプション: 必要に応じてコメントアウト）
+      // store.deleteWatchingFileSpaceRequestByRequestId(requestIdValue);
     });
-    cleanup();
-    // Store側から削除（オプション: 必要に応じてコメントアウト）
-    // store.deleteWatchingFileSpaceRequestByRequestId(requestIdValue);
-  });
+  }
 
   return {
     unsubscribe: cleanup,

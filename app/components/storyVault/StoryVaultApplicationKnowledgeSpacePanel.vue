@@ -18,15 +18,25 @@
 
       <div class="flex shrink-0 flex-wrap gap-2">
         <EnButton
-          v-if="application && status !== 'ready'"
+          v-if="application && status !== 'ready' && status !== 'creating'"
           variant="ai"
           size="sm"
           leading-icon="material-symbols:add-circle-outline"
           :loading="isProvisioning"
-          :disabled="status === 'creating'"
           @click="$emit('create-file-space')"
         >
           {{ status === "error" ? "再作成" : "専用FileSpace作成" }}
+        </EnButton>
+        <EnButton
+          v-if="application && status === 'creating'"
+          variant="outline"
+          color="warning"
+          size="sm"
+          leading-icon="material-symbols:replay"
+          :loading="isProvisioning"
+          @click="$emit('create-file-space')"
+        >
+          作成を再実行
         </EnButton>
         <EnButton
           variant="ghost"
@@ -60,7 +70,7 @@
       class="mt-4"
       color="info"
       title="FileSpaceを作成中です"
-      :description="application.fileSpaceCreateRequestId"
+      :description="`長時間変わらない場合は「作成を再実行」で新しい作成リクエストを開始できます。Request: ${application.fileSpaceCreateRequestId || '不明'}`"
     />
 
     <EnAlert
