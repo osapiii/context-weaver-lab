@@ -13,6 +13,7 @@ from triggers import google_workspace_oauth  # noqa: F401
 from triggers import google_drive_sync  # noqa: F401
 from triggers import github_oauth  # noqa: F401
 from triggers import slack_oauth  # noqa: F401
+from triggers import jira_oauth  # noqa: F401
 from triggers import guide_assistant  # noqa: F401
 from triggers import context_store_requests  # noqa: F401
 from triggers import e2e_auth_session  # noqa: F401
@@ -49,6 +50,11 @@ from triggers.slack_oauth import get_slack_connection  # noqa: F401
 from triggers.slack_oauth import get_slack_connections  # noqa: F401
 from triggers.slack_oauth import list_slack_messages  # noqa: F401
 from triggers.slack_oauth import test_slack_connection  # noqa: F401
+from triggers.jira_oauth import connect_jira_site  # noqa: F401
+from triggers.jira_oauth import disconnect_jira_site  # noqa: F401
+from triggers.jira_oauth import get_jira_connections  # noqa: F401
+from triggers.jira_oauth import list_jira_issues  # noqa: F401
+from triggers.jira_oauth import test_jira_connection  # noqa: F401
 from triggers.guide_assistant import ask_en_aistudio_guide  # noqa: F401
 from triggers.context_store_requests import on_context_store_request_created  # noqa: F401
 from triggers.e2e_auth_session import create_e2e_auth_browser_session  # noqa: F401

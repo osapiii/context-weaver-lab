@@ -20,7 +20,16 @@ export default defineNuxtRouteMiddleware((to, from) => {
   const adminUserStore = useAdminUserStore();
 
   // 除外ページ: 認証前ページは権限チェックをスキップ
-  const excludedPaths = ["/", "/lp", "/admin/signin", "/admin/ai-chat", "/setup", "/introduction"];
+  const excludedPaths = [
+    "/",
+    "/lp",
+    "/admin/signin",
+    "/admin/ai-chat",
+    "/admin/storyvault/jira-callback",
+    "/admin/storyvault/slack-callback",
+    "/setup",
+    "/introduction",
+  ];
 
   // ルートパスまたは除外パスの場合はスキップ
   if (to.path === "/" || excludedPaths.some((path) => to.path.startsWith(path))) {

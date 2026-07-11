@@ -537,6 +537,7 @@
         <div class="space-y-6">
           <OAuthConnectionGitHubCard />
           <OAuthConnectionSlackCard />
+          <OAuthConnectionJiraCard />
 
           <EnCard variant="kpi" padding="spacious">
             <template #header>
@@ -547,7 +548,7 @@
                 </h2>
               </div>
               <p class="mt-2 text-sm leading-relaxed text-neutral-600">
-                Jira、Linear、Notion などの外部ツール認証はここに追加していきます。
+                Linear、Notion などの外部ツール認証はここに追加していきます。
                 ツールごとに接続状態、権限範囲、解除操作を同じ形式で管理します。
               </p>
             </template>
@@ -617,6 +618,7 @@ import { ref, computed, onMounted } from "vue";
 import GlobalPinnedKnowledgePanel from "@components/preferences/GlobalPinnedKnowledgePanel.vue";
 import OAuthConnectionGitHubCard from "@components/preferences/OAuthConnectionGitHubCard.vue";
 import OAuthConnectionSlackCard from "@components/preferences/OAuthConnectionSlackCard.vue";
+import OAuthConnectionJiraCard from "@components/preferences/OAuthConnectionJiraCard.vue";
 import OrganizationMemberManagementPanel from "@components/admin/members/OrganizationMemberManagementPanel.vue";
 import StoryVaultMcpSetupPanel from "@components/storyVault/StoryVaultMcpSetupPanel.vue";
 import EnCard from "@components/EnCard.vue";
@@ -781,11 +783,6 @@ const isMac = computed(() => {
 });
 
 const plannedOAuthServices = [
-  {
-    name: "Jira",
-    icon: "i-simple-icons-jira",
-    description: "Issue / Epic / Sprint 情報との連携に利用します。",
-  },
   {
     name: "Linear",
     icon: "i-simple-icons-linear",
