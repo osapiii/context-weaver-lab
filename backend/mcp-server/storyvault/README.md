@@ -8,6 +8,20 @@ fetch the Markdown link; humans can open the HTML link in a browser. The public
 tool surface is intentionally small: agents fetch rich context and keep any
 plans or patches in their local workflow.
 
+## Current clip catalog
+
+The current StoryVault UI stores its primary catalog in `storyVaultClipGroups`
+and `storyVaultClips`. MCP clients should browse it with:
+
+1. `list_clip_groups`
+2. `list_clips`
+3. `list_clip_stories`
+
+`list_clip_stories` flattens `analysisResult.storyCandidates` from every clip
+and preserves clip/group provenance plus the candidate evidence. The older
+`list_operation_video_groups` and `list_operation_videos` tools remain available
+for raw/legacy operation-video records only.
+
 ## Story context report link contract
 
 `get_story_context` returns a link-first payload so remote MCP clients do not

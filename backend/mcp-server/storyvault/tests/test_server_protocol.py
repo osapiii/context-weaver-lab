@@ -115,6 +115,42 @@ class FakeStore:
             }
         ]
 
+    def list_clip_groups(self, **kwargs):
+        return [
+            {
+                "id": "clip-group-1",
+                "applicationId": kwargs["application_id"],
+                "name": "ユーザーストーリー管理",
+                "clipCount": 18,
+            }
+        ]
+
+    def list_clips(self, **kwargs):
+        return [
+            {
+                "id": "clip-1",
+                "applicationId": kwargs["application_id"],
+                "clipGroupId": kwargs.get("clip_group_id") or "clip-group-1",
+                "title": "ユーザーストーリー一覧",
+                "storyCandidateCount": 2,
+                "clipGroup": {"id": "clip-group-1", "name": "ユーザーストーリー管理"},
+            }
+        ]
+
+    def list_clip_stories(self, **kwargs):
+        return [
+            {
+                "id": "clip-1:story-001",
+                "candidateId": "story-001",
+                "applicationId": kwargs["application_id"],
+                "clipId": kwargs.get("clip_id") or "clip-1",
+                "clipGroupId": kwargs.get("clip_group_id") or "clip-group-1",
+                "title": "ユーザーストーリー一覧を表示する",
+                "sourceType": "clip_story_candidate",
+                "evidenceCount": 1,
+            }
+        ]
+
     def get_application(self, application_id):
         return {"id": application_id, "name": "Demo App", "repoFullName": "org/repo"}
 
@@ -337,6 +373,9 @@ def test_initialize_and_tools_list(monkeypatch):
     assert names.index("get_operation_video_context") < names.index("get_story_context")
     assert "list_operation_videos" in names
     assert "list_operation_video_groups" in names
+    assert "list_clip_groups" in names
+    assert "list_clips" in names
+    assert "list_clip_stories" in names
     assert "get_operation_video_context" in names
     assert "get_story_context" in names
     assert "push_knowledge_document" in names
@@ -430,6 +469,72 @@ def test_tool_call_list_operation_video_groups(monkeypatch):
     payload = json.loads(text)
     assert payload[0]["id"] == "group-1"
     assert payload[0]["name"] == "Existing operation videos"
+
+
+def test_tool_call_list_clip_groups(monkeypatch):
+    client = _client(monkeypatch)
+    with patch.object(server, "_store", side_effect=lambda principal: FakeStore(principal)):
+        response = client.post(
+            "/mcp",
+            headers={"Authorization": "Bearer dev-token"},
+            json={
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_clip_groups",
+                    "arguments": {"applicationId": "app-1", "limit": 200},
+                },
+            },
+        )
+    assert response.status_code == 200
+    payload = json.loads(response.json()["result"]["content"][0]["text"])
+    assert payload[0]["id"] == "clip-group-1"
+    assert payload[0]["clipCount"] == 18
+
+
+def test_tool_call_list_clips(monkeypatch):
+    client = _client(monkeypatch)
+    with patch.object(server, "_store", side_effect=lambda principal: FakeStore(principal)):
+        response = client.post(
+            "/mcp",
+            headers={"Authorization": "Bearer dev-token"},
+            json={
+                "jsonrpc": "2.0",
+                "id": 12,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_clips",
+                    "arguments": {"applicationId": "app-1", "clipGroupId": "clip-group-1"},
+                },
+            },
+        )
+    assert response.status_code == 200
+    payload = json.loads(response.json()["result"]["content"][0]["text"])
+    assert payload[0]["id"] == "clip-1"
+    assert payload[0]["storyCandidateCount"] == 2
+
+
+def test_tool_call_list_clip_stories(monkeypatch):
+    client = _client(monkeypatch)
+    with patch.object(server, "_store", side_effect=lambda principal: FakeStore(principal)):
+        response = client.post(
+            "/mcp",
+            headers={"Authorization": "Bearer dev-token"},
+            json={
+                "jsonrpc": "2.0",
+                "id": 13,
+                "method": "tools/call",
+                "params": {
+                    "name": "list_clip_stories",
+                    "arguments": {"applicationId": "app-1", "limit": 500},
+                },
+            },
+        )
+    assert response.status_code == 200
+    payload = json.loads(response.json()["result"]["content"][0]["text"])
+    assert payload[0]["id"] == "clip-1:story-001"
+    assert payload[0]["sourceType"] == "clip_story_candidate"
 
 
 def test_tool_call_list_operation_videos(monkeypatch):

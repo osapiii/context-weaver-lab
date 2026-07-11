@@ -11,11 +11,15 @@ Use this skill when a user asks Codex to implement, review, document, or plan wo
 
 ## Required Flow
 
-1. Call the `storyvault` MCP server before planning when the user provides an application ID and story ID.
-2. Use `get_story_context` with `format: "html"` when the user wants a visual report, or `format: "markdown"` when the user wants raw Markdown.
-3. Save returned HTML or Markdown to a local file when the user asks to inspect the source report.
-4. Read the returned context before making an implementation plan.
-5. Preserve evidence IDs in plans, PR descriptions, and summaries when they support a decision.
+1. Use `list_clip_groups` → `list_clips` → `list_clip_stories` as the primary catalog flow for the current StoryVault UI.
+   - `list_clip_groups` returns the same clip groups shown in the StoryVault clip screen.
+   - `list_clips` returns current clips with group metadata and Story candidate counts.
+   - `list_clip_stories` returns every analyzed Story candidate embedded in those clips, including clip/group provenance and evidence.
+2. Treat `list_operation_video_groups` and `list_operation_videos` as legacy/raw recording APIs. Use them only when the user explicitly asks for raw operation-video records.
+3. Call the `storyvault` MCP server before planning when the user provides an application ID and story ID.
+4. Save returned HTML or Markdown to a local file when the user asks to inspect the source report.
+5. Read the returned context before making an implementation plan.
+6. Preserve evidence IDs in plans, PR descriptions, and summaries when they support a decision.
 
 ## Important Constraints
 

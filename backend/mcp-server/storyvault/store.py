@@ -486,6 +486,165 @@ class StoryVaultStore:
             ]
         return sorted(docs, key=lambda item: str(item.get("createdAt") or item.get("name") or ""))
 
+    def list_clip_groups(
+        self,
+        *,
+        application_id: str,
+        query: str = "",
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """List the clip groups used by the current StoryVault UI."""
+        self.principal.require_scope("context:read")
+        self._require_application(application_id)
+        q = self._collection("storyVaultClipGroups").where(
+            filter=firestore.FieldFilter("applicationId", "==", application_id)
+        )
+        docs = [_serialize_firestore(_doc_to_dict(snap)) for snap in q.limit(max(1, min(limit, 200))).stream()]
+        needle = query.strip().lower()
+        if needle:
+            docs = [
+                group
+                for group in docs
+                if needle
+                in " ".join(
+                    str(group.get(key) or "")
+                    for key in ("id", "name", "description", "applicationKey")
+                ).lower()
+            ]
+        return sorted(docs, key=lambda item: str(item.get("updatedAt") or item.get("createdAt") or ""), reverse=True)
+
+    def list_clips(
+        self,
+        *,
+        application_id: str,
+        clip_group_id: str = "",
+        query: str = "",
+        discovery_status: str = "",
+        analysis_status: str = "",
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """List the clips used by the current StoryVault UI, with group refs and story counts."""
+        self.principal.require_scope("context:read")
+        self._require_application(application_id)
+        q = self._collection("storyVaultClips").where(
+            filter=firestore.FieldFilter("applicationId", "==", application_id)
+        )
+        if clip_group_id:
+            q = q.where(filter=firestore.FieldFilter("clipGroupId", "==", clip_group_id))
+        if discovery_status:
+            q = q.where(filter=firestore.FieldFilter("discoveryStatus", "==", discovery_status))
+        if analysis_status:
+            q = q.where(filter=firestore.FieldFilter("analysisStatus", "==", analysis_status))
+        docs = [_serialize_firestore(_doc_to_dict(snap)) for snap in q.limit(max(1, min(limit, 200))).stream()]
+        needle = query.strip().lower()
+        if needle:
+            docs = [
+                clip
+                for clip in docs
+                if needle
+                in " ".join(
+                    str(clip.get(key) or "")
+                    for key in (
+                        "id",
+                        "title",
+                        "description",
+                        "clipGroupNameSnapshot",
+                        "transcriptSummary",
+                        "discoveryStatus",
+                        "analysisStatus",
+                    )
+                ).lower()
+            ]
+        group_ids = {str(clip.get("clipGroupId") or "") for clip in docs if clip.get("clipGroupId")}
+        groups: dict[str, dict[str, Any]] = {}
+        for group_id in group_ids:
+            snap = self._collection("storyVaultClipGroups").document(group_id).get()
+            if snap.exists:
+                groups[group_id] = _serialize_firestore(_doc_to_dict(snap))
+        result: list[dict[str, Any]] = []
+        for clip in docs:
+            analysis_result = _as_dict(clip.get("analysisResult"))
+            candidates = _as_list(analysis_result.get("storyCandidates") or analysis_result.get("story_candidates"))
+            group_id = str(clip.get("clipGroupId") or "")
+            group = groups.get(group_id) or {}
+            result.append(
+                {
+                    **clip,
+                    "clipGroup": {
+                        "id": group_id,
+                        "name": group.get("name") or clip.get("clipGroupNameSnapshot") or "",
+                        "description": group.get("description"),
+                        "clipCount": group.get("clipCount"),
+                    },
+                    "storyCandidateCount": len(candidates),
+                }
+            )
+        return sorted(result, key=lambda item: str(item.get("recordedAt") or item.get("createdAt") or ""), reverse=True)
+
+    def list_clip_stories(
+        self,
+        *,
+        application_id: str,
+        clip_group_id: str = "",
+        clip_id: str = "",
+        query: str = "",
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Flatten story candidates embedded in current UI clips."""
+        clips = self.list_clips(
+            application_id=application_id,
+            clip_group_id=clip_group_id,
+            limit=200,
+        )
+        if clip_id:
+            clips = [clip for clip in clips if str(clip.get("id") or "") == clip_id]
+        stories: list[dict[str, Any]] = []
+        for clip in clips:
+            analysis_result = _as_dict(clip.get("analysisResult"))
+            candidates = _as_list(analysis_result.get("storyCandidates") or analysis_result.get("story_candidates"))
+            for index, candidate_value in enumerate(candidates):
+                candidate = _as_dict(candidate_value)
+                candidate_id = str(candidate.get("id") or f"story-{index + 1:03d}")
+                evidence = _as_list(candidate.get("evidence"))
+                stories.append(
+                    {
+                        **candidate,
+                        "id": f"{clip.get('id')}:{candidate_id}",
+                        "candidateId": candidate_id,
+                        "sourceType": "clip_story_candidate",
+                        "applicationId": application_id,
+                        "clipId": clip.get("id"),
+                        "clipTitle": clip.get("title"),
+                        "clipGroupId": clip.get("clipGroupId"),
+                        "clipGroup": clip.get("clipGroup"),
+                        "evidenceCount": len(evidence),
+                        "analysisStatus": clip.get("analysisStatus"),
+                        "analyzedAt": clip.get("analyzedAt"),
+                    }
+                )
+        needle = query.strip().lower()
+        if needle:
+            stories = [
+                story
+                for story in stories
+                if needle
+                in " ".join(
+                    str(story.get(key) or "")
+                    for key in (
+                        "id",
+                        "candidateId",
+                        "storyKey",
+                        "title",
+                        "summary",
+                        "userStory",
+                        "goal",
+                        "benefit",
+                        "clipTitle",
+                    )
+                ).lower()
+            ]
+        return stories[: max(1, min(limit, 500))]
+
     def list_operation_videos(
         self,
         *,

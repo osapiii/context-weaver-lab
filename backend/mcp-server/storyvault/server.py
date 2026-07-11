@@ -83,7 +83,7 @@ def _tool_definitions() -> list[dict[str, Any]]:
         },
         {
             "name": "list_stories",
-            "description": "List user stories for an application. Use this when the user explicitly asks for stories; operation videos are the primary context object.",
+            "description": "List formal user-story documents for an application. For the full set shown in the current clip UI, use list_clip_stories instead.",
             "inputSchema": {
                 "type": "object",
                 "required": ["applicationId"],
@@ -98,8 +98,55 @@ def _tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "list_clip_groups",
+            "description": "List clip groups from the current StoryVault UI. Use this as the primary catalog entry point before list_clips.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["applicationId"],
+                "properties": {
+                    "applicationId": {"type": "string"},
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "list_clips",
+            "description": "List clips from the current StoryVault UI, including clip-group metadata and embedded story-candidate counts.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["applicationId"],
+                "properties": {
+                    "applicationId": {"type": "string"},
+                    "clipGroupId": {"type": "string"},
+                    "query": {"type": "string"},
+                    "discoveryStatus": {"type": "string"},
+                    "analysisStatus": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "list_clip_stories",
+            "description": "List every analyzed user-story candidate embedded in current StoryVault clips. Results include clip and clip-group provenance, evidence, and stable synthetic IDs.",
+            "inputSchema": {
+                "type": "object",
+                "required": ["applicationId"],
+                "properties": {
+                    "applicationId": {"type": "string"},
+                    "clipGroupId": {"type": "string"},
+                    "clipId": {"type": "string"},
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 500},
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
             "name": "list_operation_videos",
-            "description": "List operation videos for an application. Prefer this as the default entry point because a single video can generate multiple linked user stories.",
+            "description": "List legacy/raw operation-video records. Prefer list_clip_groups and list_clips for the current StoryVault UI.",
             "inputSchema": {
                 "type": "object",
                 "required": ["applicationId"],
@@ -116,7 +163,7 @@ def _tool_definitions() -> list[dict[str, Any]]:
         },
         {
             "name": "list_operation_video_groups",
-            "description": "List operation video groups for an application. Use this before list_operation_videos when the user wants to browse videos by group.",
+            "description": "List legacy/raw operation-video groups. Prefer list_clip_groups for the current StoryVault UI.",
             "inputSchema": {
                 "type": "object",
                 "required": ["applicationId"],
@@ -717,6 +764,35 @@ def _call_tool(principal: McpPrincipal, name: str, arguments: dict[str, Any]) ->
                 capability_id=str(arguments.get("capabilityId") or ""),
                 query=str(arguments.get("query") or ""),
                 limit=_bounded_int(arguments.get("limit"), default=20, minimum=1, maximum=100),
+            )
+        )
+    if name == "list_clip_groups":
+        return _text_content(
+            store.list_clip_groups(
+                application_id=str(arguments.get("applicationId") or ""),
+                query=str(arguments.get("query") or ""),
+                limit=_bounded_int(arguments.get("limit"), default=200, minimum=1, maximum=200),
+            )
+        )
+    if name == "list_clips":
+        return _text_content(
+            store.list_clips(
+                application_id=str(arguments.get("applicationId") or ""),
+                clip_group_id=str(arguments.get("clipGroupId") or ""),
+                query=str(arguments.get("query") or ""),
+                discovery_status=str(arguments.get("discoveryStatus") or ""),
+                analysis_status=str(arguments.get("analysisStatus") or ""),
+                limit=_bounded_int(arguments.get("limit"), default=200, minimum=1, maximum=200),
+            )
+        )
+    if name == "list_clip_stories":
+        return _text_content(
+            store.list_clip_stories(
+                application_id=str(arguments.get("applicationId") or ""),
+                clip_group_id=str(arguments.get("clipGroupId") or ""),
+                clip_id=str(arguments.get("clipId") or ""),
+                query=str(arguments.get("query") or ""),
+                limit=_bounded_int(arguments.get("limit"), default=500, minimum=1, maximum=500),
             )
         )
     if name == "list_operation_videos":
