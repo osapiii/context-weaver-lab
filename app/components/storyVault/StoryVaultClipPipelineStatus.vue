@@ -29,7 +29,7 @@
           <p class="mt-1 text-xs">録画をバックグラウンド実行すると、ここに進捗が表示されます。</p>
         </div>
 
-        <div v-else class="grid h-full min-h-0 lg:grid-cols-[minmax(360px,42%)_minmax(0,58%)]">
+        <div v-else class="grid h-full min-h-0 lg:grid-cols-[19rem_minmax(0,1fr)_28rem]">
           <aside class="flex min-h-0 flex-col border-b border-slate-200 bg-slate-50 lg:border-b-0 lg:border-r">
             <div class="border-b border-slate-200 bg-white px-4 py-3">
               <div class="flex items-center justify-between gap-3">
@@ -41,7 +41,7 @@
               </div>
             </div>
 
-            <div class="max-h-64 space-y-2 overflow-y-auto border-b border-slate-200 p-3 lg:max-h-80">
+            <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
               <button
                 v-for="pipeline in api.pipelines.value"
                 :key="pipeline.id"
@@ -75,29 +75,6 @@
               </button>
             </div>
 
-            <div v-if="selectedPipeline" class="flex min-h-0 flex-1 flex-col p-4">
-              <div class="relative aspect-video shrink-0 overflow-hidden rounded-xl border border-slate-700 bg-black shadow-2xl">
-                <video
-                  v-if="selectedVideoUrl"
-                  :key="selectedPipeline.id"
-                  :src="selectedVideoUrl"
-                  controls
-                  playsinline
-                  preload="metadata"
-                  class="h-full w-full object-contain"
-                />
-                <div v-else class="flex h-full flex-col items-center justify-center bg-slate-950 text-slate-500">
-                  <UIcon :name="videoLoading ? 'material-symbols:progress-activity' : 'material-symbols:movie-outline'" :class="['h-10 w-10', videoLoading ? 'animate-spin text-sky-400' : '']" />
-                  <p class="mt-2 text-xs">{{ videoLoading ? '録画を読み込んでいます' : '録画プレビューを取得できません' }}</p>
-                </div>
-                <div v-if="isPipelineRunning(selectedPipeline)" class="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-cyan-300 shadow-[0_0_8px_2px_rgba(34,211,238,.9)] motion-safe:animate-[pipeline-scan_2.8s_ease-in-out_infinite]" />
-                <div class="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300 backdrop-blur">
-                  <span :class="['h-1.5 w-1.5 rounded-full', isPipelineRunning(selectedPipeline) ? 'animate-pulse bg-cyan-300' : 'bg-emerald-400']" />
-                  {{ isPipelineRunning(selectedPipeline) ? 'AI scanning' : 'scan archived' }}
-                </div>
-              </div>
-
-            </div>
           </aside>
 
           <main v-if="selectedPipeline" class="flex min-h-0 flex-col bg-white">
@@ -217,6 +194,53 @@
               <button v-if="selectedPipeline.status === 'error' || selectedPipeline.status === 'partial_error'" class="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-700" @click="api.retry(selectedPipeline.id, { step: selectedPipeline.currentStep })">失敗工程から再開</button>
             </div>
           </main>
+
+          <aside v-if="selectedPipeline" class="flex min-h-0 flex-col overflow-hidden border-l border-slate-200 bg-slate-50 p-4">
+            <div class="mb-3">
+              <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-600">AI scan preview</p>
+              <p class="mt-1 text-sm font-semibold text-slate-900">解析対象の録画</p>
+            </div>
+            <div class="relative aspect-video overflow-hidden rounded-xl border border-slate-700 bg-black shadow-2xl">
+              <video
+                v-if="selectedVideoUrl"
+                :key="selectedPipeline.id"
+                :src="selectedVideoUrl"
+                controls
+                playsinline
+                preload="metadata"
+                class="h-full w-full object-contain"
+              />
+              <div v-else class="flex h-full flex-col items-center justify-center bg-slate-950 text-slate-500">
+                <UIcon :name="videoLoading ? 'material-symbols:progress-activity' : 'material-symbols:movie-outline'" :class="['h-10 w-10', videoLoading ? 'animate-spin text-sky-400' : '']" />
+                <p class="mt-2 text-xs">{{ videoLoading ? '録画を読み込んでいます' : '録画プレビューを取得できません' }}</p>
+              </div>
+              <div v-if="isPipelineRunning(selectedPipeline)" class="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-cyan-300 shadow-[0_0_8px_2px_rgba(34,211,238,.9)] motion-safe:animate-[pipeline-scan_2.8s_ease-in-out_infinite]" />
+              <div class="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300 backdrop-blur">
+                <span :class="['h-1.5 w-1.5 rounded-full', isPipelineRunning(selectedPipeline) ? 'animate-pulse bg-cyan-300' : 'bg-emerald-400']" />
+                {{ isPipelineRunning(selectedPipeline) ? 'AI scanning' : 'scan archived' }}
+              </div>
+            </div>
+
+            <section class="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <header class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-3 py-2.5">
+                <h3 class="flex items-center gap-2 text-xs font-bold text-slate-900">
+                  <UIcon name="material-symbols:subtitles-outline" class="h-4 w-4 text-emerald-600" />
+                  文字起こし
+                </h3>
+                <span :class="transcriptStatusClass" class="rounded-full px-2 py-0.5 text-[10px] font-bold">
+                  {{ transcriptStatusLabel }}
+                </span>
+              </header>
+              <div v-if="selectedTranscriptText" class="min-h-0 flex-1 overflow-y-auto p-3">
+                <p class="whitespace-pre-wrap text-xs leading-6 text-slate-700">{{ selectedTranscriptText }}</p>
+              </div>
+              <div v-else class="flex min-h-36 flex-1 flex-col items-center justify-center px-4 text-center">
+                <UIcon :name="transcriptEmptyIcon" :class="['h-7 w-7', transcriptStepStatus === 'processing' || transcriptStepStatus === 'running' ? 'animate-spin text-sky-400' : 'text-slate-300']" />
+                <p class="mt-2 text-xs font-semibold text-slate-600">{{ transcriptEmptyTitle }}</p>
+                <p class="mt-1 text-[11px] leading-5 text-slate-400">{{ transcriptEmptyDescription }}</p>
+              </div>
+            </section>
+          </aside>
         </div>
       </div>
     </EnModal>
@@ -250,6 +274,13 @@ const completedCount = computed(() => api.pipelines.value.filter((pipeline) => p
 const selectedPipeline = computed(() => api.pipelines.value.find((pipeline) => pipeline.id === selectedPipelineId.value) || api.pipelines.value[0] || null);
 const selectedVideoUrl = computed(() => selectedPipeline.value ? videoUrls[selectedPipeline.value.id] || "" : "");
 const videoLoading = computed(() => selectedPipeline.value ? videoLoadingIds.has(selectedPipeline.value.id) : false);
+const transcriptStepStatus = computed(() => selectedPipeline.value?.steps?.transcribe?.status || "pending");
+const selectedTranscriptText = computed(() => transcriptTextFromOutput(selectedPipeline.value?.steps?.transcribe?.output));
+const transcriptStatusLabel = computed(() => selectedTranscriptText.value ? "生成済み" : transcriptStepStatus.value === "processing" || transcriptStepStatus.value === "running" ? "生成中" : transcriptStepStatus.value === "error" ? "失敗" : "未生成");
+const transcriptStatusClass = computed(() => selectedTranscriptText.value ? "bg-emerald-100 text-emerald-700" : transcriptStepStatus.value === "processing" || transcriptStepStatus.value === "running" ? "bg-sky-100 text-sky-700" : transcriptStepStatus.value === "error" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-500");
+const transcriptEmptyIcon = computed(() => transcriptStepStatus.value === "processing" || transcriptStepStatus.value === "running" ? "material-symbols:progress-activity" : transcriptStepStatus.value === "error" ? "material-symbols:error-outline" : "material-symbols:subtitles-off-outline");
+const transcriptEmptyTitle = computed(() => transcriptStepStatus.value === "processing" || transcriptStepStatus.value === "running" ? "文字起こしを生成しています" : transcriptStepStatus.value === "error" ? "文字起こしに失敗しました" : "文字起こしは未生成です");
+const transcriptEmptyDescription = computed(() => transcriptStepStatus.value === "processing" || transcriptStepStatus.value === "running" ? "生成が完了すると、ここに全文が表示されます。" : transcriptStepStatus.value === "error" ? selectedPipeline.value?.steps?.transcribe?.errorMessage || "再実行後に結果が表示されます。" : "文字起こし工程の完了後に内容を確認できます。");
 const selectedEvents = computed(() => {
   const pipelineId = selectedPipeline.value?.id;
   if (!pipelineId) return [];
@@ -284,6 +315,27 @@ async function loadPipelineVideo(pipeline: StoryVaultClipPipelineRequest): Promi
   } finally {
     videoLoadingIds.delete(pipeline.id);
   }
+}
+
+function transcriptTextFromOutput(output: Record<string, unknown> | undefined): string {
+  if (!output) return "";
+  for (const key of ["text", "transcriptText", "transcript"]) {
+    const value = output[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  for (const key of ["result", "output", "transcription"]) {
+    const value = output[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const nested = transcriptTextFromOutput(value as Record<string, unknown>);
+      if (nested) return nested;
+    }
+  }
+  const segments = output.segments ?? output.transcriptSegments;
+  if (!Array.isArray(segments)) return "";
+  return segments
+    .map((segment) => segment && typeof segment === "object" ? (segment as Record<string, unknown>).text : "")
+    .filter((text): text is string => typeof text === "string" && Boolean(text.trim()))
+    .join("\n");
 }
 
 function isPipelineRunning(pipeline: StoryVaultClipPipelineRequest): boolean { return pipeline.status === "pending" || pipeline.status === "processing"; }

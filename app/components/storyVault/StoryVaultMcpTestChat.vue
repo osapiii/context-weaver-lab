@@ -133,6 +133,8 @@
 </template>
 
 <script setup lang="ts">
+import { getAI, getGenerativeModel, GoogleAIBackend } from "firebase/ai";
+import { getApp } from "firebase/app";
 import { computed, nextTick, ref, watch } from "vue";
 import type {
   DecodedStoryVaultApplication,
@@ -221,8 +223,6 @@ async function sendMessage(): Promise<void> {
 }
 
 async function askFirebaseAi(question: string): Promise<string> {
-  const [{ getApp }, { getAI, getGenerativeModel, GoogleAIBackend }] =
-    await Promise.all([import("firebase/app"), import("firebase/ai")]);
   const ai = getAI(getApp(), { backend: new GoogleAIBackend() });
   const model = getGenerativeModel(ai, {
     model: "gemini-2.5-flash-lite",

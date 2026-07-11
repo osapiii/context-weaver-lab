@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from google.cloud import firestore, storage
 
-from transcript_normalization import clip_local_transcript, normalize_transcript
+from transcript_normalization import bullet_summary, clip_local_transcript, normalize_transcript
 
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "storyvault-dev")
 ADK_TIMEOUT_SECONDS = int(os.getenv("ADK_TIMEOUT_SECONDS", "1200"))
@@ -183,11 +183,13 @@ def quick_scan(body: dict[str, Any]) -> dict[str, Any]:
             clip = {"id": ref.id, **(ref.get().to_dict() or {})}
             frames = _extract_frames(clip)
             transcript = str(clip.get("transcriptText") or "")
+            summary = bullet_summary(transcript, clip.get("transcriptSegments") or [])
+            summary_items = [line.removeprefix("- ") for line in summary.splitlines() if line.strip()]
             scan = {
-                "title": clip.get("title"), "description": transcript[:300],
-                "operationMemo": transcript[:600],
-                "operationSteps": [line.strip() for line in transcript.splitlines() if line.strip()][:8],
-                "transcriptSummary": transcript[:800], "provider": "storyvault-clip-command",
+                "title": clip.get("title"), "description": summary_items[0] if summary_items else "",
+                "operationMemo": summary,
+                "operationSteps": summary_items,
+                "transcriptSummary": summary, "provider": "storyvault-clip-command",
                 "generatedAt": _now_iso(),
             }
             ref.set({"frameCaptures": frames, "quickScan": scan, "transcriptSummary": scan["transcriptSummary"], "updatedAt": firestore.SERVER_TIMESTAMP}, merge=True)

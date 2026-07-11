@@ -2398,7 +2398,7 @@
                   クリップURLを取得中
                 </div>
                 <div class="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                  <p class="text-xs font-bold uppercase tracking-wide text-slate-500">概要</p>
+                  <p class="text-xs font-bold uppercase tracking-wide text-slate-500">要約</p>
                   <p class="mt-2 text-sm leading-relaxed text-slate-700">
                     {{ clipSummaryText(clip) || "未生成" }}
                   </p>
@@ -2497,14 +2497,6 @@
                       <dd class="mt-1 font-bold text-slate-900">{{ formatBytes(selectedDetailClip.sizeBytes) }}</dd>
                     </div>
                   </dl>
-                </div>
-                <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
-                    概要
-                  </p>
-                  <p class="mt-2 text-sm leading-relaxed text-slate-800">
-                    {{ clipSummaryText(selectedDetailClip, detailVideo) || "未生成" }}
-                  </p>
                 </div>
               </header>
 
@@ -4647,6 +4639,7 @@
 import { getAuth } from "firebase/auth";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
+import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import { getBlob, getDownloadURL } from "firebase/storage";
 import { storageRefForBucketPath } from "@composables/firebase-storage-operations";
@@ -8526,27 +8519,32 @@ async function copyReportBody(): Promise<void> {
 }
 
 function downloadReport(): void {
-  if (!import.meta.client || typeof URL === "undefined" || typeof Blob === "undefined") return;
-  const blob =
-    reportMode.value === "excel"
-      ? new Blob(
-          [
-            XLSX.write(buildOperationVideoReportWorkbook(), {
-              bookType: "xlsx",
-              type: "array",
-            }) as ArrayBuffer,
-          ],
-          { type: reportMimeType.value }
-        )
-      : new Blob([reportBody.value], { type: reportMimeType.value });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${reportFileStem.value}-operation-video-bundle.${reportExtension.value}`;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  if (!import.meta.client || typeof Blob === "undefined") return;
+  const filename = `${reportFileStem.value}-operation-video-bundle.${reportExtension.value}`;
+  try {
+    const blob =
+      reportMode.value === "excel"
+        ? new Blob(
+            [
+              XLSX.write(buildOperationVideoReportWorkbook(), {
+                bookType: "xlsx",
+                type: "array",
+              }) as ArrayBuffer,
+            ],
+            { type: reportMimeType.value }
+          )
+        : new Blob([reportBody.value], { type: reportMimeType.value });
+    saveAs(blob, filename);
+    const formatLabel = reportModes.find((mode) => mode.value === reportMode.value)?.label ?? "";
+    toast.add({ title: `${formatLabel}レポートをダウンロードしました`, color: "success" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    toast.add({
+      title: "レポートをダウンロードできませんでした",
+      description: message,
+      color: "error",
+    });
+  }
 }
 
 function sanitizeFileStem(value: string): string {
@@ -8637,15 +8635,15 @@ function clipSummaryText(
   fallbackVideo?: DecodedStoryVaultClip
 ): string {
   return (
-    clip.transcriptSummary?.trim() ||
     clip.quickScan?.transcriptSummary?.trim() ||
+    clip.transcriptSummary?.trim() ||
     clip.quickScan?.description?.trim() ||
     clip.quickScan?.operationMemo?.trim() ||
-    fallbackVideo?.transcriptSummary?.trim() ||
     fallbackVideo?.quickScan?.transcriptSummary?.trim() ||
+    fallbackVideo?.transcriptSummary?.trim() ||
     fallbackVideo?.quickScan?.description?.trim() ||
     fallbackVideo?.quickScan?.operationMemo?.trim() ||
-    compactPreviewText(clip.transcriptText || fallbackVideo?.transcriptText || "", 420)
+    ""
   );
 }
 

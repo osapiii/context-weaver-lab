@@ -128,7 +128,9 @@ watch(
     if (!newId) return;
     await fileSpaceStore.fetchDocumentsFromFirestore(newId);
   },
-  { immediate: false }
+  // useDefaultFileSpace can resolve synchronously from Pinia state when the
+  // admin layout has already loaded it. Load in that case as well.
+  { immediate: true }
 );
 
 const onRefreshDocuments = async () => {
