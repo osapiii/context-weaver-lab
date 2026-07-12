@@ -1,0 +1,400 @@
+openapi: 3.0.3
+info:
+  title: Merge Video Audio Narration Service
+  description: |
+    動画ファイルと音声ナレーションをタイムスタンプベースで合成し、オプションで字幕を追加するCloud Runマイクロサービス。
+    RequestDoc黄金テンプレート準拠。
+  version: 1.0.0
+  contact:
+    name: StoryVault Platform Team
+
+servers:
+  - url: https://mergevideoaudionarration-7r2wiu5ycq-an.a.run.app
+    description: Cloud Run Production
+
+paths:
+  /merge:
+    post:
+      summary: 動画と音声ナレーションを合成（字幕オプション付き）
+      description: |
+        タイムスタンプに基づいて動画と音声を合成し、オプションで字幕を追加してGCSにアップロードします。
+        Firebase Background関数経由で呼び出されます。
+
+        ## 処理フロー
+        1. ダウンロード: GCSから動画・音声ファイルを取得
+        2. 音声マージ: MoviePyで動画と音声を合成
+        3. 字幕追加（オプション）: captionIsEnabled=trueの場合、字幕を動画に追加
+        4. アップロード: 完成動画をGCSにアップロード
+      operationId: mergeVideoAudioNarration
+      tags:
+        - Merge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例（音声合成のみ）
+                value:
+                  request_id: "req_abc123"
+                  input:
+                    videoBucketName: "storyvault-sandbox"
+                    videoFilePath: "mergeVideoAudioNarration/744_1280x720.mp4"
+                    audioSegments:
+                      - sourceBucketName: "storyvault-sandbox"
+                        sourceFilePath: "mergeVideoAudioNarration/001-sibutomo.mp3"
+                        timestampMs: 0
+                    outputBucketName: "storyvault-sandbox"
+                    outputFilePath: "mergeVideoAudioNarration/apiTestResult/merged_output.mp4"
+                  metadata:
+                    organizationId: "org1"
+                    videoId: "video123"
+                    projectId: "project456"
+                    loggingCollectionId: "requestLogs"
+                    loggingDocumentId: "log_abc123"
+              with_captions:
+                summary: 字幕付き動画生成の使用例
+                value:
+                  request_id: "req_xyz789"
+                  input:
+                    videoBucketName: "storyvault-sandbox"
+                    videoFilePath: "mergeVideoAudioNarration/744_1280x720.mp4"
+                    audioSegments:
+                      - sourceBucketName: "storyvault-sandbox"
+                        sourceFilePath: "mergeVideoAudioNarration/001-sibutomo.mp3"
+                        timestampMs: 0
+                    outputBucketName: "storyvault-sandbox"
+                    outputFilePath: "mergeVideoAudioNarration/apiTestResult/merged_with_captions.mp4"
+                    captionIsEnabled: true
+                    captionSegments:
+                      - timestampMs: 0
+                        text: "原宿さんは歴史にしろ人生にしろ地続きのものが好き"
+                      - timestampMs: 5000
+                        text: "カウントダウンでリセットするのが合わないのかな"
+                  metadata:
+                    organizationId: "org1"
+                    videoId: "video456"
+                    projectId: "project789"
+                    loggingCollectionId: "requestLogs"
+                    loggingDocumentId: "log_xyz789"
+              style_standard_white:
+                summary: スタイル①：標準（白文字・黒枠・下部）
+                value:
+                  request_id: "req_custom123"
+                  input:
+                    videoBucketName: "storyvault-sandbox"
+                    videoFilePath: "mergeVideoAudioNarration/744_1280x720.mp4"
+                    audioSegments:
+                      - sourceBucketName: "storyvault-sandbox"
+                        sourceFilePath: "mergeVideoAudioNarration/001-sibutomo.mp3"
+                        timestampMs: 0
+                    outputBucketName: "storyvault-sandbox"
+                    outputFilePath: "mergeVideoAudioNarration/apiTestResult/merged_custom_style.mp4"
+                    captionIsEnabled: true
+                    captionSegments:
+                      - timestampMs: 0
+                        text: "原宿さんは歴史にしろ人生にしろ地続きのものが好き"
+                      - timestampMs: 5000
+                        text: "カウントダウンでリセットするのが合わないのかな"
+                    captionStyle:
+                      position: "bottom"
+                      fontSize: 60
+                      fontColor: "#FFFF00"
+                      strokeColor: "#000000"
+                      strokeWidth: 4
+                  metadata:
+                    organizationId: "org1"
+                    videoId: "video789"
+                    projectId: "project999"
+                    loggingCollectionId: "requestLogs"
+                    loggingDocumentId: "log_custom123"
+      responses:
+        "200":
+          description: 処理成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessResponse"
+              example:
+                output:
+                  resultBucketName: "storyvault-outputs"
+                  resultFilePath: "organizations/org1/merged/output123.mp4"
+                  processingTime: 45.23
+                processing_time: 45.23
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: ファイル不存在エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: 内部サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /health:
+    get:
+      summary: ヘルスチェック
+      description: サービスの健全性を確認
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        "200":
+          description: サービス正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                  service:
+                    type: string
+                    example: "mergeVideoAudioNarration"
+        "503":
+          description: サービス異常
+
+components:
+  schemas:
+    AudioSegmentInput:
+      type: object
+      required:
+        - sourceBucketName
+        - sourceFilePath
+        - timestampMs
+      properties:
+        sourceBucketName:
+          type: string
+          description: 音声ファイルバケット名
+          minLength: 1
+        sourceFilePath:
+          type: string
+          description: 音声ファイルパス
+          minLength: 1
+        timestampMs:
+          type: integer
+          description: タイムスタンプ（ミリ秒、0以上）
+          minimum: 0
+
+    CaptionSegmentInput:
+      type: object
+      required:
+        - timestampMs
+        - text
+      properties:
+        timestampMs:
+          type: integer
+          description: 字幕表示開始タイムスタンプ（ミリ秒、0以上）
+          minimum: 0
+        text:
+          type: string
+          description: 字幕テキスト（1-500文字）
+          minLength: 1
+          maxLength: 500
+
+    CaptionStyleInput:
+      type: object
+      properties:
+        position:
+          type: string
+          description: 字幕位置（top: 画面上, bottom: 画面下）
+          enum: [top, bottom]
+          default: bottom
+        fontName:
+          type: string
+          description: フォント名（未指定時はデフォルト日本語フォント）
+          nullable: true
+        fontSize:
+          type: integer
+          description: 文字サイズ（10-200）
+          minimum: 10
+          maximum: 200
+          default: 40
+        fontColor:
+          type: string
+          description: 文字色（CSS color名 or #RRGGBB）
+          default: white
+        strokeColor:
+          type: string
+          description: 枠線色（CSS color名 or #RRGGBB）
+          default: black
+        strokeWidth:
+          type: integer
+          description: 枠線太さ（0-10、0=枠線なし）
+          minimum: 0
+          maximum: 10
+          default: 2
+
+    MergeInput:
+      type: object
+      required:
+        - videoBucketName
+        - videoFilePath
+        - audioSegments
+        - outputBucketName
+        - outputFilePath
+      properties:
+        videoBucketName:
+          type: string
+          description: 動画ファイルバケット名
+          minLength: 1
+        videoFilePath:
+          type: string
+          description: 動画ファイルパス（.mp4拡張子）
+          pattern: ".*\\.mp4$"
+        audioSegments:
+          type: array
+          description: 音声セグメントリスト（空でないこと）
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/AudioSegmentInput"
+        outputBucketName:
+          type: string
+          description: 出力バケット名
+          minLength: 1
+        outputFilePath:
+          type: string
+          description: 出力ファイルパス（.mp4拡張子）
+          pattern: ".*\\.mp4$"
+        captionIsEnabled:
+          type: boolean
+          description: 字幕機能を有効化
+          default: false
+        captionSegments:
+          type: array
+          description: 字幕セグメントリスト（captionIsEnabled=trueの場合に必須）
+          items:
+            $ref: "#/components/schemas/CaptionSegmentInput"
+        captionStyle:
+          $ref: "#/components/schemas/CaptionStyleInput"
+          description: 字幕スタイル設定（オプション、未指定時はデフォルトスタイル適用）
+
+    MergeMetadata:
+      type: object
+      required:
+        - organizationId
+        - videoId
+        - loggingCollectionId
+        - loggingDocumentId
+      properties:
+        organizationId:
+          type: string
+          description: 組織ID（マルチテナント対応、必須）
+          minLength: 1
+        videoId:
+          type: string
+          description: 動画ID
+          minLength: 1
+        projectId:
+          type: string
+          description: プロジェクトID（オプション）
+          nullable: true
+        loggingCollectionId:
+          type: string
+          description: ログ保存先Collection
+          minLength: 1
+        loggingDocumentId:
+          type: string
+          description: ログ保存先DocumentID
+          minLength: 1
+
+    ProcessRequest:
+      type: object
+      required:
+        - request_id
+        - input
+        - metadata
+      properties:
+        request_id:
+          type: string
+          description: リクエストID
+          minLength: 1
+        input:
+          $ref: "#/components/schemas/MergeInput"
+        metadata:
+          $ref: "#/components/schemas/MergeMetadata"
+
+    MergeOutput:
+      type: object
+      required:
+        - resultBucketName
+        - resultFilePath
+        - processingTime
+      properties:
+        resultBucketName:
+          type: string
+          description: 結果ファイルバケット名
+        resultFilePath:
+          type: string
+          description: 結果ファイルパス
+        processingTime:
+          type: number
+          format: float
+          description: 処理時間（秒）
+          minimum: 0
+
+    ProcessResponse:
+      type: object
+      required:
+        - output
+        - processing_time
+      properties:
+        output:
+          $ref: "#/components/schemas/MergeOutput"
+        processing_time:
+          type: number
+          format: float
+          description: 処理時間（メタデータ）
+          minimum: 0
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - error
+      properties:
+        status:
+          type: string
+          enum: ["error"]
+          description: レスポンスステータス（常に "error"）
+        request_id:
+          type: string
+          description: リクエストID（ログトレース用）
+          nullable: true
+        error:
+          type: object
+          required:
+            - type
+            - message
+          properties:
+            type:
+              type: string
+              description: エラータイプ（InternalError, ValidationError, ProcessingError, etc.）
+            message:
+              type: string
+              description: 人間可読なエラーメッセージ
+            details:
+              type: object
+              description: エラー詳細情報（オプション）
+              additionalProperties: true
+
+tags:
+  - name: Merge
+    description: 動画・音声マージ操作
+  - name: Health
+    description: ヘルスチェック

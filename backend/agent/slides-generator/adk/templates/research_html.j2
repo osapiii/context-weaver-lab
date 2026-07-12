@@ -1,0 +1,1887 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ research.theme }} | Research Report</title>
+<meta name="generator" content="enostech-slides v13 (research-first pipeline)">
+<style>
+  /* ─────────────────────────────────────────────────────────
+   * McKinsey 風: neutral 主軸 + amber 1 色 sparingly.
+   * 派手なグラデや色面は禁止. 文字と空白で構造を作る.
+   * ───────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: calc(var(--header-h) + 14px); }
+
+  /* === design tokens === */
+  :root {
+    --ink:        #1e293b;
+    --ink-soft:   #334155;
+    --chip:       #334155;
+    --muted:      #475569;
+    --subtle:     #64748b;
+    --faint:      #94a3b8;
+    --line:       #e2e8f0;
+    --line-soft:  #f1f5f9;
+    --paper:      #f8fafc;
+    --white:      #ffffff;
+    --amber:      #b45309;
+    --amber-bright:#f59e0b;
+    --amber-50:   #fffbeb;
+    --amber-100:  #fef3c7;
+    --cite:       #2563eb;
+    --cite-dark:  #1d4ed8;
+    --radius-sm:  3px;
+    --radius:     6px;
+    --radius-lg:  10px;
+    --shadow-sm:  0 1px 2px rgba(15,23,42,.05), 0 1px 3px rgba(15,23,42,.04);
+    --shadow-md:  0 6px 22px rgba(15,23,42,.10);
+    --shadow-lg:  0 14px 40px rgba(15,23,42,.16);
+    --transition: .18s ease;
+    --header-h:   54px;
+    --sidebar-w:  312px;
+  }
+
+  /* === a11y: skip link + focus ring === */
+  .skip-link {
+    position: absolute; left: 12px; top: -48px;
+    z-index: 500;
+    background: var(--chip); color: #fff;
+    padding: 8px 14px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 700; border-bottom: none;
+    transition: top var(--transition);
+  }
+  .skip-link:focus { top: 12px; }
+  :focus-visible {
+    outline: 2px solid var(--cite);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { transition: none !important; animation: none !important; }
+  }
+  body {
+    margin: 0;
+    font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.8;
+    color: #1e293b;
+    background: #ffffff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  a { color: #b45309; text-decoration: none; border-bottom: 1px solid rgba(180, 83, 9, 0.25); transition: border-color .15s; }
+  a:hover { border-bottom-color: #b45309; }
+
+  /* === inline citation link (本文中の (N) → 参照 URL) === */
+  a.cite {
+    color: #2563eb;
+    border-bottom: 1px solid rgba(37, 99, 235, 0.32);
+    font-feature-settings: "tnum" 1;
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 0 1px;
+  }
+  a.cite:hover { color: #1d4ed8; border-bottom-color: #1d4ed8; }
+
+  /* === concern を section と同じ構造で出すための差分 === */
+  .section-id-concern { border-color: #f59e0b; color: #92400e; }
+  .concerns-lead {
+    scroll-margin-top: 24px;
+    margin: 56px 0 0;
+    padding-top: 32px;
+    border-top: 2px solid #1e293b;
+  }
+  .concerns-lead + .section { border-top: none; padding-top: 16px; }
+  .concerns-lead .tldr-pill.concerns-pill { background: #f59e0b; }
+
+  /* === layout === */
+  .layout {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: 100vh;
+    max-width: none;
+    margin: 0;
+    padding-top: calc(var(--header-h) + 3px);
+    transition: grid-template-columns .2s ease;
+  }
+  .layout.sidebar-collapsed { grid-template-columns: 0 1fr; }
+  .layout.sidebar-collapsed .sidebar { opacity: 0; pointer-events: none; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar {
+      position: fixed; top: calc(var(--header-h) + 3px); left: 0; bottom: 0;
+      width: var(--sidebar-w); max-width: 86vw; height: auto;
+      z-index: 100; transform: translateX(-100%);
+      transition: transform var(--transition);
+      box-shadow: var(--shadow-lg);
+    }
+    .sidebar.open { transform: none; }
+  }
+
+  /* === sidebar (TOC) === */
+  .sidebar {
+    position: sticky;
+    top: calc(var(--header-h) + 3px);
+    height: calc(100vh - var(--header-h) - 3px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 22px 18px 40px;
+    border-right: 1px solid #e2e8f0;
+    background: #f8fafc;
+  }
+  .sidebar-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin: 0 0 14px;
+  }
+  .toc-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 2px; }
+  .toc-list a {
+    display: block;
+    padding: 7px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #334155;
+    border-bottom: none;
+    line-height: 1.5;
+    transition: background .12s, color .12s;
+  }
+  .toc-list a:hover { background: #e2e8f0; color: #1e293b; }
+  .toc-q-id {
+    display: inline-block;
+    font-weight: 700;
+    color: #b45309;
+    margin-right: 6px;
+    font-feature-settings: "tnum" 1;
+    min-width: 22px;
+  }
+  .toc-divider {
+    display: block;
+    height: 1px;
+    background: #e2e8f0;
+    margin: 4px 10px;
+  }
+
+  /* === main === */
+  .main { padding: 28px 44px 80px; max-width: none; }
+  @media (max-width: 700px) {
+    .main { padding: 20px 18px 64px; }
+  }
+
+  /* === header === */
+  .deck-meta {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: #64748b;
+    margin-bottom: 18px;
+    font-feature-settings: "tnum" 1;
+    text-transform: uppercase;
+  }
+  .pill {
+    display: inline-flex; align-items: center;
+    background: var(--chip);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    flex-shrink: 0;
+  }
+  .sep { color: #cbd5e1; }
+  h1.title {
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1.25;
+    color: #1e293b;
+    margin: 0 0 20px;
+    letter-spacing: -0.015em;
+  }
+
+  /* === summary card (落ち着いた紙風) === */
+  .summary-card {
+    background: #f8fafc;
+    border-left: 3px solid #1e293b;
+    padding: 20px 24px;
+    margin: 20px 0 40px;
+  }
+  .summary-card h3 {
+    margin: 0 0 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #475569;
+  }
+  .summary-card .intent-text {
+    font-size: 16px;
+    color: #1e293b;
+    margin: 0 0 8px;
+    line-height: 1.7;
+    font-weight: 500;
+  }
+  .summary-card .reader-text {
+    font-size: 12px;
+    color: #64748b;
+    margin: 0;
+    letter-spacing: 0.02em;
+  }
+
+  /* === References (冒頭) === */
+  .references-top {
+    margin: 0 0 48px;
+    padding: 20px 24px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+  }
+  .references-top .ref-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .references-top h2 {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #475569;
+  }
+  .references-top .ref-count {
+    font-size: 11px;
+    color: #94a3b8;
+    font-feature-settings: "tnum" 1;
+  }
+  .references-list {
+    list-style: none;
+    counter-reset: ref-counter;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 24px;
+  }
+  @media (max-width: 700px) {
+    .references-list { grid-template-columns: 1fr; }
+  }
+  .references-list li {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: #334155;
+    padding: 6px 0;
+    border-top: 1px solid #f1f5f9;
+    counter-increment: ref-counter;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .references-list li:first-child,
+  .references-list li:nth-child(2) { border-top: none; }
+  .references-list .ref-id {
+    flex-shrink: 0;
+    font-weight: 700;
+    color: #b45309;
+    font-feature-settings: "tnum" 1;
+    min-width: 22px;
+  }
+  .references-list .ref-title {
+    flex: 1;
+    min-width: 0;
+  }
+  .references-list .ref-url {
+    display: inline-block;
+    margin-left: 4px;
+    color: #94a3b8;
+    font-size: 11px;
+    border-bottom: none;
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  .references-list .ref-url:hover { color: #b45309; }
+  .references-list li:target {
+    background: #fef3c7;
+    animation: ref-flash 1.6s ease-out;
+  }
+  @keyframes ref-flash {
+    0% { background: #fde68a; }
+    100% { background: transparent; }
+  }
+
+  /* === ref badge (inline) === */
+  .ref-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 17px;
+    padding: 0 6px;
+    background: #f8fafc;
+    color: #b45309;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    font-feature-settings: "tnum" 1;
+    text-decoration: none;
+    line-height: 1;
+    transition: background .15s, border-color .15s;
+  }
+  .ref-badge:hover {
+    background: #fef3c7;
+    border-color: #fde68a;
+    color: #92400e;
+  }
+  .section-refs {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: auto;
+    align-items: center;
+  }
+
+  /* === TL;DR (Quick Answers) — restrained === */
+  .tldr {
+    scroll-margin-top: 24px;
+    margin: 0 0 56px;
+  }
+  .tldr-head {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #1e293b;
+  }
+  .tldr-pill {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffffff;
+    background: #1e293b;
+    padding: 4px 10px;
+    border-radius: 2px;
+    letter-spacing: 0.14em;
+  }
+  .tldr-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569;
+    margin: 0;
+    letter-spacing: 0.04em;
+  }
+  .tldr-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .tldr-list > li {
+    padding: 18px 4px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .tldr-list > li:last-child { border-bottom: none; }
+  .tldr-link {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    color: #1e293b;
+    border-bottom: none;
+    font-weight: 700;
+  }
+  .tldr-link:hover { border-bottom: none; color: #b45309; }
+  .tldr-id {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 800;
+    color: #1e293b;
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    padding: 1px 7px;
+    border-radius: 2px;
+    font-feature-settings: "tnum" 1;
+    letter-spacing: 0.04em;
+  }
+  .tldr-id-concern {
+    border-color: #fde68a;
+    color: #92400e;
+    background: #fffbeb;
+  }
+  .tldr-q {
+    font-size: 15px;
+    line-height: 1.5;
+    color: #1e293b;
+  }
+  .tldr-a {
+    margin: 6px 0 0 38px;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: #475569;
+  }
+  .tldr-refs {
+    margin: 8px 0 0 38px;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  /* === section === */
+  .section {
+    scroll-margin-top: 24px;
+    padding: 40px 0;
+    border-top: 1px solid #e2e8f0;
+  }
+  .section:first-of-type { border-top: none; padding-top: 0; }
+  .section-head {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+    margin: 0 0 16px;
+  }
+  .section-id {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #1e293b;
+    background: transparent;
+    border: 1.5px solid #1e293b;
+    padding: 3px 9px;
+    border-radius: 2px;
+    font-feature-settings: "tnum" 1;
+  }
+  .section-kind {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+    border-radius: 3px;
+    padding: 2px 8px;
+  }
+  .section:has(.section-id-concern) .section-kind {
+    color: #b45309;
+    border-color: #fcd9a6;
+    background: #fffbeb;
+  }
+  .section-question {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: #1e293b;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+
+  /* === section answer === */
+  .section-answer {
+    margin: 16px 0 24px;
+    padding: 0 0 0 18px;
+    border-left: 3px solid #1e293b;
+    font-size: 15.5px;
+    line-height: 1.75;
+    color: #1e293b;
+  }
+  .section-answer-label {
+    font-weight: 800;
+    color: #b45309;
+    margin-right: 6px;
+    letter-spacing: 0.04em;
+  }
+  .section-answer-text {
+    font-weight: 500;
+  }
+
+  /* === SVG figure === */
+  .svg-figure {
+    margin: 24px 0 28px;
+    padding: 20px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+  }
+  .svg-figure svg { display: block; width: 100%; height: auto; max-height: 560px; }
+  /* 図のホバー操作 (コピー / ダウンロード) */
+  .svg-figure, .next-action-svg { position: relative; }
+  .fig-actions {
+    position: absolute; top: 12px; right: 12px; z-index: 5;
+    display: flex; gap: 6px;
+    opacity: 0; transform: translateY(-3px); pointer-events: none;
+    transition: opacity var(--transition), transform var(--transition);
+  }
+  .svg-figure:hover .fig-actions,
+  .next-action-svg:hover .fig-actions,
+  .fig-actions:focus-within { opacity: 1; transform: none; pointer-events: auto; }
+  @media (hover: none) { .fig-actions { opacity: 1; pointer-events: auto; transform: none; } }
+  .fig-btn {
+    font-family: inherit; font-size: 11px; font-weight: 700; color: var(--ink);
+    background: rgba(255,255,255,.95); border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 11px; cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
+  }
+  .fig-btn:hover { background: var(--amber-50); border-color: #fcd9a6; color: var(--amber); }
+  .fig-btn.done { background: var(--amber); border-color: var(--amber); color: #fff; }
+  .svg-figure .figcaption {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #64748b;
+    text-align: center;
+    font-style: italic;
+    letter-spacing: 0.02em;
+  }
+
+  /* === body markdown === */
+  .body-md { font-size: 15.5px; line-height: 1.85; color: #1e293b; }
+  .body-md p { margin: 0 0 1em; }
+  .body-md strong { color: #1e293b; font-weight: 700; }
+  .body-md em { color: #475569; font-style: italic; }
+  .body-md code {
+    background: #f1f5f9;
+    padding: 0.1em 0.4em;
+    border-radius: 2px;
+    font-size: 0.88em;
+    color: #1e293b;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  .body-md ul, .body-md ol { padding-left: 1.5em; margin: 0.5em 0 1.2em; }
+  .body-md li { margin: 0.3em 0; }
+  .body-md blockquote {
+    margin: 1.2em 0;
+    padding: 10px 22px;
+    border-left: 3px solid #cbd5e1;
+    background: transparent;
+    color: #475569;
+    font-style: italic;
+  }
+  .body-md table { width: 100%; border-collapse: collapse; margin: 1.5em 0; font-size: 13.5px; }
+  .body-md th, .body-md td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+  }
+  .body-md th {
+    background: #f8fafc;
+    font-weight: 700;
+    color: #1e293b;
+    border-bottom: 2px solid #1e293b;
+    letter-spacing: 0.02em;
+  }
+  .body-md td { color: #1e293b; }
+
+  /* === concerns (懸念点への回答) === */
+  .concerns {
+    scroll-margin-top: 24px;
+    margin-top: 56px;
+    padding: 32px 0 24px;
+    border-top: 2px solid #1e293b;
+  }
+  .concerns .section-head {
+    margin-bottom: 6px;
+  }
+  .concerns-pill {
+    background: #f59e0b !important;
+    color: #ffffff !important;
+    border: none !important;
+  }
+  .concerns-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 8px 0 4px;
+  }
+  .concerns-intro {
+    font-size: 13.5px;
+    color: #64748b;
+    margin: 0 0 20px;
+  }
+  .concerns-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .concern-card {
+    background: #fffbeb;
+    border-left: 3px solid #f59e0b;
+    padding: 18px 22px;
+    border-radius: 2px;
+  }
+  .concern-head {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .concern-id {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 800;
+    color: #92400e;
+    background: transparent;
+    border: 1px solid #fbbf24;
+    padding: 1px 7px;
+    border-radius: 2px;
+    font-feature-settings: "tnum" 1;
+  }
+  .concern-text {
+    font-size: 15.5px;
+    font-weight: 700;
+    color: #1e293b;
+  }
+  .concern-body {
+    font-size: 14.5px;
+    line-height: 1.75;
+    color: #1e293b;
+  }
+  .concern-body p { margin: 0 0 0.6em; }
+  .concern-body p:last-child { margin-bottom: 0; }
+  .concern-related {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed #fde68a;
+    font-size: 11.5px;
+    color: #92400e;
+  }
+  .concern-related a {
+    color: #b45309;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(180, 83, 9, 0.3);
+  }
+
+  /* === Next Action (フローチャート中心) === */
+  .next-action {
+    scroll-margin-top: 24px;
+    margin-top: 72px;
+    padding: 48px 0 0;
+    border-top: 4px double #1e293b;
+  }
+  .next-action-hero {
+    margin-bottom: 32px;
+  }
+  .next-action-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+    color: #ffffff;
+    background: #1e293b;
+    padding: 5px 12px;
+    border-radius: 2px;
+    letter-spacing: 0.16em;
+    margin-bottom: 14px;
+  }
+  .next-action-title {
+    font-size: 30px;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0 0 14px;
+    letter-spacing: -0.01em;
+  }
+  .next-action-summary {
+    font-size: 15.5px;
+    line-height: 1.85;
+    color: #334155;
+    max-width: 720px;
+    margin: 0;
+  }
+  .next-action-svg {
+    margin: 32px 0;
+    padding: 24px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+  }
+  .next-action-svg svg { display: block; width: 100%; height: auto; max-height: 600px; }
+
+  /* paths を SVG の下の補助テキストとして表示 (1 列の細長カード) */
+  .paths-section {
+    margin-top: 36px;
+  }
+  .paths-section-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  .paths-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .path-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1.5fr;
+    gap: 18px;
+    align-items: start;
+    padding: 18px 20px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    transition: border-color var(--transition), box-shadow var(--transition);
+  }
+  .path-row:hover { border-color: #fcd9a6; box-shadow: var(--shadow-md); }
+  @media (max-width: 700px) {
+    .path-row { grid-template-columns: 1fr; gap: 10px; }
+    .path-arrow { transform: rotate(90deg); }
+  }
+  .path-cell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .path-label {
+    align-self: flex-start;
+    font-size: 10px; font-weight: 800; letter-spacing: .06em;
+    padding: 3px 10px; border-radius: 999px;
+  }
+  .path-label-if { background: var(--line-soft); color: var(--muted); }
+  .path-label-then { background: var(--chip); color: #fff; }
+  .path-text { margin: 0; font-size: 14px; line-height: 1.7; }
+  .path-condition-text { color: var(--ink-soft); }
+  .path-action-text { color: var(--ink); font-weight: 700; }
+  .path-arrow { align-self: center; color: var(--faint); font-size: 18px; }
+  .path-refs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
+  .path-qref {
+    font-size: 10px; font-weight: 800; color: var(--chip);
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px;
+    border-bottom: none; text-decoration: none;
+  }
+  .path-qref:hover { color: var(--amber); border-color: #fcd9a6; }
+  .path-arrow {
+    color: #94a3b8;
+    font-size: 18px;
+    line-height: 1;
+    font-weight: 700;
+  }
+  .path-meta {
+    font-size: 11px;
+    color: #64748b;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .path-meta a {
+    color: #b45309;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(180, 83, 9, 0.3);
+  }
+
+  /* === footer === */
+  .footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 11px;
+    color: #94a3b8;
+    text-align: center;
+    letter-spacing: 0.04em;
+  }
+  .footer .brand {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-weight: 700;
+    color: #475569;
+    margin-bottom: 4px;
+  }
+  .footer .brand .dot {
+    display: inline-block; width: 6px; height: 6px;
+    background: #b45309;
+    border-radius: 50%;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+   * UX enhancements (v13.3)
+   * ════════════════════════════════════════════════════════════ */
+
+  /* fixed top header (compact) */
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: var(--header-h); z-index: 240;
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 18px;
+    background: rgba(255,255,255,.94);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+  .topbar-h1 {
+    font-size: 18px; font-weight: 800; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    letter-spacing: -.01em; line-height: 1.2;
+  }
+  .topbar-meta {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 11px; color: var(--subtle); white-space: nowrap;
+    font-feature-settings: "tnum" 1;
+  }
+  .meta-date { color: var(--faint); margin-right: 2px; }
+  .meta-chip {
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: 999px; padding: 3px 10px;
+  }
+  @media (max-width: 1100px) { .topbar-meta { display: none; } }
+
+  /* ヘッダー内検索 */
+  .topbar-search {
+    display: flex; align-items: center; gap: 4px; flex-shrink: 0;
+    background: var(--white); border: 1px solid var(--line); border-radius: 999px;
+    padding: 3px 6px 3px 11px;
+    transition: border-color var(--transition), box-shadow var(--transition);
+  }
+  .topbar-search:focus-within { border-color: var(--amber-bright); box-shadow: 0 0 0 3px rgba(245,158,11,.12); }
+  .topbar-search > svg { width: 14px; height: 14px; color: var(--faint); flex-shrink: 0; }
+  #search-input {
+    border: 0; outline: none; background: transparent; font-family: inherit;
+    font-size: 12.5px; color: var(--ink); width: 150px; padding: 3px 2px;
+  }
+  #search-input::placeholder { color: var(--faint); }
+  #search-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+  .search-count {
+    font-size: 11px; color: var(--subtle); white-space: nowrap;
+    font-feature-settings: "tnum" 1;
+  }
+  .search-nav {
+    width: 22px; height: 22px; border: 0; background: transparent; cursor: pointer;
+    color: var(--subtle); border-radius: 5px; font-size: 9px;
+    display: none; align-items: center; justify-content: center;
+  }
+  .search-nav:hover { background: var(--line-soft); color: var(--ink); }
+  .topbar-search.has-hits .search-nav { display: inline-flex; }
+  @media (max-width: 820px) { .topbar-search { display: none; } }
+
+  mark.search-hit { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
+  mark.search-hit.current { background: var(--amber-bright); color: #fff; }
+
+  /* reading progress (just under header) */
+  #read-progress {
+    position: fixed; top: var(--header-h); left: 0; right: 0;
+    height: 3px; z-index: 200;
+    background: transparent; pointer-events: none;
+  }
+  #read-progress-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--amber-bright), var(--amber));
+    transition: width .1s linear;
+  }
+
+  /* nav toggle (header, all sizes: desktop=collapse, mobile=drawer) */
+  #nav-toggle {
+    flex-shrink: 0;
+    width: 38px; height: 38px; border-radius: var(--radius);
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--line);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background var(--transition), border-color var(--transition);
+  }
+  #nav-toggle:hover { background: var(--line-soft); }
+  #nav-toggle svg { width: 20px; height: 20px; }
+
+  #btt {
+    position: fixed; bottom: 28px; right: 28px; z-index: 300;
+    width: 46px; height: 46px; border-radius: 50%;
+    background: var(--chip); color: #fff; border: 0;
+    font-size: 20px; line-height: 1; cursor: pointer;
+    box-shadow: var(--shadow-md);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transform: translateY(8px); pointer-events: none;
+    transition: opacity var(--transition), transform var(--transition), background var(--transition);
+  }
+  #btt.show { opacity: 1; transform: none; pointer-events: auto; }
+  #btt:hover { background: var(--amber); }
+
+  /* mobile nav backdrop */
+  #nav-backdrop {
+    position: fixed; inset: 0; z-index: 90;
+    background: rgba(15,23,42,.4); opacity: 0; pointer-events: none;
+    transition: opacity var(--transition);
+  }
+  #nav-backdrop.show { opacity: 1; pointer-events: auto; }
+
+  /* === sidebar accordion (疑問 / 懸念 を区切って表示) === */
+  .toc { display: flex; flex-direction: column; }
+  .toc-tools {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin: 16px 0 4px; padding-left: 2px;
+  }
+  .toc-tools-label {
+    font-size: 10px; font-weight: 700; letter-spacing: .14em; color: var(--subtle);
+  }
+  .toc-grouplabel {
+    font-size: 10px; font-weight: 800; letter-spacing: .14em;
+    color: var(--subtle); margin: 14px 0 8px; padding: 9px 2px 0;
+    border-top: 1px solid var(--line);
+  }
+  .toc-grouplabel::before {
+    content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 2px;
+    background: var(--chip); margin-right: 7px; vertical-align: middle;
+  }
+  .toc-grouplabel-concern::before { background: var(--amber); }
+  .toc-bulk {
+    font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: .02em;
+    color: var(--amber); background: transparent; border: 1px solid #fcd9a6;
+    border-radius: 999px; padding: 3px 10px; cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+  }
+  .toc-bulk:hover { background: var(--amber-50); }
+  .toc-flat {
+    display: flex; align-items: center;
+    padding: 9px 10px; border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 700; color: var(--ink-soft);
+    border-bottom: none; border-left: 2px solid transparent;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .toc-flat:hover { background: var(--line-soft); color: var(--ink); }
+  .toc-flat.active { background: var(--amber-50); color: var(--ink); border-left-color: var(--amber-bright); }
+  .toc-acc {
+    margin-bottom: 5px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+    background: var(--white); overflow: hidden;
+    transition: border-color var(--transition), box-shadow var(--transition);
+  }
+  .toc-acc:hover { border-color: #fcd9a6; }
+  .toc-acc.active { border-color: var(--amber-bright); box-shadow: 0 1px 6px rgba(245,158,11,.12); }
+  .toc-head {
+    display: flex; align-items: stretch; width: 100%;
+    background: var(--white);
+    transition: background var(--transition);
+  }
+  .toc-head:hover { background: #fff8ec; }
+  .toc-acc.active .toc-head { background: var(--amber-50); }
+  .toc-main {
+    flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 8px;
+    padding: 9px 6px 9px 10px; text-align: left; border-bottom: none;
+    text-decoration: none; color: inherit;
+  }
+  .toc-toggle {
+    flex-shrink: 0; width: 30px; border: 0; background: transparent;
+    cursor: pointer; color: var(--faint); display: flex; align-items: flex-start;
+    justify-content: center; padding: 11px 6px 0 0;
+  }
+  .toc-toggle:hover { color: var(--amber); }
+  .toc-id {
+    flex-shrink: 0; min-width: 22px; font-size: 11px; font-weight: 800;
+    color: var(--subtle); font-feature-settings: "tnum" 1; margin-top: 2px;
+  }
+  .toc-id-concern { color: var(--amber); }
+  .toc-acc.active .toc-id, .toc-head:hover .toc-id { color: var(--amber); }
+  .toc-label {
+    flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; line-height: 1.5; color: var(--ink-soft);
+    white-space: normal; word-break: break-word;
+  }
+  .toc-chev {
+    display: inline-block; font-size: 10px; color: inherit; transition: transform .18s;
+  }
+  .toc-acc.collapsed .toc-chev { transform: rotate(-90deg); }
+  .toc-body { padding: 2px 12px 11px; border-top: 1px solid var(--line-soft); background: var(--paper); }
+  .toc-acc.collapsed .toc-body { display: none; }
+  .toc-ans { margin: 9px 0 8px; font-size: 11.5px; line-height: 1.65; color: var(--muted); }
+  .toc-ans a.cite { font-size: 11.5px; }
+  .toc-jump { font-size: 11px; font-weight: 700; color: var(--amber); border-bottom: none; }
+  .toc-jump:hover { border-bottom: 1px solid var(--amber); }
+
+  /* category divider (本文中: 疑問 → 懸念 の切り替え) */
+  .cat-divider {
+    scroll-margin-top: 24px;
+    margin: 48px 0 0;
+    padding: 18px 0 0;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    color: var(--subtle);
+  }
+  .cat-divider::before {
+    content: ""; display: inline-block;
+    width: 8px; height: 8px; border-radius: 2px;
+    background: var(--amber-bright);
+    margin-right: 8px; vertical-align: middle;
+  }
+
+  /* heading anchor affordance */
+  .section, .tldr, .next-action, .concerns-lead, .references-top { position: relative; }
+  .head-anchor {
+    opacity: 0; text-decoration: none; border-bottom: none;
+    color: var(--faint); font-weight: 700; margin-left: 8px;
+    transition: opacity var(--transition), color var(--transition);
+    font-size: .8em;
+  }
+  .section:hover .head-anchor,
+  .next-action:hover .head-anchor { opacity: 1; }
+  .head-anchor:hover { color: var(--amber); border-bottom: none; }
+  @media (hover: none) { .head-anchor { display: none; } }
+
+  /* citation tooltip cursor hint */
+  a.cite { cursor: help; }
+
+  /* card / figure polish (subtle depth + hover lift) */
+  .svg-figure, .next-action-svg, .references-top {
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition), border-color var(--transition);
+  }
+  .svg-figure:hover, .next-action-svg:hover { box-shadow: var(--shadow-md); }
+  .path-row { box-shadow: var(--shadow-sm); }
+  .path-row:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+
+  /* TL;DR rows: hover affordance */
+  .tldr-list > li { transition: background var(--transition); border-radius: var(--radius); }
+  .tldr-list > li:hover { background: var(--paper); }
+
+  /* sidebar scrollbar (webkit) */
+  .sidebar::-webkit-scrollbar { width: 7px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+  .sidebar::-webkit-scrollbar-thumb:hover { background: var(--faint); }
+
+  /* ════════════════════════════════════════════════════════════
+   * 共通パネル: 左上に丸アイコンのボックス (質問 / 答え / ゴール)
+   * ════════════════════════════════════════════════════════════ */
+  .panel {
+    position: relative;
+    border-radius: 14px;
+    padding: 20px 24px;
+    margin: 0 0 16px;
+  }
+  .panel-ic {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 28px; padding: 0 14px; border-radius: 999px;
+    font-size: 12px; font-weight: 800; line-height: 1; color: #fff; white-space: nowrap;
+    margin-bottom: 12px; box-shadow: 0 2px 6px rgba(30,41,59,.14);
+    font-feature-settings: "tnum" 1;
+  }
+  .panel-ic svg { width: 14px; height: 14px; }
+  @media (max-width: 700px) {
+    .panel { padding: 18px; }
+  }
+
+  /* 質問パネル */
+  .panel-q { background: var(--white); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
+  .panel-ic-q { background: var(--chip); }
+  .panel-ic-concern { background: var(--amber); }
+  .panel-title { font-size: 22px; font-weight: 800; line-height: 1.5; color: var(--ink); letter-spacing: -.01em; }
+
+  /* 答えパネル */
+  .panel-a { background: var(--amber-50); border: 1px solid #fbe2bf; }
+  .panel-ic-a { background: var(--amber-bright); }
+  .panel-a .panel-body { font-size: 16px; line-height: 1.95; color: var(--ink-soft); }
+
+  /* ゴールパネル (このレポートの目的) */
+  .panel-goal { background: #f5f8fc; border: 1px solid #e4ebf4; margin-bottom: 36px; }
+  .panel-ic-goal { background: #dc2626; }
+  .panel-goal-text { font-size: 19px; font-weight: 700; line-height: 1.8; color: var(--ink); }
+  .panel-reader { margin-top: 13px; padding-top: 12px; border-top: 1px dashed #d7e0ee; font-size: 13px; line-height: 1.75; color: var(--subtle); }
+
+  /* section は枠線をやめてパネルで構造化、間隔のみ */
+  .section { border-top: none; padding-top: 0; margin-top: 44px; }
+  .section:first-of-type { margin-top: 8px; }
+
+  /* === JSON デバッグボタン + modal === */
+  .json-btn {
+    flex-shrink: 0; margin-left: 4px;
+    font-family: ui-monospace, monospace; font-size: 13px; font-weight: 700;
+    color: var(--subtle); background: transparent; border: 1px solid var(--line);
+    border-radius: 6px; width: 34px; height: 30px; cursor: pointer;
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+  }
+  .json-btn:hover { color: var(--ink); background: var(--line-soft); border-color: var(--faint); }
+  .json-modal { position: fixed; inset: 0; z-index: 400; display: none; }
+  .json-modal.open { display: block; }
+  .json-modal-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.5); }
+  .json-modal-panel {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: min(900px, 92vw); max-height: 84vh; display: flex; flex-direction: column;
+    background: var(--white); border-radius: 12px; box-shadow: var(--shadow-lg); overflow: hidden;
+  }
+  .json-modal-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid var(--line); background: var(--paper);
+  }
+  .json-modal-title { font-size: 14px; font-weight: 800; color: var(--ink); }
+  .json-modal-actions { display: flex; gap: 8px; }
+  .json-modal-btn {
+    font-family: inherit; font-size: 12px; font-weight: 700; color: var(--ink);
+    background: var(--white); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 14px; cursor: pointer; transition: background var(--transition);
+  }
+  .json-modal-btn:hover { background: var(--line-soft); }
+  #json-copy { color: #fff; background: var(--amber); border-color: var(--amber); }
+  #json-copy:hover { background: #92400e; }
+  .json-view {
+    margin: 0; padding: 16px 18px; overflow: auto; flex: 1;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+    font-size: 12px; line-height: 1.6; color: var(--ink-soft);
+    white-space: pre; tab-size: 2;
+  }
+
+  /* === 1問1答（全体像）overview === */
+  .qa-overview {
+    scroll-margin-top: calc(var(--header-h) + 14px);
+    margin: 0 0 36px; padding: 24px 26px;
+    border: 1px solid var(--line); border-radius: 14px;
+    background: var(--white); box-shadow: var(--shadow-sm);
+  }
+  .overview-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .overview-title { font-size: 17px; font-weight: 800; color: var(--ink); }
+  .overview-subhead { font-size: 13px; font-weight: 800; color: var(--muted); margin: 18px 0 8px; }
+  .overview-tablewrap { overflow-x: auto; }
+  .qa-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .qa-table th, .qa-table td {
+    text-align: left; vertical-align: top; padding: 11px 14px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .qa-table thead th {
+    font-size: 11px; font-weight: 800; letter-spacing: .04em; color: var(--subtle);
+    background: var(--paper); border-bottom: 1px solid var(--line);
+  }
+  .qa-th-id, .qa-td-id { width: 52px; white-space: nowrap; }
+  .qa-th-q, .qa-td-q { width: 32%; }
+  .qa-table tbody tr { transition: background .12s; }
+  .qa-table tbody tr:hover { background: #fcfdff; }
+  .qa-idlink {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 30px; height: 22px; padding: 0 7px; border-radius: 999px;
+    background: var(--chip); color: #fff; font-size: 10px; font-weight: 800;
+    border-bottom: none; font-feature-settings: "tnum" 1;
+  }
+  .qa-idlink-concern { background: var(--amber); }
+  .qa-qlink { color: var(--ink); font-weight: 700; line-height: 1.55; border-bottom: none; }
+  .qa-table tbody tr:hover .qa-qlink { color: var(--amber); }
+  .qa-td-a { color: var(--muted); line-height: 1.75; }
+  .qa-td-a a.cite { font-size: 13px; }
+  @media (max-width: 700px) {
+    .qa-table th, .qa-table td { padding: 9px 8px; }
+    .qa-th-q, .qa-td-q { width: 38%; }
+  }
+
+  /* PDFボタン (json-btn と同系の控えめスタイル) */
+  .pdf-btn {
+    flex-shrink: 0; margin-left: 4px;
+    font-family: inherit; font-size: 11px; font-weight: 800; letter-spacing: .04em;
+    color: var(--muted); background: transparent; border: 1px solid var(--line);
+    border-radius: 6px; height: 30px; padding: 0 11px; cursor: pointer;
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+  }
+  .pdf-btn:hover { color: var(--ink); background: var(--line-soft); border-color: var(--faint); }
+
+  /* 印刷専用ヘッダー (画面では非表示) */
+  .print-head { display: none; }
+
+  @media print {
+    @page { margin: 14mm 12mm; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    html { scroll-padding-top: 0; }
+    body { background: #fff; }
+
+    /* 画面用 UI を全部隠す */
+    #topbar, #read-progress, #btt, #nav-toggle, #nav-backdrop,
+    #json-modal, .sidebar, .fig-actions, .toc-toggle { display: none !important; }
+
+    .layout { grid-template-columns: 1fr; max-width: none; margin: 0; padding-top: 0; }
+    .main { padding: 0; max-width: none; }
+
+    /* 印刷用タイトル */
+    .print-head { display: block; margin: 0 0 22px; padding-bottom: 14px; border-bottom: 2px solid var(--ink); }
+    .print-pill {
+      display: inline-block; background: var(--chip); color: #fff;
+      font-size: 10px; font-weight: 800; letter-spacing: .16em;
+      padding: 3px 10px; border-radius: 2px; margin-bottom: 10px;
+    }
+    .print-title { font-size: 24px; font-weight: 800; color: var(--ink); line-height: 1.35; margin: 0 0 6px; }
+    .print-meta { font-size: 11px; color: var(--subtle); margin: 0; }
+
+    /* 改ページ制御 */
+    .panel, .svg-figure, .next-action-svg, .path-row,
+    .references-top, .next-action { page-break-inside: avoid; break-inside: avoid; }
+    .qa-table tr { page-break-inside: avoid; break-inside: avoid; }
+    .panel-title, .overview-title, .overview-subhead, .paths-section-title { page-break-after: avoid; }
+    .section { page-break-inside: auto; margin-top: 26px; }
+
+    /* 図・表は全幅で見切れさせない */
+    .svg-figure, .next-action-svg { border: 1px solid var(--line); padding: 12px; }
+    .svg-figure svg, .next-action-svg svg { max-height: none; }
+    .overview-tablewrap { overflow: visible; }
+
+    /* リンクは色だけ (URL 展開はしない) */
+    a { text-decoration: none; }
+
+    /* PDF: 文字を小さく・余白を詰めて情報濃度を上げる */
+    body { font-size: 12px; line-height: 1.6; }
+    .print-head { margin-bottom: 15px; padding-bottom: 9px; }
+    .print-title { font-size: 18px; margin-bottom: 4px; }
+    .print-pill { font-size: 9px; padding: 2px 8px; margin-bottom: 7px; }
+    .print-meta { font-size: 9.5px; }
+
+    .panel { padding: 12px 15px; margin-bottom: 9px; border-radius: 9px; }
+    .panel-goal { margin-bottom: 20px; }
+    .panel-ic { height: 21px; padding: 0 9px; font-size: 9.5px; margin-bottom: 7px; gap: 5px; }
+    .panel-ic svg { width: 11px; height: 11px; }
+    .panel-title { font-size: 14px; line-height: 1.45; }
+    .panel-goal-text { font-size: 13px; line-height: 1.6; }
+    .panel-reader { font-size: 10px; margin-top: 8px; padding-top: 7px; }
+    .panel-a .panel-body { font-size: 11.5px; line-height: 1.62; }
+
+    .qa-overview { padding: 13px 15px; margin-bottom: 20px; }
+    .overview-title { font-size: 13.5px; }
+    .overview-subhead { font-size: 10.5px; margin: 11px 0 4px; }
+    .qa-table { font-size: 10.5px; }
+    .qa-table th, .qa-table td { padding: 5px 8px; }
+    .qa-table th { font-size: 9.5px; }
+    .qa-idlink { min-width: 24px; height: 18px; font-size: 9px; }
+
+    .references-top { padding: 13px 15px; }
+    .ref-head { margin-bottom: 7px; }
+    .ref-count { font-size: 10px; }
+    .references-list { gap: 4px 24px; }
+    .ref-title, .references-list a { font-size: 10.5px; line-height: 1.5; }
+
+    .section { margin-top: 15px; }
+    .cat-divider { font-size: 10.5px; margin-top: 22px; padding-top: 11px; }
+    .body-md { font-size: 11px; line-height: 1.7; }
+    .body-md h3 { font-size: 12.5px; }
+    .body-md li { margin: 2px 0; }
+    .concern-related { font-size: 10px; }
+
+    .svg-figure { padding: 9px; margin: 13px 0 15px; }
+    .svg-figure svg, .next-action-svg svg { max-height: 350px; }
+    .figcaption { font-size: 9.5px; }
+
+    .next-action-badge { font-size: 9px; }
+    .next-action-title { font-size: 15px; }
+    .next-action-summary { font-size: 12px; }
+    .paths-section-title { font-size: 11.5px; margin-bottom: 9px; }
+    .paths-list { gap: 8px; }
+    .path-row { padding: 11px 13px; border-radius: 8px; gap: 12px; }
+    .path-text { font-size: 11px; line-height: 1.55; }
+    .path-label { font-size: 8.5px; padding: 2px 8px; }
+    .path-qref, .ref-badge { font-size: 9px; }
+
+    /* 区切りよく1ページ単位で (縦は可変・余白が出てもOK) */
+    /* references は強制改ページせず「目的」と同じ1ページに収める */
+    .qa-overview, .section, .next-action { page-break-before: always; }
+    .cat-divider { page-break-before: always; margin-top: 0; }
+    .cat-divider + .section { page-break-before: avoid; }
+    /* セクション内は分割を避け、問い→答えを近接させる */
+    .section { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">本文へスキップ</a>
+<header id="topbar">
+  <button id="nav-toggle" type="button" aria-label="目次を開閉" aria-controls="sidebar" aria-expanded="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+  </button>
+  <div class="topbar-title">
+    <span class="pill">リサーチ</span>
+    <span class="topbar-h1">{{ research.theme }}</span>
+  </div>
+  <div class="topbar-search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+    <input id="search-input" type="search" placeholder="レポート内を検索" autocomplete="off" aria-label="レポート内を検索">
+    <span id="search-count" class="search-count"></span>
+    <button id="search-prev" type="button" class="search-nav" title="前の一致" aria-label="前の一致">▲</button>
+    <button id="search-next" type="button" class="search-nav" title="次の一致" aria-label="次の一致">▼</button>
+  </div>
+  <div class="topbar-meta">
+    <span class="meta-date">{{ generated_at_str }}</span>
+    <span class="meta-chip">疑問 {{ research.sections | length }}</span>
+    {% if research.concerns %}<span class="meta-chip">懸念 {{ research.concerns | length }}</span>{% endif %}
+    <span class="meta-chip">出典 {{ research.references | length }}</span>
+  </div>
+  <button id="pdf-btn" type="button" class="pdf-btn" title="PDFとして保存 / 印刷" aria-label="PDFとして保存">PDF</button>
+  <button id="json-btn" type="button" class="json-btn" title="レポートJSONを表示（デバッグ）" aria-label="レポートJSONを表示">{ }</button>
+</header>
+<div id="read-progress"><div id="read-progress-fill"></div></div>
+<div id="nav-backdrop"></div>
+<div class="layout">
+{% set KIND_JA = {'definitional':'定義','how_to':'手順','comparative':'比較','decisional':'判断','risk':'リスク','other':'その他','concern':'懸念'} %}
+  <!-- Sidebar (目次) -->
+  <aside class="sidebar" id="sidebar">
+    <nav class="toc">
+      {% if research.references %}
+      <a class="toc-flat" href="#references">参考にした情報</a>
+      {% endif %}
+      <a class="toc-flat" href="#overview">全体像を掴む1問1答</a>
+
+      <div class="toc-tools">
+        <span class="toc-tools-label">問いと答え</span>
+        <button id="toc-bulk" class="toc-bulk" type="button">すべて開く</button>
+      </div>
+
+      <p class="toc-grouplabel">疑問</p>
+      {% for s in research.sections %}
+      <div class="toc-acc collapsed" data-target="{{ s.id }}">
+        <div class="toc-head">
+          <a class="toc-main" href="#{{ s.id }}">
+            <span class="toc-id">{{ s.id }}</span>
+            <span class="toc-label">{{ s.question }}</span>
+          </a>
+          <button class="toc-toggle" type="button" aria-expanded="false" aria-label="答えを開閉"><span class="toc-chev" aria-hidden="true">▾</span></button>
+        </div>
+        <div class="toc-body">
+          <p class="toc-ans">{{ s.answer | cite_text }}</p>
+        </div>
+      </div>
+      {% endfor %}
+
+      {% if research.concerns %}
+      <p class="toc-grouplabel toc-grouplabel-concern">懸念</p>
+      {% for c in research.concerns %}
+      <div class="toc-acc collapsed toc-acc-concern" data-target="{{ c.id }}">
+        <div class="toc-head">
+          <a class="toc-main" href="#{{ c.id }}">
+            <span class="toc-id toc-id-concern">{{ c.id }}</span>
+            <span class="toc-label">{{ c.text }}</span>
+          </a>
+          <button class="toc-toggle" type="button" aria-expanded="false" aria-label="答えを開閉"><span class="toc-chev" aria-hidden="true">▾</span></button>
+        </div>
+        <div class="toc-body">
+          <p class="toc-ans">{{ c.answer | cite_text }}</p>
+        </div>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if research.next_action and not research.next_action.skipped %}
+      <a class="toc-flat" href="#next-action">次にやること</a>
+      {% endif %}
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main" id="main">
+    <div class="print-head">
+      <span class="print-pill">リサーチ</span>
+      <h1 class="print-title">{{ research.theme }}</h1>
+      <p class="print-meta">{{ generated_at_str }} ・ 疑問 {{ research.sections | length }} ・ {% if research.concerns %}懸念 {{ research.concerns | length }} ・ {% endif %}出典 {{ research.references | length }}</p>
+    </div>
+    <div class="panel panel-goal">
+      <span class="panel-ic panel-ic-goal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5"/></svg>
+        このレポートの目的
+      </span>
+      <p class="panel-goal-text">{{ research.intent }}</p>
+      <p class="panel-reader">想定読者: {{ research.reader }}</p>
+    </div>
+
+    <!-- References (目的の直後・1問1答の前に配置) -->
+    {% if research.references %}
+    <section class="references-top" id="references">
+      <div class="ref-head">
+        <h2>参考にした情報</h2>
+        <span class="ref-count">{{ research.references | length }} 件</span>
+      </div>
+      <ol class="references-list">
+        {% for r in research.references %}
+        <li id="ref-{{ r.id | replace('[','') | replace(']','') }}">
+          <span class="ref-id">{{ r.id }}</span>
+          <span class="ref-title">
+            {{ r.title }}
+            {% if r.url %}
+            <a class="ref-url" href="{{ r.url }}" target="_blank" rel="noopener noreferrer" title="{{ r.url }}">↗</a>
+            {% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+
+    <!-- 1問1答（全体像）: まずここで全容をつかむ -->
+    <section class="qa-overview" id="overview">
+      <div class="overview-head">
+        <h2 class="overview-title">全体像を掴む1問1答</h2>
+      </div>
+
+      <div class="overview-tablewrap">
+        <p class="overview-subhead">疑問への回答</p>
+        <table class="qa-table">
+          <thead>
+            <tr><th class="qa-th-id">No.</th><th class="qa-th-q">疑問</th><th class="qa-th-a">答え</th></tr>
+          </thead>
+          <tbody>
+            {% for s in research.sections %}
+            <tr>
+              <td class="qa-td-id"><a class="qa-idlink" href="#{{ s.id }}">{{ s.id }}</a></td>
+              <td class="qa-td-q"><a class="qa-qlink" href="#{{ s.id }}">{{ s.question }}</a></td>
+              <td class="qa-td-a">{{ s.answer | cite_text }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if research.concerns %}
+      <div class="overview-tablewrap">
+        <p class="overview-subhead">懸念への回答</p>
+        <table class="qa-table qa-table-concern">
+          <thead>
+            <tr><th class="qa-th-id">No.</th><th class="qa-th-q">懸念</th><th class="qa-th-a">答え</th></tr>
+          </thead>
+          <tbody>
+            {% for c in research.concerns %}
+            <tr>
+              <td class="qa-td-id"><a class="qa-idlink qa-idlink-concern" href="#{{ c.id }}">{{ c.id }}</a></td>
+              <td class="qa-td-q"><a class="qa-qlink" href="#{{ c.id }}">{{ c.text }}</a></td>
+              <td class="qa-td-a">{{ c.answer | cite_text }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- Sections -->
+    {% for s in research.sections %}
+    <section class="section" id="{{ s.id }}">
+      <div class="panel panel-q">
+        <span class="panel-ic panel-ic-q">疑問 {{ s.id }}</span>
+        <h2 class="panel-title">{{ s.question }}<a class="head-anchor" href="#{{ s.id }}" aria-hidden="true" tabindex="-1">#</a></h2>
+      </div>
+
+      {% if s.answer %}
+      <div class="panel panel-a">
+        <span class="panel-ic panel-ic-a">回答</span>
+        <p class="panel-body">{{ s.answer | cite_text }}</p>
+      </div>
+      {% endif %}
+
+      {% if s.svg_asset %}
+      <figure class="svg-figure" data-fig>
+        <div class="fig-actions">
+          <button class="fig-btn" type="button" data-fig-copy title="画像をコピー">コピー</button>
+          <button class="fig-btn" type="button" data-fig-dl title="画像をダウンロード">ダウンロード</button>
+        </div>
+        {{ s.svg_asset.svg_text | safe_svg }}
+        <figcaption class="figcaption">{{ s.svg_asset.alt }}</figcaption>
+      </figure>
+      {% endif %}
+
+      <div class="body-md">{{ s.body_md | mdcite }}</div>
+    </section>
+    {% endfor %}
+
+    <!-- 懸念への回答（疑問への回答と同じカード構造。カテゴリが「懸念」なだけ） -->
+    {% if research.concerns %}
+    <p class="cat-divider" id="concerns">ここからは「懸念」への回答です</p>
+    {% for c in research.concerns %}
+    <section class="section" id="{{ c.id }}">
+      <div class="panel panel-q panel-q-concern">
+        <span class="panel-ic panel-ic-concern">懸念 {{ c.id }}</span>
+        <h2 class="panel-title">{{ c.text }}<a class="head-anchor" href="#{{ c.id }}" aria-hidden="true" tabindex="-1">#</a></h2>
+      </div>
+
+      {% if c.answer %}
+      <div class="panel panel-a">
+        <span class="panel-ic panel-ic-a">回答</span>
+        <p class="panel-body">{{ c.answer | cite_text }}</p>
+      </div>
+      {% endif %}
+
+      <div class="body-md">{{ c.addressing_md | mdcite }}</div>
+
+      {% if c.related_section_ids %}
+      <div class="concern-related">
+        関係する疑問:
+        {% for sid in c.related_section_ids %}
+          <a href="#{{ sid }}">{{ sid }}</a>{% if not loop.last %}・{% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Next Action (フローチャート主役) -->
+    {% if research.next_action and not research.next_action.skipped %}
+    <section class="next-action" id="next-action">
+      <div class="next-action-hero">
+        <div class="next-action-badge">まとめ</div>
+        <h2 class="next-action-title">次にやること</h2>
+        <p class="next-action-summary">{{ research.next_action.summary | cite_text }}</p>
+      </div>
+
+      {% if research.next_action.svg_asset %}
+      <figure class="next-action-svg" data-fig>
+        <div class="fig-actions">
+          <button class="fig-btn" type="button" data-fig-copy title="画像をコピー">コピー</button>
+          <button class="fig-btn" type="button" data-fig-dl title="画像をダウンロード">ダウンロード</button>
+        </div>
+        {{ research.next_action.svg_asset.svg_text | safe_svg }}
+      </figure>
+      {% endif %}
+
+      {% if research.next_action.paths %}
+      <div class="paths-section">
+        <p class="paths-section-title">こんなときは、こうする</p>
+        <div class="paths-list">
+          {% for p in research.next_action.paths %}
+          <div class="path-row">
+            <div class="path-cell path-condition">
+              <span class="path-label path-label-if">こんなとき</span>
+              <p class="path-text path-condition-text">{{ p.condition }}</p>
+            </div>
+            <div class="path-arrow" aria-hidden="true">→</div>
+            <div class="path-cell path-action">
+              <span class="path-label path-label-then">こうする</span>
+              <p class="path-text path-action-text">{{ p.action }}</p>
+              {% if p.related_section_ids or p.reference_ids %}
+              <div class="path-refs">
+                {% for sid in p.related_section_ids %}<a class="path-qref" href="#{{ sid }}">{{ sid }}</a>{% endfor %}
+                {% for rid in p.reference_ids %}<a class="ref-badge" href="#ref-{{ rid }}">[{{ rid }}]</a>{% endfor %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="brand">
+        <span class="dot"></span>ENOSTECH リサーチ
+      </div>
+      <div>このページは調べた内容を 1 枚にまとめたものです。</div>
+    </footer>
+  </main>
+</div>
+
+<button id="btt" type="button" aria-label="トップへ戻る" title="トップへ戻る">↑</button>
+
+<!-- JSON デバッグ modal -->
+<div id="json-modal" class="json-modal" aria-hidden="true">
+  <div class="json-modal-backdrop" data-json-close></div>
+  <div class="json-modal-panel" role="dialog" aria-modal="true" aria-label="レポートJSON">
+    <div class="json-modal-head">
+      <span class="json-modal-title">レポート JSON（デバッグ）</span>
+      <div class="json-modal-actions">
+        <button id="json-copy" type="button" class="json-modal-btn">コピー</button>
+        <button type="button" class="json-modal-btn" data-json-close>閉じる</button>
+      </div>
+    </div>
+    <pre id="json-view" class="json-view"></pre>
+  </div>
+</div>
+<script id="research-json" type="application/json">{{ research_json }}</script>
+
+<script>
+(function () {
+  function initBtt() {
+    var btn = document.getElementById('btt');
+    var fill = document.getElementById('read-progress-fill');
+    function update() {
+      var doc = document.documentElement;
+      var max = doc.scrollHeight - doc.clientHeight;
+      var pct = max > 0 ? (window.scrollY / max) * 100 : 0;
+      if (fill) fill.style.width = pct + '%';
+      if (btn) btn.classList.toggle('show', window.scrollY > 480);
+    }
+    window.addEventListener('scroll', update, { passive: true });
+    update();
+    if (btn) btn.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  function initTocSpy() {
+    var items = [];
+    document.querySelectorAll('.toc-acc[data-target]').forEach(function (acc) {
+      var el = document.getElementById(acc.getAttribute('data-target'));
+      if (el) items.push({ node: acc, el: el });
+    });
+    document.querySelectorAll('.toc-flat[href^="#"]').forEach(function (a) {
+      var el = document.getElementById(a.getAttribute('href').slice(1));
+      if (el) items.push({ node: a, el: el });
+    });
+    if (!items.length) return;
+    function onScroll() {
+      var pos = window.scrollY + 150;
+      var cur = null, curTop = -1;
+      for (var i = 0; i < items.length; i++) {
+        var top = items[i].el.getBoundingClientRect().top + window.scrollY;
+        if (top <= pos && top > curTop) { curTop = top; cur = items[i]; }
+      }
+      items.forEach(function (n) { n.node.classList.remove('active'); });
+      if (cur) cur.node.classList.add('active');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    onScroll();
+  }
+
+  function initTocAccordion() {
+    var accs = Array.prototype.slice.call(document.querySelectorAll('.toc-acc'));
+    var bulk = document.getElementById('toc-bulk');
+    function syncBulk() {
+      if (!bulk) return;
+      var anyCollapsed = accs.some(function (a) { return a.classList.contains('collapsed'); });
+      bulk.textContent = anyCollapsed ? 'すべて開く' : 'すべて閉じる';
+    }
+    function setOne(acc, collapsed) {
+      acc.classList.toggle('collapsed', collapsed);
+      var t = acc.querySelector('.toc-toggle');
+      if (t) t.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
+    document.querySelectorAll('.toc-toggle').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var acc = btn.closest('.toc-acc');
+        if (!acc) return;
+        setOne(acc, !acc.classList.contains('collapsed'));
+        syncBulk();
+      });
+    });
+    if (bulk) {
+      bulk.addEventListener('click', function () {
+        var anyCollapsed = accs.some(function (a) { return a.classList.contains('collapsed'); });
+        accs.forEach(function (a) { setOne(a, !anyCollapsed); });
+        syncBulk();
+      });
+    }
+    syncBulk();
+  }
+
+  function initNavToggle() {
+    var btn = document.getElementById('nav-toggle');
+    var sb = document.getElementById('sidebar');
+    var bd = document.getElementById('nav-backdrop');
+    var layout = document.querySelector('.layout');
+    if (!btn || !sb || !layout) return;
+    function isMobile() { return window.matchMedia('(max-width: 900px)').matches; }
+    function closeDrawer() {
+      sb.classList.remove('open');
+      if (bd) bd.classList.remove('show');
+      if (isMobile()) btn.setAttribute('aria-expanded', 'false');
+    }
+    function openDrawer() {
+      sb.classList.add('open');
+      if (bd) bd.classList.add('show');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+    btn.addEventListener('click', function () {
+      if (isMobile()) {
+        sb.classList.contains('open') ? closeDrawer() : openDrawer();
+      } else {
+        var collapsed = layout.classList.toggle('sidebar-collapsed');
+        btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      }
+    });
+    if (bd) bd.addEventListener('click', closeDrawer);
+    sb.addEventListener('click', function (e) {
+      var a = e.target.closest ? e.target.closest('a') : null;
+      if (a && isMobile()) closeDrawer();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeDrawer();
+    });
+  }
+
+  function initJsonModal() {
+    var btn = document.getElementById('json-btn');
+    var modal = document.getElementById('json-modal');
+    var view = document.getElementById('json-view');
+    var copyBtn = document.getElementById('json-copy');
+    var data = document.getElementById('research-json');
+    if (!btn || !modal || !view || !data) return;
+    var jsonText = data.textContent || '';
+    var filled = false;
+    function open() {
+      if (!filled) { view.textContent = jsonText; filled = true; }
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+    function close() {
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    btn.addEventListener('click', open);
+    modal.querySelectorAll('[data-json-close]').forEach(function (el) {
+      el.addEventListener('click', close);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal.classList.contains('open')) close();
+    });
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function () {
+        var done = function () {
+          var t = copyBtn.textContent; copyBtn.textContent = 'コピーしました';
+          setTimeout(function () { copyBtn.textContent = t; }, 1400);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(jsonText).then(done, done);
+        } else {
+          var r = document.createRange(); r.selectNodeContents(view);
+          var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+          try { document.execCommand('copy'); } catch (e) {}
+          sel.removeAllRanges(); done();
+        }
+      });
+    }
+  }
+
+  function initFigActions() {
+    function svgToPng(svg, scale, cb) {
+      var clone = svg.cloneNode(true);
+      if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      var vb = svg.viewBox && svg.viewBox.baseVal;
+      var w = (vb && vb.width) ? vb.width : (svg.clientWidth || 1200);
+      var h = (vb && vb.height) ? vb.height : (svg.clientHeight || 675);
+      var xml = new XMLSerializer().serializeToString(clone);
+      var src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+      var img = new Image();
+      img.onload = function () {
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(function (blob) { cb(blob); }, 'image/png');
+      };
+      img.onerror = function () { cb(null); };
+      img.src = src;
+    }
+    function flash(btn, msg) {
+      var t = btn.textContent; btn.textContent = msg; btn.classList.add('done');
+      setTimeout(function () { btn.textContent = t; btn.classList.remove('done'); }, 1400);
+    }
+    function filenameOf(fig) {
+      var cap = fig.querySelector('.figcaption');
+      var base = (cap && cap.textContent ? cap.textContent : 'figure').trim();
+      base = base.replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40) || 'figure';
+      return base + '.png';
+    }
+    document.querySelectorAll('[data-fig]').forEach(function (fig) {
+      var svg = fig.querySelector('svg');
+      if (!svg) return;
+      var copyBtn = fig.querySelector('[data-fig-copy]');
+      var dlBtn = fig.querySelector('[data-fig-dl]');
+      if (copyBtn) copyBtn.addEventListener('click', function () {
+        svgToPng(svg, 2, function (blob) {
+          if (!blob) { flash(copyBtn, '失敗'); return; }
+          if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+            var item = {}; item['image/png'] = blob;
+            navigator.clipboard.write([new ClipboardItem(item)]).then(
+              function () { flash(copyBtn, 'コピー済'); },
+              function () { flash(copyBtn, '非対応'); }
+            );
+          } else { flash(copyBtn, '非対応'); }
+        });
+      });
+      if (dlBtn) dlBtn.addEventListener('click', function () {
+        svgToPng(svg, 2, function (blob) {
+          if (!blob) { flash(dlBtn, '失敗'); return; }
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url; a.download = filenameOf(fig);
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+          flash(dlBtn, '保存しました');
+        });
+      });
+    });
+  }
+
+  function initSearch() {
+    var input = document.getElementById('search-input');
+    var wrap = document.querySelector('.topbar-search');
+    var countEl = document.getElementById('search-count');
+    var prevBtn = document.getElementById('search-prev');
+    var nextBtn = document.getElementById('search-next');
+    var scope = document.getElementById('main');
+    if (!input || !scope || !wrap) return;
+    var hits = [], cur = -1, timer = null;
+
+    function clearMarks() {
+      var marks = scope.querySelectorAll('mark.search-hit');
+      for (var i = 0; i < marks.length; i++) {
+        var m = marks[i];
+        m.parentNode.replaceChild(document.createTextNode(m.textContent), m);
+      }
+      if (marks.length) scope.normalize();
+      hits = []; cur = -1;
+    }
+    function skip(node) {
+      var p = node.parentNode;
+      while (p && p !== scope) {
+        var tag = p.nodeName.toLowerCase();
+        if (tag === 'svg' || tag === 'script' || tag === 'style' || tag === 'mark' || tag === 'button') return true;
+        if (p.classList && p.classList.contains('fig-actions')) return true;
+        p = p.parentNode;
+      }
+      return false;
+    }
+    function setCurrent() {
+      for (var i = 0; i < hits.length; i++) hits[i].classList.remove('current');
+      if (cur >= 0 && cur < hits.length) {
+        hits[cur].classList.add('current');
+        hits[cur].scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+    function update() {
+      if (!input.value) { countEl.textContent = ''; wrap.classList.remove('has-hits'); return; }
+      if (hits.length) { countEl.textContent = (cur + 1) + ' / ' + hits.length; wrap.classList.add('has-hits'); }
+      else { countEl.textContent = '0 件'; wrap.classList.remove('has-hits'); }
+    }
+    function highlight(term) {
+      clearMarks();
+      if (!term) { update(); return; }
+      var lower = term.toLowerCase();
+      var walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+      var targets = [], n;
+      while ((n = walker.nextNode())) {
+        if (!n.nodeValue || n.nodeValue.toLowerCase().indexOf(lower) === -1) continue;
+        if (skip(n)) continue;
+        targets.push(n);
+      }
+      for (var t = 0; t < targets.length; t++) {
+        var node = targets[t], text = node.nodeValue, low = text.toLowerCase();
+        var frag = document.createDocumentFragment(), idx = 0, found;
+        while ((found = low.indexOf(lower, idx)) !== -1) {
+          if (found > idx) frag.appendChild(document.createTextNode(text.slice(idx, found)));
+          var mk = document.createElement('mark'); mk.className = 'search-hit';
+          mk.textContent = text.slice(found, found + term.length);
+          frag.appendChild(mk); hits.push(mk);
+          idx = found + term.length;
+        }
+        if (idx < text.length) frag.appendChild(document.createTextNode(text.slice(idx)));
+        node.parentNode.replaceChild(frag, node);
+      }
+      if (hits.length) { cur = 0; setCurrent(); }
+      update();
+    }
+    function go(delta) {
+      if (!hits.length) return;
+      cur = (cur + delta + hits.length) % hits.length;
+      setCurrent(); update();
+    }
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { highlight(input.value.trim()); }, 180);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); go(e.shiftKey ? -1 : 1); }
+      else if (e.key === 'Escape') { input.value = ''; highlight(''); input.blur(); }
+    });
+    if (prevBtn) prevBtn.addEventListener('click', function () { go(-1); });
+    if (nextBtn) nextBtn.addEventListener('click', function () { go(1); });
+  }
+
+  function initPdf() {
+    var btn = document.getElementById('pdf-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var input = document.getElementById('search-input');
+      if (input && input.value) { input.value = ''; }
+      var marks = document.querySelectorAll('mark.search-hit');
+      marks.forEach(function (m) { m.parentNode.replaceChild(document.createTextNode(m.textContent), m); });
+      window.print();
+    });
+  }
+
+  function boot() { initBtt(); initTocSpy(); initTocAccordion(); initNavToggle(); initJsonModal(); initFigActions(); initSearch(); initPdf(); }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
+</script>
+</body>
+</html>

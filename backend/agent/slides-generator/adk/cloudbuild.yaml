@@ -1,0 +1,49 @@
+# Cloud Build → Cloud Run デプロイ (Vertex AI backend 想定)
+#
+# 実行例:
+#   gcloud builds submit --config adk/cloudbuild.yaml \
+#     --substitutions=_REGION=asia-northeast1,_SERVICE=enostech-adk
+
+substitutions:
+  _REGION: asia-northeast1
+  _SERVICE: enostech-adk
+  _MEMORY: '2Gi'
+  _CPU: '2'
+
+steps:
+  # 1. Docker image をビルド (Python+Node ハイブリッド)
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file=agents-sandbox/adk/Dockerfile
+      - --tag=gcr.io/$PROJECT_ID/${_SERVICE}:$COMMIT_SHA
+      - --tag=gcr.io/$PROJECT_ID/${_SERVICE}:latest
+      - .
+
+  # 2. push
+  - name: gcr.io/cloud-builders/docker
+    args: ['push', '--all-tags', 'gcr.io/$PROJECT_ID/${_SERVICE}']
+
+  # 3. Cloud Run へデプロイ
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=gcr.io/$PROJECT_ID/${_SERVICE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --memory=${_MEMORY}
+      - --cpu=${_CPU}
+      - --timeout=900
+      - --concurrency=4
+      - --set-env-vars=GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=${_REGION},ENOSTECH_DECK_OUT=/tmp/decks
+      - --allow-unauthenticated
+
+images:
+  - gcr.io/$PROJECT_ID/${_SERVICE}:$COMMIT_SHA
+  - gcr.io/$PROJECT_ID/${_SERVICE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>【指示書】ENOSTECH デッキ設計書テンプレート v3.7</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root {
+    --brand:       #9212F3;
+    --brand-soft:  #EDD9FF;
+    --brand-deep:  #5A0A9F;
+    --accent:      #F59E0B;
+    --accent-soft: #FEF3C7;
+    --ink:         #111827;
+    --gray700:     #374151;
+    --gray500:     #6B7280;
+    --gray400:     #9CA3AF;
+    --gray300:     #D1D5DB;
+    --gray200:     #E5E7EB;
+    --gray100:     #F3F4F6;
+    --gray50:      #F9FAFB;
+    --canvas:      #FAFAF7;
+    --link:        #0563C1;
+    --positive:    #059669;
+    --warning:     #D97706;
+    --danger:      #DC2626;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--canvas);
+    color: var(--ink);
+    line-height: 1.6;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 20px 80px;
+  }
+
+  /* ─── Header ─── */
+  .doc-header {
+    border-left: 4px solid var(--brand);
+    padding: 4px 20px;
+    margin-bottom: 24px;
+  }
+  .doc-header .kicker {
+    font-size: 11px;
+    color: var(--brand);
+    letter-spacing: 3px;
+    font-weight: 700;
+  }
+  .doc-header h1 {
+    font-size: 26px;
+    margin: 6px 0 12px;
+    color: var(--ink);
+    font-weight: 800;
+  }
+  .doc-header .version {
+    font-size: 12px;
+    color: var(--gray500);
+  }
+
+  /* ─── Meta ─── */
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    background: white;
+    border: 1px solid var(--gray200);
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-bottom: 20px;
+  }
+  .meta-grid > div { font-size: 13px; }
+  .meta-grid .label {
+    color: var(--gray500);
+    font-weight: 700;
+    font-size: 11px;
+    margin-bottom: 2px;
+    letter-spacing: 1px;
+  }
+  .meta-grid .value { color: var(--ink); font-weight: 500; }
+
+  /* ─── Tab bar ─── */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    background: white;
+    border: 1px solid var(--gray200);
+    border-radius: 10px;
+    padding: 6px;
+    margin-bottom: 20px;
+    position: sticky;
+    top: 10px;
+    z-index: 20;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 10px 12px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gray500);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .tab-btn:hover {
+    background: var(--gray100);
+    color: var(--gray700);
+  }
+  .tab-btn.active {
+    background: var(--brand);
+    color: white;
+  }
+  .tab-btn .count {
+    font-size: 10px;
+    background: rgba(0,0,0,0.15);
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-family: 'SF Mono', 'Menlo', monospace;
+  }
+  .tab-btn.active .count { background: rgba(255,255,255,0.2); }
+
+  /* ─── Tab content ─── */
+  .tab-content { display: none; }
+  .tab-content.active { display: block; animation: fade .18s ease; }
+  @keyframes fade {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Section headings ─── */
+  .section-title {
+    font-size: 12px;
+    color: var(--brand);
+    letter-spacing: 3px;
+    font-weight: 700;
+    margin: 24px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--gray200);
+  }
+  .section-title span {
+    color: var(--ink);
+    margin-left: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  /* ─── Slide card (shared) ─── */
+  .slide-card {
+    background: white;
+    border: 1px solid var(--gray200);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    transition: box-shadow 0.15s;
+  }
+  .slide-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.07); }
+  .slide-card .card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  /* ─── Copy ID button ─── */
+  .id-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--brand);
+    color: white;
+    padding: 4px 10px 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    font-family: 'SF Mono', 'Menlo', monospace;
+    cursor: pointer;
+    border: none;
+    user-select: none;
+    transition: background 0.15s, transform 0.08s;
+  }
+  .id-copy:hover { background: var(--brand-deep); }
+  .id-copy:active { transform: scale(0.97); }
+  .id-copy.copied { background: var(--positive); }
+  .id-copy.copied .icon::before { content: '✓'; }
+  .id-copy:not(.copied) .icon::before { content: '📋'; }
+
+  /* ─── Template badge ─── */
+  .template-tag {
+    display: inline-block;
+    background: var(--gray100);
+    color: var(--gray700);
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .template-tag.issue-high { background: #FEE2E2; color: #991B1B; }
+  .template-tag.issue-mid  { background: #FEF3C7; color: #92400E; }
+  .template-tag.issue-low  { background: #E0F2FE; color: #075985; }
+
+  /* ─── Subsection breadcrumb badge (v3.9 新) ─── */
+  .subsec-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--brand-soft);
+    color: var(--brand-deep);
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .subsec-badge::before {
+    content: '›';
+    color: var(--gray400);
+    font-weight: 800;
+    margin-right: 2px;
+  }
+
+  /* ─── Title / subtitle ─── */
+  .slide-title {
+    font-size: 17px;
+    font-weight: 800;
+    margin: 6px 0 4px;
+    color: var(--ink);
+  }
+  .slide-subtitle {
+    font-size: 13px;
+    color: var(--gray700);
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    background: var(--brand-soft);
+    border-radius: 6px;
+  }
+
+  /* ─── Detail grid ─── */
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .detail-block h4 {
+    font-size: 11px;
+    color: var(--gray500);
+    margin: 0 0 6px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .detail-block ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13px;
+    color: var(--gray700);
+  }
+  .detail-block ul li { margin-bottom: 3px; }
+  .detail-block p { margin: 0; font-size: 13px; color: var(--gray700); }
+  .detail-block.full-width { grid-column: 1 / -1; }
+  .detail-block .quote {
+    font-style: italic;
+    background: var(--accent-soft);
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+    margin: 4px 0 0;
+    border-radius: 0 6px 6px 0;
+    color: #92400E;
+  }
+
+  /* ─── Template preview (v3.8 新) ─── */
+  .template-preview {
+    display: flex;
+    gap: 14px;
+    margin: 6px 0 14px;
+    padding: 12px;
+    background: var(--gray50);
+    border: 1px solid var(--gray200);
+    border-radius: 8px;
+    align-items: flex-start;
+  }
+  .template-preview img {
+    width: 220px;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border: 1px solid var(--gray300);
+    border-radius: 4px;
+    flex-shrink: 0;
+    background: white;
+  }
+  .template-preview .tp-meta {
+    flex: 1;
+    min-width: 0;
+  }
+  .template-preview .tp-label {
+    font-size: 10px;
+    color: var(--gray500);
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .template-preview .tp-name {
+    font-size: 13px;
+    color: var(--ink);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .template-preview .tp-note {
+    font-size: 11px;
+    color: var(--gray500);
+    line-height: 1.5;
+  }
+  .template-preview.no-preview {
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--gray500);
+    font-style: italic;
+  }
+
+  /* ─── Cite link ─── */
+  a.cite-link {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  a.cite-link:hover { opacity: 0.8; }
+
+  /* ─── Reference table ─── */
+  .ref-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border: 1px solid var(--gray200);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+  .ref-table th {
+    background: var(--ink);
+    color: white;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-size: 11px;
+  }
+  .ref-table td {
+    padding: 8px 12px;
+    border-top: 1px solid var(--gray200);
+    vertical-align: top;
+  }
+  .ref-table td.cat {
+    background: var(--gray50);
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* ─── Toast ─── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    background: var(--ink);
+    color: white;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 100;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ─── Quick nav ─── */
+  .quick-nav {
+    background: white;
+    border: 1px solid var(--gray200);
+    border-radius: 8px;
+    padding: 12px 18px;
+    margin-bottom: 20px;
+    font-size: 12px;
+  }
+  .quick-nav .label {
+    color: var(--gray500);
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-right: 8px;
+  }
+  .quick-nav .id-chip {
+    display: inline-block;
+    background: var(--gray100);
+    color: var(--gray700);
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 2px 4px 2px 0;
+    cursor: pointer;
+    font-family: 'SF Mono', 'Menlo', monospace;
+    font-weight: 700;
+    font-size: 11px;
+    transition: background 0.1s;
+    text-decoration: none;
+  }
+  .quick-nav .id-chip:hover {
+    background: var(--brand-soft);
+    color: var(--brand-deep);
+  }
+
+  /* ─── Persona card (review tab) ─── */
+  .persona-card {
+    background: white;
+    border: 1px solid var(--brand-soft);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .persona-card .ph {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+  .persona-card .avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+    display: grid;
+    place-items: center;
+    color: white;
+    font-size: 26px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .persona-card h3 {
+    margin: 0 0 2px;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+  }
+  .persona-card .role {
+    font-size: 12px;
+    color: var(--brand);
+    font-weight: 700;
+  }
+  .persona-card .traits {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--gray700);
+    margin-top: 10px;
+  }
+  .persona-card .traits .label {
+    font-size: 10px;
+    color: var(--gray500);
+    letter-spacing: 1px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+
+  /* ─── Review issue card ─── */
+  .issue-card {
+    background: white;
+    border: 1px solid var(--gray200);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    transition: box-shadow 0.15s;
+  }
+  .issue-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.07); }
+  .issue-card .head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .issue-card .rid {
+    font-family: 'SF Mono', 'Menlo', monospace;
+    font-weight: 800;
+    color: var(--warning);
+    font-size: 13px;
+    background: var(--accent-soft);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .issue-card .arrow { color: var(--gray400); font-size: 11px; }
+  .issue-card .target-slide {
+    text-decoration: none;
+    background: var(--brand);
+    color: white;
+    font-family: 'SF Mono', 'Menlo', monospace;
+    font-weight: 700;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .issue-card .target-slide:hover { background: var(--brand-deep); }
+  .issue-card .feedback {
+    background: var(--gray100);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--gray700);
+    margin: 8px 0;
+  }
+  .issue-card .feedback::before {
+    content: '💬 ';
+    margin-right: 4px;
+  }
+  .issue-card .action {
+    background: #ECFDF5;
+    border-left: 3px solid var(--positive);
+    padding: 8px 12px;
+    border-radius: 0 6px 6px 0;
+    font-size: 13px;
+    color: #065F46;
+    margin: 8px 0;
+  }
+  .issue-card .action::before {
+    content: '✏️ 対応: ';
+    font-weight: 700;
+  }
+  .issue-card details {
+    margin-top: 8px;
+    font-size: 12px;
+  }
+  .issue-card summary {
+    cursor: pointer;
+    color: var(--gray500);
+    font-weight: 700;
+    padding: 4px 0;
+    user-select: none;
+  }
+  .issue-card summary:hover { color: var(--brand); }
+  .issue-card .diff {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .issue-card .diff > div {
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .issue-card .diff .before {
+    background: #FEF2F2;
+    border-left: 3px solid var(--danger);
+    color: #991B1B;
+  }
+  .issue-card .diff .after {
+    background: #ECFDF5;
+    border-left: 3px solid var(--positive);
+    color: #065F46;
+  }
+  .issue-card .diff-label {
+    font-size: 10px;
+    letter-spacing: 1px;
+    font-weight: 700;
+    margin-bottom: 3px;
+  }
+
+  /* ─── Review summary ─── */
+  .review-summary {
+    background: linear-gradient(135deg, var(--brand-soft), #fff);
+    border: 1px solid var(--brand-soft);
+    border-radius: 12px;
+    padding: 16px 22px;
+    margin-bottom: 20px;
+  }
+  .review-summary h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: var(--brand-deep);
+    font-weight: 800;
+  }
+  .review-summary .stats {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+  .review-summary .stat { color: var(--gray700); }
+  .review-summary .stat strong {
+    color: var(--brand-deep);
+    font-size: 16px;
+    font-weight: 800;
+    margin-right: 4px;
+  }
+
+  @media (max-width: 640px) {
+    body { padding: 20px 14px 60px; }
+    .meta-grid { grid-template-columns: 1fr; }
+    .detail-grid { grid-template-columns: 1fr; }
+    .tab-bar { position: static; }
+    .tab-btn { font-size: 11px; padding: 8px 6px; }
+    .issue-card .diff { grid-template-columns: 1fr; }
+    .persona-card .traits { grid-template-columns: 1fr; }
+    .template-preview { flex-direction: column; }
+    .template-preview img { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     ヘッダー
+     ═══════════════════════════════════════════════ -->
+<header class="doc-header">
+  <div class="kicker">DECK INSTRUCTION · v3.7</div>
+  <h1>FactHub 新機能リリース説明会（例）</h1>
+  <div class="version">2026-04-19 作成 / テーマ: <code>enostech</code></div>
+</header>
+
+<!-- ═══════════════════════════════════════════════
+     メタ情報（3 タブ共通）
+     ═══════════════════════════════════════════════ -->
+<div class="meta-grid">
+  <div>
+    <div class="label">目的</div>
+    <div class="value">FactHub v2.0 で追加された機能を社内メンバーに説明し、活用促進</div>
+  </div>
+  <div>
+    <div class="label">読者</div>
+    <div class="value">営業部 15 名 / 非エンジニア</div>
+  </div>
+  <div>
+    <div class="label">Before → After</div>
+    <div class="value">「何が新しいか知らない」→「新機能 3 つを自分の業務で試したくなる」</div>
+  </div>
+  <div>
+    <div class="label">テーマ</div>
+    <div class="value">enostech（デフォルト）</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     タブバー
+     ═══════════════════════════════════════════════ -->
+<nav class="tab-bar">
+  <button class="tab-btn active" data-tab="final">
+    📄 最終アウトプット <span class="count">5</span>
+  </button>
+  <button class="tab-btn" data-tab="thinking">
+    🧠 思考過程 <span class="count">5</span>
+  </button>
+  <button class="tab-btn" data-tab="review">
+    🔄 レビューサイクル <span class="count">3</span>
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════
+     TAB 1: 最終アウトプット
+     ═══════════════════════════════════════════════ -->
+<div class="tab-content active" id="tab-final">
+
+  <nav class="quick-nav">
+    <span class="label">QUICK NAV</span>
+    <a href="#S1" class="id-chip">S1</a>
+    <a href="#S2" class="id-chip">S2</a>
+    <a href="#S3" class="id-chip">S3</a>
+    <a href="#S4" class="id-chip">S4</a>
+    <a href="#S5" class="id-chip">S5</a>
+    <a href="#SR" class="id-chip">SR</a>
+  </nav>
+
+  <div class="section-title">SECTION A <span>導入</span></div>
+
+  <article class="slide-card" id="S1">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S1')"><span class="icon"></span><span>S1</span></button>
+      <span class="template-tag">SECTION-1 表紙</span>
+    </div>
+    <div class="slide-title">FactHub v2.0 で、もっと速く、もっと自由に</div>
+    <div class="slide-subtitle">2026 年 4 月のメジャーアップデート</div>
+    <div class="template-preview">
+      <img src="data:image/jpeg;base64,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" alt="SECTION-1 テンプレート構造プレビュー">
+      <div class="tp-meta">
+        <div class="tp-label">📐 テンプレ構造プレビュー</div>
+        <div class="tp-name">SECTION-1 · 表紙</div>
+        <div class="tp-note">デッキの顔。大きなタイトル + サブコピーで主張を明確に<br>※ 実際のテキストは入っていません。レイアウト構造の参考として</div>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block full-width">
+        <h4>📝 コンテンツ</h4>
+        <ul>
+          <li>ロゴ（左上、カラー版）</li>
+          <li>メインタイトル（中央寄せ、大きく）</li>
+          <li>日付と発表者名（右下、控えめ）</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <article class="slide-card" id="S2">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S2')"><span class="icon"></span><span>S2</span></button>
+      <span class="template-tag">SECTION-6 (旧目次は v6.27 で SECTION-6 に統合) 目次</span>
+    </div>
+    <div class="slide-title">本日の内容</div>
+    <div class="slide-subtitle">v2.0 の 3 つの新機能と、明日からの使い方</div>
+    <div class="template-preview">
+      <img src="data:image/jpeg;base64,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" alt="SECTION-6 (旧目次は v6.27 で SECTION-6 に統合) テンプレート構造プレビュー">
+      <div class="tp-meta">
+        <div class="tp-label">📐 テンプレ構造プレビュー</div>
+        <div class="tp-name">SECTION-6 (旧目次は v6.27 で SECTION-6 に統合) · 目次</div>
+        <div class="tp-note">本編の流れを番号リストで提示<br>※ 実際のテキストは入っていません。レイアウト構造の参考として</div>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block full-width">
+        <h4>📝 コンテンツ</h4>
+        <ul>
+          <li>1. 新機能 A: 自然言語検索の拡張</li>
+          <li>2. 新機能 B: レポート自動生成</li>
+          <li>3. 新機能 C: 外部 DB との連携</li>
+          <li>4. 明日から使い始めるには</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <div class="section-title">SECTION B <span>新機能の紹介</span></div>
+
+  <article class="slide-card" id="S3">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S3')"><span class="icon"></span><span>S3</span></button>
+      <span class="template-tag">LIST-1 標準コンテンツ</span>
+      <span class="subsec-badge">新機能の詳細</span>
+    </div>
+    <div class="slide-title">新機能 A：SQL を書かずに、話しかけるだけでデータが見える</div>
+    <div class="slide-subtitle">自然言語検索の精度が 94% に到達。社内 QA 713 問での検証結果を元に、Excel で手集計していた時間が平均 30 分 → 2 秒に短縮された。</div>
+    <div class="template-preview">
+      <img src="data:image/jpeg;base64,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" alt="LIST-1 テンプレート構造プレビュー">
+      <div class="tp-meta">
+        <div class="tp-label">📐 テンプレ構造プレビュー</div>
+        <div class="tp-name">LIST-1 · 標準コンテンツ</div>
+        <div class="tp-note">メインメッセージ + 3要点 + 参考情報で深掘り<br>※ 実際のテキストは入っていません。レイアウト構造の参考として</div>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block">
+        <h4>📝 コンテンツ</h4>
+        <ul>
+          <li>要点 1: 質問を日本語で入力するだけ</li>
+          <li>要点 2: 平均応答時間 2 秒以内</li>
+          <li>要点 3: 20 種類以上の DB に自動対応</li>
+        </ul>
+      </div>
+      <div class="detail-block">
+        <h4>🎨 トーン・強調</h4>
+        <p>「94%」を数字大きく。Amber アクセントで達成感を演出。</p>
+      </div>
+      <div class="detail-block full-width">
+        <h4>🔗 参考・出典</h4>
+        <ul>
+          <li>社内 QA データ n=713 <span style="color: var(--gray400)">[I1]</span></li>
+          <li><a href="#SR" class="cite-link">IPA DX 動向 2024</a> <span style="color: var(--gray400)">[D1]</span></li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <article class="slide-card" id="S4">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S4')"><span class="icon"></span><span>S4</span></button>
+      <span class="template-tag">DIAG-04 Before/After 比較</span>
+      <span class="subsec-badge">新機能の詳細</span>
+    </div>
+    <div class="slide-title">新機能 A：導入前後で、作業時間とスキル要件がこう変わる</div>
+    <div class="slide-subtitle">Excel で 30 分かかっていた月次集計が、話しかけるだけで 2 秒に。SQL 書ける担当者への依存も解消し、DB20 種類に自動対応できるようになる。</div>
+    <div class="template-preview">
+      <img src="data:image/jpeg;base64,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" alt="DIAG-04 テンプレート構造プレビュー">
+      <div class="tp-meta">
+        <div class="tp-label">📐 テンプレ構造プレビュー</div>
+        <div class="tp-name">DIAG-04 · Before/After 比較</div>
+        <div class="tp-note">2択の対比を表形式で最大化<br>※ 実際のテキストは入っていません。レイアウト構造の参考として</div>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block">
+        <h4>📝 Before 行</h4>
+        <ul>
+          <li>作業時間: 1 問あたり 約 30 分</li>
+          <li>スキル要件: Excel で手集計</li>
+          <li>対応 DB: 担当者依存</li>
+        </ul>
+      </div>
+      <div class="detail-block">
+        <h4>📝 After 行</h4>
+        <ul>
+          <li>作業時間: 1 問あたり 約 2 秒</li>
+          <li>スキル要件: 話しかけるだけ</li>
+          <li>対応 DB: 20 種類以上に自動対応</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <article class="slide-card" id="S5">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S5')"><span class="icon"></span><span>S5</span></button>
+      <span class="template-tag">DIAG-09 2軸プロット</span>
+      <!-- サブセクション無し例: 単独スライドは subsec-badge を省略してよい -->
+    </div>
+    <div class="slide-title">競合の中で FactHub はスター領域に独自の立ち位置を占める</div>
+    <div class="slide-subtitle">縦軸に差別化度、横軸に汎用性をとって 5 競合と比較。FactHub のみスター領域に位置しており、他社はコモディティ・価格競争領域に集中していることが見て取れる。</div>
+    <div class="template-preview">
+      <img src="data:image/jpeg;base64,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" alt="DIAG-09 テンプレート構造プレビュー">
+      <div class="tp-meta">
+        <div class="tp-label">📐 テンプレ構造プレビュー</div>
+        <div class="tp-name">DIAG-09 · 2軸プロット</div>
+        <div class="tp-note">4象限にアイテムを打点、INSIGHTパネル付き<br>※ 実際のテキストは入っていません。レイアウト構造の参考として</div>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block">
+        <h4>📝 プロット配置</h4>
+        <ul>
+          <li>自社 FactHub: (7.2, 8.2) ★ハイライト</li>
+          <li>競合 A: (5.8, 6.4)</li>
+          <li>競合 B〜E: 散らす</li>
+        </ul>
+      </div>
+      <div class="detail-block">
+        <h4>💡 INSIGHT パネル</h4>
+        <p>FactHub は高差別化×中〜高汎用性のスター領域で独自の優位を確立。</p>
+      </div>
+    </div>
+  </article>
+
+  <div class="section-title">SECTION R <span>参考情報集</span></div>
+
+  <article class="slide-card" id="SR">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'SR')"><span class="icon"></span><span>SR</span></button>
+      <span class="template-tag">DATA-4 長尺データテーブル</span>
+    </div>
+    <div class="slide-title">本提案の主要な参考文献</div>
+    <div class="slide-subtitle">市場規模・人材・AI 導入動向の 3 観点から参照</div>
+    <div class="template-preview">
+      <img src="data:image/jpeg;base64,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" alt="DATA-4 テンプレート構造プレビュー">
+      <div class="tp-meta">
+        <div class="tp-label">📐 テンプレ構造プレビュー</div>
+        <div class="tp-name">DATA-4 · 長尺データテーブル</div>
+        <div class="tp-note">3列表形式で出典を一覧。タイトルは青リンク化<br>※ 実際のテキストは入っていません。レイアウト構造の参考として</div>
+      </div>
+    </div>
+    <table class="ref-table">
+      <thead>
+        <tr><th>カテゴリ</th><th>タイトル</th><th>出典・年</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="cat">市場規模</td><td><a class="cite-link" href="https://www.idc.com/">国内 AI 市場動向調査</a></td><td>IDC Japan / 2024</td></tr>
+        <tr><td class="cat">人材</td><td><a class="cite-link" href="https://www.ipa.go.jp/">DX 動向 2024（人材の過不足感）</a></td><td>IPA / 2024</td></tr>
+        <tr><td class="cat">AI 導入</td><td><a class="cite-link" href="https://www.nri.com/">企業における生成 AI 活用実態調査</a></td><td>野村総合研究所 / 2025</td></tr>
+        <tr><td class="cat">社内</td><td>2026 Q1 営業活動レポート</td><td>社内ダッシュボード / 2026-04</td></tr>
+      </tbody>
+    </table>
+  </article>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TAB 2: 思考過程
+     ═══════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-thinking">
+
+  <div class="section-title">THINKING <span>各スライドの設計意図を言語化</span></div>
+
+  <article class="slide-card">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S1')"><span class="icon"></span><span>S1</span></button>
+      <span class="template-tag">SECTION-1 表紙</span>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block">
+        <h4>🎯 読者に抱かせたい印象</h4>
+        <p>「なんか速くなりそう」「自分の仕事がラクになる予感」という<strong>前向きな期待感</strong>。堅苦しい製品発表ではなく、仲間からのワクワクする共有という温度で。</p>
+      </div>
+      <div class="detail-block">
+        <h4>💬 持ち帰ってほしい一言</h4>
+        <p class="quote">もっと速く、もっと自由に — FactHub v2.0</p>
+      </div>
+      <div class="detail-block">
+        <h4>📐 テンプレ選定の理由</h4>
+        <p>表紙なので SECTION-1 一択。大きな日本語タイトルで主張を伝える。</p>
+      </div>
+      <div class="detail-block">
+        <h4>🎨 トーン選定の理由</h4>
+        <p>紫メイン（ブランド）+ アンバー差し色で達成感と楽観を演出。</p>
+      </div>
+    </div>
+  </article>
+
+  <article class="slide-card">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S2')"><span class="icon"></span><span>S2</span></button>
+      <span class="template-tag">SECTION-6 (旧目次は v6.27 で SECTION-6 に統合) 目次</span>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block">
+        <h4>🎯 読者に抱かせたい印象</h4>
+        <p>「15 分で終わる説明ね」という<strong>時間感覚の確立</strong>。知らない用語が出てきても迷子にならない安心感。</p>
+      </div>
+      <div class="detail-block">
+        <h4>💬 持ち帰ってほしい一言</h4>
+        <p class="quote">3 つの新機能 + 使い始め方、だけ聞けばいい</p>
+      </div>
+      <div class="detail-block">
+        <h4>📐 テンプレ選定の理由</h4>
+        <p>4 項目の番号リストが自然に収まる SECTION-6 (旧目次は v6.27 で SECTION-6 に統合)。各項目は 10 文字以内でサマリー可能。</p>
+      </div>
+      <div class="detail-block">
+        <h4>🔗 S1 との接続</h4>
+        <p>表紙のワクワク感を受けて「では具体的に何を話すか」を一言で宣言。</p>
+      </div>
+    </div>
+  </article>
+
+  <article class="slide-card">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S3')"><span class="icon"></span><span>S3</span></button>
+      <span class="template-tag">LIST-1 標準コンテンツ</span>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block">
+        <h4>🎯 読者に抱かせたい印象</h4>
+        <p>「え、SQL 書かなくていいの?」という<strong>驚き → 希望</strong>。自分の業務に重ねて想像し始めるスイッチを入れたい。</p>
+      </div>
+      <div class="detail-block">
+        <h4>💬 持ち帰ってほしい一言</h4>
+        <p class="quote">日本語で聞けば 2 秒で答えが出る、正答率 94%</p>
+      </div>
+      <div class="detail-block">
+        <h4>📐 テンプレ選定の理由</h4>
+        <p>1 つのメッセージ（自然言語検索）を深掘りするので LIST-1 標準コンテンツ。3 要点で網羅。</p>
+      </div>
+      <div class="detail-block">
+        <h4>🎨 トーン選定の理由</h4>
+        <p>「94%」を最大フォントで視線を引き込み、達成感の Amber で囲む。事実ベースで gray も混ぜて信頼性担保。</p>
+      </div>
+      <div class="detail-block full-width">
+        <h4>⚠️ 想定される反応・質問</h4>
+        <ul>
+          <li>「94% の内訳は?」→ 出典リンクから IPA 調査 & 社内検証へ誘導</li>
+          <li>「残り 6% は?」→ Phase 3 で脚注追加を検討</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <article class="slide-card">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S4')"><span class="icon"></span><span>S4</span></button>
+      <span class="template-tag">DIAG-04 Before/After 比較</span>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block">
+        <h4>🎯 読者に抱かせたい印象</h4>
+        <p>「今の苦労 → 解消される未来」の<strong>対比ショック</strong>。自分の日常業務が右列（After）に置き換わる光景を想像させる。</p>
+      </div>
+      <div class="detail-block">
+        <h4>💬 持ち帰ってほしい一言</h4>
+        <p class="quote">30 分の作業が 2 秒になる</p>
+      </div>
+      <div class="detail-block">
+        <h4>📐 テンプレ選定の理由</h4>
+        <p>数字の対比を最大化したいので Before/After 比較ダイアグラム一択。</p>
+      </div>
+      <div class="detail-block">
+        <h4>🎨 トーン選定の理由</h4>
+        <p>左列はネイビー（過去・重さ）、右列はセージグリーン（前進・希望）。緑を差し色にすることで「前に進める」空気を作る。</p>
+      </div>
+    </div>
+  </article>
+
+  <article class="slide-card">
+    <div class="card-head">
+      <button class="id-copy" onclick="copyId(this, 'S5')"><span class="icon"></span><span>S5</span></button>
+      <span class="template-tag">DIAG-09 2軸プロット</span>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-block">
+        <h4>🎯 読者に抱かせたい印象</h4>
+        <p>「自分たちが選んでいるプロダクトは独自ポジションにいるんだ」という<strong>誇り + 確信</strong>。競合と並べることで客観性も担保。</p>
+      </div>
+      <div class="detail-block">
+        <h4>💬 持ち帰ってほしい一言</h4>
+        <p class="quote">FactHub は差別化領域を独走中</p>
+      </div>
+      <div class="detail-block">
+        <h4>📐 テンプレ選定の理由</h4>
+        <p>競合ポジショニング = 2 軸プロット（DIAG-09）が最適。INSIGHT パネルで主張を言語化。</p>
+      </div>
+      <div class="detail-block">
+        <h4>🎨 トーン選定の理由</h4>
+        <p>自社はブランド紫でハイライト + ハロー。他社はパレットから控えめな色を分散で割り当て。</p>
+      </div>
+    </div>
+  </article>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TAB 3: レビューサイクル
+     ═══════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-review">
+
+  <div class="section-title">REVIEW CYCLE <span>架空読者による通読テスト（1 回目）</span></div>
+
+  <!-- ── Persona ── -->
+  <div class="persona-card">
+    <div class="ph">
+      <div class="avatar">田</div>
+      <div>
+        <h3>田中 美咲さん（架空）</h3>
+        <div class="role">営業部 3 年目 / 非エンジニア</div>
+      </div>
+    </div>
+    <p style="font-size: 13px; color: var(--gray700); margin: 0;">
+      月次の商談データを Excel でまとめている。SQL は見たことはあるが書けない。データ分析は大切だとは思うが「難しそう」と構えている。
+    </p>
+    <div class="traits">
+      <div>
+        <div class="label">関心</div>
+        <div>「自分の業務にどう関係するか」のみ</div>
+      </div>
+      <div>
+        <div class="label">忍耐度</div>
+        <div>低め。専門用語 3 個で離脱</div>
+      </div>
+      <div>
+        <div class="label">求めていること</div>
+        <div>具体的な使い方 + 導入負荷の低さ</div>
+      </div>
+      <div>
+        <div class="label">警戒している地雷</div>
+        <div>「これ勉強しないと使えないやつ?」</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Summary ── -->
+  <div class="review-summary">
+    <h3>🔄 1 回目のレビュー結果</h3>
+    <div class="stats">
+      <div class="stat"><strong>3</strong>つの改善点</div>
+      <div class="stat">重要度 <strong>高 1</strong> / 中 <strong>1</strong> / 低 <strong>1</strong></div>
+      <div class="stat">修正対応: <strong>完了</strong></div>
+    </div>
+  </div>
+
+  <!-- ── Issues ── -->
+  <article class="issue-card">
+    <div class="head">
+      <span class="rid">R1</span>
+      <span class="template-tag issue-high">重要度: 高</span>
+      <span class="arrow">→</span>
+      <a href="#S3" class="target-slide" onclick="switchTab('final')">S3</a>
+    </div>
+    <div class="feedback">数字は印象的だが、なぜ 94% なのか根拠が分からなかった。「本当にうちの業務で効く?」と疑いが残る。</div>
+    <div class="action">サブコピーに「社内 QA 713 問の検証結果」を追記。数字の出所を即座に示す。</div>
+    <details>
+      <summary>Before / After 差分を見る</summary>
+      <div class="diff">
+        <div class="before">
+          <div class="diff-label">BEFORE</div>
+          新機能 A: 自然言語検索の精度が 94% に到達
+        </div>
+        <div class="after">
+          <div class="diff-label">AFTER</div>
+          新機能 A: 自然言語検索の精度が 94% に到達（社内 QA 713 問の検証結果）
+        </div>
+      </div>
+    </details>
+  </article>
+
+  <article class="issue-card">
+    <div class="head">
+      <span class="rid">R2</span>
+      <span class="template-tag issue-mid">重要度: 中</span>
+      <span class="arrow">→</span>
+      <a href="#S4" class="target-slide" onclick="switchTab('final')">S4</a>
+    </div>
+    <div class="feedback">Before 行の「SQL 専門知識」が重すぎて、まず「自分はどっちの人間なんだっけ?」で止まった。After が頭に入らない。</div>
+    <div class="action">Before 行を「Excel で手集計」、After 行を「話しかけるだけ」に変更。読者の現状語彙に寄せる。</div>
+    <details>
+      <summary>Before / After 差分を見る</summary>
+      <div class="diff">
+        <div class="before">
+          <div class="diff-label">BEFORE</div>
+          Before: SQL 専門知識<br>After: 自然言語のみ
+        </div>
+        <div class="after">
+          <div class="diff-label">AFTER</div>
+          Before: Excel で手集計<br>After: 話しかけるだけ
+        </div>
+      </div>
+    </details>
+  </article>
+
+  <article class="issue-card">
+    <div class="head">
+      <span class="rid">R3</span>
+      <span class="template-tag issue-low">重要度: 低</span>
+      <span class="arrow">→</span>
+      <a href="#S5" class="target-slide" onclick="switchTab('final')">S5</a>
+    </div>
+    <div class="feedback">2 軸プロットの「差別化」「汎用性」の意味が一瞬分からず、脳内変換にコストがかかった。</div>
+    <div class="action">軸ラベルに補足を追加: 「差別化 ＝ 独自の価値」「汎用性 ＝ 使える場面の広さ」。Phase 3 で実装時に反映。</div>
+    <details>
+      <summary>対応予定（Phase 3）</summary>
+      <div style="padding: 8px 12px; background: var(--gray100); border-radius: 6px; font-size: 12px; color: var(--gray700);">
+        軸ラベルテキストを更新: <code>「汎用性 高 →」 → 「汎用性 高（使える場面広い）→」</code>
+      </div>
+    </details>
+  </article>
+
+  <!-- ── Final check ── -->
+  <div class="review-summary" style="margin-top: 24px;">
+    <h3>✅ レビュー完了後の状態</h3>
+    <p style="font-size: 13px; color: var(--gray700); margin: 0;">
+      修正反映後、同じ架空読者で再通読をシミュレート。R1・R2 は解消済み、R3 は Phase 3 の実装段階で確実に反映する。
+      この結果を踏まえて人間の最終 QA 判断を仰ぐ。
+    </p>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     Toast + Script
+     ═══════════════════════════════════════════════ -->
+<div class="toast" id="toast">コピーしました</div>
+
+<script>
+  /** ID コピー */
+  function copyId(btn, id) {
+    const toast = document.getElementById('toast');
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = id;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch(e) {}
+      document.body.removeChild(ta);
+    };
+    const showFeedback = () => {
+      btn.classList.add('copied');
+      toast.textContent = `"${id}" をコピーしました`;
+      toast.classList.add('show');
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        toast.classList.remove('show');
+      }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(id).then(showFeedback).catch(() => {
+        fallback(); showFeedback();
+      });
+    } else {
+      fallback(); showFeedback();
+    }
+  }
+
+  /** タブ切替 */
+  function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.tab === name);
+    });
+    document.querySelectorAll('.tab-content').forEach(c => {
+      c.classList.toggle('active', c.id === `tab-${name}`);
+    });
+  }
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.addEventListener('click', () => switchTab(b.dataset.tab));
+  });
+</script>
+
+</body>
+</html>

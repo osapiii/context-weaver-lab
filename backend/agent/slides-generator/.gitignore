@@ -1,0 +1,8 @@
+# Local-only artifacts that should not be committed
+.adk/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+node_modules/

@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Nuxt / build output
+.nuxt/
+.output/
+dist/
+app/dist
+playwright-report/
+test-results/
+
+# Logs
+*.log
+
+# Local env files
+.env
+.env.*
+!.env.example
+app/.env
+app/.env.*
+!app/.env.example
+
+# Local certificates / keys
+*.key
+*.csr
+*.crt
+*service-account*.json
+*key*.json
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Firebase local cache
+.firebase/
+
+# Local signer keys / private local runtime state
+app/.local/

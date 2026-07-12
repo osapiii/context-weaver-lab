@@ -1,0 +1,16 @@
+{
+  "projects": {
+    "default": "storyvault-dev",
+    "development": "storyvault-dev"
+  },
+  "targets": {
+    "storyvault-dev": {
+      "hosting": {
+        "default": [
+          "storyvault-dev"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

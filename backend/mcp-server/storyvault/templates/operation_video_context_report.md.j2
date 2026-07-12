@@ -1,0 +1,218 @@
+# StoryVault Operation Video Bundle: {{ video.title|text(operation_video_id) }}
+
+## Bundle
+- Application: {{ application.name|text(application.id|text("n/a")) }}
+- Application ID: {{ application.id|text("n/a") }}
+- Operation video ID: {{ operation_video_id }}
+- Video group: {{ video_group.name|text("n/a") }}
+- Video group description: {{ video_group.description|text("n/a") }}
+- Generated at: {{ manifest.generatedAt|text("n/a") }}
+- Signed URL expires at: {{ manifest.signedUrlExpiresAt|text("n/a") }}
+- Linked stories: {{ linked_stories|length }}
+- Evidence: {{ evidence|length }}
+- Source assets: {{ source_assets|length }}
+- Video clips: {{ video.clips|default([])|length }}
+- Screenshots: {{ counts.screenshots|default(video.screenshots|default([])|length) }}
+- Generated editing assets: {{ counts.generatedAssets|default(video.generatedAssets|default([])|length) }}
+- Story candidates: {{ video.storyCandidates|default([])|length }}
+- Timestamped transcript cues: {{ video.transcriptSegmentCount|default(video.transcriptSegments|default([])|length) }}
+- GitHub pull requests: {{ pull_requests|length }}
+- Slack messages: {{ slack_messages|length }}
+- Knowledge documents: {{ knowledge_documents|length }}
+
+## Operation Video
+- Title: {{ video.title|text("n/a") }}
+- Description: {{ video.description|text("n/a") }}
+- Recorded at: {{ video.recordedAt|text("n/a") }}
+- Duration: {{ video.durationMs|format_ms }}
+- Group: {{ video.videoGroup.name|text(video_group.name|text("n/a")) }}
+- GCS path: {{ video.gcsPath|text("n/a") }}
+- Download URL: {{ video.downloadUrl|text("n/a") }}
+- Transcript summary: {{ video.transcriptSummary|text("n/a") }}
+- Transcript provider: {{ video.transcriptProvider|text("n/a") }}
+- Transcript timing status: {{ video.transcriptTimingStatus|text("n/a") }}
+- Analysis status: {{ video.analysisStatus|text("n/a") }}
+- Story candidates: {{ video.storyCandidateCount|default(video.storyCandidates|default([])|length) }}
+- Generated editing assets: {{ video.generatedAssetCount|default(video.generatedAssets|default([])|length) }}
+
+## External Editing Assets
+{% for asset in video.generatedAssets|default([]) -%}
+- {{ asset.label|text(asset.kind|text("generated_asset")) }}
+  - Kind: {{ asset.kind|text("n/a") }}
+  - Role: {{ asset.role|text("n/a") }}
+  - MIME: {{ asset.contentType|text("n/a") }}
+  - Project: {{ asset.projectName|text(asset.projectId|text("n/a")) }}
+  - GCS path: {{ asset.gcsPath|text("n/a") }}
+  - Download URL: {{ asset.downloadUrl|text("n/a") }}
+{% else -%}
+- No Video Studio generated assets were found for this operation video.
+{% endfor %}
+
+## Operation Clips
+{% for clip in video.clips|default([]) %}
+### {{ clip.id|text("clip") }}{% if clip.fileName %}: {{ clip.fileName }}{% endif %}
+- Recorded at: {{ clip.recordedAt|text("n/a") }}
+- Duration: {{ clip.durationMs|format_ms }}
+- GCS path: {{ clip.gcsPath|text("n/a") }}
+- Download URL: {{ clip.downloadUrl|text("n/a") }}
+- Screenshots: {{ clip.screenshots|default([])|length }}
+- Transcript summary: {{ clip.transcriptSummary|text("n/a") }}
+- Transcript provider: {{ clip.transcriptProvider|text("n/a") }}
+- Transcript timing status: {{ clip.transcriptTimingStatus|text("n/a") }}
+- Timestamped transcript cues: {{ clip.transcriptSegmentCount|default(clip.transcriptSegments|default([])|length) }}
+{% else %}
+- No clips.
+{% endfor %}
+
+## Extracted Story Candidates
+{% for candidate in video.storyCandidates|default([]) %}
+### {{ candidate.storyKey|text(candidate.id|text("story-candidate")) }}: {{ candidate.title|text("Untitled candidate") }}
+- Summary: {{ candidate.summary|text("n/a") }}
+- Who: {{ candidate.who|text("n/a") }}
+- What: {{ candidate.what|text("n/a") }}
+- Why: {{ candidate.why|text("n/a") }}
+- User story: {{ candidate.userStory|text("n/a") }}
+- Confidence: {{ candidate.confidenceScore|text("n/a") }}
+- Transcript cue IDs: {{ candidate.transcriptCueIds|default([])|join(", ") if candidate.transcriptCueIds else "n/a" }}
+- Evidence count: {{ candidate.evidenceCount|default(candidate.evidence|default([])|length) }}
+- Screenshots: {{ candidate.screenshotCount|default(0) }}
+
+#### Completion Criteria
+{% for criterion in candidate.acceptanceCriteria|default([]) -%}
+{{ loop.index }}. {{ criterion }}
+{% else -%}
+- No completion criteria recorded.
+{% endfor %}
+
+#### Timestamp Evidence
+{% for item in candidate.evidence|default([]) -%}
+- {{ item.title|text("Evidence") }} ({{ item.tRange|format_seconds_range }})
+  - Summary: {{ item.summary|text("n/a") }}
+  - Transcript quote: {{ item.transcriptQuote|text("n/a") }}
+  - Cue IDs: {{ item.transcriptCueIds|default([])|join(", ") if item.transcriptCueIds else "n/a" }}
+  - Screenshots: {% if item.screenshots %}{{ item.screenshots|map(attribute="id")|join(", ") }}{% else %}n/a{% endif %}
+{% else -%}
+- No timestamp evidence recorded.
+{% endfor %}
+{% else -%}
+- No extracted story candidates are recorded on this operation video.
+{% endfor %}
+
+## Timestamped Transcript
+- Provider: {{ video.transcriptProvider|text("n/a") }}
+- Timing status: {{ video.transcriptTimingStatus|text("n/a") }}
+- Cues: {{ video.transcriptSegmentCount|default(video.transcriptSegments|default([])|length) }}
+{% set transcript_cues = video.transcriptSegments|default([]) %}
+{% for cue in transcript_cues[:120] -%}
+- {{ cue.id|text("cue") }} / {{ cue.startMs|format_ms }} - {{ cue.endMs|format_ms }}: {{ cue.text|text("n/a") }}
+{% else -%}
+- No timestamped transcript cues.
+{% endfor %}
+{% if video.transcriptSegmentsTruncated -%}
+- Transcript cues were truncated for MCP response size. Use the original operation video record for the full transcript.
+{% endif %}
+
+## Linked User Stories
+{% for story in linked_stories %}
+### {{ story.storyKey|text(story.id|text("story")) }}: {{ story.title|text("Untitled story") }}
+- Story ID: {{ story.id|text("n/a") }}
+- Status: {{ story.status|text("n/a") }}
+- Review state: {{ story.reviewState|text("n/a") }}
+- Capability: {{ story.capabilityName|text(story.capabilityKey|text(story.capabilityId|text("n/a"))) }}
+- Summary: {{ story.summary|text("n/a") }}
+- User story: {{ story.userStory|text("n/a") }}
+- Evidence IDs: {{ story.evidenceIds|default([])|join(", ") if story.evidenceIds else "n/a" }}
+
+#### Acceptance Criteria
+{% for criterion in story.acceptanceCriteria|default([]) -%}
+{{ loop.index }}. [{{ criterion.state|text("unknown") }}] {{ criterion.text|text("Untitled criterion") }} (evidence: {{ criterion.evidenceIds|default([])|join(", ") if criterion.evidenceIds else "n/a" }})
+{% else -%}
+- No acceptance criteria recorded.
+{% endfor %}
+{% else -%}
+- No user stories are linked to this operation video.
+{% endfor %}
+
+## Evidence
+{% for item in evidence %}
+### {{ item.title|text(item.id|text("Evidence")) }}
+- Evidence ID: {{ item.id|text("n/a") }}
+- Story: {{ item.storyKey|text(item.storyId|text("n/a")) }}
+- Type: {{ item.type|text("n/a") }}
+- Freshness: {{ item.freshness|text("n/a") }}
+- Excerpt: {{ item.excerpt|text("n/a") }}
+- Observed user action: {{ item.observedUserAction|text("n/a") }}
+- Observed UI surface: {{ item.observedUiSurface|text("n/a") }}
+- Source asset ID: {{ item.sourceAssetId|text("n/a") }}
+- Source URL: {{ item.sourceUrl|text("n/a") }}
+{% else -%}
+- No evidence is linked to this operation video.
+{% endfor %}
+
+## Source Assets
+{% for asset in source_assets -%}
+- {{ asset.id|text("source_asset") }}
+  - Type: {{ asset.sourceType|text("n/a") }}
+  - Title: {{ asset.title|text("n/a") }}
+  - GCS path: {{ asset.gcsPath|text("n/a") }}
+  - Download URL: {{ asset.downloadUrl|text("n/a") }}
+{% else -%}
+- No source asset refs.
+{% endfor %}
+
+## Knowledge Documents
+{% for doc in knowledge_documents -%}
+- {{ doc.displayName|text(doc.documentId|text(doc.name|text("Knowledge"))) }}
+  - FileSpace: {{ doc.fileSpaceId|text("n/a") }}
+  - MIME: {{ doc.mimeType|text("n/a") }}
+  - Score: {{ doc.relevanceScore|text("n/a") }}
+  - Reason: {{ doc.reason|text("n/a") }}
+  - GCS path: {{ doc.gcsPath|text(doc.gcsUrl|text("n/a")) }}
+  - Download URL: {{ doc.downloadUrl|text("n/a") }}
+{% else -%}
+- No knowledge document refs.
+{% endfor %}
+
+## Screenshots
+{% set frames = video.screenshots|default([]) %}
+{% for frame in frames[:30] -%}
+- Frame {{ frame.id|text("n/a") }} at {{ frame.timestampMs|text("n/a") }}ms: {{ frame.downloadUrl|text(frame.gcsPath|text("n/a")) }}
+{% else -%}
+- No screenshots.
+{% endfor %}
+
+## GitHub Pull Requests
+{% for pr in pull_requests -%}
+- {{ pr.repoFullName|text("repo") }} PR {{ pr.number|text("n/a") }}: {{ pr.title|text("n/a") }} ({{ pr.htmlUrl|text("n/a") }})
+{% else -%}
+- No GitHub pull request refs.
+{% endfor %}
+
+## Slack Messages
+{% for message in slack_messages -%}
+- #{{ message.channelName|text(message.channelId|text("slack")) }} / {{ message.author|text("unknown") }} / {{ message.postedAt|text(message.messageTs|text("n/a")) }}
+  - Text: {{ message.text|text("n/a") }}
+  - Reason: {{ message.reason|text("n/a") }}
+  - Score: {{ message.relevanceScore|text("n/a") }}
+  - Matched signals: {{ message.matchedSignals|default([])|join(", ") if message.matchedSignals else "n/a" }}
+  - Permalink: {{ message.permalink|text("n/a") }}
+{% else -%}
+- No Slack message refs.
+{% endfor %}
+
+## Jira Issues
+{% for issue in jira_issues -%}
+- {{ issue.key|text("JIRA") }}: {{ issue.summary|text("n/a") }} ({{ issue.htmlUrl|text("n/a") }})
+  - Site: {{ issue.siteName|text(issue.siteUrl|text("n/a")) }}
+  - Status: {{ issue.status.name|text("n/a") if issue.status else "n/a" }}
+  - Assignee: {{ issue.assignee.name|text("unassigned") if issue.assignee else "unassigned" }}
+  - Reason: {{ issue.reason|text("n/a") }}
+  - Score: {{ issue.relevanceScore|text("n/a") }}
+{% else -%}
+- No Jira issue refs.
+{% endfor %}
+
+## Agent Instructions
+- Treat this as an operation-video bundle report.
+- Summarize the operation video first, then use linked user stories as interpretations attached to the video.
+- Preserve operationVideoId, story IDs, story keys, and evidence IDs in implementation plans, PR descriptions, and release notes.

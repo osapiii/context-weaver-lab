@@ -1,0 +1,24 @@
+# Cloud Build / docker build 時に COPY したくないもの
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+
+# 巨大成果物 (Cloud Run には不要)
+decks/
+tests/outputs/
+logs/
+tmp/
+
+# 開発ホスト依存
+.venv/
+.env
+.DS_Store
+.cursor/
+.obsidian/
+
+# 別バンドル (skill バックアップ等)
+skills-dist/
+skills/versions/
+adk_app.deprecated/
+adk_app/

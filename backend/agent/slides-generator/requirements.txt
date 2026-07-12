@@ -1,0 +1,28 @@
+# ─── ADK + Gemini SDK ──────────────────────────
+google-adk>=2.0,<3
+google-genai>=1.72,<2
+
+# ─── Pydantic v2 ──────────────────────────────
+pydantic>=2.6.0
+
+# ─── 環境変数 / CLI / 共通ユーティリティ ───────────
+python-dotenv>=1.0.0
+pyyaml>=6.0
+requests>=2.31.0
+
+# ─── 既存エージェント依存 (画像合成 / Jinja2) ─────
+pillow>=10.0,<12
+jinja2>=3.1.0
+
+# ─── research.html 生成用 markdown→HTML ──────────
+markdown-it-py>=3.0,<4
+
+# ─── PPTX レンダラ python-pptx (skill v12 が import) ─
+python-pptx>=1.0,<2
+
+# ─── EN AIstudio 連携: FastAPI + 認証 + GCP クライアント ───
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+firebase-admin>=6.6.0
+google-cloud-firestore>=2.19.0
+google-cloud-storage>=2.19.0

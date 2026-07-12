@@ -1,0 +1,9 @@
+{
+  "apiKey": "replace-with-firebase-web-api-key",
+  "authDomain": "qlavis-dev.firebaseapp.com",
+  "projectId": "qlavis-dev",
+  "storageBucket": "qlavis-dev.appspot.com",
+  "messagingSenderId": "295155675478",
+  "appId": "1:295155675478:web:25d1f82ea2308794c1a6f7",
+  "measurementId": "G-8ZRSJ69GVD"
+}
