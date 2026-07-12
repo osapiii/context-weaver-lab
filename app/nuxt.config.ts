@@ -28,21 +28,12 @@ if (existsSync(envFile)) {
 const useFirebaseEmulator =
   process.env.NUXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
 const firebaseProjectId = process.env.NUXT_PUBLIC_FIREBASECONFIG_PROJECTID || "";
-const devAuthBypassDefaultProjects = new Set([
-  "storyvault-dev",
-  "en-aistudio-development",
-]);
-const defaultDevAuthBypassEmails =
-  devAuthBypassDefaultProjects.has(firebaseProjectId) ||
-  (firebaseProjectId && firebaseProjectId !== "en-aistudio-production")
-    ? "super@enostech.co.jp"
-    : "";
 const devAuthBypassEmails =
-  process.env.NUXT_PUBLIC_DEV_AUTH_BYPASS_EMAILS ||
-  defaultDevAuthBypassEmails;
+  process.env.NUXT_PUBLIC_DEV_AUTH_BYPASS_EMAILS || "";
 const devAuthBypassEnabled =
-  process.env.NUXT_PUBLIC_DEV_AUTH_BYPASS_ENABLED ||
-  (devAuthBypassEmails ? "true" : "false");
+  process.env.NUXT_PUBLIC_DEV_AUTH_BYPASS_ENABLED === "true" ? "true" : "false";
+const passwordAuthEnabled =
+  process.env.NUXT_PUBLIC_PASSWORD_AUTH_ENABLED === "true" ? "true" : "false";
 const defaultDatadogEnv =
   firebaseProjectId === "en-aistudio-production" ||
   process.env.NODE_ENV === "production"
@@ -284,6 +275,8 @@ export default defineNuxtConfig({
         enabled: devAuthBypassEnabled,
         emails: devAuthBypassEmails,
       },
+      /** 審査・デモ用のメール/パスワード認証。Firebase Auth 側でも provider を有効化する。 */
+      passwordAuthEnabled,
       datadog: {
         applicationId: process.env.NUXT_PUBLIC_DATADOG_APPLICATIONID || "",
         clientToken: process.env.NUXT_PUBLIC_DATADOG_CLIENTTOKEN || "",

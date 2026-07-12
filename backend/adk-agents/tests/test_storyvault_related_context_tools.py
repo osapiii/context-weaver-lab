@@ -26,28 +26,30 @@ class _ToolContext:
 def test_unprotect_github_token_supports_plain_and_fernet(monkeypatch):
     key = Fernet.generate_key()
     fernet = Fernet(key)
-    encrypted = fernet.encrypt(b"gho_test").decode("utf-8")
+    github_fixture = "github-test-token"
+    encrypted = fernet.encrypt(github_fixture.encode()).decode("utf-8")
 
     assert unprotect_github_token({"mode": "plain", "value": "plain-token"}) == "plain-token"
 
     monkeypatch.setenv("GITHUB_TOKEN_ENCRYPTION_KEY", key.decode("utf-8"))
     assert (
         unprotect_github_token({"mode": "fernet", "value": encrypted})
-        == "gho_test"
+        == github_fixture
     )
 
 
 def test_unprotect_slack_token_supports_plain_and_fernet(monkeypatch):
     key = Fernet.generate_key()
     fernet = Fernet(key)
-    encrypted = fernet.encrypt(b"xoxb-test").decode("utf-8")
+    slack_fixture = "slack-test-token"
+    encrypted = fernet.encrypt(slack_fixture.encode()).decode("utf-8")
 
     assert unprotect_slack_token({"mode": "plain", "value": "plain-token"}) == "plain-token"
 
     monkeypatch.setenv("SLACK_TOKEN_ENCRYPTION_KEY", key.decode("utf-8"))
     assert (
         unprotect_slack_token({"mode": "fernet", "value": encrypted})
-        == "xoxb-test"
+        == slack_fixture
     )
 
 

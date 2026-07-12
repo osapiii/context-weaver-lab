@@ -4,6 +4,7 @@ import {
   getAuth,
   isSignInWithEmailLink,
   setPersistence,
+  signInWithEmailAndPassword,
   signInWithCustomToken,
   signInWithEmailLink,
   type User,
@@ -127,6 +128,17 @@ export const useAdminUserStore = defineStore("adminUser", {
         auth,
         params.email,
         params.url,
+      );
+      return credential.user;
+    },
+
+    async passwordSignIn(params: { email: string; password: string }) {
+      const auth = getAuth();
+      await setPersistence(auth, browserLocalPersistence);
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        params.email.trim().toLowerCase(),
+        params.password,
       );
       return credential.user;
     },

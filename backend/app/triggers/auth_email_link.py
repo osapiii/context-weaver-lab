@@ -28,8 +28,6 @@ db = firestore.Client()
 SEND_MAIL_SERVICE_URL = os.getenv("SEND_MAIL_SERVICE_URL", "").rstrip("/")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 RATE_LIMIT_SECONDS = 60
-DEFAULT_DEV_AUTH_PROJECT_IDS = {"en-aistudio-development"}
-DEFAULT_DEV_AUTH_EMAILS = {"super@enostech.co.jp"}
 DEV_SUPER_UID = "super_enostech_co_jp"
 DEV_ORGANIZATION_ID = "org_enostech"
 DEV_ORGANIZATION_CODE = "enostech"
@@ -88,14 +86,19 @@ def _csv_env_set(name: str) -> set[str]:
 
 
 def _dev_auth_project_ids() -> set[str]:
-    return _csv_env_set("DEV_AUTH_BYPASS_PROJECT_IDS") or DEFAULT_DEV_AUTH_PROJECT_IDS
+    return _csv_env_set("DEV_AUTH_BYPASS_PROJECT_IDS")
 
 
 def _dev_auth_emails() -> set[str]:
-    return _csv_env_set("DEV_AUTH_BYPASS_EMAILS") or DEFAULT_DEV_AUTH_EMAILS
+    return _csv_env_set("DEV_AUTH_BYPASS_EMAILS")
 
 
 def _assert_dev_auth_bypass_allowed(email: str, project_id: str) -> None:
+    if os.getenv("DEV_AUTH_BYPASS_ENABLED", "").lower() != "true":
+        raise https_fn.HttpsError(
+            code=https_fn.FunctionsErrorCode.PERMISSION_DENIED,
+            message="開発ログインは無効です",
+        )
     if project_id.lower() not in _dev_auth_project_ids():
         raise https_fn.HttpsError(
             code=https_fn.FunctionsErrorCode.PERMISSION_DENIED,

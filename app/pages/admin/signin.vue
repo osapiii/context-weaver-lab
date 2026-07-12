@@ -29,6 +29,7 @@ const schema = z.object({
     .trim()
     .email("有効なメールアドレスを入力してください")
     .min(1, "メールアドレスは必須です"),
+  password: z.string().optional(),
 });
 
 type Schema = z.output<typeof schema>;
@@ -61,6 +62,7 @@ const resolveRedirectPath = (): string | null => {
 //#region Reactive Data
 const state = reactive<Schema>({
   email: "",
+  password: "",
 });
 
 const isLoading = ref(false);
@@ -68,6 +70,11 @@ const signinStep = ref<"request" | "sent" | "verifying" | "needs-email">(
   "request",
 );
 const sentEmail = ref("");
+const passwordAuthEnabled =
+  String(config.public.passwordAuthEnabled) === "true";
+const loginMethod = ref<"password" | "email-link">(
+  passwordAuthEnabled ? "password" : "email-link",
+);
 //#endregion
 
 //#region Methods
@@ -93,18 +100,10 @@ const clearPersistedEmailForLink = () => {
 
 const isDevAuthBypassEmail = (email: string): boolean => {
   const normalizedEmail = email.trim().toLowerCase();
-  const devAuthBypassHosts = new Set([
-    "localhost",
-    "127.0.0.1",
-    "storyvault-dev.web.app",
-    "storyvault-dev.firebaseapp.com",
-  ]);
-  const isDevHost =
+  const isLocalHost =
     typeof window !== "undefined" &&
-    devAuthBypassHosts.has(window.location.hostname);
-  if (isDevHost && normalizedEmail === "super@enostech.co.jp") {
-    return true;
-  }
+    ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  if (!isLocalHost) return false;
 
   const devAuthBypass = config.public.devAuthBypass as
     | { enabled?: boolean | string; emails?: string }
@@ -119,6 +118,36 @@ const isDevAuthBypassEmail = (email: string): boolean => {
     .filter(Boolean);
   return allowlistedEmails.includes(normalizedEmail);
 };
+
+async function signInWithPassword(email: string, password: string) {
+  if (isLoading.value) return;
+  if (!passwordAuthEnabled) return;
+  if (password.length < 8) {
+    toast.add({
+      title: "入力を確認してください",
+      description: "パスワードは8文字以上で入力してください",
+      color: "error",
+    });
+    return;
+  }
+
+  isLoading.value = true;
+  try {
+    const user = await userAuthStore.passwordSignIn({ email, password });
+    await initializeSignedInUser(user);
+    toast.add({ title: "ログインしました", color: "success" });
+    await redirectAfterSignIn();
+  } catch (error: unknown) {
+    log("ERROR", "Password sign-in failed", error);
+    toast.add({
+      title: "ログインできませんでした",
+      description: "メールアドレスまたはパスワードを確認してください",
+      color: "error",
+    });
+  } finally {
+    isLoading.value = false;
+  }
+}
 
 async function initializeSignedInUser(currentUser: User) {
   organizationStore.$reset();
@@ -286,6 +315,13 @@ async function sendSigninLink(email: string) {
  * サインイン処理（ログインリンク送信 / リンク検証）
  */
 async function onSubmit(event: FormSubmitEvent<Schema>) {
+  if (loginMethod.value === "password") {
+    await signInWithPassword(
+      event.data.email.trim().toLowerCase(),
+      event.data.password || "",
+    );
+    return;
+  }
   if (
     signinStep.value === "needs-email" &&
     userAuthStore.isEmailLinkSignIn(window.location.href)
@@ -332,9 +368,7 @@ onMounted(async () => {
         <div class="signin-copy">
           <p class="signin-eyebrow">Secure workspace access</p>
           <h2>仕様とコードのズレを、ストーリー単位で管理。</h2>
-          <p>
-            登録済みメールアドレスに認証リンクを送信します。
-          </p>
+          <p>登録済みアカウントで安全にワークスペースへ接続します。</p>
         </div>
 
         <!-- スマホ向けメッセージ -->
@@ -372,6 +406,29 @@ onMounted(async () => {
           </div>
 
           <div v-else class="mb-6">
+            <div
+              v-if="passwordAuthEnabled && signinStep === 'request'"
+              class="mb-5 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1"
+            >
+              <UButton
+                type="button"
+                :variant="loginMethod === 'password' ? 'solid' : 'ghost'"
+                color="neutral"
+                block
+                @click="loginMethod = 'password'"
+              >
+                審査用ログイン
+              </UButton>
+              <UButton
+                type="button"
+                :variant="loginMethod === 'email-link' ? 'solid' : 'ghost'"
+                color="neutral"
+                block
+                @click="loginMethod = 'email-link'"
+              >
+                メールリンク
+              </UButton>
+            </div>
             <div class="signin-card-header">
               <div class="signin-card-icon" aria-hidden="true">
                 <UIcon
@@ -386,7 +443,9 @@ onMounted(async () => {
               </div>
               <p>
                 {{
-                  signinStep === "sent"
+                  loginMethod === "password"
+                    ? "Reviewer sign in"
+                    : signinStep === "sent"
                     ? "Link sent"
                     : signinStep === "needs-email"
                       ? "Confirm email"
@@ -396,7 +455,9 @@ onMounted(async () => {
             </div>
             <h3 class="signin-form-title">
               {{
-                signinStep === "sent"
+                loginMethod === "password"
+                  ? "メールとパスワードでログイン"
+                  : signinStep === "sent"
                   ? "メールを確認してください"
                   : signinStep === "needs-email"
                     ? "確認のためメールアドレスを入力"
@@ -405,7 +466,9 @@ onMounted(async () => {
             </h3>
             <p class="signin-form-description">
               {{
-                signinStep === "sent"
+                loginMethod === "password"
+                  ? "主催者へ個別に共有された審査用アカウントを入力してください。"
+                  : signinStep === "sent"
                   ? `${sentEmail} 宛にログインリンクを送信しました。リンクを押すとログインが完了します。`
                   : signinStep === "needs-email"
                     ? "別のブラウザまたは端末でリンクを開いたため、送信先メールアドレスの確認が必要です。"
@@ -440,6 +503,25 @@ onMounted(async () => {
                 />
               </UFormField>
 
+              <UFormField
+                v-if="loginMethod === 'password'"
+                label="パスワード"
+                required
+                name="password"
+                class="signin-field"
+              >
+                <UInput
+                  v-model="state.password"
+                  type="password"
+                  placeholder="パスワード"
+                  autocomplete="current-password"
+                  size="xl"
+                  class="w-full"
+                  :disabled="isLoading"
+                  icon="i-heroicons-lock-closed"
+                />
+              </UFormField>
+
               <!-- サインインボタン -->
               <div v-if="signinStep !== 'sent'" class="pt-1">
                 <EnButton
@@ -449,7 +531,7 @@ onMounted(async () => {
                   :leading-icon="
                     isLoading
                       ? 'i-svg-spinners-90-ring-with-bg'
-                      : signinStep === 'needs-email'
+                      : loginMethod === 'password' || signinStep === 'needs-email'
                         ? 'i-heroicons-arrow-right-end-on-rectangle'
                         : 'i-heroicons-paper-airplane'
                   "
@@ -461,7 +543,9 @@ onMounted(async () => {
                   {{
                     isLoading
                       ? "処理中..."
-                      : signinStep === "needs-email"
+                      : loginMethod === "password"
+                        ? "ログイン"
+                        : signinStep === "needs-email"
                         ? "ログインを完了する"
                         : "ログインリンクを送信"
                   }}
