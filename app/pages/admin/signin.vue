@@ -203,26 +203,19 @@ async function redirectAfterSignIn() {
     return;
   }
 
-  // スマホ判定（画面幅で判定）。タブレット (>=768px, iPad 縦含む) は
-  // PC と同じくホーム (/admin) に着地させ、全機能を使えるようにする。
-  const isMobileDevice =
-    typeof window !== "undefined" && window.innerWidth < 768;
-
-  log("INFO", "Device detection", {
-    windowWidth: typeof window !== "undefined" ? window.innerWidth : "N/A",
-    isMobileDevice,
-  });
-
-  if (isMobileDevice) {
-    log("INFO", "Mobile device detected, redirecting to /admin/ai-chat");
-    if (typeof window !== "undefined") {
-      window.location.href = "/admin/ai-chat";
-      return;
-    }
-  } else {
-    log("INFO", "PC device detected, redirecting to /admin (home)");
-    await navigateTo("/admin", { replace: true });
-  }
+  // 通常ログインは、審査で最初に確認してほしい StoryVault の
+  // ユーザーストーリー一覧へ直接遷移する。QR等の redirect は上で優先済み。
+  log("INFO", "Redirecting to the StoryVault user story catalog");
+  await navigateTo(
+    {
+      path: "/admin/storyvault",
+      query: {
+        view: "stories",
+        applicationId: "app-storyvault",
+      },
+    },
+    { replace: true },
+  );
 }
 
 async function completeEmailLinkSignIn(email: string) {
