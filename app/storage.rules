@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Craft rules based on data in your Firestore database
+// allow write: if firestore.get(
+//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSuper() {
+      return signedIn() && request.auth.token.rbacRole == 1;
+    }
+
+    function hasSpaceAccess(orgId, spaceId) {
+      return signedIn()
+             && request.auth.token.organizationId == orgId
+             && (request.auth.token.rbacRole == 2
+                 || (request.auth.token.rbacRole == 3
+                     && spaceId in request.auth.token.spaceIds));
+    }
+
+    match /organizations/{orgId}/spaces/{spaceId}/{allPaths=**} {
+      allow read, write: if isSuper() || hasSpaceAccess(orgId, spaceId);
+    }
+
+    // 移行前の StoryVault assets。組織識別子をパスに持たないため管理者以上に限定。
+    // 新規データは organizations/{orgId}/spaces/{spaceId} 配下へ保存する。
+    match /storyVault/{allPaths=**} {
+      allow read, write: if isSuper()
+                         || (signedIn() && request.auth.token.rbacRole == 2);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if isSuper();
+    }
+  }
+}

@@ -1,0 +1,30 @@
+declare module "vue3-json-viewer" {
+  import type {
+    AllowedComponentProps,
+    App,
+    Component,
+    ComponentCustomProps,
+    VNodeProps,
+  } from "vue";
+
+  interface JsonViewerProps {
+    value: Record<string, unknown> | Array<any> | string | number | boolean;
+    expanded: boolean;
+    expandDepth: number;
+    copyable: boolean | object;
+    sort: boolean;
+    boxed: boolean;
+    theme: string; //"dark" | "light"
+    previewMode: boolean;
+    timeformat: (value: any) => string;
+  }
+
+  type JsonViewerType = JsonViewerProps &
+    VNodeProps &
+    AllowedComponentProps &
+    ComponentCustomProps;
+  const JsonViewer: Component<JsonViewerType>;
+  export { JsonViewer };
+  const def: { install: (app: App) => void };
+  export default def;
+}

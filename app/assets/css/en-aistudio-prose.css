@@ -1,0 +1,395 @@
+/**
+ * EN_AISTUDIO 共通 Markdown prose スタイル.
+ *
+ * v-html で挿入される Markdown HTML に統一的な装飾を当てるためのグローバル class.
+ * `<div class="en-aistudio-prose en-aistudio-prose--{variant}">` で利用する。
+ *
+ * variant (見出し縦バー色だけ振り分ける. 本文・テーブル・コードは全 variant 共通):
+ *  - default  : slate    — 通常 (汎用)
+ *  - ai       : violet   — AI 部下 (経営相談など)
+ *  - research : purple    — リサーチエージェント
+ *  - analysis : emerald  — データ分析
+ *  - help     : sky      — 操作ガイド / オフラインヘルプ
+ *
+ * modifier:
+ *  - .is-compact   : チャットバブル内など、上下マージンを詰める
+ *  - .is-dark      : ダーク背景上での文字色調整 (現状未使用、将来用)
+ *
+ * highlight.js のシンタックスハイライト用 css は別途
+ * import "highlight.js/styles/github.css" で読み込む.
+ */
+
+.en-aistudio-prose {
+  --hp-bar-color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #1e293b;
+  word-wrap: break-word;
+}
+
+/* === variant: 見出し縦バー色だけ振り分け ============================= */
+.en-aistudio-prose--default { --hp-bar-color: #94a3b8; }   /* slate-400  */
+.en-aistudio-prose--ai      { --hp-bar-color: #7c3aed; }   /* violet-500 */
+.en-aistudio-prose--research{ --hp-bar-color: #8b5cf6; }   /* purple-500  */
+.en-aistudio-prose--analysis{ --hp-bar-color: #10b981; }   /* emerald-500*/
+.en-aistudio-prose--help    { --hp-bar-color: #0ea5e9; }   /* sky-500    */
+
+/* === 見出し ========================================================= */
+.en-aistudio-prose h1 {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e2e8f0;
+  color: #0f172a;
+}
+.en-aistudio-prose h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 28px 0 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--hp-bar-color);
+  color: #0f172a;
+}
+.en-aistudio-prose h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 22px 0 8px;
+  color: #0f172a;
+}
+.en-aistudio-prose h4 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 18px 0 6px;
+  color: #334155;
+}
+.en-aistudio-prose h5,
+.en-aistudio-prose h6 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 16px 0 6px;
+  color: #475569;
+}
+
+/* === 段落 / 強調 ==================================================== */
+.en-aistudio-prose p {
+  margin: 0 0 12px;
+}
+.en-aistudio-prose strong {
+  font-weight: 700;
+  color: #0f172a;
+}
+.en-aistudio-prose em {
+  font-style: italic;
+  color: #475569;
+}
+.en-aistudio-prose mark {
+  background: #fef9c3;
+  color: #713f12;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+/* === リスト ========================================================= */
+.en-aistudio-prose ul,
+.en-aistudio-prose ol {
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+.en-aistudio-prose ul { list-style: disc; }
+.en-aistudio-prose ol { list-style: decimal; }
+.en-aistudio-prose li { margin: 4px 0; }
+.en-aistudio-prose li > p { margin: 0; }
+.en-aistudio-prose ul.contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+.en-aistudio-prose ul.contains-task-list li {
+  padding-left: 1.5em;
+  position: relative;
+}
+.en-aistudio-prose ul.contains-task-list li input[type="checkbox"] {
+  position: absolute;
+  left: 0;
+  margin-top: 0.4em;
+  cursor: pointer;
+}
+
+/* === リンク (通常 / route: / launcher:) ============================== */
+.en-aistudio-prose a {
+  color: #0369a1;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 120ms ease;
+}
+.en-aistudio-prose a:hover { color: #0c4a6e; }
+
+.en-aistudio-prose a.en-aistudio-router-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 120ms ease;
+}
+.en-aistudio-prose a.en-aistudio-router-link--route {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.en-aistudio-prose a.en-aistudio-router-link--route:hover {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.en-aistudio-prose a.en-aistudio-router-link--launcher {
+  background: #f0f9ff;
+  color: #0369a1;
+}
+.en-aistudio-prose a.en-aistudio-router-link--launcher:hover {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+/* === Inline code / fenced code ====================================== */
+.en-aistudio-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #be185d;
+  border: 1px solid #e2e8f0;
+}
+.en-aistudio-prose pre {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.en-aistudio-prose pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  border: none;
+  font-size: inherit;
+}
+/* highlight.js が出力する pre.hljs もダーク背景に揃える */
+.en-aistudio-prose pre.hljs {
+  background: #0f172a;
+  color: #e2e8f0;
+  border: none;
+}
+
+/* === Blockquote ===================================================== */
+.en-aistudio-prose blockquote {
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: #fffbeb;
+  border-left: 3px solid #8b5cf6;
+  color: #78350f;
+  border-radius: 4px;
+}
+.en-aistudio-prose blockquote p { margin: 0; }
+
+/* === HR ============================================================= */
+.en-aistudio-prose hr {
+  margin: 24px 0;
+  border: none;
+  border-top: 1px dashed #e2e8f0;
+}
+
+/* === Table ========================================================== */
+.en-aistudio-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0 20px;
+  font-size: 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.en-aistudio-prose thead { background: #f1f5f9; }
+.en-aistudio-prose th {
+  text-align: left;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+.en-aistudio-prose td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+  color: #334155;
+}
+.en-aistudio-prose tbody tr:last-child td { border-bottom: none; }
+.en-aistudio-prose tbody tr:hover { background: #f8fafc; }
+
+/* === Help viewer: table as card list ================================= */
+.en-aistudio-prose--help {
+  font-size: 15px;
+  line-height: 1.85;
+}
+.en-aistudio-prose--help h1 {
+  font-size: 27px;
+  letter-spacing: 0;
+  margin-bottom: 18px;
+}
+.en-aistudio-prose--help h2 {
+  margin-top: 34px;
+  margin-bottom: 16px;
+  padding-left: 13px;
+  border-left-width: 4px;
+  font-size: 21px;
+  letter-spacing: 0;
+}
+.en-aistudio-prose--help h3 {
+  font-size: 17px;
+  margin-top: 26px;
+}
+.en-aistudio-prose--help .en-aistudio-help-table-card-list {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 26px;
+}
+.en-aistudio-prose--help .en-aistudio-help-table-card {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.42fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(203, 213, 225, 0.86);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+.en-aistudio-prose--help .en-aistudio-help-table-card__title {
+  min-width: 0;
+  color: #be185d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.en-aistudio-prose--help .en-aistudio-help-table-card__details {
+  display: grid;
+  gap: 10px;
+}
+.en-aistudio-prose--help .en-aistudio-help-table-card__field {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 12px;
+}
+.en-aistudio-prose--help .en-aistudio-help-table-card__label {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+.en-aistudio-prose--help .en-aistudio-help-table-card__value {
+  min-width: 0;
+  color: #334155;
+}
+
+@media (max-width: 768px) {
+  .en-aistudio-prose--help .en-aistudio-help-table-card {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .en-aistudio-prose--help .en-aistudio-help-table-card__field {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* === Img ============================================================ */
+.en-aistudio-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 12px 0;
+}
+
+/* === Sub / Sup ====================================================== */
+.en-aistudio-prose sub,
+.en-aistudio-prose sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+.en-aistudio-prose sub { bottom: -0.25em; }
+.en-aistudio-prose sup { top: -0.5em; }
+
+/* === Definition list ================================================ */
+.en-aistudio-prose dl { padding: 0; margin: 12px 0; }
+.en-aistudio-prose dl dt {
+  font-weight: 700;
+  margin-top: 12px;
+  color: #0f172a;
+}
+.en-aistudio-prose dl dd {
+  margin: 0 0 12px;
+  padding: 0 0 0 12px;
+  color: #334155;
+}
+
+/* === ResearchAgent 用 callout (highlightCallouts() で span 注入) ===== */
+.en-aistudio-prose .callout-fatal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 600;
+}
+.en-aistudio-prose .callout-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #fffbeb;
+  color: #b45309;
+  font-weight: 600;
+}
+.en-aistudio-prose .callout-pass {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #ecfdf5;
+  color: #047857;
+  font-weight: 600;
+}
+
+/* === modifier: compact (チャットバブル内など) ======================= */
+.en-aistudio-prose.is-compact {
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+.en-aistudio-prose.is-compact h1 { font-size: 18px; margin: 4px 0 10px; padding-bottom: 6px; }
+.en-aistudio-prose.is-compact h2 { font-size: 15px; margin: 14px 0 6px; }
+.en-aistudio-prose.is-compact h3 { font-size: 13.5px; margin: 12px 0 4px; }
+.en-aistudio-prose.is-compact h4,
+.en-aistudio-prose.is-compact h5,
+.en-aistudio-prose.is-compact h6 { font-size: 13px; margin: 10px 0 4px; }
+.en-aistudio-prose.is-compact p { margin: 0 0 8px; }
+.en-aistudio-prose.is-compact ul,
+.en-aistudio-prose.is-compact ol { margin: 0 0 8px; padding-left: 20px; }
+.en-aistudio-prose.is-compact pre { margin: 8px 0 10px; padding: 10px 12px; font-size: 12px; }
+.en-aistudio-prose.is-compact table { margin: 8px 0 12px; font-size: 12.5px; }
+.en-aistudio-prose.is-compact th,
+.en-aistudio-prose.is-compact td { padding: 6px 10px; }
+.en-aistudio-prose.is-compact blockquote { margin: 8px 0; padding: 8px 12px; }
+/* バブル内では最後の要素のマージンを消して、バブル下端の余白が二重にならないように */
+.en-aistudio-prose.is-compact > *:last-child { margin-bottom: 0 !important; }

@@ -1,0 +1,1094 @@
+openapi: 3.0.3
+info:
+  title: Gemini File Search API
+  version: 1.0.0
+  description: |
+    Gemini File Search APIを操作する統一マイクロサービスアーキテクチャ準拠のFastAPIアプリケーション
+
+    ## 主な機能
+    - FileSearchStoreの作成
+    - ファイルのFileSearchStoreへのアップロード
+    - FileSearchStore情報の取得
+
+    ## RequestDoc標準構造
+    すべてのエンドポイントはRequestDoc標準構造に準拠しています：
+    - `requestId`: リクエスト識別子
+    - `input`: エンドポイント固有の入力パラメータ
+    - `operationMetadata`: 操作メタデータ（organizationId, spaceId, requestedBy）
+
+servers:
+  - url: https://gemini-file-search-781544707153.us-central1.run.app
+    description: Cloud Run本番環境（en-aistudio-development）
+
+tags:
+  - name: file-search-store
+    description: FileSearchStore操作
+  - name: system
+    description: システム管理
+
+paths:
+  /file-search-store/create:
+    post:
+      tags: [file-search-store]
+      summary: FileSearchStore作成
+      description: |
+        Gemini File Search用のFileSearchStoreを作成します。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. Gemini File Search APIを使用してFileSearchStoreを作成
+        3. 作成されたStore情報を返却
+
+      operationId: createFileSearchStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStoreRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    displayName: "My File Search Store"
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+              minimal:
+                summary: 最小限のパラメータ
+                value:
+                  requestId: "req_789012"
+                  input: {}
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+      responses:
+        "200":
+          description: FileSearchStore作成成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 作成成功レスポンス
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      name: "file_search_stores/abc123"
+                      displayName: "My File Search Store"
+                      createTime: "2025-11-25T14:30:00Z"
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  summary: バリデーションエラー例
+                  value:
+                    status: "error"
+                    requestId: "req_123456"
+                    error:
+                      type: "ValidationError"
+                      message: "Request validation failed"
+                      details:
+                        endpoint: "/file-search-store/create"
+                        validationErrors:
+                          - field: "operationMetadata.organizationId"
+                            message: "field required"
+                            type: "value_error.missing"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /file-search-store/{storeId}/upload:
+    post:
+      tags: [file-search-store]
+      summary: ファイルアップロード
+      description: |
+        指定されたFileSearchStoreにファイルをアップロードします。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. GCSからファイルを取得（bucketNameとfilePathを使用）
+        3. Gemini File Search APIを使用してファイルをアップロード（customMetadataとmimeTypeを含む）
+        4. アップロード操作情報（Operationオブジェクト）を返却
+
+      operationId: uploadFileToStore
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          description: FileSearchStoreのID（パスから`file_search_stores/`プレフィックスを除いた部分）
+          schema:
+            type: string
+            example: "abc123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadFileRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    bucketName: "my-bucket"
+                    filePath: "path/to/file.pdf"
+                    customMetadata:
+                      - key: "project"
+                        value: "project-a"
+                      - key: "environment"
+                        value: "production"
+                    mimeType: "application/pdf"
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: ファイルアップロード操作開始成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: アップロード開始成功レスポンス（Operationオブジェクト）
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      statusCode: 200
+                      response:
+                        name: "operations/upload_789"
+                        done: false
+                        metadata:
+                          "@type": "type.googleapis.com/google.cloud.generativelanguage.v1beta.UploadFileSearchStoreMetadata"
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /file-search-store:
+    post:
+      tags: [file-search-store]
+      summary: FileSearchStore一覧取得
+      description: |
+        すべてのFileSearchStoreの一覧を取得します。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. Gemini File Search APIからFileSearchStore一覧を取得
+        3. Store一覧を返却
+
+        Note: RequestDoc標準構造を使用します。リクエストボディからrequest_idとoperation_metadataを取得します。
+
+      operationId: listFileSearchStores
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListStoresRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    force: true
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: FileSearchStore一覧取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 取得成功レスポンス
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      stores:
+                        - name: "file_search_stores/abc123"
+                          displayName: "My File Search Store 1"
+                          createTime: "2025-11-25T14:30:00Z"
+                        - name: "file_search_stores/def456"
+                          displayName: "My File Search Store 2"
+                          createTime: "2025-11-25T15:00:00Z"
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /file-search-store/{storeId}:
+    post:
+      tags: [file-search-store]
+      summary: FileSearchStore情報取得
+      description: |
+        指定されたFileSearchStoreの情報を取得します。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. Gemini File Search APIからFileSearchStore情報を取得
+        3. Store情報を返却
+
+      operationId: getFileSearchStore
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          description: FileSearchStoreのID（パスから`file_search_stores/`プレフィックスを除いた部分）
+          schema:
+            type: string
+            example: "abc123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GetStoreRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    force: true
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: FileSearchStore情報取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 取得成功レスポンス
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      name: "file_search_stores/abc123"
+                      displayName: "My File Search Store"
+                      createTime: "2025-11-25T14:30:00Z"
+                      fileCount: 5
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags: [file-search-store]
+      summary: FileSearchStore削除
+      description: |
+        指定されたFileSearchStoreを削除します。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. Gemini File Search APIを使用してFileSearchStoreを削除
+        3. 削除結果を返却
+
+      operationId: deleteFileSearchStore
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          description: FileSearchStoreのID（パスから`file_search_stores/`プレフィックスを除いた部分）
+          schema:
+            type: string
+            example: "abc123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteStoreRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    force: true
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: FileSearchStore削除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 削除成功レスポンス
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      name: "file_search_stores/abc123"
+                      deleted: true
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /file-search-store/{storeId}/delete:
+    post:
+      tags: [file-search-store]
+      summary: FileSearchStore削除（POST版）
+      description: |
+        指定されたFileSearchStoreを削除します（POSTメソッド版）。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. Gemini File Search APIを使用してFileSearchStoreを削除
+        3. 削除結果を返却
+
+      operationId: deleteFileSearchStorePost
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          description: FileSearchStoreのID（パスから`file_search_stores/`プレフィックスを除いた部分）
+          schema:
+            type: string
+            example: "abc123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteStoreRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    force: true
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: FileSearchStore削除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 削除成功レスポンス
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      name: "file_search_stores/abc123"
+                      deleted: true
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /file-search-store/{storeId}/documents:
+    post:
+      tags: [documents]
+      summary: Document一覧取得
+      description: |
+        指定されたFileSearchStore内のすべてのDocumentの一覧を取得します。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. Gemini File Search APIからDocument一覧を取得
+        3. Document一覧を返却
+
+      operationId: listDocuments
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          description: FileSearchStoreのID
+          schema:
+            type: string
+            example: "abc123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListDocumentsRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    force: true
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: Document一覧取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 取得成功レスポンス
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      documents:
+                        - name: "fileSearchStores/abc123/documents/doc1"
+                          displayName: "Document 1"
+                          createTime: "2025-11-25T14:30:00Z"
+                          updateTime: "2025-11-25T15:00:00Z"
+                        - name: "fileSearchStores/abc123/documents/doc2"
+                          displayName: "Document 2"
+                          createTime: "2025-11-25T14:35:00Z"
+                          updateTime: "2025-11-25T15:05:00Z"
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /file-search-store/{storeId}/documents/{documentId}:
+    post:
+      tags: [documents]
+      summary: Document情報取得
+      description: |
+        指定されたDocumentの情報を取得します。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. Gemini File Search APIからDocument情報を取得
+        3. Document情報を返却
+
+      operationId: getDocument
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          description: FileSearchStoreのID
+          schema:
+            type: string
+            example: "abc123"
+        - name: documentId
+          in: path
+          required: true
+          description: DocumentのID
+          schema:
+            type: string
+            example: "doc1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GetDocumentRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    force: true
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: Document情報取得成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 取得成功レスポンス
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      name: "fileSearchStores/abc123/documents/doc1"
+                      displayName: "Document 1"
+                      createTime: "2025-11-25T14:30:00Z"
+                      updateTime: "2025-11-25T15:00:00Z"
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags: [documents]
+      summary: Document削除
+      description: |
+        指定されたDocumentを削除します。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. Gemini File Search APIを使用してDocumentを削除
+        3. 削除結果を返却
+
+      operationId: deleteDocument
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          description: FileSearchStoreのID
+          schema:
+            type: string
+            example: "abc123"
+        - name: documentId
+          in: path
+          required: true
+          description: DocumentのID
+          schema:
+            type: string
+            example: "doc1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteDocumentRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    force: true
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: Document削除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 削除成功レスポンス
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      name: "fileSearchStores/abc123/documents/doc1"
+                      deleted: true
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /file-search-store/{storeId}/documents/{documentId}/delete:
+    post:
+      tags: [documents]
+      summary: Document削除（POST版）
+      description: |
+        指定されたDocumentを削除します（POSTメソッド版）。
+
+        ## 処理フロー
+        1. リクエストのバリデーション
+        2. Gemini File Search APIを使用してDocumentを削除
+        3. 削除結果を返却
+
+      operationId: deleteDocumentPost
+      parameters:
+        - name: storeId
+          in: path
+          required: true
+          description: FileSearchStoreのID
+          schema:
+            type: string
+            example: "abc123"
+        - name: documentId
+          in: path
+          required: true
+          description: DocumentのID
+          schema:
+            type: string
+            example: "doc1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteDocumentRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  requestId: "req_123456"
+                  input:
+                    force: true
+                  operationMetadata:
+                    organizationId: "org_123"
+                    spaceId: "space_456"
+                    requestedBy:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: Document削除成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 削除成功レスポンス
+                  value:
+                    status: "success"
+                    requestId: "req_123456"
+                    output:
+                      name: "fileSearchStores/abc123/documents/doc1"
+                      deleted: true
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /health:
+    get:
+      tags: [system]
+      summary: ヘルスチェック
+      description: サービスの稼働状態を確認します
+      operationId: healthCheck
+      responses:
+        "200":
+          description: サービス正常稼働中
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+              examples:
+                healthy:
+                  summary: 正常レスポンス
+                  value:
+                    status: "healthy"
+
+components:
+  schemas:
+    CreateStoreRequest:
+      type: object
+      required: [requestId, input, operationMetadata]
+      properties:
+        requestId:
+          type: string
+          description: リクエスト識別子
+          example: "req_123456"
+        input:
+          $ref: "#/components/schemas/CreateStoreInput"
+        operationMetadata:
+          $ref: "#/components/schemas/StandardOperationMetadata"
+
+    CreateStoreInput:
+      type: object
+      properties:
+        displayName:
+          type: string
+          description: FileSearchStoreの表示名
+          example: "My File Search Store"
+
+    UploadFileRequest:
+      type: object
+      required: [requestId, input, operationMetadata]
+      properties:
+        requestId:
+          type: string
+          description: リクエスト識別子
+          example: "req_123456"
+        input:
+          $ref: "#/components/schemas/UploadFileInput"
+        operationMetadata:
+          $ref: "#/components/schemas/StandardOperationMetadata"
+
+    UploadFileInput:
+      type: object
+      required: [bucketName, filePath]
+      properties:
+        bucketName:
+          type: string
+          description: GCSバケット名
+          example: "my-bucket"
+        filePath:
+          type: string
+          description: GCS内のファイルパス（バケット名を除く）。ファイル名はこのパスから自動的に取得されます。
+          example: "path/to/file.pdf"
+        customMetadata:
+          type: array
+          description: カスタムメタデータ（key-value形式の配列）
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+                description: メタデータのキー
+                example: "project"
+              value:
+                type: string
+                description: メタデータの値
+                example: "project-a"
+          example:
+            - key: "project"
+              value: "project-a"
+            - key: "environment"
+              value: "production"
+        mimeType:
+          type: string
+          description: "ファイルのMIMEタイプ（例: application/pdf, image/jpeg等）"
+          example: "application/pdf"
+
+    GetStoreRequest:
+      type: object
+      required: [requestId, input, operationMetadata]
+      properties:
+        requestId:
+          type: string
+          description: リクエスト識別子（リクエストボディがない場合は自動生成）
+          example: "req_123456"
+        input:
+          $ref: "#/components/schemas/GetStoreInput"
+        operationMetadata:
+          $ref: "#/components/schemas/StandardOperationMetadata"
+
+    GetStoreInput:
+      type: object
+      description: FileSearchStore取得の入力パラメータ（パスパラメータのみ使用）
+      properties: {}
+
+    ListStoresRequest:
+      type: object
+      required: [requestId, input, operationMetadata]
+      properties:
+        requestId:
+          type: string
+          description: リクエスト識別子（リクエストボディがない場合は自動生成）
+          example: "req_123456"
+        input:
+          $ref: "#/components/schemas/ListStoresInput"
+        operationMetadata:
+          $ref: "#/components/schemas/StandardOperationMetadata"
+
+    ListStoresInput:
+      type: object
+      description: FileSearchStore一覧取得の入力パラメータ（パラメータなし）
+      properties: {}
+
+    DeleteStoreRequest:
+      type: object
+      required: [requestId, input, operationMetadata]
+      properties:
+        requestId:
+          type: string
+          description: リクエスト識別子
+          example: "req_123456"
+        input:
+          $ref: "#/components/schemas/DeleteStoreInput"
+        operationMetadata:
+          $ref: "#/components/schemas/StandardOperationMetadata"
+
+    DeleteStoreInput:
+      type: object
+      properties:
+        force:
+          type: boolean
+          description: "強制削除フラグ（デフォルト: true）"
+          example: true
+
+    ListDocumentsRequest:
+      type: object
+      required: [requestId, input, operationMetadata]
+      properties:
+        requestId:
+          type: string
+          description: リクエスト識別子（リクエストボディに含まれていない場合は自動生成）
+          example: "req_123456"
+        input:
+          $ref: "#/components/schemas/ListDocumentsInput"
+        operationMetadata:
+          $ref: "#/components/schemas/StandardOperationMetadata"
+
+    ListDocumentsInput:
+      type: object
+      description: Document一覧取得の入力パラメータ（パラメータなし）
+      properties: {}
+
+    GetDocumentRequest:
+      type: object
+      required: [requestId, input, operationMetadata]
+      properties:
+        requestId:
+          type: string
+          description: リクエスト識別子（リクエストボディに含まれていない場合は自動生成）
+          example: "req_123456"
+        input:
+          $ref: "#/components/schemas/GetDocumentInput"
+        operationMetadata:
+          $ref: "#/components/schemas/StandardOperationMetadata"
+
+    GetDocumentInput:
+      type: object
+      description: Document取得の入力パラメータ（パスパラメータのみ使用）
+      properties: {}
+
+    DeleteDocumentRequest:
+      type: object
+      required: [requestId, input, operationMetadata]
+      properties:
+        requestId:
+          type: string
+          description: リクエスト識別子
+          example: "req_123456"
+        input:
+          $ref: "#/components/schemas/DeleteDocumentInput"
+        operationMetadata:
+          $ref: "#/components/schemas/StandardOperationMetadata"
+
+    DeleteDocumentInput:
+      type: object
+      description: Document削除の入力パラメータ
+      properties:
+        force:
+          type: boolean
+          description: "強制削除フラグ（デフォルト: true）。trueに設定すると、このDocumentに関連するChunkとオブジェクトも削除されます。"
+          default: true
+          example: true
+
+    StandardOperationMetadata:
+      type: object
+      required: [organizationId, spaceId, requestedBy]
+      description: 標準操作メタデータ（RequestDoc標準構造準拠）
+      properties:
+        organizationId:
+          type: string
+          description: Organization ID（テナント分離）
+          example: "org_123"
+        spaceId:
+          type: string
+          description: Space ID（組織内のワークスペース分離）
+          example: "space_456"
+        requestedBy:
+          $ref: "#/components/schemas/RequestedBy"
+
+    RequestedBy:
+      type: object
+      required: [email]
+      description: リクエスト実行者情報
+      properties:
+        userId:
+          type: string
+          description: ユーザー識別子
+          example: "user_123"
+          nullable: true
+        email:
+          type: string
+          description: ユーザーのメールアドレス
+          example: "user@example.com"
+        role:
+          type: integer
+          description: ユーザーロール（1=Super Admin, 2=Admin, 3=User）
+          minimum: 1
+          maximum: 3
+          example: 1
+
+    SuccessResponse:
+      type: object
+      required: [status, requestId, output]
+      description: 成功レスポンス（統一フォーマット）
+      properties:
+        status:
+          type: string
+          enum: [success]
+          example: "success"
+        requestId:
+          type: string
+          description: リクエスト識別子
+          example: "req_123456"
+        output:
+          type: object
+          description: エンドポイント固有の出力データ（camelCase形式）
+          additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      required: [status, error]
+      description: エラーレスポンス（統一フォーマット）
+      properties:
+        status:
+          type: string
+          enum: [error]
+          example: "error"
+        requestId:
+          type: string
+          description: リクエスト識別子（バリデーションエラーの場合はnullの可能性あり）
+          example: "req_123456"
+          nullable: true
+        error:
+          type: object
+          required: [type, message]
+          properties:
+            type:
+              type: string
+              description: エラータイプ（ValidationError, StepExecutionError, InternalError等）
+              example: "ValidationError"
+            message:
+              type: string
+              description: エラーメッセージ
+              example: "Request validation failed"
+            details:
+              type: object
+              description: 追加のエラー詳細情報
+              additionalProperties: true
+              properties:
+                endpoint:
+                  type: string
+                  description: エラーが発生したエンドポイント
+                  example: "/file-search-store/create"
+                validationErrors:
+                  type: array
+                  description: バリデーションエラーの詳細（バリデーションエラーの場合）
+                  items:
+                    type: object
+                    properties:
+                      field:
+                        type: string
+                        example: "operationMetadata.organizationId"
+                      message:
+                        type: string
+                        example: "field required"
+                      type:
+                        type: string
+                        example: "value_error.missing"

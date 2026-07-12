@@ -1,0 +1,379 @@
+openapi: 3.0.3
+info:
+  title: Web Crawler API
+  version: 1.0.0
+  description: |
+    WEBページのナレッジ取り込みを目的としたcrawlingマイクロサービス
+    firescrawlを使用してWEBページをクロールし、Markdown形式でGCSに保存する
+
+    ## 主な機能
+    - WEBページのクロール
+    - Markdown形式でのコンテンツ抽出
+    - GCSへの自動保存
+
+    ## RequestDoc標準構造
+    すべてのエンドポイントはRequestDoc標準構造に準拠しています：
+    - `request_id`: リクエスト識別子
+    - `input`: エンドポイント固有の入力パラメータ
+    - `operation_metadata`: 操作メタデータ（organizationId, spaceId, requestedBy）
+
+servers:
+  - url: https://web-crawler-{project-hash}.us-central1.run.app
+    description: Cloud Run本番環境
+    variables:
+      project-hash:
+        default: example
+
+tags:
+  - name: crawl
+    description: WEBページクロール操作
+  - name: system
+    description: システム管理
+
+paths:
+  /workflow/run-step:
+    post:
+      tags: [crawl]
+      summary: Workflow ステップ実行
+      description: |
+        GCP Workflow `web-crawl` から 1 ステップずつ呼ばれる。
+        対象ステップ: `crawl` | `uploadToGcs` | `registerToFileSpace`
+
+      operationId: runWorkflowStep
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CrawlRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  request_id: "req_123456"
+                  input:
+                    url: "https://example.com/page"
+                    bucket_name: "my-bucket"
+                    folder_path: "crawled-pages"
+                    max_depth: 3
+                    max_urls: 100
+                  operation_metadata:
+                    organization_id: "org_123"
+                    space_id: "space_456"
+                    requested_by:
+                      email: "user@example.com"
+                      role: 1
+              with_options:
+                summary: firescrawlオプション付き
+                value:
+                  request_id: "req_789012"
+                  input:
+                    url: "https://docs.example.com"
+                    bucket_name: "my-bucket"
+                    folder_path: "documentation"
+                    max_depth: 2
+                    max_urls: 50
+                    options:
+                      scrapeOptions:
+                        onlyMainContent: true
+                  operation_metadata:
+                    organization_id: "org_123"
+                    space_id: "space_456"
+                    requested_by:
+                      email: "user@example.com"
+                      role: 1
+      responses:
+        "200":
+          description: クロール成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: クロール成功レスポンス（複数ページ）
+                  value:
+                    status: "success"
+                    request_id: "req_123456"
+                    output:
+                      file_path: "crawled-pages/example_com_page.md"
+                      gcs_url: "https://storage.googleapis.com/my-bucket/crawled-pages/example_com_page.md"
+                      url: "https://example.com/page"
+                      title: "Example Page Title"
+                      status: "completed"
+                      total_pages: 5
+                      metadata:
+                        title: "Example Page Title"
+                        description: "This is an example page"
+                      saved_files:
+                        - file_path: "crawled-pages/example_com_page.md"
+                          gcs_url: "https://storage.googleapis.com/my-bucket/crawled-pages/example_com_page.md"
+                          url: "https://example.com/page"
+                          title: "Example Page Title"
+                        - file_path: "crawled-pages/example_com_about.md"
+                          gcs_url: "https://storage.googleapis.com/my-bucket/crawled-pages/example_com_about.md"
+                          url: "https://example.com/about"
+                          title: "About Us"
+        "400":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  summary: バリデーションエラー例
+                  value:
+                    status: "error"
+                    request_id: "req_123456"
+                    error:
+                      type: "ValidationError"
+                      message: "Request validation failed"
+                      details:
+                        endpoint: "/crawl"
+                        validation_errors:
+                          - field: "input.url"
+                            message: "field required"
+                            type: "value_error.missing"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /health:
+    get:
+      tags: [system]
+      summary: ヘルスチェック
+      description: サービスの稼働状態を確認します
+      operationId: healthCheck
+      responses:
+        "200":
+          description: サービス正常稼働中
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+              examples:
+                healthy:
+                  summary: 正常レスポンス
+                  value:
+                    status: "healthy"
+
+components:
+  schemas:
+    CrawlRequest:
+      type: object
+      required: [request_id, input, operation_metadata]
+      properties:
+        request_id:
+          type: string
+          description: リクエスト識別子
+          example: "req_123456"
+        input:
+          $ref: "#/components/schemas/CrawlInput"
+        operation_metadata:
+          $ref: "#/components/schemas/StandardOperationMetadata"
+
+    CrawlInput:
+      type: object
+      required: [url, bucket_name, folder_path, max_depth, max_urls]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: クロール対象のURL
+          example: "https://example.com/page"
+        bucket_name:
+          type: string
+          description: 保存先GCSバケット名
+          example: "my-bucket"
+        folder_path:
+          type: string
+          description: 保存先フォルダパス
+          example: "crawled-pages"
+        max_depth:
+          type: integer
+          description: クロールの階層の深さ（必須、1〜10）
+          minimum: 1
+          maximum: 10
+          example: 3
+        max_urls:
+          type: integer
+          description: 最大URL数（必須、1〜10000）
+          minimum: 1
+          maximum: 10000
+          example: 100
+        options:
+          type: object
+          description: firescrawlオプション（任意）
+          additionalProperties: true
+          example:
+            scrapeOptions:
+              onlyMainContent: true
+
+    StandardOperationMetadata:
+      type: object
+      required: [organization_id, space_id, requested_by]
+      description: 標準操作メタデータ（RequestDoc標準構造準拠）
+      properties:
+        organization_id:
+          type: string
+          description: Organization ID（テナント分離）
+          example: "org_123"
+        space_id:
+          type: string
+          description: Space ID（組織内のワークスペース分離）
+          example: "space_456"
+        requested_by:
+          $ref: "#/components/schemas/RequestedBy"
+
+    RequestedBy:
+      type: object
+      required: [email]
+      description: リクエスト実行者情報
+      properties:
+        user_id:
+          type: string
+          description: ユーザー識別子
+          example: "user_123"
+          nullable: true
+        email:
+          type: string
+          description: ユーザーのメールアドレス
+          example: "user@example.com"
+        role:
+          type: integer
+          description: ユーザーロール（1=Super Admin, 2=Admin, 3=User）
+          minimum: 1
+          maximum: 3
+          example: 1
+
+    SuccessResponse:
+      type: object
+      required: [status, request_id, output]
+      description: 成功レスポンス（統一フォーマット）
+      properties:
+        status:
+          type: string
+          enum: [success]
+          example: "success"
+        request_id:
+          type: string
+          description: リクエスト識別子
+          example: "req_123456"
+        output:
+          type: object
+          description: ジョブ実行情報
+          properties:
+            file_path:
+              type: string
+              description: メインのMarkdownファイルのGCSパス（最初のページ）
+              example: "crawled-pages/example_com_page.md"
+            gcs_url:
+              type: string
+              description: メインのGCS URL
+              example: "https://storage.googleapis.com/my-bucket/crawled-pages/example_com_page.md"
+            url:
+              type: string
+              description: クロール対象URL（開始URL）
+              example: "https://example.com/page"
+            title:
+              type: string
+              description: メインページのタイトル
+              example: "Example Page Title"
+            status:
+              type: string
+              description: クロールステータス
+              example: "completed"
+            total_pages:
+              type: integer
+              description: 保存されたページ総数
+              example: 5
+            metadata:
+              type: object
+              description: メインページのfirescrawlから取得したメタデータ
+              additionalProperties: true
+            saved_files:
+              type: array
+              description: 保存されたすべてのファイル情報
+              items:
+                type: object
+                properties:
+                  file_path:
+                    type: string
+                    description: 保存されたMarkdownファイルのGCSパス
+                    example: "crawled-pages/example_com_page.md"
+                  gcs_url:
+                    type: string
+                    description: GCS URL
+                    example: "https://storage.googleapis.com/my-bucket/crawled-pages/example_com_page.md"
+                  url:
+                    type: string
+                    description: クロールされたページのURL
+                    example: "https://example.com/page"
+                  title:
+                    type: string
+                    description: ページタイトル
+                    example: "Example Page Title"
+                  metadata:
+                    type: object
+                    description: firescrawlから取得したメタデータ
+                    additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      required: [status, error]
+      description: エラーレスポンス（統一フォーマット）
+      properties:
+        status:
+          type: string
+          enum: [error]
+          example: "error"
+        request_id:
+          type: string
+          description: リクエスト識別子（バリデーションエラーの場合はnullの可能性あり）
+          example: "req_123456"
+          nullable: true
+        error:
+          type: object
+          required: [type, message]
+          properties:
+            type:
+              type: string
+              description: エラータイプ（ValidationError, StepExecutionError, InternalError等）
+              example: "ValidationError"
+            message:
+              type: string
+              description: エラーメッセージ
+              example: "Request validation failed"
+            details:
+              type: object
+              description: 追加のエラー詳細情報
+              additionalProperties: true
+              properties:
+                endpoint:
+                  type: string
+                  description: エラーが発生したエンドポイント
+                  example: "/crawl"
+                validationErrors:
+                  type: array
+                  description: バリデーションエラーの詳細（バリデーションエラーの場合）
+                  items:
+                    type: object
+                    properties:
+                      field:
+                        type: string
+                        example: "input.url"
+                      message:
+                        type: string
+                        example: "field required"
+                      type:
+                        type: string
+                        example: "value_error.missing"
+

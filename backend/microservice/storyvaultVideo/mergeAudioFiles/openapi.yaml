@@ -1,0 +1,328 @@
+openapi: 3.0.3
+info:
+  title: Audio Merge API
+  version: 1.0.0
+  description: |
+    音声ファイル結合マイクロサービス
+
+    このAPIは、複数の音声ファイルをバッファ間隔で連結し、
+    MP3形式でGoogle Cloud Storageに保存します。
+
+    ## 主な機能
+    - 複数音声ファイルの連結
+    - カスタムバッファ間隔設定
+    - フォーマット自動変換
+    - MP3出力
+    - GCS統合
+
+  contact:
+    name: StoryVault Development Team
+    url: https://github.com/ENOSTECH-inc/storyvault
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8080
+    description: ローカル開発環境
+  - url: https://merge-audio-files-328416367800.asia-northeast1.run.app
+    description: Cloud Run本番環境
+
+tags:
+  - name: merge
+    description: 音声結合関連のエンドポイント
+  - name: system
+    description: システム管理関連のエンドポイント
+
+paths:
+  /merge-audio:
+    post:
+      tags:
+        - merge
+      summary: 複数の音声ファイルを結合
+      description: |
+        GCS上の複数の音声ファイルをバッファ間隔で連結し、MP3形式で保存します。
+
+        ## 処理フロー
+        1. GCSから音声ファイルをダウンロード
+        2. pydubで音声を読み込み
+        3. バッファ間隔で連結
+        4. MP3形式でGCSにアップロード
+
+        ## サポートフォーマット
+        - 入力: MP3, WAV, OGG, FLAC, M4A, AAC
+        - 出力: MP3
+
+      operationId: mergeAudio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeAudioRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  audioFiles:
+                    - sourceBucketName: storyvault-audio
+                      sourceFilePath: audio/segment1.mp3
+                    - sourceBucketName: storyvault-audio
+                      sourceFilePath: audio/segment2.mp3
+                  bufferSeconds: 2.0
+                  outputBucketName: storyvault-merged
+                  outputFilePath: merged/output.mp3
+              multiple_files:
+                summary: 複数ファイル結合
+                value:
+                  audioFiles:
+                    - sourceBucketName: storyvault-audio
+                      sourceFilePath: narration/intro.mp3
+                    - sourceBucketName: storyvault-audio
+                      sourceFilePath: narration/chapter1.mp3
+                    - sourceBucketName: storyvault-audio
+                      sourceFilePath: narration/chapter2.mp3
+                    - sourceBucketName: storyvault-audio
+                      sourceFilePath: narration/outro.mp3
+                  bufferSeconds: 1.5
+                  outputBucketName: storyvault-merged
+                  outputFilePath: final/complete_narration.mp3
+      responses:
+        "200":
+          description: 音声結合が正常に完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergeAudioResponse"
+              examples:
+                success:
+                  summary: 成功レスポンス例
+                  value:
+                    success: true
+                    output_path: gs://storyvault-merged/merged/output.mp3
+                    processing_time: 15.2
+                    statistics:
+                      total_files: 2
+                      total_duration_seconds: 120.5
+                      output_file_size_bytes: 1024000
+        "400":
+          description: リクエストパラメータのバリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  summary: バリデーションエラー
+                  value:
+                    error: "Validation failed"
+                    details:
+                      - "audioFiles is required and must not be empty"
+        "500":
+          description: サーバー内部エラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                internal_error:
+                  summary: 内部エラー
+                  value:
+                    error: "Internal server error: Audio merge failed"
+                    error_type: MergeException
+
+  /health:
+    get:
+      tags:
+        - system
+      summary: ヘルスチェック
+      description: |
+        サービスの稼働状態を確認します。
+
+        ## チェック項目
+        - サービス基本情報
+        - Google Cloud Storage接続状態
+        - pydub利用可能性
+        - アクティブなリクエスト数
+
+      operationId: healthCheck
+      responses:
+        "200":
+          description: サービスが正常に稼働中
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+              examples:
+                healthy:
+                  summary: 正常状態
+                  value:
+                    status: healthy
+                    timestamp: "2024-10-05T12:00:00.000Z"
+                    service_info:
+                      name: merge-audio-files
+                      version: 1.0.0
+                    api_status:
+                      storage: connected
+                      pydub: available
+        "503":
+          description: サービスが劣化状態
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+
+components:
+  schemas:
+    MergeAudioRequest:
+      type: object
+      required:
+        - audioFiles
+        - outputBucketName
+        - outputFilePath
+      properties:
+        audioFiles:
+          type: array
+          description: 結合する音声ファイルのリスト（順序保持）
+          items:
+            $ref: "#/components/schemas/AudioFileReference"
+          minItems: 1
+          maxItems: 100
+        bufferSeconds:
+          type: number
+          format: float
+          description: ファイル間のバッファ時間（秒）
+          example: 2.0
+          default: 1.0
+          minimum: 0
+          maximum: 10
+        outputBucketName:
+          type: string
+          description: 出力先のGCSバケット名
+          example: storyvault-merged
+          pattern: '^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$|^[a-z0-9][a-z0-9_-]{1,61}[a-z0-9]\\.firebasestorage\\.app$'
+        outputFilePath:
+          type: string
+          description: 出力ファイルのGCSパス
+          example: merged/output.mp3
+          minLength: 1
+
+    AudioFileReference:
+      type: object
+      required:
+        - sourceBucketName
+        - sourceFilePath
+      properties:
+        sourceBucketName:
+          type: string
+          description: 音声ファイルのGCSバケット名
+          example: storyvault-audio
+          pattern: '^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$|^[a-z0-9][a-z0-9_-]{1,61}[a-z0-9]\\.firebasestorage\\.app$'
+        sourceFilePath:
+          type: string
+          description: 音声ファイルのGCSパス
+          example: audio/segment1.mp3
+          minLength: 1
+
+    MergeAudioResponse:
+      type: object
+      required:
+        - success
+        - output_path
+        - processing_time
+        - statistics
+      properties:
+        success:
+          type: boolean
+          description: 処理が成功したかどうか
+          example: true
+        output_path:
+          type: string
+          description: 結合された音声ファイルのGCSパス
+          example: gs://storyvault-merged/merged/output.mp3
+        processing_time:
+          type: number
+          format: float
+          description: 処理時間（秒）
+          example: 15.2
+          minimum: 0
+        statistics:
+          type: object
+          description: 結合統計情報
+          required:
+            - total_files
+            - total_duration_seconds
+            - output_file_size_bytes
+          properties:
+            total_files:
+              type: integer
+              description: 結合したファイル数
+              example: 2
+              minimum: 1
+            total_duration_seconds:
+              type: number
+              format: float
+              description: 総音声長（秒）
+              example: 120.5
+              minimum: 0
+            output_file_size_bytes:
+              type: integer
+              description: 出力ファイルサイズ（バイト）
+              example: 1024000
+              minimum: 0
+
+    HealthCheckResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+        - service_info
+        - api_status
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: サービスの健全性ステータス
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+          description: ヘルスチェック実行時刻（ISO 8601形式）
+          example: "2024-10-05T12:00:00.000Z"
+        service_info:
+          type: object
+          description: サービス基本情報
+          properties:
+            name:
+              type: string
+              example: merge-audio-files
+            version:
+              type: string
+              example: 1.0.0
+        api_status:
+          type: object
+          description: 各APIクライアントの接続状態
+          properties:
+            storage:
+              type: string
+              example: connected
+            pydub:
+              type: string
+              example: available
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: エラーメッセージ
+          example: "Internal server error: Audio merge failed"
+        error_type:
+          type: string
+          description: エラーの種類（Python例外クラス名）
+          example: MergeException
+        details:
+          type: object
+          description: 詳細なエラー情報
+          additionalProperties: true

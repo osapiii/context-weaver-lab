@@ -1,0 +1,323 @@
+{
+  "$schema": "research-v13",
+  "deck": {
+    "title": "GitHub Releases 実務復習ガイド",
+    "slug": "github-releases",
+    "intent": "GitHub をふだん使っている実務者が、タグとの違い・gh CLI/API・自動生成ノート・Actions 自動化・不変リリース・バージョニング運用までを一枚絵で整理し直し、自分のプロジェクトに合った配布フローを自信を持って選べる状態になる",
+    "target_reader": "ふだん GitHub と gh CLI を使う開発・運用者(上級)。Release はなんとなく使っているが、自動生成ノートや不変リリース、Actions 自動化まで含めて運用を体系立てて見直したい人",
+    "deck_structure": "learning-deck",
+    "deck_type": "learning",
+    "date": "2026-06-03"
+  },
+  "references": [
+    {
+      "n": 1,
+      "title": "About releases — GitHub Docs",
+      "url": "https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases",
+      "medium": "公式ドキュメント",
+      "retrieved_at": "2026-06-03",
+      "id": "1"
+    },
+    {
+      "n": 2,
+      "title": "gh release create — GitHub CLI manual",
+      "url": "https://cli.github.com/manual/gh_release_create",
+      "medium": "公式 CLI マニュアル",
+      "retrieved_at": "2026-06-03",
+      "id": "2"
+    },
+    {
+      "n": 3,
+      "title": "Automatically generated release notes — GitHub Docs",
+      "url": "https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes",
+      "medium": "公式ドキュメント",
+      "retrieved_at": "2026-06-03",
+      "id": "3"
+    },
+    {
+      "n": 4,
+      "title": "Immutable releases are now generally available — GitHub Changelog (2025-10-28)",
+      "url": "https://github.blog/changelog/2025-10-28-immutable-releases-are-now-generally-available/",
+      "medium": "公式ブログ",
+      "retrieved_at": "2026-06-03",
+      "id": "4"
+    },
+    {
+      "n": 5,
+      "title": "Immutable releases — GitHub Docs",
+      "url": "https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases",
+      "medium": "公式ドキュメント",
+      "retrieved_at": "2026-06-03",
+      "id": "5"
+    },
+    {
+      "n": 6,
+      "title": "softprops/action-gh-release — GitHub",
+      "url": "https://github.com/softprops/action-gh-release",
+      "medium": "OSS リポジトリ",
+      "retrieved_at": "2026-06-03",
+      "id": "6"
+    },
+    {
+      "n": 7,
+      "title": "googleapis/release-please — GitHub",
+      "url": "https://github.com/googleapis/release-please",
+      "medium": "OSS リポジトリ",
+      "retrieved_at": "2026-06-03",
+      "id": "7"
+    },
+    {
+      "n": 8,
+      "title": "Semantic Versioning 2.0.0",
+      "url": "https://semver.org/",
+      "medium": "仕様書",
+      "retrieved_at": "2026-06-03",
+      "id": "8"
+    }
+  ],
+  "sections": [
+    {
+      "id": "Q1",
+      "question": "そもそも Git タグと GitHub の「リリース」って何が違うの? リリースの実体は何?",
+      "kind": "definitional",
+      "answer": "タグはコミットへの目印、リリースはそのタグに紐づくメタデータ層(ノート＋添付アセット)です。リリースは Git の機能ではなく GitHub 独自の配布単位です (1)。",
+      "body_md": "まず押さえたいのは、タグとリリースは別の層にあるという点です。タグは Git の機能で、特定のコミットに付ける不変の目印にすぎません。一方でリリースは Git の標準機能ではなく、GitHub がそのタグの上にかぶせる配布単位です (1)。\n\nリリースの実体は、ひとつのタグに紐づいた「リリースノート(本文)」と「添付アセット(バイナリやアーカイブ)」のまとまりです。GitHub はこれを専用の画面と API で管理し、ダウンロードリンクを自動で用意してくれます (1)。つまり「ソースコードのある時点」を指すのがタグ、「その時点を配布物として公開する」のがリリース、と役割が分かれています。\n\nリリースは既存のタグから作ることも、作成時にタグを同時に切ることもできます (2)。注釈付きタグ(annotated tag)を先にローカルで切って push しておけば、その注釈メッセージをリリースノートの素材として取り込めます (2)。\n\n実務では、この「タグ＝目印 / リリース＝配布」という分離を意識すると混乱が減ります。タグだけ打って満足してしまうとダウンロード可能な成果物は用意されません。配布したいものがあるときに初めてリリースを作る、という順番です。",
+      "reference_ids": [
+        "1",
+        "2"
+      ],
+      "svg_spec": {
+        "kind": "concept-diagram",
+        "intent": "コミット・タグ・リリースが別の層にあること、リリースだけがノートとアセットを持つ配布単位であることを一目で理解させる",
+        "key_elements": [
+          "コミット",
+          "タグ(目印)",
+          "リリース(ノート＋アセット)",
+          "GitHub 独自層"
+        ]
+      },
+      "svg_asset": {
+        "svg_text": "<svg viewBox=\"0 0 1920 1080\" xmlns=\"http://www.w3.org/2000/svg\" role=\"img\" font-family=\"Noto Sans JP\">\n  <title>コミット・タグ・リリースの3層構造</title>\n  <desc>Git のコミット履歴とタグの上に、GitHub 独自の配布層であるリリース（ノートとアセット）が乗る関係を示す図。</desc>\n  <defs>\n    <marker id=\"arrow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"9\" markerHeight=\"9\" orient=\"auto\">\n      <path d=\"M0,0 L10,5 L0,10 z\" fill=\"currentColor\"/>\n    </marker>\n  </defs>\n\n  <rect width=\"1920\" height=\"1080\" fill=\"#FAFAF7\"/>\n\n  <!-- header -->\n  <text x=\"100\" y=\"92\" font-size=\"44\" font-weight=\"700\" fill=\"#1F2937\">コミットとタグとリリース ― 3 つの層</text>\n  <line x1=\"100\" y1=\"132\" x2=\"780\" y2=\"132\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n\n  <!-- 世界ラベル chips -->\n  <rect x=\"120\" y=\"250\" width=\"240\" height=\"48\" fill=\"#374151\" rx=\"10\"/>\n  <text x=\"240\" y=\"282\" font-size=\"22\" font-weight=\"700\" fill=\"#FAFAF7\" text-anchor=\"middle\">GitHub の世界</text>\n  <rect x=\"120\" y=\"820\" width=\"200\" height=\"48\" fill=\"#374151\" rx=\"10\"/>\n  <text x=\"220\" y=\"852\" font-size=\"22\" font-weight=\"700\" fill=\"#FAFAF7\" text-anchor=\"middle\">Git の世界</text>\n\n  <!-- 上層: リリース card -->\n  <rect x=\"540\" y=\"220\" width=\"860\" height=\"300\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"16\"/>\n  <rect x=\"580\" y=\"246\" width=\"430\" height=\"48\" fill=\"#374151\" rx=\"10\"/>\n  <text x=\"795\" y=\"279\" font-size=\"24\" font-weight=\"700\" fill=\"#FAFAF7\" text-anchor=\"middle\">リリース（GitHub 独自層）</text>\n  <rect x=\"580\" y=\"322\" width=\"360\" height=\"160\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"2\" rx=\"12\"/>\n  <text x=\"760\" y=\"392\" font-size=\"26\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">リリースノート</text>\n  <text x=\"760\" y=\"432\" font-size=\"20\" fill=\"#1F2937\" text-anchor=\"middle\">変更点や使い方の説明</text>\n  <rect x=\"1000\" y=\"322\" width=\"360\" height=\"160\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"2\" rx=\"12\"/>\n  <text x=\"1180\" y=\"392\" font-size=\"26\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">添付アセット</text>\n  <text x=\"1180\" y=\"432\" font-size=\"20\" fill=\"#1F2937\" text-anchor=\"middle\">バイナリ / zip / インストーラ</text>\n\n  <!-- arrow release -> tag -->\n  <g color=\"#F59E0B\">\n    <line x1=\"970\" y1=\"520\" x2=\"970\" y2=\"586\" stroke=\"#F59E0B\" stroke-width=\"3\" marker-end=\"url(#arrow)\"/>\n  </g>\n  <text x=\"1010\" y=\"560\" font-size=\"20\" fill=\"#1F2937\">1 つのタグに対応する</text>\n\n  <!-- 中層: タグ flag -->\n  <rect x=\"820\" y=\"600\" width=\"300\" height=\"84\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"12\"/>\n  <text x=\"970\" y=\"652\" font-size=\"28\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">タグ v1.2.3</text>\n  <text x=\"1140\" y=\"652\" font-size=\"20\" fill=\"#1F2937\">コミットへの不変の目印</text>\n\n  <!-- arrow tag -> commit -->\n  <g color=\"#F59E0B\">\n    <line x1=\"970\" y1=\"684\" x2=\"970\" y2=\"772\" stroke=\"#F59E0B\" stroke-width=\"3\" marker-end=\"url(#arrow)\"/>\n  </g>\n  <text x=\"1010\" y=\"736\" font-size=\"20\" fill=\"#1F2937\">特定のコミットを指す</text>\n\n  <!-- 下層: コミット履歴 -->\n  <line x1=\"360\" y1=\"880\" x2=\"1600\" y2=\"880\" stroke=\"#1F2937\" stroke-width=\"3\" marker-end=\"url(#arrow)\"/>\n  <circle cx=\"420\" cy=\"880\" r=\"18\" fill=\"#FFFFFF\" stroke=\"#1F2937\" stroke-width=\"3\"/>\n  <circle cx=\"600\" cy=\"880\" r=\"18\" fill=\"#FFFFFF\" stroke=\"#1F2937\" stroke-width=\"3\"/>\n  <circle cx=\"780\" cy=\"880\" r=\"18\" fill=\"#FFFFFF\" stroke=\"#1F2937\" stroke-width=\"3\"/>\n  <circle cx=\"970\" cy=\"880\" r=\"22\" fill=\"#F59E0B\" stroke=\"#1F2937\" stroke-width=\"3\"/>\n  <circle cx=\"1160\" cy=\"880\" r=\"18\" fill=\"#FFFFFF\" stroke=\"#1F2937\" stroke-width=\"3\"/>\n  <circle cx=\"1340\" cy=\"880\" r=\"18\" fill=\"#FFFFFF\" stroke=\"#1F2937\" stroke-width=\"3\"/>\n  <text x=\"360\" y=\"960\" font-size=\"24\" font-weight=\"700\" fill=\"#1F2937\">コミット（Git の履歴）</text>\n  <text x=\"970\" y=\"824\" font-size=\"20\" fill=\"#1F2937\" text-anchor=\"middle\">タグが付いたコミット</text>\n\n  <!-- closing caption -->\n  <text x=\"100\" y=\"1030\" font-size=\"22\" fill=\"#1F2937\">タグは Git の目印。リリースは GitHub がその上に用意する配布の単位です。</text>\n</svg>",
+        "alt": "コミットの履歴の上にタグが目印として付き、その上に GitHub のリリース層（ノートとアセット）が乗る3層構造の図",
+        "generated_at": 1780469873
+      }
+    },
+    {
+      "id": "Q2",
+      "question": "gh CLI と Web UI、それぞれどう作るの? 最低限おさえるコマンドは?",
+      "kind": "how_to",
+      "answer": "中心は gh release create v1.2.3 です。--generate-notes でノート自動生成、--draft や --prerelease で状態指定、末尾にファイルを並べればアセットもアップロードできます (2)。",
+      "body_md": "コマンドラインなら gh release create が起点です。タグ名を渡すだけで対話的に作れますが、実務では非対話で指定するのが基本になります (2)。\n\nよく使うフラグはこのあたりです。`--generate-notes` はマージ済み PR からノートとタイトルを自動生成します。`--notes \"...\"` は本文を直接渡し、`-F changelog.md` はファイルから読み込みます。`--notes-from-tag` は注釈付きタグのメッセージをノートに使います (2)。状態の指定では `--draft` で下書き保存、`--prerelease` でプレリリース、`--latest=false` で「最新」扱いを外せます (2)。\n\nアセットの添付は驚くほど簡単で、コマンド末尾にファイルやグロブを並べるだけです。たとえば `gh release create v1.2.3 ./dist/*.tgz` でディレクトリ内の成果物をまとめて添付できます。`'asset.zip#表示ラベル'` の形式で表示名も付けられます (2)。後から足したいときは `gh release upload v1.2.3 file.zip` を使います (2)。\n\nWeb UI では Releases 画面の「Draft a new release」から、タグ選択・ノート入力・バイナリのドラッグ＆ドロップを行い、「Publish release」で公開、「Save draft」で下書き保存します (1)。CLI と UI は同じ概念(タグ・ノート・アセット・状態)を操作しているので、片方を覚えればもう片方も迷いません。",
+      "reference_ids": [
+        "1",
+        "2"
+      ],
+      "svg_spec": null,
+      "svg_asset": null
+    },
+    {
+      "id": "Q3",
+      "question": "自動生成リリースノートってどういう仕組みで、どこまでカスタムできるの?",
+      "kind": "definitional",
+      "answer": "前のタグからの差分でマージ済み PR を集約する仕組みです。.github/release.yml に categories と labels を書くと、PR ラベルごとに見出しを分けてグルーピングできます (3)。",
+      "body_md": "自動生成リリースノートは、前回のリリース(タグ)から今回のタグまでの間にマージされた PR を集め、一覧として並べてくれる機能です。手で変更履歴を書く代わりに、リリースの中身の概観を素早く作れます (3)。gh CLI なら `--generate-notes`、API なら generate-notes エンドポイントで同じ結果が得られます (2)。\n\nカスタマイズの中心は、リポジトリに置く `.github/release.yml` です。`changelog.categories` に「見出し(title)」と「対象ラベル(labels)」の対応を書くと、PR がそのラベルに応じた見出しの下に振り分けられます (3)。たとえば Semver-Major / breaking-change を「Breaking Changes」に、enhancement を「新機能」に、といった整理ができます (3)。\n\n受け皿として `labels: - \"*\"` を持つカテゴリを 1 つ用意しておくと、どの分類にも当てはまらない PR がそこに集約されます (3)。逆に出したくないものは `changelog.exclude` の labels や authors で除外できます。Dependabot の自動 PR を別枠にまとめたり、ignore-for-release ラベルの付いた PR を隠したりといった調整が定番です (3)。\n\nポイントは、ノートの質は PR の運用に依存することです。PR タイトルとラベルが整っていれば、ほぼ手直し不要のノートが出ます。逆にラベル運用がゆるいと受け皿カテゴリに全部流れ込むので、まずラベルの設計から入るのが近道です。",
+      "reference_ids": [
+        "2",
+        "3"
+      ],
+      "svg_spec": null,
+      "svg_asset": null
+    },
+    {
+      "id": "Q4",
+      "question": "2025 年に GA になった「不変リリース(Immutable Releases)」って何? 運用はどう変わるの?",
+      "kind": "risk",
+      "answer": "公開後のアセットとタグが改ざん不能になり、署名付き attestation が自動で付く仕組みで、2025 年 10 月に一般提供されました (4)。公開前にアセットを揃える draft-first 運用が推奨になります (5)。",
+      "body_md": "不変リリースは、リリースのアセットと関連タグを公開後に変更できないように固定し、サプライチェーン攻撃への耐性を高める機能です。2025 年 10 月 28 日に一般提供(GA)となりました (4)。\n\n有効化するとリポジトリまたは Organization の設定で、新しく作るリリースがすべて不変になります (4)。具体的には、添付アセットは公開後に追加・変更・削除ができなくなり、タグは特定コミットに固定されて移動も削除もできません (5)。さらに各アセットには署名付きの attestation が付与され、GitHub 上でも外部環境でも真正性と完全性を検証できます (4)。リポジトリを消して同名で作り直しても、元の不変リリースで使ったタグ名は再利用できない、という復活攻撃対策も入っています (5)。\n\n運用面で効いてくるのが公開フローの順番です。アセットは公開後に追加できないため、先に draft(下書き)としてリリースを作り、アセットをすべて添付してから publish する「draft-first」が公式の推奨手順になります (5)。gh CLI でも、作成・アップロード・公開は別々の API 呼び出しになり、不変の保護は publish 後にだけ効くと明記されています (2)。\n\n注意点として、不変はリポジトリ単位で all-or-nothing です。latest タグを上書きし続けるような「動くリリース(rolling release)」運用とは相性が悪く、ここは設計を見直す必要があります。配布バイナリの信頼性を上げたい OSS では大きな利点ですが、運用が固定化される点は事前に理解しておくべきです。",
+      "reference_ids": [
+        "2",
+        "4",
+        "5"
+      ],
+      "svg_spec": {
+        "kind": "timeline",
+        "intent": "不変リリースでは公開後にアセットを足せないため、draft で全アセットを揃えてから publish する順番が要点だと理解させる",
+        "key_elements": [
+          "draft 作成",
+          "アセット全添付",
+          "publish",
+          "公開後はロック(改ざん不能)",
+          "attestation 付与"
+        ]
+      },
+      "svg_asset": {
+        "svg_text": "<svg viewBox=\"0 0 1920 1080\" xmlns=\"http://www.w3.org/2000/svg\" role=\"img\" font-family=\"Noto Sans JP\">\n  <title>不変リリースの draft-first 公開シーケンス</title>\n  <desc>draft 作成、アセット全添付、publish、公開後ロックの4段階。公開後はアセットを追加できないため先に全部そろえる。</desc>\n  <defs>\n    <marker id=\"arrow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"9\" markerHeight=\"9\" orient=\"auto\">\n      <path d=\"M0,0 L10,5 L0,10 z\" fill=\"currentColor\"/>\n    </marker>\n  </defs>\n\n  <rect width=\"1920\" height=\"1080\" fill=\"#FAFAF7\"/>\n\n  <text x=\"100\" y=\"92\" font-size=\"44\" font-weight=\"700\" fill=\"#1F2937\">不変リリースは「公開前に全部そろえる」</text>\n  <line x1=\"100\" y1=\"132\" x2=\"900\" y2=\"132\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n\n  <!-- 4 stage cards -->\n  <rect x=\"90\" y=\"330\" width=\"360\" height=\"230\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"270\" y=\"400\" font-size=\"30\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">① draft 作成</text>\n  <text x=\"270\" y=\"452\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">下書きとして作る</text>\n  <text x=\"270\" y=\"490\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">まだ非公開</text>\n\n  <rect x=\"510\" y=\"330\" width=\"360\" height=\"230\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"690\" y=\"400\" font-size=\"30\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">② アセット全添付</text>\n  <text x=\"690\" y=\"452\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">バイナリ・zip を</text>\n  <text x=\"690\" y=\"490\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">すべて付ける</text>\n\n  <rect x=\"930\" y=\"330\" width=\"360\" height=\"230\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"1110\" y=\"400\" font-size=\"30\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">③ publish</text>\n  <text x=\"1110\" y=\"452\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">ここで世に出す</text>\n  <text x=\"1110\" y=\"490\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">（公開）</text>\n\n  <!-- card4 = 主役強調 (dark inverse) -->\n  <rect x=\"1350\" y=\"330\" width=\"360\" height=\"230\" fill=\"#374151\" rx=\"14\"/>\n  <text x=\"1530\" y=\"400\" font-size=\"30\" font-weight=\"700\" fill=\"#FAFAF7\" text-anchor=\"middle\">④ 公開後ロック</text>\n  <text x=\"1530\" y=\"452\" font-size=\"22\" fill=\"#FAFAF7\" text-anchor=\"middle\">改ざん不能になる</text>\n  <text x=\"1530\" y=\"490\" font-size=\"22\" font-weight=\"700\" fill=\"#F59E0B\" text-anchor=\"middle\">＋署名付与</text>\n\n  <!-- arrows between cards -->\n  <g color=\"#F59E0B\">\n    <line x1=\"458\" y1=\"445\" x2=\"502\" y2=\"445\" stroke=\"#F59E0B\" stroke-width=\"3\" marker-end=\"url(#arrow)\"/>\n    <line x1=\"878\" y1=\"445\" x2=\"922\" y2=\"445\" stroke=\"#F59E0B\" stroke-width=\"3\" marker-end=\"url(#arrow)\"/>\n    <line x1=\"1298\" y1=\"445\" x2=\"1342\" y2=\"445\" stroke=\"#F59E0B\" stroke-width=\"3\" marker-end=\"url(#arrow)\"/>\n  </g>\n\n  <!-- ここから不変 marker -->\n  <text x=\"1320\" y=\"600\" font-size=\"20\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">↑ ここから不変</text>\n\n  <!-- 推奨手順 band -->\n  <rect x=\"90\" y=\"680\" width=\"1620\" height=\"210\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"16\"/>\n  <rect x=\"90\" y=\"680\" width=\"8\" height=\"210\" fill=\"#F59E0B\"/>\n  <text x=\"130\" y=\"744\" font-size=\"28\" font-weight=\"700\" fill=\"#1F2937\">推奨手順 ― draft-first</text>\n  <text x=\"130\" y=\"796\" font-size=\"22\" fill=\"#1F2937\">公開後はアセットの追加・修正・削除ができず、タグも移動・削除できません。</text>\n  <text x=\"130\" y=\"838\" font-size=\"22\" fill=\"#1F2937\">だから先に draft で全アセットを添付してから publish します。</text>\n\n  <text x=\"100\" y=\"970\" font-size=\"22\" fill=\"#1F2937\">各アセットには署名付きの attestation が付与され、真正性と完全性を検証できます。</text>\n</svg>",
+        "alt": "draft 作成→アセット全添付→publish→公開後ロックの4段階で、不変リリースは公開前に全アセットを揃える draft-first が要点であることを示すタイムライン",
+        "generated_at": 1780469873
+      }
+    },
+    {
+      "id": "Q5",
+      "question": "GitHub Actions でリリースを自動化する典型パターンは?",
+      "kind": "how_to",
+      "answer": "タグ push をトリガに、成果物をビルドして gh release create --generate-notes で公開する形か、softprops/action-gh-release を使う形が定番です (2)(6)。permissions に contents: write が要ります (6)。",
+      "body_md": "Actions での自動化は、おおむね「タグ push を検知 → ビルド → リリース作成・アセット添付」という流れに集約されます。トリガは `on: push: tags: ['v*']` のようにタグパターンで絞るのが定番です。\n\n一番シンプルなのは、ワークフロー内で gh CLI を呼ぶ方法です。checkout したあと成果物をビルドし、`gh release create \"$TAG\" --generate-notes ./dist/*` のように 1 コマンドで公開とアセット添付をまとめられます (2)。gh はランナーに標準で入っており、`GH_TOKEN` を渡すだけで動きます。第三者製アクションを増やさずに済むのが利点です。\n\nもう一つの定番が softprops/action-gh-release です。`with: files:` に成果物のパスを書き、`tag_name` や `prerelease`、`generate_release_notes` などを宣言的に指定できます (6)。複数 OS のビルド成果物を集めて 1 つのリリースにまとめる用途で広く使われています (6)。\n\nどちらの方式でも、ワークフローにはリリースを書き込む権限が要ります。ジョブまたはワークフローの `permissions:` に `contents: write` を付与してください (6)。これを忘れると 403 で失敗するのが、最初によく踏む落とし穴です。\n\n選び方の目安としては、すでに gh を多用しているなら gh CLI 直叩きが軽量で見通しがよく、複数ジョブの成果物を集約したりプレリリース判定を宣言的に書きたいなら action-gh-release が扱いやすい、と整理できます。",
+      "reference_ids": [
+        "2",
+        "6"
+      ],
+      "svg_spec": {
+        "kind": "flow",
+        "intent": "タグ push を起点に、ビルドからリリース公開までが Actions 上で一本のパイプラインになることを理解させる",
+        "key_elements": [
+          "タグ push (v*)",
+          "checkout・ビルド",
+          "gh release create / action-gh-release",
+          "permissions: contents: write",
+          "リリース公開＋アセット添付"
+        ]
+      },
+      "svg_asset": {
+        "svg_text": "<svg viewBox=\"0 0 1920 1080\" xmlns=\"http://www.w3.org/2000/svg\" role=\"img\" font-family=\"Noto Sans JP\">\n  <title>タグ push 起点の Actions 自動リリースパイプライン</title>\n  <desc>タグ push を起点に、ビルドして gh release create または action-gh-release でリリースを公開するまでの自動化フロー。</desc>\n  <defs>\n    <marker id=\"arrow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"9\" markerHeight=\"9\" orient=\"auto\">\n      <path d=\"M0,0 L10,5 L0,10 z\" fill=\"currentColor\"/>\n    </marker>\n  </defs>\n\n  <rect width=\"1920\" height=\"1080\" fill=\"#FAFAF7\"/>\n\n  <text x=\"100\" y=\"92\" font-size=\"44\" font-weight=\"700\" fill=\"#1F2937\">タグ push から自動でリリースを公開する</text>\n  <line x1=\"100\" y1=\"132\" x2=\"940\" y2=\"132\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n\n  <!-- ① タグ push -->\n  <rect x=\"80\" y=\"330\" width=\"380\" height=\"280\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"270\" y=\"400\" font-size=\"28\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">① タグを push</text>\n  <text x=\"270\" y=\"456\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">git push origin v1.2.3</text>\n  <text x=\"270\" y=\"524\" font-size=\"20\" fill=\"#1F2937\" text-anchor=\"middle\">on: push:</text>\n  <text x=\"270\" y=\"556\" font-size=\"20\" fill=\"#1F2937\" text-anchor=\"middle\">tags: [ 'v*' ]</text>\n\n  <!-- ② ビルド (歯車) -->\n  <rect x=\"510\" y=\"330\" width=\"380\" height=\"280\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <g transform=\"translate(700,430)\">\n    <circle r=\"30\" fill=\"none\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n    <circle r=\"10\" fill=\"#F59E0B\"/>\n    <line x1=\"0\" y1=\"-40\" x2=\"0\" y2=\"-30\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n    <line x1=\"0\" y1=\"30\" x2=\"0\" y2=\"40\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n    <line x1=\"-40\" y1=\"0\" x2=\"-30\" y2=\"0\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n    <line x1=\"30\" y1=\"0\" x2=\"40\" y2=\"0\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n    <line x1=\"-28\" y1=\"-28\" x2=\"-21\" y2=\"-21\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n    <line x1=\"21\" y1=\"21\" x2=\"28\" y2=\"28\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n    <line x1=\"-28\" y1=\"28\" x2=\"-21\" y2=\"21\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n    <line x1=\"21\" y1=\"-21\" x2=\"28\" y2=\"-28\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n  </g>\n  <text x=\"700\" y=\"528\" font-size=\"28\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">② ビルド</text>\n  <text x=\"700\" y=\"568\" font-size=\"20\" fill=\"#1F2937\" text-anchor=\"middle\">checkout・コンパイル</text>\n\n  <!-- ③ リリース作成 -->\n  <rect x=\"940\" y=\"330\" width=\"380\" height=\"280\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"1130\" y=\"400\" font-size=\"28\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">③ リリース作成</text>\n  <text x=\"1130\" y=\"468\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">gh release create</text>\n  <text x=\"1130\" y=\"510\" font-size=\"20\" fill=\"#1F2937\" text-anchor=\"middle\">または</text>\n  <text x=\"1130\" y=\"552\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">action-gh-release</text>\n\n  <!-- ④ 公開 -->\n  <rect x=\"1370\" y=\"330\" width=\"380\" height=\"280\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"1560\" y=\"400\" font-size=\"28\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">④ 公開</text>\n  <text x=\"1560\" y=\"452\" font-size=\"22\" fill=\"#1F2937\" text-anchor=\"middle\">リリース＋アセット</text>\n  <rect x=\"1480\" y=\"496\" width=\"34\" height=\"44\" fill=\"#FFFFFF\" stroke=\"#1F2937\" stroke-width=\"2\" rx=\"4\"/>\n  <rect x=\"1528\" y=\"496\" width=\"34\" height=\"44\" fill=\"#FFFFFF\" stroke=\"#1F2937\" stroke-width=\"2\" rx=\"4\"/>\n  <rect x=\"1576\" y=\"496\" width=\"34\" height=\"44\" fill=\"#F59E0B\" stroke=\"#1F2937\" stroke-width=\"2\" rx=\"4\"/>\n  <text x=\"1560\" y=\"578\" font-size=\"20\" fill=\"#1F2937\" text-anchor=\"middle\">アセットを添付</text>\n\n  <!-- arrows -->\n  <g color=\"#F59E0B\">\n    <line x1=\"466\" y1=\"470\" x2=\"502\" y2=\"470\" stroke=\"#F59E0B\" stroke-width=\"3\" marker-end=\"url(#arrow)\"/>\n    <line x1=\"896\" y1=\"470\" x2=\"932\" y2=\"470\" stroke=\"#F59E0B\" stroke-width=\"3\" marker-end=\"url(#arrow)\"/>\n    <line x1=\"1326\" y1=\"470\" x2=\"1362\" y2=\"470\" stroke=\"#F59E0B\" stroke-width=\"3\" marker-end=\"url(#arrow)\"/>\n  </g>\n\n  <!-- permissions chip -->\n  <rect x=\"80\" y=\"710\" width=\"980\" height=\"64\" fill=\"#374151\" rx=\"12\"/>\n  <text x=\"110\" y=\"751\" font-size=\"24\" font-weight=\"700\" fill=\"#FAFAF7\">permissions: contents: write を付与する</text>\n\n  <text x=\"100\" y=\"860\" font-size=\"22\" fill=\"#1F2937\">gh はランナーに標準搭載。GH_TOKEN を渡すだけで動きます。</text>\n  <text x=\"100\" y=\"908\" font-size=\"22\" fill=\"#1F2937\">複数 OS のビルド成果物を 1 つのリリースに集約するなら action-gh-release が扱いやすいです。</text>\n</svg>",
+        "alt": "タグ push を起点に checkout・ビルドし、gh release create または action-gh-release でリリースを公開する Actions 自動化フロー",
+        "generated_at": 1780469873
+      }
+    },
+    {
+      "id": "Q6",
+      "question": "release-please や semantic-release みたいなツールは何が違うの? 入れるべき?",
+      "kind": "comparative",
+      "answer": "どちらも Conventional Commits からバージョンと変更履歴を自動算出する系です。release-please はリリース PR を作って人がマージする方式 (7)、semantic-release は CI で即配布まで走らせる方式という違いがあります。",
+      "body_md": "GitHub 標準の自動生成ノートが「PR を集めて一覧にする」だけなのに対し、release-please や semantic-release はもう一段踏み込んで、コミットメッセージから次のバージョン番号と CHANGELOG まで自動で決めるツールです。前提として Conventional Commits(feat: / fix: / feat!: のような規約)に沿ったコミットが必要になります。\n\nrelease-please は、規約コミットを解析して「次はこのバージョン」「CHANGELOG はこう」という内容のリリース PR を自動で作り、その PR をマージした時点でタグとリリースを発行する方式です (7)。リリースが人のマージ操作を挟むので、内容を確認してから出せる安心感があります。多言語のモノレポにも対応しています (7)。\n\n一方の semantic-release は、main への push をトリガに CI 上でバージョン決定からパッケージ公開までを一気に走らせる、人手を挟まない自動化に振った設計です。npm 配布との相性がよく、止めずに出し続けたいプロジェクトで好まれます。\n\n導入の判断は頻度と規約定着で決まります。たまにしか出さない、あるいは規約コミットが回っていないなら、まずは gh release create --generate-notes の手動運用で十分です (2)。リリース頻度が高く、バージョンと変更履歴の手作業をなくしたい段階に来たら、まず人のマージを挟める release-please から入るのが無難です。規約の徹底という運用コストと、ロックインの度合いを天秤にかけて選びます。",
+      "reference_ids": [
+        "2",
+        "7"
+      ],
+      "svg_spec": null,
+      "svg_asset": null
+    },
+    {
+      "id": "Q7",
+      "question": "Draft / Pre-release / latest / セマンティックバージョニングって、どう使い分ければいいの?",
+      "kind": "decisional",
+      "answer": "Draft は未公開の下書き、Pre-release は安定版扱いしない印で latest から外れます (1)。latest は配布の正面で、バージョン番号は SemVer の major.minor.patch で意味を決めます (8)。",
+      "body_md": "この 4 つは「状態」「目立たせ方」「番号の意味」という別々の軸を担っています。混同しやすいので分けて整理します。\n\nDraft はリリースの状態で、保存はするが公開しない下書きです (1)。アセットを揃えている途中や、公開タイミングを後にずらしたいときに使います。不変リリースでは、この draft 段階でアセットを全部添付してから publish するのが推奨手順でした (5)。\n\nPre-release は「これは本番向けの安定版ではない」という印です。ベータや RC を出すときに付けると、latest(最新)から除外されます (1)。gh CLI では `--prerelease` で指定します (2)。\n\nlatest は配布の正面に当たる「最新版」の指定です。既定では日付とバージョンから自動判定されますが、`--latest=false` で明示的に外すこともできます (2)。ユーザーが /releases/latest で取りに来るのはこの版なので、どれを正面に置くかは意識して決めます。\n\nそして番号の意味付けがセマンティックバージョニングです。major.minor.patch の 3 つで、後方互換を壊す変更は major、後方互換のある機能追加は minor、後方互換のあるバグ修正は patch を上げる、という規約です (8)。プレリリースは 1.0.0-rc.1 のようにハイフン付きで表現します (8)。\n\n実務では、番号は SemVer で機械的に決め、Pre-release / latest で「どれを正面に出すか」を制御し、Draft で「いつ出すか」を握る、と役割分担して考えると運用がぶれません。",
+      "reference_ids": [
+        "1",
+        "2",
+        "5",
+        "8"
+      ],
+      "svg_spec": null,
+      "svg_asset": null
+    }
+  ],
+  "concerns": [
+    {
+      "id": "C1",
+      "text": "不変リリースを有効化すると、既存の運用が壊れないか",
+      "answer": "不変はリポジトリ単位で all-or-nothing なので、latest を上書きし続ける「動くリリース」運用とは相性が悪く、draft-first への切り替えが要ります (5)。",
+      "addressing_md": "不変リリースは、公開後のアセット追加・タグ移動をすべて禁じます (5)。ナイトリービルドのように同じタグを上書きし続ける運用とは構造的にぶつかります。導入するなら、先に draft でアセットを揃えてから publish する手順に運用を寄せ、安定版の配布だけを不変対象にする切り分けを設計してから有効化するのが安全です (5)。",
+      "reference_ids": [
+        "5"
+      ],
+      "related_section_ids": [
+        "Q4"
+      ]
+    },
+    {
+      "id": "C2",
+      "text": "release-please 等の自動化ツールを入れると、学習コストやロックインが増えないか",
+      "answer": "Conventional Commits の徹底が前提なので運用コストは増えます。低頻度なら gh release create --generate-notes の手動運用で十分まかなえます (2)(7)。",
+      "addressing_md": "release-please は規約コミットを前提に動くため、チーム全体でコミット規約を守る運用負荷が新たに発生します (7)。リリース頻度が低い、または規約がまだ定着していない段階では、無理に入れず gh CLI の手動運用に .github/release.yml の見出し整理を足すだけで実用上は足ります (2)(3)。頻度と規約定着が上がってから段階的に移行するのが現実的です。",
+      "reference_ids": [
+        "2",
+        "3",
+        "7"
+      ],
+      "related_section_ids": [
+        "Q3",
+        "Q6"
+      ]
+    }
+  ],
+  "next_action": {
+    "summary": "まず gh release create --generate-notes の手動運用を基準線にし、.github/release.yml で見出しだけ整えます。そこから、リリース頻度とチーム規模が上がれば Actions 自動化、Conventional Commits が回るなら release-please、改ざん耐性が要る配布物があれば不変リリース＋draft-first、と段階的に足していくのが堅実です。",
+    "paths": [
+      {
+        "condition": "たまにしかリリースしない / 個人〜小規模",
+        "action": "gh release create vX.Y.Z --generate-notes を手動運用し、.github/release.yml で見出しだけ整える",
+        "related_section_ids": [
+          "Q2",
+          "Q3"
+        ],
+        "reference_ids": [
+          "2",
+          "3"
+        ]
+      },
+      {
+        "condition": "タグ push のたびに確実に公開したい / バイナリ配布あり",
+        "action": "GitHub Actions で gh release create か softprops/action-gh-release を組み、permissions に contents: write を付ける",
+        "related_section_ids": [
+          "Q5"
+        ],
+        "reference_ids": [
+          "2",
+          "6"
+        ]
+      },
+      {
+        "condition": "Conventional Commits が定着 / バージョンと変更履歴を自動化したい",
+        "action": "release-please を導入してリリース PR 駆動に切り替える(npm 配布中心なら semantic-release も検討)",
+        "related_section_ids": [
+          "Q6"
+        ],
+        "reference_ids": [
+          "7"
+        ]
+      },
+      {
+        "condition": "配布バイナリの改ざん耐性を上げたい OSS",
+        "action": "不変リリースを有効化し、draft 作成→アセット全添付→publish の draft-first 運用に寄せる",
+        "related_section_ids": [
+          "Q4"
+        ],
+        "reference_ids": [
+          "4",
+          "5"
+        ]
+      }
+    ],
+    "svg_spec": {
+      "kind": "flow",
+      "intent": "読者が自分のリリース頻度・配布物・規約状況に当てはめて、手動・Actions・release-please・不変リリースのどれを選ぶかを 30 秒で決められる YES/NO 分岐にする",
+      "key_elements": [
+        "頻度は高い?",
+        "バイナリ配布ある?",
+        "Conventional Commits 回ってる?",
+        "→ 手動 gh CLI",
+        "→ Actions 自動化",
+        "→ release-please",
+        "→ 不変リリース"
+      ]
+    },
+    "svg_asset": {
+      "svg_text": "<svg viewBox=\"0 0 1920 1080\" xmlns=\"http://www.w3.org/2000/svg\" role=\"img\" font-family=\"Noto Sans JP\">\n  <title>状況別にリリース運用を選ぶ意思決定フロー</title>\n  <desc>リリース頻度とコミット規約の有無で、手動・release-please・Actions自動化を選び、改ざん耐性が要るなら不変リリースを併用する判断フロー。</desc>\n  <defs>\n    <marker id=\"arrow\" viewBox=\"0 0 10 10\" refX=\"9\" refY=\"5\" markerWidth=\"9\" markerHeight=\"9\" orient=\"auto\">\n      <path d=\"M0,0 L10,5 L0,10 z\" fill=\"currentColor\"/>\n    </marker>\n  </defs>\n\n  <rect width=\"1920\" height=\"1080\" fill=\"#FAFAF7\"/>\n\n  <text x=\"100\" y=\"92\" font-size=\"44\" font-weight=\"700\" fill=\"#1F2937\">自分の状況でどれを選ぶか</text>\n  <line x1=\"100\" y1=\"132\" x2=\"700\" y2=\"132\" stroke=\"#F59E0B\" stroke-width=\"3\"/>\n\n  <!-- 判定 D1 -->\n  <rect x=\"160\" y=\"240\" width=\"560\" height=\"110\" fill=\"#FFFFFF\" stroke=\"#1F2937\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"440\" y=\"305\" font-size=\"30\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">リリース頻度は高い?</text>\n\n  <!-- D1 → O1 (いいえ) -->\n  <g color=\"#1F2937\">\n    <line x1=\"724\" y1=\"295\" x2=\"1076\" y2=\"295\" stroke=\"#1F2937\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/>\n  </g>\n  <text x=\"880\" y=\"268\" font-size=\"22\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">いいえ</text>\n\n  <!-- O1 手動 (推奨ベースライン) -->\n  <rect x=\"1080\" y=\"240\" width=\"740\" height=\"120\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <rect x=\"1080\" y=\"240\" width=\"8\" height=\"120\" fill=\"#F59E0B\"/>\n  <text x=\"1120\" y=\"296\" font-size=\"28\" font-weight=\"700\" fill=\"#1F2937\">手動運用</text>\n  <text x=\"1120\" y=\"336\" font-size=\"22\" fill=\"#1F2937\">gh release create --generate-notes</text>\n\n  <!-- D1 → D2 (はい) -->\n  <g color=\"#1F2937\">\n    <line x1=\"440\" y1=\"354\" x2=\"440\" y2=\"436\" stroke=\"#1F2937\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/>\n  </g>\n  <text x=\"478\" y=\"402\" font-size=\"22\" font-weight=\"700\" fill=\"#1F2937\">はい</text>\n\n  <!-- 判定 D2 -->\n  <rect x=\"160\" y=\"440\" width=\"560\" height=\"110\" fill=\"#FFFFFF\" stroke=\"#1F2937\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"440\" y=\"495\" font-size=\"26\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">Conventional Commits は</text>\n  <text x=\"440\" y=\"527\" font-size=\"26\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">定着している?</text>\n\n  <!-- D2 → O2 (はい) -->\n  <g color=\"#1F2937\">\n    <line x1=\"724\" y1=\"495\" x2=\"1076\" y2=\"495\" stroke=\"#1F2937\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/>\n  </g>\n  <text x=\"880\" y=\"468\" font-size=\"22\" font-weight=\"700\" fill=\"#1F2937\" text-anchor=\"middle\">はい</text>\n\n  <!-- O2 release-please -->\n  <rect x=\"1080\" y=\"440\" width=\"740\" height=\"120\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"1120\" y=\"496\" font-size=\"28\" font-weight=\"700\" fill=\"#1F2937\">release-please</text>\n  <text x=\"1120\" y=\"536\" font-size=\"22\" fill=\"#1F2937\">リリース PR を自動生成して駆動</text>\n\n  <!-- D2 → O3 (いいえ) -->\n  <g color=\"#1F2937\">\n    <line x1=\"440\" y1=\"554\" x2=\"440\" y2=\"636\" stroke=\"#1F2937\" stroke-width=\"2\" marker-end=\"url(#arrow)\"/>\n  </g>\n  <text x=\"478\" y=\"602\" font-size=\"22\" font-weight=\"700\" fill=\"#1F2937\">いいえ</text>\n\n  <!-- O3 Actions -->\n  <rect x=\"160\" y=\"640\" width=\"660\" height=\"120\" fill=\"#FFFFFF\" stroke=\"#F59E0B\" stroke-width=\"3\" rx=\"14\"/>\n  <text x=\"200\" y=\"696\" font-size=\"28\" font-weight=\"700\" fill=\"#1F2937\">Actions で自動化</text>\n  <text x=\"200\" y=\"736\" font-size=\"22\" fill=\"#1F2937\">gh release create / action-gh-release</text>\n\n  <!-- 横断バンド: 不変リリース (dark inverse 強調) -->\n  <rect x=\"160\" y=\"830\" width=\"1660\" height=\"150\" fill=\"#374151\" rx=\"16\"/>\n  <text x=\"200\" y=\"892\" font-size=\"28\" font-weight=\"700\" fill=\"#FAFAF7\">配布物の改ざん耐性が要るなら ― どの経路でも併用</text>\n  <text x=\"200\" y=\"940\" font-size=\"24\" font-weight=\"700\" fill=\"#F59E0B\">不変リリース ＋ draft-first（draft で全アセットを添付 → publish）</text>\n</svg>",
+      "alt": "リリース頻度とコミット規約の有無で手動・release-please・Actions自動化を選び、改ざん耐性が要るなら不変リリースを併用する意思決定フロー",
+      "generated_at": 1780469873
+    },
+    "skipped": false,
+    "skip_reason": ""
+  },
+  "generated_at": 1780469873,
+  "svg_done": true,
+  "html_path": "/home/claude/enostech-workspace/decks/2026-06-03_github-releases/research.html",
+  "meta": {
+    "schema_version": "13"
+  },
+  "theme": "GitHub Releases 実務復習ガイド",
+  "intent": "GitHub をふだん使っている実務者が、タグとの違い・gh CLI/API・自動生成ノート・Actions 自動化・不変リリース・バージョニング運用までを一枚絵で整理し直し、自分のプロジェクトに合った配布フローを自信を持って選べる状態になる",
+  "reader": "ふだん GitHub と gh CLI を使う開発・運用者(上級)。Release はなんとなく使っているが、自動生成ノートや不変リリース、Actions 自動化まで含めて運用を体系立てて見直したい人",
+  "deck_id": ""
+}

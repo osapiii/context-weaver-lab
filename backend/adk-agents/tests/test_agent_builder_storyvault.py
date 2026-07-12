@@ -1,0 +1,86 @@
+"""Tests for StoryVault mode wiring in agent_builder."""
+from __future__ import annotations
+
+import pytest
+
+pytest.importorskip("google.adk")
+
+from common.agent_builder import build_agent_for_mode  # noqa: E402
+
+
+def _tool_names(agent) -> list[str]:
+    names: list[str] = []
+    for tool in agent.tools:
+        name = getattr(tool, "name", None) or type(tool).__name__
+        names.append(str(name))
+    return names
+
+
+def test_build_storyvault_agent_has_ssot_tools(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    agent = build_agent_for_mode(
+        "storyvault",
+        datastore_path=None,
+        model="gemini-2.5-flash",
+    )
+    assert agent.name == "en_aistudio_storyvault_agent"
+    joined = " ".join(_tool_names(agent)).lower()
+    assert "read_storyvault_sources" in joined
+    assert "save_user_story_ssot" in joined
+
+
+def test_build_storyvault_capability_structuring_agent_has_tools(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    agent = build_agent_for_mode(
+        "storyvault_capability_structuring",
+        datastore_path=None,
+        model="gemini-2.5-flash",
+    )
+    assert agent.name == "storyvault_capability_structuring_agent"
+    joined = " ".join(_tool_names(agent)).lower()
+    assert "read_capability_structuring_context" in joined
+    assert "save_capability_structure" in joined
+
+
+def test_build_storyvault_zapping_analysis_agent_has_tools(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    agent = build_agent_for_mode(
+        "storyvault_zapping_analysis",
+        datastore_path=None,
+        model="gemini-2.5-flash",
+    )
+    assert agent.name == "storyvault_zapping_analysis_agent"
+    joined = " ".join(_tool_names(agent)).lower()
+    assert "read_zapping_analysis_context" in joined
+    assert "save_zapping_analysis" not in joined
+    assert agent.output_schema is not None
+    assert agent.output_key == "storyvault_zapping_analysis"
+
+
+def test_build_storyvault_related_context_agent_has_tools(monkeypatch):
+    monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "TRUE")
+    agent = build_agent_for_mode(
+        "storyvault_related_context",
+        datastore_path=None,
+        model="gemini-2.5-flash",
+    )
+
+    tool_names = {tool.name for tool in agent.tools}
+    assert agent.name == "storyvault_related_context_agent"
+    assert "read_related_context_request" in tool_names
+    assert "fetch_github_pull_request_candidates" in tool_names
+    assert "fetch_slack_message_candidates" in tool_names
+    assert agent.output_key == "storyvault_related_context"
+
+
+def test_build_storyvault_story_generation_agent_has_tools(monkeypatch):
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    agent = build_agent_for_mode(
+        "storyvault_story_generation",
+        datastore_path=None,
+        model="gemini-2.5-flash",
+    )
+    assert agent.name == "storyvault_story_generation_agent"
+    joined = " ".join(_tool_names(agent)).lower()
+    assert "read_story_generation_context" in joined
+    assert "save_story_generation" in joined
