@@ -29,10 +29,15 @@ export default defineNuxtRouteMiddleware(async (to) => {
         );
         // 組織情報を更新する
         const organizationStore = useOrganizationStore();
+        const organizationId = adminUserStore.currentOrganizationId;
+        if (!organizationId) {
+          throw new Error("Custom Claims に organizationId がありません");
+        }
         await organizationStore.updateLoggedInOrganizationInfo({
-          filterKey: adminUserStore.currentUserClaimsInfo
-            .organizationCode as string,
-          searchType: "code",
+          // Firestore Rules で所属組織だけを許可しているため、collection
+          // query ではなく claims の document ID を使って直接取得する。
+          filterKey: organizationId,
+          searchType: "id",
         });
         log("INFO", "update organization operation finished!🔥");
 
