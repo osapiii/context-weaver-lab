@@ -1,0 +1,85 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSuper() {
+      return signedIn() && request.auth.token.rbacRole == 1;
+    }
+
+    function isOrganizationAdmin(orgId) {
+      return signedIn()
+             && request.auth.token.rbacRole == 2
+             && request.auth.token.organizationId == orgId;
+    }
+
+    function hasSpaceAccess(orgId, spaceId) {
+      return signedIn()
+             && request.auth.token.organizationId == orgId
+             && (request.auth.token.rbacRole == 2
+                 || (request.auth.token.rbacRole == 3
+                     && spaceId in request.auth.token.spaceIds));
+    }
+
+    // ─── ユーザー個人シークレット (BYOK) ───────────────────────
+    // 本人だけ read/write 可。他ユーザーから絶対に読めないようにする。
+    // Cloud Run の service account は Admin SDK 経由なので rules を bypass する。
+    match /users/{uid}/secrets/{secretId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == uid;
+    }
+
+    // 組織管理者は所属組織内のみ、利用者は許可された Space 内のみアクセスできる。
+    match /organizations/{orgId} {
+      allow read: if isSuper() || isOrganizationAdmin(orgId);
+      allow write: if isSuper() || isOrganizationAdmin(orgId);
+
+      match /spaces/{spaceId}/{document=**} {
+        allow read, write: if isSuper() || isOrganizationAdmin(orgId);
+      }
+
+      // Space 外の組織設定・連携・管理データは組織管理者以上に限定する。
+      match /{document=**} {
+        allow read, write: if isSuper() || isOrganizationAdmin(orgId);
+      }
+    }
+
+    // ─── ADK セッション (org/space 配下) ─────────────────────────
+    match /organizations/{orgId}/spaces/{spaceId}/adkSessions/{sessionId} {
+      allow read, list: if request.auth != null
+                        && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.uid == request.auth.uid;
+      allow delete: if false;
+
+      match /events/{eventId} {
+        allow read: if request.auth != null
+                    && get(/databases/$(database)/documents/organizations/$(orgId)/spaces/$(spaceId)/adkSessions/$(sessionId)).data.uid == request.auth.uid;
+        allow write: if false;
+      }
+
+      match /artifacts/{artifactId} {
+        allow read: if request.auth != null
+                    && get(/databases/$(database)/documents/organizations/$(orgId)/spaces/$(spaceId)/adkSessions/$(sessionId)).data.uid == request.auth.uid;
+        allow write: if false;
+      }
+    }
+
+    // ─── RequestDoc ───────────────────
+    // PC が作成し、スマホ (同 org/space の認証ユーザー) が files/status を更新する。
+    // 解析結果 (output) の書き込みは Admin SDK (Firebase Function) が rules を bypass。
+    match /organizations/{orgId}/spaces/{spaceId}/requests/shippingIntakeRequests/logs/{requestId} {
+      allow read, create, update: if isSuper() || hasSpaceAccess(orgId, spaceId);
+      allow delete: if false;
+    }
+
+    // 組織パス外の legacy/system データは Super のみに限定する。
+    match /{document=**} {
+      allow read, write: if isSuper();
+    }
+  }
+}

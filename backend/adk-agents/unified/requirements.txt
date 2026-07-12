@@ -1,0 +1,2 @@
+# unified agent の追加依存. common + image (GCS) を Dockerfile で install.
+google-cloud-storage>=2.16.0

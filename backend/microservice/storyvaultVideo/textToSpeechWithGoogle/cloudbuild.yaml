@@ -1,0 +1,19 @@
+# Cloud Build: キャッシュを使わず毎回フルリビルド
+# requirements.txt 変更時も確実に反映させる
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--no-cache'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:latest'
+      - '.'
+
+substitutions:
+  _SERVICE_NAME: text-to-speech-with-google
+
+images:
+  - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

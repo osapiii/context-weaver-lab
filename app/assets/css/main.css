@@ -1,0 +1,130 @@
+@import "tailwindcss" theme(static);
+@import "@nuxt/ui";
+@import "highlight.js/styles/github.css";
+@import "./en-aistudio-table-header.css";
+@import "./en-aistudio-ag-grid.css";
+
+/* MarkdownRenderer テーブルスタイル（本番環境でも確実に適用されるようにグローバルに定義） */
+.markdown-renderer .markdown-body table,
+.markdown-body table {
+  border-spacing: 0 !important;
+  border-collapse: collapse !important;
+  display: table !important;
+  width: 100% !important;
+  margin: 24px 0 !important;
+  overflow-x: auto !important;
+  border: none !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.markdown-renderer .markdown-body table:hover,
+.markdown-body table:hover {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23) !important;
+}
+
+.markdown-renderer .markdown-body table th,
+.markdown-renderer .markdown-body table td,
+.markdown-body table th,
+.markdown-body table td {
+  padding: 16px 20px !important;
+  border: none !important;
+  border-right: 1px solid #e5e7eb !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  text-align: left !important;
+  vertical-align: top !important;
+  line-height: 1.6 !important;
+}
+
+.markdown-renderer .markdown-body table th:last-child,
+.markdown-renderer .markdown-body table td:last-child,
+.markdown-body table th:last-child,
+.markdown-body table td:last-child {
+  border-right: none !important;
+}
+
+.markdown-renderer .markdown-body table th,
+.markdown-body table th {
+  font-weight: 600 !important;
+  background: #f8f9fa !important;
+  color: #1f2937 !important;
+  border-bottom: 2px solid #e5e7eb !important;
+  font-size: 14px !important;
+  text-transform: none !important;
+  letter-spacing: 0.5px !important;
+  white-space: nowrap !important;
+  position: relative !important;
+}
+
+.markdown-renderer .markdown-body table th:first-child,
+.markdown-body table th:first-child {
+  border-top-left-radius: 8px !important;
+}
+
+.markdown-renderer .markdown-body table th:last-child,
+.markdown-body table th:last-child {
+  border-top-right-radius: 8px !important;
+}
+
+.markdown-renderer .markdown-body table td,
+.markdown-body table td {
+  background: #ffffff !important;
+  font-size: 14px !important;
+  color: #374151 !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.markdown-renderer .markdown-body table tr,
+.markdown-body table tr {
+  background: #ffffff !important;
+  border-top: none !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.markdown-renderer .markdown-body table tr:first-child th,
+.markdown-body table tr:first-child th {
+  border-top: none !important;
+}
+
+.markdown-renderer .markdown-body table tr:last-child td,
+.markdown-body table tr:last-child td {
+  border-bottom: none !important;
+}
+
+.markdown-renderer .markdown-body table tr:last-child td:first-child,
+.markdown-body table tr:last-child td:first-child {
+  border-bottom-left-radius: 8px !important;
+}
+
+.markdown-renderer .markdown-body table tr:last-child td:last-child,
+.markdown-body table tr:last-child td:last-child {
+  border-bottom-right-radius: 8px !important;
+}
+
+.markdown-renderer .markdown-body table tr:nth-child(2n),
+.markdown-body table tr:nth-child(2n) {
+  background: #ffffff !important;
+}
+
+.markdown-renderer .markdown-body table tr:nth-child(2n) td,
+.markdown-body table tr:nth-child(2n) td {
+  background: #ffffff !important;
+}
+
+.markdown-renderer .markdown-body table tr:hover,
+.markdown-body table tr:hover {
+  background: #f5f5f5 !important;
+}
+
+.markdown-renderer .markdown-body table tr:hover td,
+.markdown-body table tr:hover td {
+  background: #f5f5f5 !important;
+}
+
+.markdown-renderer .markdown-body table thead,
+.markdown-body table thead {
+  background-color: #f8f9fa !important;
+}
+

@@ -1,0 +1,4 @@
+This stray file was created during a v9.25 release session.
+It is harmless (not loaded by any code) but the Drive mirror does not allow rm.
+osanai さん: please delete manually:
+  rm /sessions/youthful-wizardly-pascal/mnt/ENOSTECH-KNOWLEDGE-SPACE/skills/enostech-slides/scripts/render/deck-structures/_test_write.txt

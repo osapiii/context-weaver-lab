@@ -1,0 +1,72 @@
+/**
+ * vue-cal 月表示の日本向けスタイル（月曜始まり・土日色分け）
+ * `.en-aistudio-vuecal-japanese` を VueCal の class に付与して使う。
+ */
+.en-aistudio-vuecal-japanese.vuecal {
+  background-color: #fff;
+}
+
+.en-aistudio-vuecal-japanese .vuecal__weekdays-headings {
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.en-aistudio-vuecal-japanese .vuecal__heading {
+  min-height: 2.25rem;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #334155;
+}
+
+.en-aistudio-vuecal-japanese .vuecal__heading .weekday-label {
+  width: 100%;
+}
+
+.en-aistudio-vuecal-japanese .vuecal__heading .full,
+.en-aistudio-vuecal-japanese .vuecal__heading .small,
+.en-aistudio-vuecal-japanese .vuecal__heading .xsmall {
+  display: block !important;
+}
+
+.en-aistudio-vuecal-japanese .en-aistudio-vuecal-wd-weekday {
+  color: #334155;
+}
+
+.en-aistudio-vuecal-japanese .en-aistudio-vuecal-wd-sat {
+  color: #2563eb;
+}
+
+.en-aistudio-vuecal-japanese .en-aistudio-vuecal-wd-sun {
+  color: #dc2626;
+}
+
+.en-aistudio-vuecal-japanese.vuecal--month-view .vuecal__cell--day6 .vuecal__cell-date {
+  color: #2563eb;
+}
+
+.en-aistudio-vuecal-japanese.vuecal--month-view .vuecal__cell--day7 .vuecal__cell-date {
+  color: #dc2626;
+}
+
+.en-aistudio-vuecal-japanese.vuecal--month-view .vuecal__cell--out-of-scope .vuecal__cell-date {
+  color: #94a3b8;
+}
+
+.en-aistudio-vuecal-japanese.vuecal--month-view
+  .vuecal__cell--out-of-scope.vuecal__cell--day6
+  .vuecal__cell-date {
+  color: #93c5fd;
+}
+
+.en-aistudio-vuecal-japanese.vuecal--month-view
+  .vuecal__cell--out-of-scope.vuecal__cell--day7
+  .vuecal__cell-date {
+  color: #fca5a5;
+}
+
+.en-aistudio-vuecal-japanese .vuecal__today-btn span.default {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}

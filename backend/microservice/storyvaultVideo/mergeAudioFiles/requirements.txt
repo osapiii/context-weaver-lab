@@ -1,0 +1,20 @@
+# Flask Web Framework
+Flask==3.0.0
+flask-cors==4.0.0
+Werkzeug==3.0.1
+
+# Audio Processing
+pydub==0.25.1
+
+# Google Cloud Services
+google-cloud-storage==2.13.0
+
+# Environment and Configuration
+python-dotenv==1.0.0
+
+# Utilities
+requests==2.31.0
+
+# Development and Testing
+gunicorn==21.2.0
+ddtrace>=3.17.0

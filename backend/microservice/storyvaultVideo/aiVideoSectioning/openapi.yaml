@@ -1,0 +1,361 @@
+openapi: 3.0.3
+info:
+  title: AI Video Sectioning API
+  version: 1.0.0
+  description: |
+    Gemini structuredOutputを使用して動画を自動的に分析し、適切なセクションに分割して
+    動画と音声をカットしてGCSに保存するマイクロサービス
+
+    ## 主な機能
+    - GCSから動画をダウンロード
+    - Gemini structuredOutputで動画を分析してセクション配列を取得
+    - 各セクションごとに動画カット・音声分離/カット
+    - カットされた動画と音声をGCSにアップロード
+    - Firestoreへのリアルタイム進捗ログ記録（オプション）
+
+  contact:
+    name: StoryVault Development Team
+    url: https://github.com/ENOSTECH-inc/storyvault
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://ai-video-sectioning-328416367800.asia-northeast1.run.app
+    description: Cloud Run本番環境
+
+tags:
+  - name: video
+    description: 動画処理関連のエンドポイント
+  - name: system
+    description: システム管理関連のエンドポイント
+
+paths:
+  /auto-section:
+    post:
+      tags:
+        - video
+      summary: AI動画セクション化
+      description: |
+        Gemini structuredOutputを使用して動画を自動的に分析し、適切なセクションに分割して
+        動画と音声をカットしてGCSに保存します。
+
+        ## 処理フロー
+        1. GCSから元動画をダウンロード
+        2. Gemini structuredOutputで動画分析 → セクション配列取得
+        3. 各セクションごとに動画カット・音声分離/カット
+        4. カットされた動画と音声をGCSにアップロード
+        5. 結果をレスポンスとして返却
+
+      operationId: autoSectionVideo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutoSectionRequest"
+            examples:
+              basic:
+                summary: 基本的な使用例
+                value:
+                  request_id: autoSectionVideoRequest_1234567890
+                  input:
+                    sourceBucketName: storyvault-dev-adk-artifacts
+                    sourceFilePath: organizations/org123/spaces/space456/videos/video123/original.mp4
+                    outputBucketName: storyvault-dev-adk-artifacts
+                    videoId: video_456
+                    projectId: project_789
+                  systemMetadata:
+                    organizationId: org_123
+                    spaceId: space_456
+                    loggingCollectionId: requests/autoSectionVideoRequests/logs
+                    loggingDocumentId: autoSectionVideoRequest_1234567890
+                    requestedBy:
+                      email: system@example.com
+                      role: 2
+                    isCommand: false
+                    isOouiCrud: true
+                    isLlmCall: true
+                    isAdminCrud: false
+      responses:
+        "200":
+          description: AI動画セクション化が正常に完了
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              examples:
+                success:
+                  summary: 成功レスポンス例
+                  value:
+                    status: success
+                    request_id: autoSectionVideoRequest_1234567890
+                    output:
+                      sections:
+                        - sectionId: section-0
+                          index: 0
+                          startTime: 0.0
+                          endTime: 15.5
+                          title: "イントロダクション"
+                          videoSegment:
+                            bucketName: storyvault-dev-adk-artifacts
+                            gcsFilePath: organizations/org123/spaces/space456/videos/video123/narrationProjects/project789/sections/section-0/section.mp4
+                            duration: 15.5
+                            sizeBytes: 1234567
+                          audioSegment:
+                            bucketName: storyvault-dev-adk-artifacts
+                            gcsFilePath: organizations/org123/spaces/space456/videos/video123/narrationProjects/project789/sections/section-0/recording.m4a
+                            duration: 15.5
+                            sizeBytes: 234567
+                      apiRequestId: autoSectionVideoRequest_1234567890
+                      processingTime: 45.2
+                    processing_time: 45.2
+        "400":
+          description: リクエストが無効
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "500":
+          description: 内部サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /health:
+    get:
+      tags:
+        - system
+      summary: ヘルスチェック
+      description: |
+        サービスの稼働状態とAPIクライアントの接続状態を確認します。
+
+        ## チェック項目
+        - サービス基本情報
+        - Google Cloud Storage接続状態
+        - Firestore接続状態
+        - MoviePyライブラリの利用可能性
+        - アクティブなリクエスト数
+
+      operationId: healthCheck
+      responses:
+        "200":
+          description: サービスが正常に稼働中
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthCheckResponse"
+
+components:
+  schemas:
+    AutoSectionRequest:
+      type: object
+      description: RequestDoc黄金テンプレート準拠（input/systemMetadata構造）
+      required:
+        - request_id
+        - input
+        - systemMetadata
+      properties:
+        request_id:
+          type: string
+          description: リクエストID（Firebase Background関数で生成）
+          example: autoSectionVideoRequest_1234567890
+        input:
+          type: object
+          description: 入力パラメータ（Command）
+          required:
+            - sourceBucketName
+            - sourceFilePath
+            - outputBucketName
+            - videoId
+            - projectId
+          properties:
+            sourceBucketName:
+              type: string
+              description: ソース動画のGCSバケット名
+              example: storyvault-dev-adk-artifacts
+            sourceFilePath:
+              type: string
+              description: ソース動画のGCSファイルパス
+              example: organizations/org123/spaces/space456/videos/video123/original.mp4
+              minLength: 1
+            outputBucketName:
+              type: string
+              description: 出力動画・音声のGCSバケット名
+              example: storyvault-dev-adk-artifacts
+            videoId:
+              type: string
+              description: 動画ID
+              example: video_456
+            projectId:
+              type: string
+              description: プロジェクトID
+              example: project_789
+            sectioningPrompt:
+              type: string
+              description: ユーザー指定のセクション分割指示（任意）
+              example: 30秒ごとに区切ってください
+        systemMetadata:
+          type: object
+          description: システムメタデータ
+          required:
+            - organizationId
+            - spaceId
+            - loggingCollectionId
+            - loggingDocumentId
+            - requestedBy
+            - isCommand
+            - isOouiCrud
+            - isLlmCall
+            - isAdminCrud
+          properties:
+            organizationId:
+              type: string
+              description: 組織ID（マルチテナント対応）
+            spaceId:
+              type: string
+              description: スペースID（マルチテナント対応）
+            loggingCollectionId:
+              type: string
+              description: ログ保存先Collection ID
+            loggingDocumentId:
+              type: string
+              description: ログ保存先Document ID
+            requestedBy:
+              type: object
+              description: リクエスト実行者情報
+            isCommand:
+              type: boolean
+              description: コマンド実行フラグ
+            isOouiCrud:
+              type: boolean
+              description: OOUI CRUDフラグ
+            isLlmCall:
+              type: boolean
+              description: LLM呼び出しフラグ（Gemini使用のためtrue）
+            isAdminCrud:
+              type: boolean
+              description: 管理者CRUDフラグ
+
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        request_id:
+          type: string
+        output:
+          type: object
+          properties:
+            sections:
+              type: array
+              items:
+                type: object
+                properties:
+                  sectionId:
+                    type: string
+                  index:
+                    type: integer
+                  startTime:
+                    type: number
+                  endTime:
+                    type: number
+                  title:
+                    type: string
+                    nullable: true
+                  videoSegment:
+                    type: object
+                    properties:
+                      bucketName:
+                        type: string
+                      gcsFilePath:
+                        type: string
+                      duration:
+                        type: number
+                      sizeBytes:
+                        type: integer
+                  audioSegment:
+                    type: object
+                    properties:
+                      bucketName:
+                        type: string
+                      gcsFilePath:
+                        type: string
+                      duration:
+                        type: number
+                      sizeBytes:
+                        type: integer
+            apiRequestId:
+              type: string
+            processingTime:
+              type: number
+        processing_time:
+          type: number
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        request_id:
+          type: string
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        request_id:
+          type: string
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+              example: ValidationError
+            message:
+              type: string
+            details:
+              type: object
+              properties:
+                validation_errors:
+                  type: array
+                  items:
+                    type: object
+
+    HealthCheckResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: healthy
+        timestamp:
+          type: string
+        service_info:
+          type: object
+        environment:
+          type: object
+        configuration:
+          type: object
+        api_status:
+          type: object
+        active_requests:
+          type: integer

@@ -1,0 +1,1684 @@
+# GCP Workflows definition for Drive → GCS Mirror → FileSpace sync.
+#
+# Triggered by `google-drive-workflow-kicker` Cloud Run service which is in turn
+# called from a Firestore trigger on `googleDriveSyncRequests/logs/{requestId}`.
+#
+# The workflow writes back to the originating RequestDoc throughout execution,
+# so the UI can subscribe to a single Firestore document and visualise the
+# full pipeline.
+#
+# Input args (set by kicker):
+#   requestPath        — organizations/{org}/spaces/{space}/requests/googleDriveSyncRequests/logs/{requestId}
+#   requestId          — Firestore document id
+#   inputArtifactUri   — gs://{bucket}/{object} (JSON/YAML manifest containing importIds/removeIds etc.)
+#   operationType      — "syncFolder" | "syncSingleFolder"
+#   organizationId     — convenience (also in requestPath)
+#
+# Required Workflow env (set in deploy.sh via --set-env-vars):
+#   DRIVE_TO_GCS_SYNC_URL          — Cloud Run base URL for drive-to-gcs-sync
+#   GCS_TO_CONTEXT_STORE_REGISTER_URL  — Cloud Run base URL for gcs-to-filespace-register
+#   DRIVE_MIRROR_BUCKET            — e.g. "storyvault-dev.firebasestorage.app"
+#   FIRESTORE_DATABASE             — e.g. "(default)"
+#
+# Notes on Firestore writeback shape:
+#   - `steps` is stored as a Firestore map keyed by stepId (not an array) so the
+#     workflow can patch individual entries via `updateMask.fieldPaths=steps.{id}`.
+#   - The Vue UI normalises the map back to an array via
+#     `normalizeStepMapToArray` in `app/utils/driveImportSession.ts`.
+
+main:
+  params: [args]
+  steps:
+    - init:
+        assign:
+          - requestPath: ${args.requestPath}
+          - requestId: ${args.requestId}
+          - inputArtifactUri: ${args.inputArtifactUri}
+          - operationType: ${args.operationType}
+          - organizationId: ${default(map.get(args, "organizationId"), "")}
+          - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - database: ${default(sys.get_env("FIRESTORE_DATABASE"), "(default)")}
+          - driveToGcsUrl: ${sys.get_env("DRIVE_TO_GCS_SYNC_URL")}
+          - registerUrl: ${sys.get_env("GCS_TO_CONTEXT_STORE_REGISTER_URL")}
+          - mirrorBucket: ${sys.get_env("DRIVE_MIRROR_BUCKET")}
+          - executionId: ${sys.get_env("GOOGLE_CLOUD_WORKFLOW_EXECUTION_ID")}
+          - documentName: ${"projects/" + project + "/databases/" + database + "/documents/" + requestPath}
+          - allSteps:
+              - loadInput
+              - listDriveFolder
+              - diffWithMirror
+              - mirrorAdd
+              - mirrorRemove
+              - diffWithFileSpace
+              - registerAdd
+              - registerRemove
+              - finalize
+
+    - markActive:
+        call: PatchRequestActive
+        args:
+          documentName: ${documentName}
+          allSteps: ${allSteps}
+    - initProgressState:
+        assign:
+          - progressTotalFiles: 0
+          - progressProcessedFiles: 0
+          - progressTotalBatches: 0
+          - progressCompletedBatches: 0
+          - progressFailedBatches: 0
+
+    # ------------------------------------------------------------------
+    # Step 1 — loadInput
+    # ------------------------------------------------------------------
+    - loadInputStart:
+        call: PatchStep
+        args:
+          documentName: ${documentName}
+          stepId: "loadInput"
+          status: "running"
+          currentStep: "loadInput"
+          currentStage: ""
+          detail: null
+    - loadInputLogStart:
+        call: AppendStepLog
+        args:
+          documentName: ${documentName}
+          stepId: "loadInput"
+          level: "info"
+          message: "Input artifact の読み込みを開始"
+          priorLogsJson: "[]"
+    - loadInputDo:
+        try:
+          steps:
+            - splitUri:
+                assign:
+                  - withoutScheme: ${text.split(inputArtifactUri, "gs://")[1]}
+                  - inputBucket: ${text.split(withoutScheme, "/")[0]}
+                  # orgId/requestId.yml — slashes must be URL-encoded for the Storage API connector.
+                  - inputObject: ${text.url_encode(text.replace_all(withoutScheme, inputBucket + "/", ""))}
+            - readArtifact:
+                call: googleapis.storage.v1.objects.get
+                args:
+                  bucket: ${inputBucket}
+                  object: ${inputObject}
+                  alt: "media"
+                result: rawArtifact
+            - parseArtifact:
+                assign:
+                  # alt=media returns bytes; text.decode → string → json.decode
+                  - inputManifest: ${json.decode(text.decode(rawArtifact))}
+                  - rootFolderId: ${default(map.get(inputManifest, "rootFolderId"), "")}
+                  - rootFolderResourceKey: ${default(map.get(inputManifest, "rootFolderResourceKey"), null)}
+                  - targetFolderId: ${default(map.get(inputManifest, "targetFolderId"), null)}
+                  - fileSpaceId: ${default(map.get(inputManifest, "fileSpaceId"), "")}
+                  - importIds: ${default(map.get(inputManifest, "importIds"), [])}
+                  - removeIds: ${default(map.get(inputManifest, "removeIds"), [])}
+                  - operationMetadata: ${default(map.get(inputManifest, "operationMetadata"), json.decode("{}"))}
+                  - spaceId: ${default(map.get(operationMetadata, "spaceId"), "")}
+                  - requestedBy: ${default(map.get(operationMetadata, "requestedBy"), json.decode("{}"))}
+                  - googleWorkspaceUserId: ${default(map.get(requestedBy, "userId"), "")}
+            - loadInputOk:
+                call: PatchStep
+                args:
+                  documentName: ${documentName}
+                  stepId: "loadInput"
+                  status: "completed"
+                  currentStep: "loadInput"
+                  currentStage: ""
+                  detail:
+                    importCount: ${len(importIds)}
+                    removeCount: ${len(removeIds)}
+                    rootFolderId: ${rootFolderId}
+                    fileSpaceId: ${fileSpaceId}
+            - setProgressAfterInput:
+                assign:
+                  - progressTotalFiles: ${len(importIds) + len(removeIds)}
+            - patchProgressAfterInput:
+                call: PatchProgressCounters
+                args:
+                  documentName: ${documentName}
+                  totalFiles: ${progressTotalFiles}
+                  processedFiles: ${progressProcessedFiles}
+                  totalBatches: ${progressTotalBatches}
+                  completedBatches: ${progressCompletedBatches}
+                  failedBatches: ${progressFailedBatches}
+            - loadInputLogDone:
+                call: AppendStepLog
+                args:
+                  documentName: ${documentName}
+                  stepId: "loadInput"
+                  level: "info"
+                  message: '${"Input 読み込み完了 (追加 " + string(len(importIds)) + " / 削除 " + string(len(removeIds)) + ")"}'
+                  priorLogsJson: "[]"
+        except:
+          as: e
+          steps:
+            - loadInputFail:
+                call: FailWorkflow
+                args:
+                  documentName: ${documentName}
+                  stepId: "loadInput"
+                  error: ${e}
+    # ------------------------------------------------------------------
+    # Step 2 — listDriveFolder
+    # ------------------------------------------------------------------
+    - listDriveFolderStart:
+        call: PatchStep
+        args:
+          documentName: ${documentName}
+          stepId: "listDriveFolder"
+          status: "running"
+          currentStep: "listDriveFolder"
+          currentStage: "mirror"
+          detail: null
+    - listDriveFolderLogStart:
+        call: AppendStepLog
+        args:
+          documentName: ${documentName}
+          stepId: "listDriveFolder"
+          level: "info"
+          message: "Drive フォルダ一覧の取得を開始"
+          priorLogsJson: "[]"
+    - listDriveFolderDo:
+        try:
+          steps:
+            - callList:
+                call: http.post
+                args:
+                  url: ${driveToGcsUrl + "/scan/list-folder"}
+                  auth:
+                    type: OIDC
+                    audience: ${driveToGcsUrl}
+                  timeout: 1800
+                  body:
+                    rootFolderId: ${rootFolderId}
+                    rootFolderResourceKey: ${rootFolderResourceKey}
+                    targetFolderId: ${targetFolderId}
+                    recursive: true
+                    organizationId: ${organizationId}
+                    userId: ${googleWorkspaceUserId}
+                    operationMetadata: ${operationMetadata}
+                result: listResp
+            - assignList:
+                assign:
+                  - driveFiles: ${default(map.get(listResp.body, "files"), [])}
+            - listOk:
+                call: PatchStep
+                args:
+                  documentName: ${documentName}
+                  stepId: "listDriveFolder"
+                  status: "completed"
+                  currentStep: "listDriveFolder"
+                  currentStage: "mirror"
+                  detail:
+                    driveFileCount: ${len(driveFiles)}
+            - listDriveFolderLogDone:
+                call: AppendStepLog
+                args:
+                  documentName: ${documentName}
+                  stepId: "listDriveFolder"
+                  level: "info"
+                  message: '${"Drive 一覧取得完了 (" + string(len(driveFiles)) + " 件)"}'
+                  priorLogsJson: "[]"
+            - buildAllFileIdsAfterList:
+                call: MergeLists
+                args:
+                  left: ${importIds}
+                  right: ${removeIds}
+                result: allFileIdsAfterList
+            - markPrepareComplete:
+                call: PatchFileItemsFromIds
+                args:
+                  documentName: ${documentName}
+                  fileIds: ${allFileIdsAfterList}
+                  stageField: "prepare"
+                  statusValue: "completed"
+        except:
+          as: e
+          steps:
+            - listFail:
+                call: FailWorkflow
+                args:
+                  documentName: ${documentName}
+                  stepId: "listDriveFolder"
+                  error: ${e}
+    # ------------------------------------------------------------------
+    # Step 3 — diffWithMirror
+    # ------------------------------------------------------------------
+    - diffWithMirrorStart:
+        call: PatchStep
+        args:
+          documentName: ${documentName}
+          stepId: "diffWithMirror"
+          status: "running"
+          currentStep: "diffWithMirror"
+          currentStage: "mirror"
+          detail: null
+    - diffWithMirrorDo:
+        try:
+          steps:
+            - callDiff:
+                call: http.post
+                args:
+                  url: ${driveToGcsUrl + "/mirror/diff"}
+                  auth:
+                    type: OIDC
+                    audience: ${driveToGcsUrl}
+                  timeout: 600
+                  body:
+                    organizationId: ${organizationId}
+                    spaceId: ${spaceId}
+                    fileSpaceId: ${fileSpaceId}
+                    operationType: ${operationType}
+                    targetFolderId: ${targetFolderId}
+                    userId: ${googleWorkspaceUserId}
+                    operationMetadata: ${operationMetadata}
+                    driveFiles: ${driveFiles}
+                result: mirrorDiffResp
+            - assignDiff:
+                assign:
+                  - mirrorDiff: ${mirrorDiffResp.body}
+                  - mirrorToAdd: ${default(map.get(mirrorDiff, "toAdd"), [])}
+                  - mirrorToUpdate: ${default(map.get(mirrorDiff, "toUpdate"), [])}
+                  - mirrorToRemove: ${default(map.get(mirrorDiff, "toRemove"), [])}
+                  - mirrorPrefix: ${default(map.get(mirrorDiff, "mirrorPrefix"), "")}
+                  - mirrorUnchanged: ${default(map.get(mirrorDiff, "unchanged"), [])}
+            - buildMirrorApplyItems:
+                call: MergeLists
+                args:
+                  left: ${mirrorToAdd}
+                  right: ${mirrorToUpdate}
+                result: mirrorApplyItems
+            - diffOk:
+                call: PatchStep
+                args:
+                  documentName: ${documentName}
+                  stepId: "diffWithMirror"
+                  status: "completed"
+                  currentStep: "diffWithMirror"
+                  currentStage: "mirror"
+                  detail:
+                    toAdd: ${len(mirrorToAdd)}
+                    toUpdate: ${len(mirrorToUpdate)}
+                    toRemove: ${len(mirrorToRemove)}
+                    mirrorPrefix: ${mirrorPrefix}
+        except:
+          as: e
+          steps:
+            - diffFail:
+                call: FailWorkflow
+                args:
+                  documentName: ${documentName}
+                  stepId: "diffWithMirror"
+                  error: ${e}
+    # ------------------------------------------------------------------
+    # Step 4 — mirrorAdd / mirrorRemove (in parallel)
+    # ------------------------------------------------------------------
+    - initMirrorParallel:
+        assign:
+          - mirrorAddResult: ${json.decode("{}")}
+          - mirrorRemoveResult: ${json.decode("{}")}
+    - mirrorParallel:
+        parallel:
+          shared: [mirrorAddResult, mirrorRemoveResult]
+          branches:
+            - mirrorAddBranch:
+                steps:
+                  - mirrorAddStart:
+                      call: PatchStep
+                      args:
+                        documentName: ${documentName}
+                        stepId: "mirrorAdd"
+                        status: "running"
+                        currentStep: "mirrorAdd"
+                        currentStage: "mirror"
+                        detail: null
+                  - markMirrorAddRunning:
+                      call: PatchFileItemsFromWorkItems
+                      args:
+                        documentName: ${documentName}
+                        items: ${mirrorApplyItems}
+                        stageField: "mirror"
+                        statusValue: "running"
+                  - mirrorAddDo:
+                      try:
+                        steps:
+                          - callAdd:
+                              call: ChunkAndApply
+                              args:
+                                items: ${mirrorApplyItems}
+                                url: ${driveToGcsUrl + "/mirror/apply-batch"}
+                                authAudience: ${driveToGcsUrl}
+                                chunkSize: 10
+                                bodyExtras:
+                                  organizationId: ${organizationId}
+                                  userId: ${googleWorkspaceUserId}
+                                  operationMetadata: ${operationMetadata}
+                                documentName: ${documentName}
+                                fileItemStage: "mirror"
+                                completeOnSuccess: false
+                              result: addRaw
+                          - assignAdd:
+                              assign:
+                                - mirrorAddResult: ${addRaw}
+                          - mirrorAddOk:
+                              call: PatchStep
+                              args:
+                                documentName: ${documentName}
+                                stepId: "mirrorAdd"
+                                status: "completed"
+                                currentStep: "mirrorAdd"
+                                currentStage: "mirror"
+                                detail: ${addRaw}
+                      except:
+                        as: e
+                        steps:
+                          - mirrorAddFail:
+                              call: FailWorkflow
+                              args:
+                                documentName: ${documentName}
+                                stepId: "mirrorAdd"
+                                error: ${e}
+            - mirrorRemoveBranch:
+                steps:
+                  - mirrorRemoveStart:
+                      call: PatchStep
+                      args:
+                        documentName: ${documentName}
+                        stepId: "mirrorRemove"
+                        status: "running"
+                        currentStep: "mirrorRemove"
+                        currentStage: "mirror"
+                        detail: null
+                  - markMirrorRemoveRunning:
+                      call: PatchFileItemsFromWorkItems
+                      args:
+                        documentName: ${documentName}
+                        items: ${mirrorToRemove}
+                        stageField: "mirror"
+                        statusValue: "running"
+                  - mirrorRemoveDo:
+                      try:
+                        steps:
+                          - callRemove:
+                              call: ChunkAndApply
+                              args:
+                                items: ${mirrorToRemove}
+                                url: ${driveToGcsUrl + "/mirror/remove-batch"}
+                                authAudience: ${driveToGcsUrl}
+                                chunkSize: 10
+                                bodyExtras:
+                                  operationMetadata: ${operationMetadata}
+                                documentName: ${documentName}
+                                fileItemStage: "mirror"
+                                completeOnSuccess: false
+                              result: rmRaw
+                          - assignRm:
+                              assign:
+                                - mirrorRemoveResult: ${rmRaw}
+                          - mirrorRemoveOk:
+                              call: PatchStep
+                              args:
+                                documentName: ${documentName}
+                                stepId: "mirrorRemove"
+                                status: "completed"
+                                currentStep: "mirrorRemove"
+                                currentStage: "mirror"
+                                detail: ${rmRaw}
+                      except:
+                        as: e
+                        steps:
+                          - mirrorRemoveFail:
+                              call: FailWorkflow
+                              args:
+                                documentName: ${documentName}
+                                stepId: "mirrorRemove"
+                                error: ${e}
+    - patchMirrorSummary:
+        call: PatchMirrorSummary
+        args:
+          documentName: ${documentName}
+          mirrorPrefix: ${"gs://" + mirrorBucket + "/organizations/" + organizationId + "/spaces/" + spaceId + "/fileSpaces/" + fileSpaceId + "/knowledges/driveSync/"}
+          added: ${default(map.get(default(mirrorAddResult, json.decode("{}")), "added"), 0)}
+          updated: ${default(map.get(default(mirrorAddResult, json.decode("{}")), "updated"), 0)}
+          removed: ${default(map.get(default(mirrorRemoveResult, json.decode("{}")), "removed"), 0)}
+          skipped: ${len(mirrorUnchanged)}
+          failed: ${default(map.get(default(mirrorAddResult, json.decode("{}")), "failed"), 0) + default(map.get(default(mirrorRemoveResult, json.decode("{}")), "failed"), 0)}
+    - setProgressAfterMirror:
+        assign:
+          - progressProcessedFiles: ${default(map.get(default(mirrorAddResult, json.decode("{}")), "added"), 0) + default(map.get(default(mirrorAddResult, json.decode("{}")), "updated"), 0) + default(map.get(default(mirrorAddResult, json.decode("{}")), "failed"), 0) + default(map.get(default(mirrorRemoveResult, json.decode("{}")), "removed"), 0) + default(map.get(default(mirrorRemoveResult, json.decode("{}")), "failed"), 0)}
+          - progressTotalBatches: ${default(map.get(default(mirrorAddResult, json.decode("{}")), "batches"), 0) + default(map.get(default(mirrorRemoveResult, json.decode("{}")), "batches"), 0)}
+          - progressCompletedBatches: ${default(map.get(default(mirrorAddResult, json.decode("{}")), "okBatches"), 0) + default(map.get(default(mirrorRemoveResult, json.decode("{}")), "okBatches"), 0)}
+          - progressFailedBatches: ${default(map.get(default(mirrorAddResult, json.decode("{}")), "errBatches"), 0) + default(map.get(default(mirrorRemoveResult, json.decode("{}")), "errBatches"), 0)}
+    - patchProgressAfterMirror:
+        call: PatchProgressCounters
+        args:
+          documentName: ${documentName}
+          totalFiles: ${progressTotalFiles}
+          processedFiles: ${progressProcessedFiles}
+          totalBatches: ${progressTotalBatches}
+          completedBatches: ${progressCompletedBatches}
+          failedBatches: ${progressFailedBatches}
+    - mirrorStageLogDone:
+        call: AppendStepLog
+        args:
+          documentName: ${documentName}
+          stepId: "mirrorAdd"
+          level: "info"
+          message: "GCS Mirror ステージ完了"
+          priorLogsJson: "[]"
+
+    # ------------------------------------------------------------------
+    # Step 5 — diffWithFileSpace
+    # ------------------------------------------------------------------
+    - diffFileSpaceStart:
+        call: PatchStep
+        args:
+          documentName: ${documentName}
+          stepId: "diffWithFileSpace"
+          status: "running"
+          currentStep: "diffWithFileSpace"
+          currentStage: "register"
+          detail: null
+    - diffFileSpaceDo:
+        try:
+          steps:
+            - callDiffReg:
+                call: http.post
+                args:
+                  url: ${registerUrl + "/register/diff"}
+                  auth:
+                    type: OIDC
+                    audience: ${registerUrl}
+                  timeout: 600
+                  body:
+                    organizationId: ${organizationId}
+                    spaceId: ${spaceId}
+                    fileSpaceId: ${fileSpaceId}
+                    operationType: ${operationType}
+                    targetFolderId: ${targetFolderId}
+                result: regDiffResp
+            - assignRegDiff:
+                assign:
+                  - regDiff: ${regDiffResp.body}
+                  - regToAdd: ${default(map.get(regDiff, "toAdd"), [])}
+                  - regToUpdate: ${default(map.get(regDiff, "toUpdate"), [])}
+                  - regToRemove: ${default(map.get(regDiff, "toRemove"), [])}
+            - buildRegApplyItems:
+                call: MergeLists
+                args:
+                  left: ${regToAdd}
+                  right: ${regToUpdate}
+                result: regApplyItems
+            - diffRegOk:
+                call: PatchStep
+                args:
+                  documentName: ${documentName}
+                  stepId: "diffWithFileSpace"
+                  status: "completed"
+                  currentStep: "diffWithFileSpace"
+                  currentStage: "register"
+                  detail:
+                    toAdd: ${len(regToAdd)}
+                    toUpdate: ${len(regToUpdate)}
+                    toRemove: ${len(regToRemove)}
+        except:
+          as: e
+          steps:
+            - diffRegFail:
+                call: FailWorkflow
+                args:
+                  documentName: ${documentName}
+                  stepId: "diffWithFileSpace"
+                  error: ${e}
+    # ------------------------------------------------------------------
+    # Step 6 — registerAdd / registerRemove (in parallel)
+    # ------------------------------------------------------------------
+    - initRegisterParallel:
+        assign:
+          - regAddResult: ${json.decode("{}")}
+          - regRemoveResult: ${json.decode("{}")}
+    - registerParallel:
+        parallel:
+          shared: [regAddResult, regRemoveResult]
+          branches:
+            - registerAddBranch:
+                steps:
+                  - regAddStart:
+                      call: PatchStep
+                      args:
+                        documentName: ${documentName}
+                        stepId: "registerAdd"
+                        status: "running"
+                        currentStep: "registerAdd"
+                        currentStage: "register"
+                        detail: null
+                  - markRegAddRunning:
+                      call: PatchFileItemsFromWorkItems
+                      args:
+                        documentName: ${documentName}
+                        items: ${regApplyItems}
+                        stageField: "register"
+                        statusValue: "running"
+                  - regAddDo:
+                      try:
+                        steps:
+                          - callRegAdd:
+                              call: ChunkAndApply
+                              args:
+                                items: ${regApplyItems}
+                                url: ${registerUrl + "/register/apply-batch"}
+                                authAudience: ${registerUrl}
+                                chunkSize: 10
+                                bodyExtras:
+                                  organizationId: ${organizationId}
+                                  spaceId: ${spaceId}
+                                  fileSpaceId: ${fileSpaceId}
+                                  targetFolderId: ${targetFolderId}
+                                  requestId: ${requestId}
+                                  operationMetadata: ${operationMetadata}
+                                documentName: ${documentName}
+                                fileItemStage: "register"
+                                completeOnSuccess: true
+                              result: regAddRaw
+                          - assignRegAdd:
+                              assign:
+                                - regAddResult: ${regAddRaw}
+                          - regAddOk:
+                              call: PatchStep
+                              args:
+                                documentName: ${documentName}
+                                stepId: "registerAdd"
+                                status: "completed"
+                                currentStep: "registerAdd"
+                                currentStage: "register"
+                                detail: ${regAddRaw}
+                      except:
+                        as: e
+                        steps:
+                          - regAddFail:
+                              call: FailWorkflow
+                              args:
+                                documentName: ${documentName}
+                                stepId: "registerAdd"
+                                error: ${e}
+            - registerRemoveBranch:
+                steps:
+                  - regRemoveStart:
+                      call: PatchStep
+                      args:
+                        documentName: ${documentName}
+                        stepId: "registerRemove"
+                        status: "running"
+                        currentStep: "registerRemove"
+                        currentStage: "register"
+                        detail: null
+                  - markRegRemoveRunning:
+                      call: PatchFileItemsFromWorkItems
+                      args:
+                        documentName: ${documentName}
+                        items: ${regToRemove}
+                        stageField: "register"
+                        statusValue: "running"
+                  - regRemoveDo:
+                      try:
+                        steps:
+                          - callRegRm:
+                              call: ChunkAndApply
+                              args:
+                                items: ${regToRemove}
+                                url: ${registerUrl + "/register/remove-batch"}
+                                authAudience: ${registerUrl}
+                                chunkSize: 10
+                                bodyExtras:
+                                  organizationId: ${organizationId}
+                                  spaceId: ${spaceId}
+                                  fileSpaceId: ${fileSpaceId}
+                                  requestId: ${requestId}
+                                  operationMetadata: ${operationMetadata}
+                                documentName: ${documentName}
+                                fileItemStage: "register"
+                                completeOnSuccess: true
+                              result: regRmRaw
+                          - assignRegRm:
+                              assign:
+                                - regRemoveResult: ${regRmRaw}
+                          - regRemoveOk:
+                              call: PatchStep
+                              args:
+                                documentName: ${documentName}
+                                stepId: "registerRemove"
+                                status: "completed"
+                                currentStep: "registerRemove"
+                                currentStage: "register"
+                                detail: ${regRmRaw}
+                      except:
+                        as: e
+                        steps:
+                          - regRmFail:
+                              call: FailWorkflow
+                              args:
+                                documentName: ${documentName}
+                                stepId: "registerRemove"
+                                error: ${e}
+    - patchRegisterSummary:
+        call: PatchRegisterSummary
+        args:
+          documentName: ${documentName}
+          added: ${default(map.get(default(regAddResult, json.decode("{}")), "added"), 0)}
+          updated: ${default(map.get(default(regAddResult, json.decode("{}")), "updated"), 0)}
+          removed: ${default(map.get(default(regRemoveResult, json.decode("{}")), "removed"), 0)}
+          failed: ${default(map.get(default(regAddResult, json.decode("{}")), "failed"), 0) + default(map.get(default(regRemoveResult, json.decode("{}")), "failed"), 0)}
+    - setProgressAfterRegister:
+        assign:
+          - regAdded: ${default(map.get(default(regAddResult, json.decode("{}")), "added"), 0)}
+          - regUpdated: ${default(map.get(default(regAddResult, json.decode("{}")), "updated"), 0)}
+          - regRemoved: ${default(map.get(default(regRemoveResult, json.decode("{}")), "removed"), 0)}
+          - regFailed: ${default(map.get(default(regAddResult, json.decode("{}")), "failed"), 0) + default(map.get(default(regRemoveResult, json.decode("{}")), "failed"), 0)}
+          - progressProcessedFiles: ${regAdded + regUpdated + regRemoved + regFailed}
+          - progressTotalBatches: ${progressTotalBatches + default(map.get(default(regAddResult, json.decode("{}")), "batches"), 0) + default(map.get(default(regRemoveResult, json.decode("{}")), "batches"), 0)}
+          - progressCompletedBatches: ${progressCompletedBatches + default(map.get(default(regAddResult, json.decode("{}")), "okBatches"), 0) + default(map.get(default(regRemoveResult, json.decode("{}")), "okBatches"), 0)}
+          - progressFailedBatches: ${progressFailedBatches + default(map.get(default(regAddResult, json.decode("{}")), "errBatches"), 0) + default(map.get(default(regRemoveResult, json.decode("{}")), "errBatches"), 0)}
+    - patchProgressAfterRegister:
+        call: PatchProgressCounters
+        args:
+          documentName: ${documentName}
+          totalFiles: ${progressTotalFiles}
+          processedFiles: ${progressProcessedFiles}
+          totalBatches: ${progressTotalBatches}
+          completedBatches: ${progressCompletedBatches}
+          failedBatches: ${progressFailedBatches}
+    - failIfRegisterFailures:
+        switch:
+          - condition: ${regFailed > 0}
+            steps:
+              - markRegisterFailures:
+                  call: FailWorkflow
+                  args:
+                    documentName: ${documentName}
+                    stepId: "registerAdd"
+                    error:
+                      message: ${"FileSpace 登録で " + string(regFailed) + " 件失敗しました"}
+                      added: ${regAdded}
+                      updated: ${regUpdated}
+                      removed: ${regRemoved}
+                      failed: ${regFailed}
+    - registerStageLogDone:
+        call: AppendStepLog
+        args:
+          documentName: ${documentName}
+          stepId: "registerAdd"
+          level: "info"
+          message: "FileSpace 登録ステージ完了"
+          priorLogsJson: "[]"
+
+    # ------------------------------------------------------------------
+    # Step 7 — finalize
+    # ------------------------------------------------------------------
+    - finalizeStart:
+        call: PatchStep
+        args:
+          documentName: ${documentName}
+          stepId: "finalize"
+          status: "running"
+          currentStep: "finalize"
+          currentStage: ""
+          detail: null
+    - finalizeLogStart:
+        call: AppendStepLog
+        args:
+          documentName: ${documentName}
+          stepId: "finalize"
+          level: "info"
+          message: "完了処理を開始"
+          priorLogsJson: "[]"
+    - setProgressBeforeFinalize:
+        assign:
+          - progressProcessedFiles: ${default(progressTotalFiles, progressProcessedFiles)}
+    - finalizeDo:
+        call: PatchRequestFinal
+        args:
+          documentName: ${documentName}
+          status: "completed"
+          totalFiles: ${progressTotalFiles}
+          processedFiles: ${progressProcessedFiles}
+    - finalizeLogDone:
+        call: AppendStepLog
+        args:
+          documentName: ${documentName}
+          stepId: "finalize"
+          level: "info"
+          message: "取り込みが正常に完了しました"
+          priorLogsJson: "[]"
+    - finalizeOk:
+        call: PatchStep
+        args:
+          documentName: ${documentName}
+          stepId: "finalize"
+          status: "completed"
+          currentStep: ""
+          currentStage: ""
+          detail: null
+    - done:
+        return:
+          ok: true
+          requestId: ${requestId}
+
+
+# =============================================================================
+# Sub-workflows
+# =============================================================================
+
+# Patch one entry of the steps map. Builds an updateMask `steps.{stepId}` and
+# a body where the `steps` map contains a single key (static switch on stepId).
+PatchStep:
+  params: [documentName, stepId, status, currentStep, currentStage, detail]
+  steps:
+    - prep:
+        assign:
+          - nowStr: ${time.format(sys.now())}
+          - stepFields:
+              id:
+                stringValue: ${stepId}
+              status:
+                stringValue: ${status}
+              endedAt:
+                timestampValue: ${nowStr}
+    - mergeStartedAt:
+        switch:
+          - condition: ${status == "running"}
+            assign:
+              - startedExtra:
+                  startedAt:
+                    timestampValue: ${nowStr}
+              - stepFields: ${map.merge(stepFields, startedExtra)}
+    - mergeDetail:
+        switch:
+          - condition: ${default(detail, null) != null}
+            assign:
+              - detailExtra:
+                  detail:
+                    stringValue: ${json.encode_to_string(detail)}
+              - stepFields: ${map.merge(stepFields, detailExtra)}
+    - buildStepsMap:
+        switch:
+          - condition: ${stepId == "loadInput"}
+            assign:
+              - stepsMap:
+                  loadInput:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "listDriveFolder"}
+            assign:
+              - stepsMap:
+                  listDriveFolder:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "diffWithMirror"}
+            assign:
+              - stepsMap:
+                  diffWithMirror:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "mirrorAdd"}
+            assign:
+              - stepsMap:
+                  mirrorAdd:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "mirrorRemove"}
+            assign:
+              - stepsMap:
+                  mirrorRemove:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "diffWithFileSpace"}
+            assign:
+              - stepsMap:
+                  diffWithFileSpace:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "registerAdd"}
+            assign:
+              - stepsMap:
+                  registerAdd:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "registerRemove"}
+            assign:
+              - stepsMap:
+                  registerRemove:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "finalize"}
+            assign:
+              - stepsMap:
+                  finalize:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: true
+            assign:
+              - stepsMap: ${json.decode("{}")}
+    - buildBody:
+        assign:
+          - progressFields:
+              currentStep:
+                stringValue: ${default(currentStep, "")}
+              currentStage:
+                stringValue: ${default(currentStage, "")}
+          - body:
+              fields:
+                steps:
+                  mapValue:
+                    fields: ${stepsMap}
+                progress:
+                  mapValue:
+                    fields: ${progressFields}
+                updatedAt:
+                  timestampValue: ${nowStr}
+          - updateMask: ${"updateMask.fieldPaths=steps." + stepId + "&updateMask.fieldPaths=progress.currentStep&updateMask.fieldPaths=progress.currentStage&updateMask.fieldPaths=updatedAt"}
+    - sendPatch:
+        try:
+          call: http.request
+          args:
+            method: PATCH
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?" + updateMask}
+            auth:
+              type: OAuth2
+            body: ${body}
+        except:
+          as: e
+          steps:
+            - logPatchErr:
+                call: sys.log
+                args:
+                  text: '${"PatchStep " + stepId + " failed: " + json.encode_to_string(e)}'
+
+# Append one log line to stepLogs.{stepId} (JSON stringValue array).
+AppendStepLog:
+  params: [documentName, stepId, level, message, priorLogsJson]
+  steps:
+    - fetchExisting:
+        try:
+          call: http.get
+          args:
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?mask.fieldPaths=stepLogs." + stepId}
+            auth:
+              type: OAuth2
+          result: currentDoc
+        except:
+          as: e
+          steps:
+            - fallbackExisting:
+                assign:
+                  - currentDoc:
+                      body:
+                        fields: {}
+    - merge:
+        assign:
+          - nowStr: ${time.format(sys.now())}
+          - docFields: ${default(map.get(default(currentDoc.body, json.decode("{}")), "fields"), json.decode("{}"))}
+          - stepLogsField: ${default(map.get(docFields, "stepLogs"), json.decode("{}"))}
+          - stepLogsMapValue: ${default(map.get(stepLogsField, "mapValue"), json.decode("{}"))}
+          - stepLogsFields: ${default(map.get(stepLogsMapValue, "fields"), json.decode("{}"))}
+          - currentStepLogField: ${default(map.get(stepLogsFields, stepId), json.decode("{}"))}
+          - existingLogsJson: ${default(map.get(currentStepLogField, "stringValue"), default(priorLogsJson, "[]"))}
+          - prior: ${json.decode(existingLogsJson)}
+          - entry:
+              at: ${nowStr}
+              level: ${level}
+              message: ${message}
+              stepId: ${stepId}
+          - merged: ${list.concat(prior, entry)}
+          - encoded: ${json.encode_to_string(merged)}
+    - buildStepLogsMap:
+        switch:
+          - condition: ${stepId == "loadInput"}
+            assign:
+              - stepLogsMap:
+                  loadInput:
+                    stringValue: ${encoded}
+          - condition: ${stepId == "listDriveFolder"}
+            assign:
+              - stepLogsMap:
+                  listDriveFolder:
+                    stringValue: ${encoded}
+          - condition: ${stepId == "diffWithMirror"}
+            assign:
+              - stepLogsMap:
+                  diffWithMirror:
+                    stringValue: ${encoded}
+          - condition: ${stepId == "mirrorAdd"}
+            assign:
+              - stepLogsMap:
+                  mirrorAdd:
+                    stringValue: ${encoded}
+          - condition: ${stepId == "mirrorRemove"}
+            assign:
+              - stepLogsMap:
+                  mirrorRemove:
+                    stringValue: ${encoded}
+          - condition: ${stepId == "diffWithFileSpace"}
+            assign:
+              - stepLogsMap:
+                  diffWithFileSpace:
+                    stringValue: ${encoded}
+          - condition: ${stepId == "registerAdd"}
+            assign:
+              - stepLogsMap:
+                  registerAdd:
+                    stringValue: ${encoded}
+          - condition: ${stepId == "registerRemove"}
+            assign:
+              - stepLogsMap:
+                  registerRemove:
+                    stringValue: ${encoded}
+          - condition: ${stepId == "finalize"}
+            assign:
+              - stepLogsMap:
+                  finalize:
+                    stringValue: ${encoded}
+          - condition: true
+            assign:
+              - stepLogsMap: ${json.decode("{}")}
+    - patch:
+        try:
+          call: http.request
+          args:
+            method: PATCH
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?updateMask.fieldPaths=stepLogs." + stepId + "&updateMask.fieldPaths=updatedAt"}
+            auth:
+              type: OAuth2
+            body:
+              fields:
+                stepLogs:
+                  mapValue:
+                    fields: ${stepLogsMap}
+                updatedAt:
+                  timestampValue: ${nowStr}
+        except:
+          as: e
+          steps:
+            - logAppendErr:
+                call: sys.log
+                args:
+                  text: '${"AppendStepLog " + stepId + " failed: " + json.encode_to_string(e)}'
+
+PatchProgressCounters:
+  params: [documentName, totalFiles, processedFiles, totalBatches, completedBatches, failedBatches]
+  steps:
+    - patch:
+        try:
+          call: http.request
+          args:
+            method: PATCH
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?updateMask.fieldPaths=progress.totalFiles&updateMask.fieldPaths=progress.processedFiles&updateMask.fieldPaths=progress.totalBatches&updateMask.fieldPaths=progress.completedBatches&updateMask.fieldPaths=progress.failedBatches&updateMask.fieldPaths=updatedAt"}
+            auth:
+              type: OAuth2
+            body:
+              fields:
+                progress:
+                  mapValue:
+                    fields:
+                      totalFiles:
+                        integerValue: ${string(totalFiles)}
+                      processedFiles:
+                        integerValue: ${string(processedFiles)}
+                      totalBatches:
+                        integerValue: ${string(totalBatches)}
+                      completedBatches:
+                        integerValue: ${string(completedBatches)}
+                      failedBatches:
+                        integerValue: ${string(failedBatches)}
+                updatedAt:
+                  timestampValue: ${time.format(sys.now())}
+        except:
+          as: e
+          steps:
+            - logProgressErr:
+                call: sys.log
+                args:
+                  text: '${"PatchProgressCounters failed: " + json.encode_to_string(e)}'
+
+PatchRequestActive:
+  params: [documentName, allSteps]
+  steps:
+    - patch:
+        try:
+          call: http.request
+          args:
+            method: PATCH
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?updateMask.fieldPaths=status&updateMask.fieldPaths=workflow.state&updateMask.fieldPaths=workflow.startedAt&updateMask.fieldPaths=updatedAt"}
+            auth:
+              type: OAuth2
+            body:
+              fields:
+                status: { stringValue: "processing" }
+                workflow:
+                  mapValue:
+                    fields:
+                      state:
+                        stringValue: "ACTIVE"
+                      startedAt:
+                        timestampValue: ${time.format(sys.now())}
+                updatedAt:
+                  timestampValue: ${time.format(sys.now())}
+        except:
+          as: e
+          steps:
+            - logActiveErr:
+                call: sys.log
+                args:
+                  text: '${"PatchRequestActive failed: " + json.encode_to_string(e)}'
+PatchMirrorSummary:
+  params: [documentName, mirrorPrefix, added, updated, removed, skipped, failed]
+  steps:
+    - patch:
+        try:
+          call: http.request
+          args:
+            method: PATCH
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?updateMask.fieldPaths=mirror&updateMask.fieldPaths=updatedAt"}
+            auth:
+              type: OAuth2
+            body:
+              fields:
+                mirror:
+                  mapValue:
+                    fields:
+                      gcsPrefixUri:
+                        stringValue: ${mirrorPrefix}
+                      addedCount:
+                        integerValue: ${string(added)}
+                      updatedCount:
+                        integerValue: ${string(updated)}
+                      removedCount:
+                        integerValue: ${string(removed)}
+                      skippedCount:
+                        integerValue: ${string(skipped)}
+                      failedCount:
+                        integerValue: ${string(failed)}
+                updatedAt:
+                  timestampValue: ${time.format(sys.now())}
+        except:
+          as: e
+          steps:
+            - logMirrorErr:
+                call: sys.log
+                args:
+                  text: '${"PatchMirrorSummary failed: " + json.encode_to_string(e)}'
+PatchRegisterSummary:
+  params: [documentName, added, updated, removed, failed]
+  steps:
+    - patch:
+        try:
+          call: http.request
+          args:
+            method: PATCH
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?updateMask.fieldPaths=register&updateMask.fieldPaths=updatedAt"}
+            auth:
+              type: OAuth2
+            body:
+              fields:
+                register:
+                  mapValue:
+                    fields:
+                      addedCount:
+                        integerValue: ${string(added)}
+                      updatedCount:
+                        integerValue: ${string(updated)}
+                      removedCount:
+                        integerValue: ${string(removed)}
+                      failedCount:
+                        integerValue: ${string(failed)}
+                updatedAt:
+                  timestampValue: ${time.format(sys.now())}
+        except:
+          as: e
+          steps:
+            - logRegErr:
+                call: sys.log
+                args:
+                  text: '${"PatchRegisterSummary failed: " + json.encode_to_string(e)}'
+PatchRequestFinal:
+  params: [documentName, status, totalFiles, processedFiles]
+  steps:
+    - prep:
+        assign:
+          - nowStr: ${time.format(sys.now())}
+          - finalizeFields:
+              id:
+                stringValue: "finalize"
+              status:
+                stringValue: "completed"
+              endedAt:
+                timestampValue: ${nowStr}
+    - patch:
+        try:
+          call: http.request
+          args:
+            method: PATCH
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?updateMask.fieldPaths=status&updateMask.fieldPaths=workflow.state&updateMask.fieldPaths=workflow.endedAt&updateMask.fieldPaths=steps.finalize&updateMask.fieldPaths=progress.processedFiles&updateMask.fieldPaths=progress.totalFiles&updateMask.fieldPaths=updatedAt"}
+            auth:
+              type: OAuth2
+            body:
+              fields:
+                status:
+                  stringValue: ${status}
+                workflow:
+                  mapValue:
+                    fields:
+                      state:
+                        stringValue: "SUCCEEDED"
+                      endedAt:
+                        timestampValue: ${nowStr}
+                steps:
+                  mapValue:
+                    fields:
+                      finalize:
+                        mapValue:
+                          fields: ${finalizeFields}
+                progress:
+                  mapValue:
+                    fields:
+                      totalFiles:
+                        integerValue: ${string(default(totalFiles, 0))}
+                      processedFiles:
+                        integerValue: ${string(default(processedFiles, 0))}
+                updatedAt:
+                  timestampValue: ${nowStr}
+        except:
+          as: e
+          steps:
+            - logFinalErr:
+                call: sys.log
+                args:
+                  text: '${"PatchRequestFinal failed: " + json.encode_to_string(e)}'
+FailWorkflow:
+  params: [documentName, stepId, error]
+  steps:
+    - prep:
+        assign:
+          - nowStr: ${time.format(sys.now())}
+          - errStr: ${json.encode_to_string(error)}
+          - stepFields:
+              id:
+                stringValue: ${stepId}
+              status:
+                stringValue: "error"
+              endedAt:
+                timestampValue: ${nowStr}
+              error:
+                stringValue: ${errStr}
+    - buildStepsMap:
+        switch:
+          - condition: ${stepId == "loadInput"}
+            assign:
+              - stepsMap:
+                  loadInput:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "listDriveFolder"}
+            assign:
+              - stepsMap:
+                  listDriveFolder:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "diffWithMirror"}
+            assign:
+              - stepsMap:
+                  diffWithMirror:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "mirrorAdd"}
+            assign:
+              - stepsMap:
+                  mirrorAdd:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "mirrorRemove"}
+            assign:
+              - stepsMap:
+                  mirrorRemove:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "diffWithFileSpace"}
+            assign:
+              - stepsMap:
+                  diffWithFileSpace:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "registerAdd"}
+            assign:
+              - stepsMap:
+                  registerAdd:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "registerRemove"}
+            assign:
+              - stepsMap:
+                  registerRemove:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: ${stepId == "finalize"}
+            assign:
+              - stepsMap:
+                  finalize:
+                    mapValue:
+                      fields: ${stepFields}
+          - condition: true
+            assign:
+              - stepsMap: ${json.decode("{}")}
+    - writeError:
+        try:
+          call: http.request
+          args:
+            method: PATCH
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?updateMask.fieldPaths=steps." + stepId + "&updateMask.fieldPaths=status&updateMask.fieldPaths=workflow.state&updateMask.fieldPaths=workflow.endedAt&updateMask.fieldPaths=errorMessage&updateMask.fieldPaths=updatedAt"}
+            auth:
+              type: OAuth2
+            body:
+              fields:
+                steps:
+                  mapValue:
+                    fields: ${stepsMap}
+                status: { stringValue: "error" }
+                workflow:
+                  mapValue:
+                    fields:
+                      state:
+                        stringValue: "FAILED"
+                      endedAt:
+                        timestampValue: ${nowStr}
+                errorMessage:
+                  stringValue: '${"step " + stepId + " failed: " + errStr}'
+                updatedAt:
+                  timestampValue: ${nowStr}
+        except:
+          as: e
+          steps:
+            - logFailErr:
+                call: sys.log
+                args:
+                  text: '${"FailWorkflow writeback failed: " + json.encode_to_string(e)}'
+    - raise:
+        raise: '${"step " + stepId + " failed: " + errStr}'
+
+
+# Merge two lists without nesting the right list as a single element.
+# list.concat(left, right) would append the entire `right` list as one item.
+MergeLists:
+  params: [left, right]
+  steps:
+    - init:
+        assign:
+          - merged: ${default(left, [])}
+          - i: 0
+          - rightLen: ${len(default(right, []))}
+    - loop:
+        steps:
+          - checkDone:
+              switch:
+                - condition: ${i >= rightLen}
+                  next: returnMerged
+          - append:
+              assign:
+                - merged: ${list.concat(merged, right[i])}
+                - i: ${i + 1}
+              next: loop
+    - returnMerged:
+        return: ${merged}
+
+
+# Chunk `items` into batches of `chunkSize`, POST each to `url` with `bodyExtras`
+# merged in, sum integer fields across responses.
+# Optional `documentName` + `fileItemStage` enable per-file PATCH after each chunk.
+ChunkAndApply:
+  params: [items, url, authAudience, chunkSize, bodyExtras, documentName, fileItemStage, completeOnSuccess]
+  steps:
+    - prep:
+        assign:
+          - total: ${len(items)}
+          - chunks: 0
+          - okBatches: 0
+          - errBatches: 0
+          - addedSum: 0
+          - updatedSum: 0
+          - removedSum: 0
+          - failedSum: 0
+          - i: 0
+          - patchFileItems: ${default(documentName, "") != "" and default(fileItemStage, "") != ""}
+    - loop:
+        steps:
+          - checkDone:
+              switch:
+                - condition: ${i >= total}
+                  next: returnRes
+          - takeChunk:
+              assign:
+                - endIdx: ${if(i + chunkSize > total, total, i + chunkSize)}
+                - chunk: []
+                - idx: ${i}
+                - chunks: ${chunks + 1}
+          - collectChunk:
+              switch:
+                - condition: ${idx >= endIdx}
+                  next: buildBody
+          - appendOne:
+              assign:
+                - chunk: ${list.concat(chunk, items[idx])}
+                - idx: ${idx + 1}
+              next: collectChunk
+          - buildBody:
+              assign:
+                - chunkExtras:
+                    items: ${chunk}
+                - body: ${map.merge(bodyExtras, chunkExtras)}
+                - chunkResp: null
+                - chunkOk: false
+          - sendChunk:
+              try:
+                call: http.post
+                args:
+                  url: ${url}
+                  auth:
+                    type: OIDC
+                    audience: ${authAudience}
+                  timeout: 1800
+                  body: ${body}
+                result: chunkResp
+              except:
+                as: e
+                steps:
+                  - markBatchErr:
+                      assign:
+                        - errBatches: ${errBatches + 1}
+                        - failedSum: ${failedSum + len(chunk)}
+                        - chunkResp: null
+                  - patchChunkErr:
+                      switch:
+                        - condition: ${patchFileItems}
+                          call: PatchFileItemsChunkFailed
+                          args:
+                            documentName: ${documentName}
+                            chunk: ${chunk}
+                            stageField: ${fileItemStage}
+                            errorMessage: "batch request failed"
+                  - logBatchErr:
+                      call: sys.log
+                      args:
+                        text: '${"ChunkAndApply chunk failed: " + json.encode_to_string(e)}'
+                  - failChunk:
+                      raise: '${"ChunkAndApply chunk failed: " + json.encode_to_string(e)}'
+          - markChunkResult:
+              switch:
+                - condition: ${chunkResp != null}
+                  steps:
+                    - setChunkOk:
+                        assign:
+                          - chunkOk: true
+          - patchChunkSuccess:
+              switch:
+                - condition: ${chunkOk and patchFileItems}
+                  call: PatchFileItemsFromApplyBatchResponse
+                  args:
+                    documentName: ${documentName}
+                    responseBody: ${chunkResp.body}
+                    stageField: ${fileItemStage}
+                    completeOnSuccess: ${default(completeOnSuccess, false)}
+          - aggregate:
+              switch:
+                - condition: ${chunkOk}
+                  steps:
+                    - aggOk:
+                        assign:
+                          - okBatches: ${okBatches + 1}
+                          - addedSum: ${addedSum + default(map.get(chunkResp.body, "added"), 0)}
+                          - updatedSum: ${updatedSum + default(map.get(chunkResp.body, "updated"), 0)}
+                          - removedSum: ${removedSum + default(map.get(chunkResp.body, "removed"), 0)}
+                          - failedSum: ${failedSum + default(map.get(chunkResp.body, "failed"), 0)}
+          - advance:
+              assign:
+                - i: ${endIdx}
+              next: loop
+    - returnRes:
+        return:
+          added: ${addedSum}
+          updated: ${updatedSum}
+          removed: ${removedSum}
+          failed: ${failedSum}
+          batches: ${chunks}
+          okBatches: ${okBatches}
+          errBatches: ${errBatches}
+
+
+# Patch one fileItems.{driveFileId}.{stageField} (+ optional errorMessage).
+PatchFileItemStage:
+  params: [documentName, driveFileId, stageField, statusValue, errorMessage]
+  steps:
+    - assignNow:
+        assign:
+          - nowStr: ${time.format(sys.now())}
+          - errMsg: ${default(errorMessage, "")}
+    - buildInnerFields:
+        assign:
+          - innerFields:
+              ${stageField}:
+                stringValue: ${statusValue}
+    - putError:
+        switch:
+          - condition: ${errMsg != ""}
+            assign:
+              - innerFields["errorMessage"]:
+                  stringValue: ${text.replace_all(errMsg, "\"", "'")}
+    - buildFileItemsMap:
+        assign:
+          - fileItemStagePath: ${"fileItems.`" + driveFileId + "`." + stageField}
+          - fileItemErrorPath: ${"fileItems.`" + driveFileId + "`.errorMessage"}
+          - encodedFileItemStagePath: ${text.url_encode(fileItemStagePath)}
+          - encodedFileItemErrorPath: ${text.url_encode(fileItemErrorPath)}
+          - fileItemsOuter:
+              mapValue:
+                fields:
+                  ${driveFileId}:
+                    mapValue:
+                      fields: ${innerFields}
+          - updateMask: ${"updateMask.fieldPaths=" + encodedFileItemStagePath + "&updateMask.fieldPaths=updatedAt" + if(errMsg != "", "&updateMask.fieldPaths=" + encodedFileItemErrorPath, "")}
+    - patch:
+        try:
+          call: http.request
+          args:
+            method: PATCH
+            url: ${"https://firestore.googleapis.com/v1/" + documentName + "?" + updateMask}
+            auth:
+              type: OAuth2
+            body:
+              fields:
+                fileItems: ${fileItemsOuter}
+                updatedAt:
+                  timestampValue: ${nowStr}
+        except:
+          as: e
+          steps:
+            - logFileItemErr:
+                call: sys.log
+                args:
+                  text: '${"PatchFileItemStage failed: " + json.encode_to_string(e)}'
+
+
+PatchFileItemsFromIds:
+  params: [documentName, fileIds, stageField, statusValue]
+  steps:
+    - init:
+        assign:
+          - i: 0
+          - total: ${len(default(fileIds, []))}
+    - loop:
+        steps:
+          - checkDone:
+              switch:
+                - condition: ${i >= total}
+                  next: returnDone
+          - patchOne:
+              call: PatchFileItemStage
+              args:
+                documentName: ${documentName}
+                driveFileId: ${fileIds[i]}
+                stageField: ${stageField}
+                statusValue: ${statusValue}
+                errorMessage: ""
+          - inc:
+              assign:
+                - i: ${i + 1}
+              next: loop
+    - returnDone:
+        return: null
+
+
+PatchFileItemsFromWorkItems:
+  params: [documentName, items, stageField, statusValue]
+  steps:
+    - init:
+        assign:
+          - i: 0
+          - total: ${len(default(items, []))}
+    - loop:
+        steps:
+          - checkDone:
+              switch:
+                - condition: ${i >= total}
+                  next: returnDone
+          - readItem:
+              assign:
+                - row: ${items[i]}
+                - driveFileId: ${default(map.get(row, "driveFileId"), "")}
+                - i: ${i + 1}
+          - patchOne:
+              switch:
+                - condition: ${driveFileId != ""}
+                  call: PatchFileItemStage
+                  args:
+                    documentName: ${documentName}
+                    driveFileId: ${driveFileId}
+                    stageField: ${stageField}
+                    statusValue: ${statusValue}
+                    errorMessage: ""
+              next: loop
+    - returnDone:
+        return: null
+
+
+PatchFileItemsChunkFailed:
+  params: [documentName, chunk, stageField, errorMessage]
+  steps:
+    - init:
+        assign:
+          - i: 0
+          - total: ${len(default(chunk, []))}
+    - loop:
+        steps:
+          - checkDone:
+              switch:
+                - condition: ${i >= total}
+                  next: returnDone
+          - readItem:
+              assign:
+                - row: ${chunk[i]}
+                - driveFileId: ${default(map.get(row, "driveFileId"), "")}
+                - i: ${i + 1}
+          - patchOne:
+              switch:
+                - condition: ${driveFileId != ""}
+                  call: PatchFileItemStage
+                  args:
+                    documentName: ${documentName}
+                    driveFileId: ${driveFileId}
+                    stageField: ${stageField}
+                    statusValue: "error"
+                    errorMessage: ${errorMessage}
+              next: loop
+    - returnDone:
+        return: null
+
+
+PatchFileItemsFromApplyBatchResponse:
+  params: [documentName, responseBody, stageField, completeOnSuccess]
+  steps:
+    - init:
+        assign:
+          - results: ${default(map.get(responseBody, "results"), [])}
+          - failures: ${default(map.get(responseBody, "failures"), [])}
+          - ri: 0
+          - fi: 0
+    - loopResults:
+        steps:
+          - checkResults:
+              switch:
+                - condition: ${ri >= len(results)}
+                  next: initFailures
+          - readResult:
+              assign:
+                - row: ${results[ri]}
+                - driveFileId: ${default(map.get(row, "driveFileId"), "")}
+                - ok: ${default(map.get(row, "ok"), false)}
+                - errText: ${default(map.get(row, "error"), "batch item failed")}
+                - ri: ${ri + 1}
+          - patchResult:
+              switch:
+                - condition: ${driveFileId != "" and ok}
+                  steps:
+                    - patchOk:
+                        call: PatchFileItemStage
+                        args:
+                          documentName: ${documentName}
+                          driveFileId: ${driveFileId}
+                          stageField: ${stageField}
+                          statusValue: "completed"
+                          errorMessage: ""
+                    - patchCompleteIfNeeded:
+                        switch:
+                          - condition: ${default(completeOnSuccess, false)}
+                            call: PatchFileItemStage
+                            args:
+                              documentName: ${documentName}
+                              driveFileId: ${driveFileId}
+                              stageField: "complete"
+                              statusValue: "completed"
+                              errorMessage: ""
+                - condition: ${driveFileId != ""}
+                  call: PatchFileItemStage
+                  args:
+                    documentName: ${documentName}
+                    driveFileId: ${driveFileId}
+                    stageField: ${stageField}
+                    statusValue: "error"
+                    errorMessage: ${errText}
+              next: loopResults
+    - initFailures:
+        assign:
+          - fi: 0
+    - loopFailures:
+        steps:
+          - checkFailures:
+              switch:
+                - condition: ${fi >= len(failures)}
+                  next: returnDone
+          - readFailure:
+              assign:
+                - row: ${failures[fi]}
+                - driveFileId: ${default(map.get(row, "driveFileId"), "")}
+                - errText: ${default(map.get(row, "error"), "batch item failed")}
+                - fi: ${fi + 1}
+          - patchFailure:
+              switch:
+                - condition: ${driveFileId != ""}
+                  call: PatchFileItemStage
+                  args:
+                    documentName: ${documentName}
+                    driveFileId: ${driveFileId}
+                    stageField: ${stageField}
+                    statusValue: "error"
+                    errorMessage: ${errText}
+              next: loopFailures
+    - returnDone:
+        return: null

@@ -1,0 +1,160 @@
+{
+  "createdAt": {
+    "__time__": "2024-05-03T16:05:34.455Z"
+  },
+  "flow": [
+    {
+      "data": {
+        "ref": {
+          "next": 1,
+          "parent": null,
+          "prev": null
+        },
+        "sort": "1"
+      },
+      "id": 0,
+      "ref": {
+        "next": 1,
+        "parent": null,
+        "prev": null
+      },
+      "type": "entry"
+    },
+    {
+      "data": {
+        "ref": {
+          "next": 2,
+          "parent": 0,
+          "prev": 0
+        },
+        "sort": "1"
+      },
+      "id": 1,
+      "ref": {
+        "next": 2,
+        "parent": 0,
+        "prev": 0
+      },
+      "type": "welcome"
+    },
+    {
+      "data": {
+        "ref": {
+          "next": 3,
+          "parent": 0,
+          "prev": 1
+        },
+        "sort": "2"
+      },
+      "id": 2,
+      "ref": {
+        "next": 3,
+        "parent": 0,
+        "prev": 1
+      },
+      "type": "profile"
+    },
+    {
+      "data": {
+        "main": "セクションタイトル",
+        "ref": {
+          "next": 4,
+          "parent": 0,
+          "prev": 2
+        },
+        "sort": "3"
+      },
+      "id": 3,
+      "ref": {
+        "next": 4,
+        "parent": 0,
+        "prev": 2
+      },
+      "type": "section"
+    },
+    {
+      "data": {
+        "main": "質問の色んな情報",
+        "questionnaireTypeInfo": {
+          "type": "select"
+        },
+        "ref": {
+          "next": 5,
+          "parent": 3,
+          "prev": 3
+        },
+        "sort": "1"
+      },
+      "id": 4,
+      "ref": {
+        "next": 5,
+        "parent": 3,
+        "prev": 3
+      },
+      "type": "questionnaire"
+    },
+    {
+      "data": {
+        "main": "質問の色んな情報",
+        "questionnaireTypeInfo": {
+          "type": "select"
+        },
+        "ref": {
+          "next": 6,
+          "parent": 3,
+          "prev": 4
+        },
+        "sort": "2"
+      },
+      "id": 5,
+      "ref": {
+        "next": 6,
+        "parent": 3,
+        "prev": 4
+      },
+      "type": "questionnaire"
+    },
+    {
+      "data": {
+        "main": "セクションタイトル",
+        "ref": {
+          "next": 7,
+          "parent": 0,
+          "prev": 5
+        },
+        "sort": "4"
+      },
+      "id": 4,
+      "ref": {
+        "next": 7,
+        "parent": 0,
+        "prev": 5
+      },
+      "type": "section"
+    },
+    {
+      "data": {
+        "main": "質問の色んな情報",
+        "questionnaireTypeInfo": {
+          "type": "select"
+        },
+        "ref": {
+          "next": null,
+          "parent": 6,
+          "prev": 6
+        },
+        "sort": "1"
+      },
+      "id": 7,
+      "ref": {
+        "next": null,
+        "parent": 6,
+        "prev": 6
+      },
+      "type": "questionnaire"
+    }
+  ],
+  "updatedAt": {
+    "__time__": "2024-05-03T16:05:40.936Z"
+  }
+}

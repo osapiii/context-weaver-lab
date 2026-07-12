@@ -1,0 +1,1020 @@
+"""Tools for StoryVault Related Context Agent."""
+from __future__ import annotations
+
+import os
+import re
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+import requests
+from cryptography.fernet import Fernet, InvalidToken
+from google.cloud import firestore
+
+from common.tool_state import read_tool_state  # type: ignore
+
+GITHUB_API = "https://api.github.com"
+SLACK_API = "https://slack.com/api"
+JIRA_TOKEN_URL = "https://auth.atlassian.com/oauth/token"
+JIRA_API_BASE = "https://api.atlassian.com/ex/jira"
+MAX_CANDIDATES = 50
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _clean_text(value: Any, fallback: str = "") -> str:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return fallback
+
+
+def _task_bucket(tool_context: Any) -> dict[str, Any]:
+    state = read_tool_state(tool_context)
+    return _as_dict(state.get("storyvault_related_context"))
+
+
+def _setup_from_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
+    return _as_dict(bucket.get("setup"))
+
+
+def _payload_from_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
+    return _as_dict(bucket.get("payload"))
+
+
+def _fernet() -> Fernet | None:
+    raw = os.getenv("GITHUB_TOKEN_ENCRYPTION_KEY", "").strip()
+    if not raw:
+        return None
+    try:
+        return Fernet(raw.encode("utf-8"))
+    except Exception:
+        return None
+
+
+def unprotect_github_token(payload: Any) -> str:
+    """Decode GitHub token saved by backend/app/triggers/github_oauth.py."""
+    if isinstance(payload, str):
+        return payload
+    if not isinstance(payload, dict):
+        return ""
+    value = str(payload.get("value") or "")
+    if payload.get("mode") != "fernet":
+        return value
+    f = _fernet()
+    if not f:
+        raise RuntimeError("GITHUB_TOKEN_ENCRYPTION_KEY is required")
+    try:
+        return f.decrypt(value.encode("utf-8")).decode("utf-8")
+    except InvalidToken as exc:
+        raise RuntimeError("Stored GitHub token cannot be decrypted") from exc
+
+
+def _github_headers(access_token: str) -> dict[str, str]:
+    return {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {access_token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _github_get(
+    access_token: str,
+    path: str,
+    params: dict[str, Any] | None = None,
+) -> Any:
+    resp = requests.get(
+        f"{GITHUB_API}{path}",
+        headers=_github_headers(access_token),
+        params=params,
+        timeout=30,
+    )
+    if resp.status_code >= 400:
+        try:
+            message = str(resp.json().get("message") or "")
+        except Exception:
+            message = resp.text[:300]
+        raise RuntimeError(message or f"GitHub API failed: {resp.status_code}")
+    return resp.json()
+
+
+def _access_token_for_user(organization_id: str, user_id: str) -> str:
+    db = firestore.Client()
+    snap = (
+        db.collection("organizations")
+        .document(organization_id)
+        .collection("externalServiceConfigs")
+        .document("githubOAuth")
+        .collection("users")
+        .document(user_id)
+        .get()
+    )
+    if not snap.exists:
+        raise RuntimeError("GitHub が未接続です。GitHub アカウントを接続してください。")
+    token = unprotect_github_token((snap.to_dict() or {}).get("accessToken"))
+    if not token:
+        raise RuntimeError("GitHub token is missing. Reconnect GitHub.")
+    return token
+
+
+def _slack_fernet() -> Fernet | None:
+    raw = (
+        os.getenv("SLACK_TOKEN_ENCRYPTION_KEY", "").strip()
+        or os.getenv("GITHUB_TOKEN_ENCRYPTION_KEY", "").strip()
+    )
+    if not raw:
+        return None
+    try:
+        return Fernet(raw.encode("utf-8"))
+    except Exception:
+        return None
+
+
+def unprotect_slack_token(payload: Any) -> str:
+    """Decode Slack token saved by backend/app/triggers/slack_oauth.py."""
+    if isinstance(payload, str):
+        return payload
+    if not isinstance(payload, dict):
+        return ""
+    value = str(payload.get("value") or "")
+    if payload.get("mode") != "fernet":
+        return value
+    f = _slack_fernet()
+    if not f:
+        raise RuntimeError("SLACK_TOKEN_ENCRYPTION_KEY is required")
+    try:
+        return f.decrypt(value.encode("utf-8")).decode("utf-8")
+    except InvalidToken as exc:
+        raise RuntimeError("Stored Slack token cannot be decrypted") from exc
+
+
+def _jira_fernet() -> Fernet | None:
+    raw = (
+        os.getenv("JIRA_TOKEN_ENCRYPTION_KEY", "").strip()
+        or os.getenv("SLACK_TOKEN_ENCRYPTION_KEY", "").strip()
+        or os.getenv("GITHUB_TOKEN_ENCRYPTION_KEY", "").strip()
+    )
+    if not raw:
+        return None
+    try:
+        return Fernet(raw.encode("utf-8"))
+    except Exception:
+        return None
+
+
+def unprotect_jira_token(payload: Any) -> str:
+    """Decode Jira token saved by backend/app/triggers/jira_oauth.py."""
+    if isinstance(payload, str):
+        return payload
+    if not isinstance(payload, dict):
+        return ""
+    value = str(payload.get("value") or "")
+    if payload.get("mode") != "fernet":
+        return value
+    f = _jira_fernet()
+    if not f:
+        raise RuntimeError("JIRA_TOKEN_ENCRYPTION_KEY is required")
+    try:
+        return f.decrypt(value.encode("utf-8")).decode("utf-8")
+    except InvalidToken as exc:
+        raise RuntimeError("Stored Jira token cannot be decrypted") from exc
+
+
+def _protect_jira_token(value: str) -> dict[str, str]:
+    f = _jira_fernet()
+    if not f:
+        return {"mode": "plain", "value": value}
+    return {
+        "mode": "fernet",
+        "value": f.encrypt(value.encode("utf-8")).decode("utf-8"),
+    }
+
+
+def _jira_configs_ref(organization_id: str) -> firestore.CollectionReference:
+    return (
+        firestore.Client()
+        .collection("organizations")
+        .document(organization_id)
+        .collection("externalServiceConfigs")
+        .document("jiraIntegration")
+        .collection("configs")
+    )
+
+
+def _jira_connection(
+    organization_id: str,
+    cloud_id: str = "",
+) -> tuple[str, dict[str, Any]]:
+    configs = _jira_configs_ref(organization_id)
+    if cloud_id:
+        snap = configs.document(cloud_id).get()
+        if not snap.exists:
+            raise RuntimeError("Jira site connection was not found.")
+        return snap.id, snap.to_dict() or {}
+    rows = list(configs.limit(1).stream())
+    if not rows:
+        raise RuntimeError("Jira が未接続です。Jira Cloud siteを接続してください。")
+    return rows[0].id, rows[0].to_dict() or {}
+
+
+def _jira_access_token(
+    organization_id: str,
+    cloud_id: str = "",
+) -> tuple[str, str, dict[str, Any]]:
+    resolved_cloud_id, connection = _jira_connection(organization_id, cloud_id)
+    expires_at = connection.get("expiresAt")
+    if isinstance(expires_at, datetime) and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    needs_refresh = not isinstance(expires_at, datetime) or (
+        expires_at <= datetime.now(timezone.utc) + timedelta(minutes=2)
+    )
+    if needs_refresh:
+        refresh_token = unprotect_jira_token(connection.get("refreshToken"))
+        client_id = os.getenv("JIRA_OAUTH_CLIENT_ID", "").strip()
+        client_secret = os.getenv("JIRA_OAUTH_CLIENT_SECRET", "").strip()
+        if not refresh_token or not client_id or not client_secret:
+            raise RuntimeError("Jira tokenを更新できません。Jiraを再接続してください。")
+        response = requests.post(
+            JIRA_TOKEN_URL,
+            json={
+                "grant_type": "refresh_token",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+            },
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            raise RuntimeError(f"Jira token refresh failed: {response.text[:300]}")
+        token = response.json()
+        access_token = _clean_text(token.get("access_token"))
+        if not access_token:
+            raise RuntimeError("Jira token refresh returned no access token.")
+        try:
+            expires_in = max(60, min(86400, int(token.get("expires_in") or 3600)))
+        except (TypeError, ValueError):
+            expires_in = 3600
+        update = {
+            "accessToken": _protect_jira_token(access_token),
+            "refreshToken": _protect_jira_token(
+                _clean_text(token.get("refresh_token"), refresh_token)
+            ),
+            "expiresAt": datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+            "scopes": _clean_text(token.get("scope")).split(),
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        configs = _jira_configs_ref(organization_id)
+        configs.document(resolved_cloud_id).set(update, merge=True)
+        return access_token, resolved_cloud_id, {**connection, **update}
+    access_token = unprotect_jira_token(connection.get("accessToken"))
+    if not access_token:
+        raise RuntimeError("Jira access token is missing. Reconnect Jira.")
+    return access_token, resolved_cloud_id, connection
+
+
+def _jira_request(
+    access_token: str,
+    cloud_id: str,
+    method: str,
+    path: str,
+    *,
+    json_body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    response = requests.request(
+        method,
+        f"{JIRA_API_BASE}/{cloud_id}{path}",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        json=json_body,
+        timeout=45,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Jira API failed: {response.status_code} {response.text[:300]}")
+    return response.json() if response.text else {}
+
+
+def _slack_access_token_for_user(organization_id: str, user_id: str) -> tuple[str, str, dict[str, Any]]:
+    db = firestore.Client()
+    snap = (
+        db.collection("organizations")
+        .document(organization_id)
+        .collection("externalServiceConfigs")
+        .document("slackOAuth")
+        .collection("users")
+        .document(user_id)
+        .get()
+    )
+    if not snap.exists:
+        raise RuntimeError("Slack が未接続です。Slack ワークスペースを接続してください。")
+    doc = snap.to_dict() or {}
+    token = unprotect_slack_token(doc.get("accessToken"))
+    if not token:
+        raise RuntimeError("Slack token is missing. Reconnect Slack.")
+    user_token = unprotect_slack_token(doc.get("userAccessToken"))
+    return token, user_token, doc
+
+
+def _slack_get(
+    access_token: str,
+    path: str,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    resp = requests.get(
+        f"{SLACK_API}{path}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        params=params,
+        timeout=30,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Slack API failed: {resp.status_code} {resp.text[:200]}")
+    payload = resp.json()
+    if not payload.get("ok"):
+        raise RuntimeError(str(payload.get("error") or "Slack API failed"))
+    return payload
+
+
+def _file_names(files: Any) -> list[str]:
+    out: list[str] = []
+    for item in _as_list(files)[:30]:
+        if isinstance(item, dict):
+            name = _clean_text(item.get("filename"))
+            if name:
+                out.append(name)
+    return out
+
+
+def normalize_pull_request(pr: dict[str, Any], files: list[str] | None = None) -> dict[str, Any]:
+    return {
+        "number": pr.get("number") or 0,
+        "title": pr.get("title") or "",
+        "htmlUrl": pr.get("html_url") or "",
+        "author": _as_dict(pr.get("user")).get("login") or "",
+        "state": "merged" if pr.get("merged_at") else (pr.get("state") or ""),
+        "mergedAt": pr.get("merged_at") or "",
+        "createdAt": pr.get("created_at") or "",
+        "updatedAt": pr.get("updated_at") or "",
+        "baseBranch": _as_dict(pr.get("base")).get("ref") or "",
+        "headBranch": _as_dict(pr.get("head")).get("ref") or "",
+        "labels": [
+            str(label.get("name") or "")
+            for label in _as_list(pr.get("labels"))
+            if isinstance(label, dict) and label.get("name")
+        ],
+        "changedFiles": pr.get("changed_files"),
+        "additions": pr.get("additions"),
+        "deletions": pr.get("deletions"),
+        "bodySummary": _clean_text(pr.get("body"))[:1200],
+        "files": files or [],
+    }
+
+
+def _list_recent_pull_requests(access_token: str, repo: str) -> list[dict[str, Any]]:
+    collected: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for state in ("open", "closed"):
+        for page in range(1, 3):
+            payload = _github_get(
+                access_token,
+                f"/repos/{repo}/pulls",
+                {
+                    "state": state,
+                    "sort": "updated",
+                    "direction": "desc",
+                    "per_page": 30,
+                    "page": page,
+                },
+            )
+            if not isinstance(payload, list) or not payload:
+                break
+            for item in payload:
+                number = item.get("number")
+                if not isinstance(number, int) or number in seen:
+                    continue
+                seen.add(number)
+                detail = _github_get(access_token, f"/repos/{repo}/pulls/{number}")
+                files_payload = _github_get(
+                    access_token,
+                    f"/repos/{repo}/pulls/{number}/files",
+                    {"per_page": 30},
+                )
+                collected.append(
+                    normalize_pull_request(detail, files=_file_names(files_payload))
+                )
+                if len(collected) >= MAX_CANDIDATES:
+                    return collected
+            if len(payload) < 30:
+                break
+    return collected
+
+
+def read_related_context_request(tool_context: Any = None) -> dict[str, Any]:
+    """Read related context request from session state."""
+    bucket = _task_bucket(tool_context)
+    setup = _setup_from_bucket(bucket)
+    payload = _payload_from_bucket(bucket)
+    application = _as_dict(payload.get("application"))
+    operation_video = _as_dict(payload.get("operation_video")) or _as_dict(
+        payload.get("clip")
+    )
+    analysis_result = _as_dict(payload.get("analysis_result"))
+    repo = _clean_text(
+        setup.get("repo_full_name"),
+        _clean_text(application.get("repoFullName")),
+    )
+    file_space_id = _clean_text(
+        setup.get("file_space_id"),
+        _clean_text(application.get("fileSpaceId")),
+    )
+    return {
+        "ok": True,
+        "provider": _clean_text(setup.get("provider"), "github"),
+        "organizationId": _clean_text(setup.get("organization_id")),
+        "spaceId": _clean_text(setup.get("space_id")),
+        "userId": _clean_text(setup.get("user_id")),
+        "application": application,
+        "operationVideo": operation_video,
+        "analysisResult": analysis_result,
+        "repoFullName": repo,
+        "fileSpaceId": file_space_id,
+        "jiraCloudId": _clean_text(setup.get("jira_cloud_id")),
+        "slackQuery": _clean_text(setup.get("slack_query")),
+        "defaultBranch": _clean_text(
+            setup.get("default_branch"),
+            _clean_text(application.get("defaultBranch"), "main"),
+        ),
+        "expectedOutputs": _as_list(payload.get("expected_outputs")),
+    }
+
+
+def _extract_keywords(context: dict[str, Any]) -> list[str]:
+    pieces: list[str] = []
+    operation_video = _as_dict(context.get("operationVideo"))
+    analysis_result = _as_dict(context.get("analysisResult"))
+    quick_scan = _as_dict(operation_video.get("quickScan"))
+    for value in (
+        operation_video.get("title"),
+        operation_video.get("description"),
+        operation_video.get("transcriptSummary"),
+        quick_scan.get("title"),
+        quick_scan.get("description"),
+        quick_scan.get("operationMemo"),
+        quick_scan.get("transcriptSummary"),
+        analysis_result.get("operationIntent"),
+        analysis_result.get("transcriptSummary"),
+        analysis_result.get("productContextSummary"),
+    ):
+        if isinstance(value, str):
+            pieces.append(value)
+    for step in _as_list(quick_scan.get("operationSteps")):
+        if isinstance(step, str):
+            pieces.append(step)
+    for story in _as_list(analysis_result.get("storyCandidates")):
+        if isinstance(story, dict):
+            for key in ("title", "goal", "benefit"):
+                if isinstance(story.get(key), str):
+                    pieces.append(story[key])
+    text = " ".join(pieces)
+    candidates = re.findall(r"[A-Za-z][A-Za-z0-9_-]{2,}|[一-龥ぁ-んァ-ンー]{2,}", text)
+    stopwords = {
+        "する",
+        "できる",
+        "ため",
+        "こと",
+        "よう",
+        "ます",
+        "です",
+        "AI",
+    }
+    out: list[str] = []
+    seen: set[str] = set()
+    for word in candidates:
+        cleaned = word.strip()
+        key = cleaned.lower()
+        if key in seen or cleaned in stopwords:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+        if len(out) >= 8:
+            break
+    return out
+
+
+def _document_id_from_name(name: str) -> str:
+    if not name:
+        return ""
+    return name.rstrip("/").split("/")[-1]
+
+
+def _normalize_knowledge_document(doc_id: str, data: dict[str, Any]) -> dict[str, Any]:
+    name = _clean_text(data.get("name"))
+    return {
+        "documentId": doc_id or _document_id_from_name(name),
+        "name": name,
+        "displayName": _clean_text(data.get("displayName")) or None,
+        "description": _clean_text(data.get("description")) or None,
+        "mimeType": _clean_text(data.get("mimeType")) or None,
+        "sourceKind": _clean_text(data.get("sourceKind")) or None,
+        "gcsUrl": _clean_text(data.get("gcsUrl")) or None,
+        "bucketName": _clean_text(data.get("bucketName")) or None,
+        "filePath": _clean_text(data.get("filePath")) or None,
+        "title": _clean_text(data.get("title")) or None,
+        "sourceUrl": _clean_text(data.get("sourceUrl")) or None,
+        "createTime": _clean_text(data.get("createTime")) or None,
+        "updateTime": _clean_text(data.get("updateTime")) or None,
+    }
+
+
+def _metadata_value(items: Any, key: str) -> str:
+    for item in _as_list(items):
+        if not isinstance(item, dict):
+            continue
+        if _clean_text(item.get("key")) == key:
+            return _clean_text(item.get("value"))
+    return ""
+
+
+def _knowledge_document_from_upload_log(
+    request_id: str,
+    data: dict[str, Any],
+) -> dict[str, Any] | None:
+    input_data = _as_dict(data.get("input"))
+    if input_data.get("operationType") != "fileSpaceUpload":
+        return None
+    if data.get("status") != "completed":
+        return None
+    output = _as_dict(data.get("output"))
+    response = _as_dict(output.get("response"))
+    document_id = _clean_text(
+        input_data.get("documentId"),
+        _clean_text(response.get("agentSearchDocumentId"), _clean_text(response.get("id"))),
+    )
+    file_path = _clean_text(input_data.get("filePath"))
+    bucket_name = _clean_text(input_data.get("bucketName"))
+    if not document_id and not file_path:
+        return None
+    original_file = _as_dict(input_data.get("originalFileInfo"))
+    display_name = (
+        _clean_text(original_file.get("fileName"))
+        or file_path.rstrip("/").split("/")[-1]
+        or document_id
+        or request_id
+    )
+    custom_metadata = input_data.get("customMetadata")
+    source_kind = (
+        _metadata_value(custom_metadata, "documentKind")
+        or _metadata_value(custom_metadata, "source")
+    )
+    gcs_url = f"gs://{bucket_name}/{file_path}" if bucket_name and file_path else ""
+    updated_at = data.get("updatedAt")
+    created_at = data.get("createdAt")
+    return {
+        "documentId": document_id or request_id,
+        "name": _clean_text(response.get("name")),
+        "displayName": display_name,
+        "description": _clean_text(input_data.get("description")) or None,
+        "mimeType": _clean_text(input_data.get("mimeType")) or None,
+        "sourceKind": source_kind or None,
+        "gcsUrl": gcs_url or None,
+        "bucketName": bucket_name or None,
+        "filePath": file_path or None,
+        "title": display_name,
+        "sourceUrl": None,
+        "createTime": created_at.isoformat() if hasattr(created_at, "isoformat") else _clean_text(created_at) or None,
+        "updateTime": updated_at.isoformat() if hasattr(updated_at, "isoformat") else _clean_text(updated_at) or None,
+        "applicationId": _metadata_value(custom_metadata, "applicationId") or None,
+        "operationVideoId": _metadata_value(custom_metadata, "operationVideoId") or None,
+        "sourceAssetId": _metadata_value(custom_metadata, "sourceAssetId") or None,
+        "sourceRequestId": request_id,
+    }
+
+
+def _fetch_knowledge_documents_from_upload_logs(
+    db: firestore.Client,
+    *,
+    organization_id: str,
+    space_id: str,
+    file_space_id: str,
+) -> list[dict[str, Any]]:
+    docs: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    logs = (
+        db.collection("organizations")
+        .document(organization_id)
+        .collection("spaces")
+        .document(space_id)
+        .collection("requests")
+        .document("contextStoreRequests")
+        .collection("logs")
+        .limit(300)
+        .stream()
+    )
+    for snap in logs:
+        data = snap.to_dict() or {}
+        input_data = _as_dict(data.get("input"))
+        if _clean_text(input_data.get("storeId")) != file_space_id:
+            continue
+        doc = _knowledge_document_from_upload_log(snap.id, data)
+        if not doc:
+            continue
+        dedupe_key = _clean_text(doc.get("documentId")) or _clean_text(doc.get("filePath"))
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        docs.append(doc)
+    docs.sort(key=lambda item: _clean_text(item.get("updateTime")), reverse=True)
+    return docs[:MAX_CANDIDATES]
+
+
+def fetch_knowledge_document_candidates(tool_context: Any = None) -> dict[str, Any]:
+    """Fetch FileSpace document metadata candidates for the current request."""
+    context = read_related_context_request(tool_context)
+    if context.get("provider") != "knowledge":
+        return {"ok": False, "error": "provider is not knowledge"}
+    organization_id = _clean_text(context.get("organizationId"))
+    space_id = _clean_text(context.get("spaceId"))
+    file_space_id = _clean_text(context.get("fileSpaceId"))
+    if not organization_id or not space_id or not file_space_id:
+        return {"ok": False, "error": "organizationId/spaceId/fileSpaceId is required"}
+    try:
+        db = firestore.Client()
+        snapshots = (
+            db.collection("organizations")
+            .document(organization_id)
+            .collection("spaces")
+            .document(space_id)
+            .collection("fileSpaces")
+            .document(file_space_id)
+            .collection("documents")
+            .limit(MAX_CANDIDATES)
+            .stream()
+        )
+        documents = [
+            _normalize_knowledge_document(snap.id, snap.to_dict() or {})
+            for snap in snapshots
+        ]
+        existing_keys = {
+            _clean_text(doc.get("documentId")) or _clean_text(doc.get("filePath"))
+            for doc in documents
+        }
+        for doc in _fetch_knowledge_documents_from_upload_logs(
+            db,
+            organization_id=organization_id,
+            space_id=space_id,
+            file_space_id=file_space_id,
+        ):
+            key = _clean_text(doc.get("documentId")) or _clean_text(doc.get("filePath"))
+            if key and key in existing_keys:
+                continue
+            documents.append(doc)
+            existing_keys.add(key)
+            if len(documents) >= MAX_CANDIDATES:
+                break
+        return {
+            "ok": True,
+            "fileSpaceId": file_space_id,
+            "checkedAt": _now_iso(),
+            "documents": documents,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "fileSpaceId": file_space_id,
+            "checkedAt": _now_iso(),
+            "error": str(exc)[:500],
+            "documents": [],
+        }
+
+
+def _slack_permalink(access_token: str, channel_id: str, message_ts: str) -> str:
+    try:
+        payload = _slack_get(
+            access_token,
+            "/chat.getPermalink",
+            {"channel": channel_id, "message_ts": message_ts},
+        )
+        return str(payload.get("permalink") or "")
+    except Exception:
+        return ""
+
+
+def normalize_slack_message(
+    item: dict[str, Any],
+    *,
+    access_token: str = "",
+    default_channel_name: str = "",
+) -> dict[str, Any]:
+    channel = _as_dict(item.get("channel"))
+    channel_id = _clean_text(
+        item.get("channel_id"),
+        _clean_text(channel.get("id"), _clean_text(item.get("channel"))),
+    )
+    channel_name = _clean_text(
+        item.get("channel_name"),
+        _clean_text(channel.get("name"), default_channel_name),
+    )
+    message_ts = _clean_text(item.get("ts"))
+    permalink = _clean_text(item.get("permalink"))
+    if access_token and channel_id and message_ts and not permalink:
+        permalink = _slack_permalink(access_token, channel_id, message_ts)
+    return {
+        "channelId": channel_id,
+        "channelName": channel_name,
+        "messageTs": message_ts,
+        "threadTs": _clean_text(item.get("thread_ts")),
+        "permalink": permalink,
+        "author": _clean_text(item.get("user"), _clean_text(item.get("username"))),
+        "text": _clean_text(item.get("text"))[:1600],
+        "postedAt": message_ts,
+    }
+
+
+def _search_slack_messages(
+    access_token: str,
+    query: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    payload = _slack_get(
+        access_token,
+        "/search.messages",
+        {
+            "query": query,
+            "sort": "timestamp",
+            "sort_dir": "desc",
+            "count": min(limit, 20),
+        },
+    )
+    matches = _as_dict(payload.get("messages")).get("matches") or []
+    out: list[dict[str, Any]] = []
+    for item in _as_list(matches):
+        if isinstance(item, dict):
+            out.append(normalize_slack_message(item, access_token=access_token))
+    return out
+
+
+def _recent_slack_messages(access_token: str, limit: int) -> list[dict[str, Any]]:
+    payload = _slack_get(
+        access_token,
+        "/conversations.list",
+        {
+            "types": "public_channel,private_channel",
+            "exclude_archived": True,
+            "limit": 20,
+        },
+    )
+    out: list[dict[str, Any]] = []
+    for channel in _as_list(payload.get("channels")):
+        if not isinstance(channel, dict) or not channel.get("id"):
+            continue
+        try:
+            history = _slack_get(
+                access_token,
+                "/conversations.history",
+                {
+                    "channel": channel.get("id"),
+                    "limit": 10,
+                },
+            )
+        except Exception:
+            continue
+        for item in _as_list(history.get("messages")):
+            if not isinstance(item, dict) or item.get("subtype"):
+                continue
+            out.append(
+                normalize_slack_message(
+                    {
+                        **item,
+                        "channel_id": channel.get("id"),
+                        "channel_name": channel.get("name") or "",
+                    },
+                    access_token=access_token,
+                )
+            )
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def _jira_adf_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        return "\n".join(part for part in (_jira_adf_text(item) for item in value) if part)
+    if not isinstance(value, dict):
+        return ""
+    own_text = _clean_text(value.get("text"))
+    child_text = _jira_adf_text(value.get("content"))
+    return "\n".join(part for part in (own_text, child_text) if part).strip()
+
+
+def _jira_named_field(value: Any) -> dict[str, str]:
+    data = _as_dict(value)
+    return {
+        "id": _clean_text(data.get("id")),
+        "name": _clean_text(data.get("name"), _clean_text(data.get("displayName"))),
+    }
+
+
+def normalize_jira_issue(
+    issue: dict[str, Any],
+    *,
+    cloud_id: str = "",
+    site_url: str = "",
+) -> dict[str, Any]:
+    fields = _as_dict(issue.get("fields"))
+    key = _clean_text(issue.get("key"))
+    parent = _as_dict(fields.get("parent"))
+    return {
+        "id": _clean_text(issue.get("id")),
+        "key": key,
+        "cloudId": cloud_id,
+        "siteUrl": site_url,
+        "htmlUrl": f"{site_url.rstrip('/')}/browse/{key}" if site_url and key else "",
+        "summary": _clean_text(fields.get("summary")),
+        "description": _jira_adf_text(fields.get("description"))[:4000],
+        "issueType": _jira_named_field(fields.get("issuetype")),
+        "status": _jira_named_field(fields.get("status")),
+        "priority": _jira_named_field(fields.get("priority")),
+        "assignee": _jira_named_field(fields.get("assignee")),
+        "reporter": _jira_named_field(fields.get("reporter")),
+        "project": _jira_named_field(fields.get("project")),
+        "labels": [str(item) for item in _as_list(fields.get("labels")) if str(item)],
+        "components": [
+            _jira_named_field(item)
+            for item in _as_list(fields.get("components"))
+            if isinstance(item, dict)
+        ],
+        "fixVersions": [
+            _jira_named_field(item)
+            for item in _as_list(fields.get("fixVersions"))
+            if isinstance(item, dict)
+        ],
+        "parentKey": _clean_text(parent.get("key")),
+        "createdAt": _clean_text(fields.get("created")),
+        "updatedAt": _clean_text(fields.get("updated")),
+    }
+
+
+def _jira_search_jql(keywords: list[str]) -> str:
+    escaped = [
+        keyword.replace("\\", "\\\\").replace('"', '\\"')
+        for keyword in keywords[:4]
+        if keyword.strip()
+    ]
+    if not escaped:
+        return "updated >= -180d ORDER BY updated DESC"
+    clauses = " OR ".join(f'text ~ "{keyword}"' for keyword in escaped)
+    return f"({clauses}) ORDER BY updated DESC"
+
+
+def fetch_jira_issue_candidates(tool_context: Any = None) -> dict[str, Any]:
+    """Fetch Jira issue candidates for the current related-context request."""
+    context = read_related_context_request(tool_context)
+    if context.get("provider") != "jira":
+        return {"ok": False, "error": "provider is not jira"}
+    organization_id = _clean_text(context.get("organizationId"))
+    cloud_id = _clean_text(context.get("jiraCloudId"))
+    if not organization_id:
+        return {"ok": False, "error": "organizationId is required"}
+    try:
+        access_token, resolved_cloud_id, connection = _jira_access_token(
+            organization_id,
+            cloud_id,
+        )
+        keywords = _extract_keywords(context)
+        payload = _jira_request(
+            access_token,
+            resolved_cloud_id,
+            "POST",
+            "/rest/api/3/search/jql",
+            json_body={
+                "jql": _jira_search_jql(keywords),
+                "maxResults": MAX_CANDIDATES,
+                "fields": [
+                    "summary",
+                    "description",
+                    "issuetype",
+                    "status",
+                    "priority",
+                    "assignee",
+                    "reporter",
+                    "project",
+                    "labels",
+                    "components",
+                    "fixVersions",
+                    "updated",
+                    "created",
+                    "parent",
+                ],
+            },
+        )
+        site_url = _clean_text(connection.get("siteUrl"))
+        issues = [
+            normalize_jira_issue(
+                item,
+                cloud_id=resolved_cloud_id,
+                site_url=site_url,
+            )
+            for item in _as_list(payload.get("issues"))
+            if isinstance(item, dict)
+        ]
+        return {
+            "ok": True,
+            "cloudId": resolved_cloud_id,
+            "siteName": _clean_text(connection.get("siteName")),
+            "siteUrl": site_url,
+            "checkedAt": _now_iso(),
+            "issues": issues,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "cloudId": cloud_id,
+            "siteName": "",
+            "siteUrl": "",
+            "checkedAt": _now_iso(),
+            "error": str(exc)[:500],
+            "issues": [],
+        }
+
+
+def fetch_github_pull_request_candidates(tool_context: Any = None) -> dict[str, Any]:
+    """Fetch recent GitHub PR candidates for the current request."""
+    context = read_related_context_request(tool_context)
+    repo = _clean_text(context.get("repoFullName"))
+    organization_id = _clean_text(context.get("organizationId"))
+    user_id = _clean_text(context.get("userId"))
+    if context.get("provider") != "github":
+        return {"ok": False, "error": "provider is not github"}
+    if not repo or "/" not in repo:
+        return {"ok": False, "error": "GitHub repositoryを選択してください"}
+    if not organization_id or not user_id:
+        return {"ok": False, "error": "organizationId/userId is required"}
+    try:
+        access_token = _access_token_for_user(organization_id, user_id)
+        pull_requests = _list_recent_pull_requests(access_token, repo)
+        return {
+            "ok": True,
+            "repoFullName": repo,
+            "checkedAt": _now_iso(),
+            "pullRequests": pull_requests,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "repoFullName": repo,
+            "checkedAt": _now_iso(),
+            "error": str(exc)[:500],
+            "pullRequests": [],
+        }
+
+
+def fetch_slack_message_candidates(tool_context: Any = None) -> dict[str, Any]:
+    """Fetch Slack message candidates for the current related-context request."""
+    context = read_related_context_request(tool_context)
+    organization_id = _clean_text(context.get("organizationId"))
+    user_id = _clean_text(context.get("userId"))
+    if context.get("provider") != "slack":
+        return {"ok": False, "error": "provider is not slack"}
+    if not organization_id or not user_id:
+        return {"ok": False, "error": "organizationId/userId is required"}
+    try:
+        access_token, user_access_token, connection = _slack_access_token_for_user(organization_id, user_id)
+        explicit_query = _clean_text(context.get("slackQuery"))
+        keywords = _extract_keywords(context)
+        query = explicit_query or " OR ".join(f'"{word}"' for word in keywords[:5])
+        messages: list[dict[str, Any]] = []
+        if query and user_access_token:
+            try:
+                messages = _search_slack_messages(user_access_token, query, MAX_CANDIDATES)
+            except Exception:
+                messages = []
+        if not messages:
+            messages = _recent_slack_messages(access_token, MAX_CANDIDATES)
+        return {
+            "ok": True,
+            "teamId": _clean_text(connection.get("teamId")),
+            "teamName": _clean_text(connection.get("teamName")),
+            "checkedAt": _now_iso(),
+            "query": query,
+            "messages": messages[:MAX_CANDIDATES],
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "teamId": "",
+            "teamName": "",
+            "checkedAt": _now_iso(),
+            "error": str(exc)[:500],
+            "messages": [],
+        }

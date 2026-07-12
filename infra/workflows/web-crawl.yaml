@@ -1,0 +1,209 @@
+# GCP Workflows definition for Web Crawl → GCS → FileSpace registration.
+#
+# Triggered by `web-crawl-workflow-kicker`, which writes an input artifact to GCS
+# and starts this workflow. The workflow orchestrates the step runner exposed by
+# the `web-crawler` Cloud Run service.
+#
+# Required env:
+#   WEB_CRAWLER_URL
+#   FIRESTORE_DATABASE
+
+main:
+  params: [args]
+  steps:
+    - init:
+        assign:
+          - requestPath: ${args.requestPath}
+          - requestId: ${args.requestId}
+          - inputArtifactUri: ${args.inputArtifactUri}
+          - organizationId: ${default(map.get(args, "organizationId"), "")}
+          - project: ${sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+          - database: ${default(sys.get_env("FIRESTORE_DATABASE"), "(default)")}
+          - webCrawlerUrl: ${sys.get_env("WEB_CRAWLER_URL")}
+          - documentName: ${"projects/" + project + "/databases/" + database + "/documents/" + requestPath}
+
+    - markActive:
+        call: PatchRequest
+        args:
+          documentName: ${documentName}
+          status: "processing"
+          workflowState: "ACTIVE"
+          currentStep: "loadInput"
+          output: null
+          errorMessage: ""
+
+    - loadInput:
+        call: LoadInputArtifact
+        args:
+          inputArtifactUri: ${inputArtifactUri}
+        result: inputManifest
+
+    - buildStepInput:
+        assign:
+          - operationMetadata: ${default(map.get(inputManifest, "operationMetadata"), json.decode("{}"))}
+          - crawlInput:
+              url: ${map.get(inputManifest, "url")}
+              bucket_name: ${default(map.get(inputManifest, "bucketName"), "")}
+              folder_path: ${default(map.get(inputManifest, "folderPath"), "")}
+              max_depth: ${default(map.get(inputManifest, "maxDepth"), 1)}
+              max_urls: ${default(map.get(inputManifest, "maxUrls"), 100)}
+              file_space_id: ${default(map.get(inputManifest, "fileSpaceId"), "")}
+              include_images: ${default(map.get(inputManifest, "includeImages"), true)}
+
+    - crawl:
+        call: RunCrawlerStep
+        args:
+          webCrawlerUrl: ${webCrawlerUrl}
+          documentName: ${documentName}
+          requestPath: ${requestPath}
+          requestId: ${requestId}
+          step: "crawl"
+          input: ${crawlInput}
+          operationMetadata: ${operationMetadata}
+        result: crawlResult
+
+    - uploadToGcs:
+        call: RunCrawlerStep
+        args:
+          webCrawlerUrl: ${webCrawlerUrl}
+          documentName: ${documentName}
+          requestPath: ${requestPath}
+          requestId: ${requestId}
+          step: "uploadToGcs"
+          input: ${crawlInput}
+          operationMetadata: ${operationMetadata}
+        result: uploadResult
+
+    - registerToFileSpace:
+        call: RunCrawlerStep
+        args:
+          webCrawlerUrl: ${webCrawlerUrl}
+          documentName: ${documentName}
+          requestPath: ${requestPath}
+          requestId: ${requestId}
+          step: "registerToFileSpace"
+          input: ${crawlInput}
+          operationMetadata: ${operationMetadata}
+        result: registerResult
+
+    - markSucceeded:
+        call: PatchRequest
+        args:
+          documentName: ${documentName}
+          status: "completed"
+          workflowState: "SUCCEEDED"
+          currentStep: "complete"
+          output: ${registerResult}
+          errorMessage: ""
+
+    - done:
+        return:
+          status: "completed"
+          crawl: ${crawlResult}
+          upload: ${uploadResult}
+          register: ${registerResult}
+
+LoadInputArtifact:
+  params: [inputArtifactUri]
+  steps:
+    - splitUri:
+        assign:
+          - withoutScheme: ${text.split(inputArtifactUri, "gs://")[1]}
+          - inputBucket: ${text.split(withoutScheme, "/")[0]}
+          - inputObject: ${text.url_encode(text.replace_all(withoutScheme, inputBucket + "/", ""))}
+    - readArtifact:
+        call: googleapis.storage.v1.objects.get
+        args:
+          bucket: ${inputBucket}
+          object: ${inputObject}
+          alt: "media"
+        result: rawArtifact
+    - parseArtifact:
+        return: ${json.decode(text.decode(rawArtifact))}
+
+RunCrawlerStep:
+  params: [webCrawlerUrl, documentName, requestPath, requestId, step, input, operationMetadata]
+  steps:
+    - patchRunning:
+        call: PatchRequest
+        args:
+          documentName: ${documentName}
+          status: "processing"
+          workflowState: "ACTIVE"
+          currentStep: ${step}
+          output: null
+          errorMessage: ""
+    - callStep:
+        call: http.post
+        args:
+          url: ${webCrawlerUrl + "/workflow/run-step"}
+          auth:
+            type: OIDC
+            audience: ${webCrawlerUrl}
+          timeout: 1800
+          body:
+            requestPath: ${requestPath}
+            requestId: ${requestId}
+            step: ${step}
+            input: ${input}
+            operationMetadata: ${operationMetadata}
+        result: stepResp
+    - checkError:
+        switch:
+          - condition: ${stepResp.code >= 400 or default(map.get(stepResp.body, "status"), "") == "error"}
+            steps:
+              - patchFailed:
+                  call: PatchRequest
+                  args:
+                    documentName: ${documentName}
+                    status: "error"
+                    workflowState: "FAILED"
+                    currentStep: ${step}
+                    output: null
+                    errorMessage: ${json.encode_to_string(stepResp.body)}
+              - raiseError:
+                  raise: ${json.encode_to_string(stepResp.body)}
+    - returnOutput:
+        return: ${default(map.get(stepResp.body, "output"), stepResp.body)}
+
+PatchRequest:
+  params: [documentName, status, workflowState, currentStep, output, errorMessage]
+  steps:
+    - init:
+        assign:
+          - nowStr: ${time.format(sys.now())}
+          - out: ${default(output, null)}
+          - err: ${default(errorMessage, "")}
+          - fields:
+              status:
+                stringValue: ${status}
+              workflow:
+                mapValue:
+                  fields:
+                    state:
+                      stringValue: ${workflowState}
+                    currentStep:
+                      stringValue: ${currentStep}
+              updatedAt:
+                timestampValue: ${nowStr}
+    - maybeOutput:
+        switch:
+          - condition: ${out != null}
+            assign:
+              - fields["output"]:
+                  stringValue: ${json.encode_to_string(out)}
+    - maybeError:
+        switch:
+          - condition: ${err != ""}
+            assign:
+              - fields["errorMessage"]:
+                  stringValue: ${err}
+    - patch:
+        call: http.request
+        args:
+          method: PATCH
+          url: ${"https://firestore.googleapis.com/v1/" + documentName + "?updateMask.fieldPaths=status&updateMask.fieldPaths=workflow&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=output&updateMask.fieldPaths=errorMessage"}
+          auth:
+            type: OAuth2
+          body:
+            fields: ${fields}

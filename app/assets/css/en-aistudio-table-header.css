@@ -1,0 +1,13 @@
+:root {
+  --en-aistudio-table-header-bg: #1e293b;
+  --en-aistudio-table-header-fg: #ffffff;
+  --en-aistudio-table-header-hover-bg: #334155;
+  --en-aistudio-table-header-border: #334155;
+}
+
+.dark {
+  --en-aistudio-table-header-bg: #0f172a;
+  --en-aistudio-table-header-fg: #f8fafc;
+  --en-aistudio-table-header-hover-bg: #1e293b;
+  --en-aistudio-table-header-border: #334155;
+}

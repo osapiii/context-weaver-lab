@@ -1,0 +1,164 @@
+/**
+ * 業務向け AG Grid（一覧 / 帳票）共通テーマ
+ * MasterEditor と同系: Navy ヘッダー + zebra + 控えめな hover（オレンジ下線なし）
+ */
+.en-aistudio-ag-grid.ag-theme-quartz {
+  --ag-font-family: inherit;
+  --ag-font-size: 13px;
+  --ag-grid-size: 6px;
+
+  --ag-foreground-color: #111827;
+  --ag-secondary-foreground-color: #6b7280;
+  --ag-background-color: #ffffff;
+
+  --ag-header-background-color: var(--en-aistudio-table-header-bg, #1e293b);
+  --ag-header-foreground-color: var(--en-aistudio-table-header-fg, #ffffff);
+  --ag-header-cell-hover-background-color: var(
+    --en-aistudio-table-header-hover-bg,
+    #334155
+  );
+  --ag-header-column-separator-color: var(--en-aistudio-table-header-border, #334155);
+
+  --ag-odd-row-background-color: #f8fafc;
+  --ag-row-hover-color: #f1f5f9;
+  --ag-selected-row-background-color: rgba(59, 130, 246, 0.08);
+
+  --ag-border-color: #e5e7eb;
+  --ag-borders: solid 1px;
+  --ag-border-radius: 8px;
+  --ag-cell-horizontal-padding: 12px;
+}
+
+.dark .en-aistudio-ag-grid.ag-theme-quartz {
+  --ag-foreground-color: #f3f4f6;
+  --ag-secondary-foreground-color: #9ca3af;
+  --ag-background-color: #030712;
+  --ag-odd-row-background-color: #0a0f1c;
+  --ag-row-hover-color: #1e293b;
+  --ag-border-color: #1f2937;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-root-wrapper {
+  border-radius: 0.5rem;
+  border: 1px solid rgb(226 232 240);
+  overflow: hidden;
+}
+
+/* Quartz デフォルトは明るいヘッダー。変数が親に付かないと白地 + 白文字になるため明示 */
+.en-aistudio-ag-grid.ag-theme-quartz .ag-header,
+.en-aistudio-ag-grid.ag-theme-quartz .ag-header-viewport,
+.en-aistudio-ag-grid.ag-theme-quartz .ag-header-container,
+.en-aistudio-ag-grid.ag-theme-quartz .ag-header-row {
+  background-color: var(--en-aistudio-table-header-bg, #1e293b) !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-header-cell {
+  background-color: var(--en-aistudio-table-header-bg, #1e293b) !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-header-cell-text {
+  font-weight: 600;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--en-aistudio-table-header-fg, #ffffff) !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-header-cell-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: normal;
+  color: var(--en-aistudio-table-header-fg, #ffffff) !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-header-icon,
+.en-aistudio-ag-grid.ag-theme-quartz .ag-sort-indicator-icon {
+  color: var(--en-aistudio-table-header-fg, #ffffff) !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell {
+  display: flex;
+  align-items: center;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-row.ag-row-odd {
+  background-color: #f8fafc !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-row.ag-row-even {
+  background-color: #ffffff !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-row.ag-row-hover {
+  background-color: #f1f5f9 !important;
+}
+
+.dark .en-aistudio-ag-grid.ag-theme-quartz .ag-row.ag-row-odd {
+  background-color: #0a0f1c !important;
+}
+
+.dark .en-aistudio-ag-grid.ag-theme-quartz .ag-row.ag-row-even {
+  background-color: #030712 !important;
+}
+
+.dark .en-aistudio-ag-grid.ag-theme-quartz .ag-row.ag-row-hover {
+  background-color: #1e293b !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell.en-aistudio-ag-grid-cell-right {
+  justify-content: flex-end;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell.en-aistudio-ag-grid-cell-right > * {
+  width: auto;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell.en-aistudio-ag-grid-cell-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell.en-aistudio-ag-grid-cell-compact {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell.en-aistudio-ag-grid-cell-compact > * {
+  width: auto !important;
+  min-width: 0;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell.en-aistudio-ag-grid-actions-cell {
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  overflow: visible !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell.en-aistudio-ag-grid-actions-cell > * {
+  width: 100% !important;
+  min-width: 0;
+  overflow: visible;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-cell.en-aistudio-ag-grid-actions-cell {
+  justify-content: stretch;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz
+  .ag-pinned-left-cols-container
+  .ag-row
+  .ag-cell.en-aistudio-ag-grid-actions-cell {
+  overflow: visible !important;
+}
+
+.en-aistudio-ag-grid.ag-theme-quartz .ag-pinned-left-header,
+.en-aistudio-ag-grid.ag-theme-quartz .ag-pinned-left-cols-container {
+  box-shadow: 4px 0 8px -4px rgba(15, 23, 42, 0.12);
+  z-index: 1;
+}
